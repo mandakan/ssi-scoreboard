@@ -4,7 +4,7 @@ import { Target } from "lucide-react";
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen flex flex-col items-center p-6 pt-16 gap-8">
+    <main className="min-h-screen flex flex-col items-center p-4 pt-8 sm:p-6 sm:pt-16 gap-8">
       <div className="flex flex-col items-center gap-4 text-center">
         <div className="flex items-center gap-3">
           <Target className="w-8 h-8 text-primary" />

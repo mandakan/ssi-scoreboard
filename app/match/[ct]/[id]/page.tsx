@@ -111,7 +111,7 @@ export default function MatchPage() {
   const match = matchQuery.data;
 
   return (
-    <div className="min-h-screen p-6 max-w-6xl mx-auto space-y-6">
+    <div className="min-h-screen p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
       {/* Back link */}
       <Link
         href="/"

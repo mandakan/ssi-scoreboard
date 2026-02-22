@@ -37,7 +37,7 @@ export function MatchHeader({ match }: MatchHeaderProps) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-start gap-2">
-        <h1 className="text-2xl font-bold flex-1 min-w-0">{match.name}</h1>
+        <h1 className="text-xl sm:text-2xl font-bold flex-1 min-w-0">{match.name}</h1>
         <div className="flex flex-wrap gap-1.5 shrink-0">
           {match.level && (
             <Badge variant="secondary">

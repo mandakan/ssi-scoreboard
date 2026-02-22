@@ -229,3 +229,36 @@ test.describe("Scoreboard E2E", () => {
     await expect(page.getByRole("table").getByText("#116")).not.toBeVisible();
   });
 });
+
+test.describe("Mobile 390px viewport", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("comparison page has no horizontal overflow with 2 competitors", async ({ page }) => {
+    await page.route("/api/match/22/26547", (route) =>
+      route.fulfill({ json: MOCK_MATCH })
+    );
+    await page.route(/\/api\/compare/, (route) =>
+      route.fulfill({ json: MOCK_COMPARE_2 })
+    );
+
+    await page.goto("/match/22/26547?competitors=100,200");
+    await expect(page.getByText("Test IPSC Match")).toBeVisible();
+    await expect(page.getByText("Stage results")).toBeVisible();
+    await expect(page.getByRole("table")).toBeVisible();
+
+    const hasOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth
+    );
+    expect(hasOverflow).toBe(false);
+  });
+
+  test("home page has no horizontal overflow at 390px", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("textbox", { name: /match url/i })).toBeVisible();
+
+    const hasOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth
+    );
+    expect(hasOverflow).toBe(false);
+  });
+});
