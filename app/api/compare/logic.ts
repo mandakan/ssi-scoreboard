@@ -7,6 +7,7 @@ import type {
   CompetitorInfo,
   CompetitorPenaltyStats,
   EfficiencyStats,
+  StageClassification,
 } from "@/lib/types";
 
 export interface RawScorecard {
@@ -131,6 +132,95 @@ const DIFFICULTY_LABELS: Record<1 | 2 | 3 | 4 | 5, string> = {
   4: "very hard",
   5: "brutal",
 };
+
+/**
+ * Thresholds used for per-stage run classification.
+ * Centralised here so they can be adjusted without hunting through logic code.
+ */
+export const STAGE_CLASS_THRESHOLDS = {
+  SOLID_HF_PCT: 95,           // HF% ≥ this → eligible for Solid
+  CONSERVATIVE_HF_PCT_MIN: 85, // HF% ≥ this (and < SOLID) → eligible for Conservative
+  CONSERVATIVE_A_PCT: 90,     // A% must be > this for Conservative
+  OVERPUSH_HF_PCT: 85,        // HF% < this → eligible for Over-push
+  OVERPUSH_A_PCT: 85,         // A% must be < this for Over-push
+  MELTDOWN_HF_PCT: 70,        // HF% < this → Meltdown (any penalty count)
+  MELTDOWN_MISS_NS: 2,        // miss + no-shoot ≥ this → Meltdown
+} as const;
+
+/**
+ * Classify a single stage run into one of four quality buckets.
+ *
+ * Priority (highest to lowest):
+ *   1. Meltdown — catastrophic: HF% < 70 %, ≥ 2 misses/NS, or any procedural
+ *   2. Solid    — excellent: HF% ≥ 95 %, penalty-free
+ *   3. Conservative — decent: HF% 85–95 %, penalty-free, A% > 90 %
+ *   4. Over-push — risky: HF% < 85 %, penalised, A% < 85 %
+ *   null — does not fit any bucket (edge cases, or groupPercent is unknown)
+ *
+ * @param groupPercent HF as % of the group leader on this stage (already computed)
+ * @param aHits        A-zone hits (null if not recorded)
+ * @param cHits        C/B-zone hits (null if not recorded)
+ * @param dHits        D-zone hits (null if not recorded)
+ * @param missCount    Miss count (null if not recorded)
+ * @param noShoots     No-shoot penalties (null if not recorded)
+ * @param procedurals  Procedural penalties (null if not recorded)
+ */
+export function classifyStageRun(
+  groupPercent: number | null,
+  aHits: number | null,
+  cHits: number | null,
+  dHits: number | null,
+  missCount: number | null,
+  noShoots: number | null,
+  procedurals: number | null
+): StageClassification | null {
+  if (groupPercent === null) return null;
+
+  const a = aHits ?? 0;
+  const c = cHits ?? 0;
+  const d = dHits ?? 0;
+  const miss = missCount ?? 0;
+  const ns = noShoots ?? 0;
+  const proc = procedurals ?? 0;
+  const penalized = miss > 0 || ns > 0 || proc > 0;
+
+  const totalHits = a + c + d + miss;
+  const aPct = totalHits > 0 ? (a / totalHits) * 100 : null;
+
+  // 1. Meltdown (checked first — takes priority over all other buckets)
+  if (
+    groupPercent < STAGE_CLASS_THRESHOLDS.MELTDOWN_HF_PCT ||
+    miss + ns >= STAGE_CLASS_THRESHOLDS.MELTDOWN_MISS_NS ||
+    proc > 0
+  ) {
+    return "meltdown";
+  }
+
+  // 2. Solid: fast and clean
+  if (groupPercent >= STAGE_CLASS_THRESHOLDS.SOLID_HF_PCT && !penalized) {
+    return "solid";
+  }
+
+  // 3. Conservative: decent pace, penalty-free, high accuracy
+  if (
+    groupPercent >= STAGE_CLASS_THRESHOLDS.CONSERVATIVE_HF_PCT_MIN &&
+    !penalized &&
+    (aPct === null || aPct > STAGE_CLASS_THRESHOLDS.CONSERVATIVE_A_PCT)
+  ) {
+    return "conservative";
+  }
+
+  // 4. Over-push: pushed speed, paid penalty cost, accuracy suffered
+  if (
+    groupPercent < STAGE_CLASS_THRESHOLDS.OVERPUSH_HF_PCT &&
+    penalized &&
+    (aPct === null || aPct < STAGE_CLASS_THRESHOLDS.OVERPUSH_A_PCT)
+  ) {
+    return "over-push";
+  }
+
+  return null;
+}
 
 /**
  * Map a normalised difficulty score [0, 1] to a 1–5 integer level.
@@ -303,6 +393,7 @@ export function computeGroupRankings(
           no_shoots: null,
           procedurals: null,
           shooting_order,
+          stageClassification: null,
         };
       } else {
         const hf = effectiveHF(sc);
@@ -310,6 +401,7 @@ export function computeGroupRankings(
         const divKey = sc.competitor_division ?? "__none__";
         const divInfo = divResults.get(divKey);
         const overallRank = overallRankMap.get(comp.id) ?? null;
+        const groupPercent = pct(hf, groupLeaderHF);
 
         competitorMap[comp.id] = {
           competitor_id: comp.id,
@@ -317,7 +409,7 @@ export function computeGroupRankings(
           hit_factor: hf,
           time: sc.time,
           group_rank: groupRankMap.get(comp.id) ?? null,
-          group_percent: pct(hf, groupLeaderHF),
+          group_percent: groupPercent,
           div_rank: divInfo ? (divInfo.rankMap.get(comp.id) ?? null) : null,
           div_percent: divInfo ? pct(hf, divInfo.leaderHF) : null,
           overall_rank: overallRank,
@@ -334,6 +426,15 @@ export function computeGroupRankings(
           no_shoots: sc.no_shoots,
           procedurals: sc.procedurals,
           shooting_order,
+          stageClassification: classifyStageRun(
+            groupPercent,
+            sc.a_hits,
+            sc.c_hits,
+            sc.d_hits,
+            sc.miss_count,
+            sc.no_shoots,
+            sc.procedurals
+          ),
         };
       }
     }

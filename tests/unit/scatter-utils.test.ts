@@ -130,6 +130,7 @@ function makeStage(overrides: StageOverrides = {}): StageComparison {
         miss_count: null,
         no_shoots: null,
         procedurals: null,
+        stageClassification: null,
       },
     },
   };
@@ -237,6 +238,7 @@ describe("buildScatterData", () => {
           miss_count: null,
           no_shoots: null,
           procedurals: null,
+          stageClassification: null,
         },
         2: {
           competitor_id: 2,
@@ -260,6 +262,7 @@ describe("buildScatterData", () => {
           miss_count: null,
           no_shoots: null,
           procedurals: null,
+          stageClassification: null,
         },
       },
     };

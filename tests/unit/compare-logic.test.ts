@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computeCompetitorPPS, computeFieldPPSDistribution, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompetitorInfo } from "@/lib/types";
 
 const competitors: CompetitorInfo[] = [
@@ -1025,5 +1025,212 @@ describe("computeFieldPPSDistribution", () => {
     const dist = computeFieldPPSDistribution(scorecards);
     expect(dist.fieldMedian).toBeCloseTo(8.0, 5);
     expect(dist.fieldCount).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// classifyStageRun — per-stage run quality classification
+// ---------------------------------------------------------------------------
+
+/**
+ * Helper: build args for classifyStageRun with sensible defaults.
+ * groupPercent defaults to 100 (group leader), fully clean A-zone run.
+ */
+function classify(overrides: {
+  groupPercent?: number | null;
+  aHits?: number | null;
+  cHits?: number | null;
+  dHits?: number | null;
+  missCount?: number | null;
+  noShoots?: number | null;
+  procedurals?: number | null;
+}) {
+  return classifyStageRun(
+    overrides.groupPercent ?? 100,
+    overrides.aHits ?? 10,
+    overrides.cHits ?? 0,
+    overrides.dHits ?? 0,
+    overrides.missCount ?? 0,
+    overrides.noShoots ?? 0,
+    overrides.procedurals ?? 0
+  );
+}
+
+describe("classifyStageRun — Solid", () => {
+  it("classifies as solid at exactly SOLID_HF_PCT with no penalties", () => {
+    expect(classify({ groupPercent: STAGE_CLASS_THRESHOLDS.SOLID_HF_PCT })).toBe("solid");
+  });
+
+  it("classifies as solid above SOLID_HF_PCT with no penalties", () => {
+    expect(classify({ groupPercent: 100 })).toBe("solid");
+  });
+
+  it("does NOT classify as solid if HF% is just below threshold", () => {
+    expect(classify({ groupPercent: STAGE_CLASS_THRESHOLDS.SOLID_HF_PCT - 0.1 })).not.toBe("solid");
+  });
+
+  it("does NOT classify as solid if there is a miss (penalty)", () => {
+    expect(classify({ groupPercent: 100, missCount: 1 })).not.toBe("solid");
+  });
+
+  it("does NOT classify as solid if there is a no-shoot", () => {
+    expect(classify({ groupPercent: 100, noShoots: 1 })).not.toBe("solid");
+  });
+});
+
+describe("classifyStageRun — Conservative", () => {
+  it("classifies as conservative at CONSERVATIVE_HF_PCT_MIN with no penalties and high A%", () => {
+    // 10 A-hits, 0 others → A% = 100 > 90
+    expect(classify({ groupPercent: STAGE_CLASS_THRESHOLDS.CONSERVATIVE_HF_PCT_MIN })).toBe("conservative");
+  });
+
+  it("classifies as conservative in the 85–95 % range when A% > 90", () => {
+    // 10 A, 0 C/D/miss → A% 100
+    expect(classify({ groupPercent: 90 })).toBe("conservative");
+  });
+
+  it("does NOT classify as conservative if A% ≤ 90 %", () => {
+    // 9 A, 1 C → A% = 9/10 = 90 — not strictly above 90
+    const result = classifyStageRun(90, 9, 1, 0, 0, 0, 0);
+    expect(result).not.toBe("conservative");
+  });
+
+  it("does NOT classify as conservative if there are penalties", () => {
+    expect(classify({ groupPercent: 90, missCount: 1 })).not.toBe("conservative");
+  });
+
+  it("does NOT classify as conservative if HF% >= SOLID_HF_PCT (Solid wins)", () => {
+    // 96 % → Solid, not Conservative
+    expect(classify({ groupPercent: 96 })).toBe("solid");
+  });
+
+  it("does NOT classify as conservative if HF% < CONSERVATIVE_HF_PCT_MIN", () => {
+    expect(classify({ groupPercent: 84, noShoots: 0, missCount: 0 })).not.toBe("conservative");
+  });
+});
+
+describe("classifyStageRun — Over-push", () => {
+  it("classifies as over-push when HF% < 85, penalised, A% < 85", () => {
+    // 5 A, 1 miss → A% = 5/6 ≈ 83 % < 85. 1 miss < MELTDOWN_MISS_NS threshold (2).
+    const result = classifyStageRun(80, 5, 0, 0, 1, 0, 0);
+    expect(result).toBe("over-push");
+  });
+
+  it("does NOT classify as over-push if no penalties", () => {
+    expect(classify({ groupPercent: 80 })).not.toBe("over-push");
+  });
+
+  it("does NOT classify as over-push if A% >= 85", () => {
+    // 9 A, 1 miss → A% = 9/10 = 90 ≥ 85
+    const result = classifyStageRun(80, 9, 0, 0, 1, 0, 0);
+    expect(result).not.toBe("over-push");
+  });
+
+  it("does NOT classify as over-push if HF% >= OVERPUSH_HF_PCT", () => {
+    // HF% exactly at threshold: classified differently
+    const result = classifyStageRun(85, 7, 0, 0, 1, 0, 0);
+    expect(result).not.toBe("over-push");
+  });
+});
+
+describe("classifyStageRun — Meltdown", () => {
+  it("classifies as meltdown when HF% < 70", () => {
+    expect(classify({ groupPercent: 69 })).toBe("meltdown");
+  });
+
+  it("classifies as meltdown at exactly HF% = 69.9 (< 70)", () => {
+    expect(classify({ groupPercent: 69.9 })).toBe("meltdown");
+  });
+
+  it("does NOT classify as meltdown at HF% = 70 with no other triggers", () => {
+    // 70 % is NOT < 70, and no other meltdown conditions → not meltdown
+    expect(classify({ groupPercent: 70 })).not.toBe("meltdown");
+  });
+
+  it("classifies as meltdown with exactly 2 miss+NS even at high HF%", () => {
+    // 2 misses → meltdown regardless of good HF%
+    expect(classify({ groupPercent: 98, missCount: 2 })).toBe("meltdown");
+  });
+
+  it("classifies as meltdown with 1 miss + 1 no-shoot (total 2)", () => {
+    expect(classify({ groupPercent: 98, missCount: 1, noShoots: 1 })).toBe("meltdown");
+  });
+
+  it("does NOT classify as meltdown with only 1 miss (below MELTDOWN_MISS_NS threshold)", () => {
+    // 1 miss alone doesn't trigger meltdown on HF% or miss count
+    // (unless HF% is already below 70 or proc > 0)
+    expect(classify({ groupPercent: 90, missCount: 1 })).not.toBe("meltdown");
+  });
+
+  it("classifies as meltdown with any procedural penalty", () => {
+    expect(classify({ groupPercent: 98, procedurals: 1 })).toBe("meltdown");
+  });
+
+  it("meltdown takes priority over other categories", () => {
+    // HF% < 70 but otherwise would look like Conservative
+    expect(classify({ groupPercent: 65, missCount: 0, noShoots: 0, procedurals: 0 })).toBe("meltdown");
+  });
+});
+
+describe("classifyStageRun — null / edge cases", () => {
+  it("returns null when groupPercent is null", () => {
+    expect(classifyStageRun(null, 10, 0, 0, 0, 0, 0)).toBeNull();
+  });
+
+  it("returns null when run does not match any bucket", () => {
+    // HF% = 88, 1 miss → not meltdown (< 2 miss, no proc), not solid (miss),
+    // not conservative (miss), not over-push (HF% ≥ 85)
+    const result = classifyStageRun(88, 9, 0, 0, 1, 0, 0);
+    expect(result).toBeNull();
+  });
+});
+
+describe("classifyStageRun — integration via computeGroupRankings", () => {
+  it("stores stageClassification on CompetitorSummary", () => {
+    // Alice is the group leader (100 %) with clean A-zone → Solid
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 5.0, a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    expect(result[0].competitors[1].stageClassification).toBe("solid");
+  });
+
+  it("DNF competitor has null stageClassification", () => {
+    const scorecards = [
+      makeCard(1, 1, { dnf: true }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    expect(result[0].competitors[1].stageClassification).toBeNull();
+  });
+
+  it("all four classifications are reachable", () => {
+    // Stage 1: Alice leads (HF 10, clean A-zone) → Solid
+    // Stage 1: Bob at 90%, clean, high A% → Conservative
+    // Stage 1: Charlie at 80%, 1 miss+no-shoot, poor A% → over-push? No...
+    //   Actually need miss/ns for Over-push AND HF < 85 AND A% < 85
+    // Let me construct them per-stage instead (one stage per classification)
+    const scorecards = [
+      // Stage 1 — Solid: Alice leads (100%), clean, all A
+      makeCard(1, 1, { hit_factor: 5.0, a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0 }),
+      // Stage 2 — Conservative: Alice at 90%, clean, high A%
+      makeCard(1, 2, { hit_factor: 4.5, a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0 }),
+      makeCard(2, 2, { hit_factor: 5.0, a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0 }),
+      // Stage 3 — Over-push: Alice at 80%, 1 miss, A% = 4/5 = 80 % < 85
+      makeCard(1, 3, { hit_factor: 4.0, a_hits: 4, c_hits: 0, d_hits: 0, miss_count: 1, no_shoots: 0, procedurals: 0 }),
+      makeCard(2, 3, { hit_factor: 5.0, a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0 }),
+      // Stage 4 — Meltdown: Alice at 60%, 0 penalties
+      makeCard(1, 4, { hit_factor: 3.0, a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0 }),
+      makeCard(2, 4, { hit_factor: 5.0, a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    const s1 = result.find((s) => s.stage_num === 1)!;
+    const s2 = result.find((s) => s.stage_num === 2)!;
+    const s3 = result.find((s) => s.stage_num === 3)!;
+    const s4 = result.find((s) => s.stage_num === 4)!;
+
+    expect(s1.competitors[1].stageClassification).toBe("solid");       // 100%, no penalties
+    expect(s2.competitors[1].stageClassification).toBe("conservative"); // 90%, no penalties, all A
+    expect(s3.competitors[1].stageClassification).toBe("over-push");    // 80%, 1 miss, 40% A
+    expect(s4.competitors[1].stageClassification).toBe("meltdown");     // 60% HF
   });
 });
