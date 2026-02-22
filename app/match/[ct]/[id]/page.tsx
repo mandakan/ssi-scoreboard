@@ -13,6 +13,7 @@ import { ShareButton } from "@/components/share-button";
 import { CompetitorPicker } from "@/components/competitor-picker";
 import { ComparisonTable } from "@/components/comparison-table";
 import { ComparisonChart } from "@/components/comparison-chart";
+import { HfPercentChart } from "@/components/hf-percent-chart";
 import { SpeedAccuracyChart } from "@/components/scatter-chart";
 import { StageBalanceChart } from "@/components/radar-chart";
 import { useMatchQuery, useCompareQuery } from "@/lib/queries";
@@ -236,6 +237,15 @@ export default function MatchPage() {
               <div className="rounded-lg border p-4 space-y-3">
                 <h2 className="font-semibold">Hit factor by stage</h2>
                 <ComparisonChart data={compareQuery.data} />
+              </div>
+
+              <div className="rounded-lg border p-4 space-y-3">
+                <h2 className="font-semibold">HF% vs stage winner</h2>
+                <p className="text-xs text-muted-foreground">
+                  Hit factor as a percentage of the stage winner per stage. Select
+                  a competitor as reference to see gaps relative to them.
+                </p>
+                <HfPercentChart data={compareQuery.data} />
               </div>
 
               <div className="rounded-lg border p-4 space-y-3">
