@@ -30,6 +30,7 @@ export interface MatchResponse {
   stages_count: number;
   competitors_count: number;
   scoring_completed: number; // percentage 0-100
+  ssi_url: string | null;
   stages: StageInfo[];
   competitors: CompetitorInfo[];
 }

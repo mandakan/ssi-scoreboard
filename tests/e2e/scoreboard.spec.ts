@@ -11,6 +11,7 @@ const MOCK_MATCH: MatchResponse = {
   stages_count: 3,
   competitors_count: 10,
   scoring_completed: 75,
+  ssi_url: "https://shootnscoreit.com/event/22/26547/",
   stages: [
     { id: 1, name: "Stage 1", stage_number: 1, max_points: 80, min_rounds: 16, paper_targets: 8, steel_targets: 0, ssi_url: "https://shootnscoreit.com/event/stage/24/1/" },
     { id: 2, name: "Stage 2", stage_number: 2, max_points: 60, min_rounds: 12, paper_targets: 6, steel_targets: 0, ssi_url: "https://shootnscoreit.com/event/stage/24/2/" },

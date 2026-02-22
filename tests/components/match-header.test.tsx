@@ -13,6 +13,7 @@ const baseMatch: MatchResponse = {
   stages_count: 8,
   competitors_count: 105,
   scoring_completed: 56,
+  ssi_url: "https://shootnscoreit.com/event/22/123/",
   stages: [],
   competitors: [],
 };
@@ -66,5 +67,17 @@ describe("MatchHeader", () => {
     render(<MatchHeader match={baseMatch} />);
     expect(screen.getByText(/8 stages/)).toBeInTheDocument();
     expect(screen.getByText(/105 competitors/)).toBeInTheDocument();
+  });
+
+  it("renders SSI link when ssi_url is provided", () => {
+    render(<MatchHeader match={baseMatch} />);
+    const link = screen.getByRole("link", { name: /ShootNScoreIt/i });
+    expect(link).toHaveAttribute("href", "https://shootnscoreit.com/event/22/123/");
+    expect(link).toHaveAttribute("target", "_blank");
+  });
+
+  it("omits SSI link when ssi_url is null", () => {
+    render(<MatchHeader match={{ ...baseMatch, ssi_url: null }} />);
+    expect(screen.queryByRole("link", { name: /ShootNScoreIt/i })).not.toBeInTheDocument();
   });
 });

@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { MapPin, Calendar, Target } from "lucide-react";
+import { MapPin, Calendar, Target, ExternalLink } from "lucide-react";
 import type { MatchResponse } from "@/lib/types";
 
 interface MatchHeaderProps {
@@ -72,6 +72,19 @@ export function MatchHeader({ match }: MatchHeaderProps) {
           <Target className="w-3.5 h-3.5 shrink-0" />
           {match.stages_count} stages · {match.competitors_count} competitors
         </span>
+        {match.ssi_url && (
+          <a
+            href={match.ssi_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 hover:text-foreground transition-colors"
+            aria-label="View on ShootNScoreIt (opens in new tab)"
+          >
+            <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+            ShootNScoreIt
+            <span className="sr-only">(opens in new tab)</span>
+          </a>
+        )}
       </div>
 
       <div className="space-y-1">

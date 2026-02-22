@@ -109,6 +109,7 @@ export async function GET(
     scoring_completed: ev.scoring_completed != null
       ? Math.round(parseFloat(String(ev.scoring_completed)))
       : 0,
+    ssi_url: `https://shootnscoreit.com/event/${ct}/${id}/`,
     stages,
     competitors,
   };
