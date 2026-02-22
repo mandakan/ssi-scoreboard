@@ -94,6 +94,9 @@ export interface CompetitorSummary {
   // Formula: 1 − (overall_rank − 1) / (N − 1) where N = non-DNF field competitors.
   // null for DNF or when N = 0.
   overall_percentile: number | null;
+  // Run quality classification based on HF% vs group leader, A%, and penalty counts.
+  // null when there is insufficient data or the run is DNF.
+  stageClassification: StageClassification | null;
 }
 
 export interface StageComparison {
@@ -114,6 +117,11 @@ export interface StageComparison {
   stageDifficultyLabel: string;       // human-readable label: easy/moderate/hard/very hard/brutal
   competitors: Record<number, CompetitorSummary>; // keyed by competitor_id
 }
+
+// Run quality classification for a single stage × competitor result.
+// Computed relative to the selected group's leader HF.
+// null = not enough data to classify (e.g. missing zone data, DNF).
+export type StageClassification = "solid" | "conservative" | "over-push" | "meltdown";
 
 // Percentage context for the comparison view.
 // "group"    — HF % relative to the group leader (selected competitors only)

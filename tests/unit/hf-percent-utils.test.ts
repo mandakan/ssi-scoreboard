@@ -30,6 +30,7 @@ function makeStage(
       miss_count: 0,
       no_shoots: 0,
       procedurals: 0,
+      stageClassification: null,
       ...overrides,
     };
   }

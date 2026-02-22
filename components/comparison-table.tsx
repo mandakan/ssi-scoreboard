@@ -7,11 +7,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { AlertTriangle, ExternalLink } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ExternalLink, Flame, Shield, Zap } from "lucide-react";
 import { cn, formatHF, formatTime, formatPct, computePointsDelta, formatDelta } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
 import { HitZoneBar } from "@/components/hit-zone-bar";
-import type { CompareResponse, CompetitorSummary, PctMode, ViewMode } from "@/lib/types";
+import type { CompareResponse, CompetitorSummary, PctMode, StageClassification, ViewMode } from "@/lib/types";
 
 interface ComparisonTableProps {
   data: CompareResponse;
@@ -182,6 +182,77 @@ function PenaltyBadge({
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs">
         {tooltipText}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+const CLASSIFICATION_CONFIG: Record<
+  StageClassification,
+  { label: string; color: string; Icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }> }
+> = {
+  solid: { label: "Solid", color: "text-emerald-500", Icon: CheckCircle2 },
+  conservative: { label: "Conservative", color: "text-yellow-500", Icon: Shield },
+  "over-push": { label: "Over-push", color: "text-orange-500", Icon: Zap },
+  meltdown: { label: "Meltdown", color: "text-red-500", Icon: Flame },
+};
+
+/**
+ * Small dot + icon badge indicating run quality classification.
+ * Uses both color and shape to satisfy WCAG color-not-sole-differentiator.
+ */
+function StageClassificationBadge({
+  classification,
+  groupPercent,
+  aPct,
+  miss,
+  noShoots,
+  procedurals,
+}: {
+  classification: StageClassification | null;
+  groupPercent: number | null;
+  aPct: number | null;
+  miss: number | null;
+  noShoots: number | null;
+  procedurals: number | null;
+}) {
+  if (!classification) return null;
+  const { label, color, Icon } = CLASSIFICATION_CONFIG[classification];
+
+  const parts: string[] = [];
+  if (groupPercent != null) parts.push(`${groupPercent.toFixed(1)}% HF`);
+  if (aPct != null) parts.push(`${aPct.toFixed(0)}% A-zone`);
+  const m = miss ?? 0;
+  const ns = noShoots ?? 0;
+  const proc = procedurals ?? 0;
+  if (m + ns + proc > 0) {
+    const pen: string[] = [];
+    if (m > 0) pen.push(`${m} miss`);
+    if (ns > 0) pen.push(`${ns} no-shoot`);
+    if (proc > 0) pen.push(`${proc} procedural`);
+    parts.push(pen.join(", "));
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={cn("inline-flex items-center gap-0.5 cursor-help leading-none", color)}
+          aria-label={`Run classification: ${label}`}
+          role="img"
+        >
+          <span
+            className="w-2 h-2 rounded-full bg-current"
+            aria-hidden={true}
+          />
+          <Icon className="w-3 h-3" aria-hidden={true} />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-xs space-y-0.5">
+        <div className="font-medium">{label}</div>
+        {parts.length > 0 && (
+          <div className="text-muted-foreground">{parts.join(" · ")}</div>
+        )}
       </TooltipContent>
     </Tooltip>
   );
@@ -361,10 +432,20 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
     let totalDelta = 0;
     let deltaCount = 0;
     let totalMaxPts = 0;
+    let solidCount = 0;
+    let conservativeCount = 0;
+    let overpushCount = 0;
+    let meltdownCount = 0;
 
     for (const stage of stages) {
       const sc = stage.competitors[comp.id];
       if (!sc || sc.dnf) continue;
+      switch (sc.stageClassification) {
+        case "solid": solidCount++; break;
+        case "conservative": conservativeCount++; break;
+        case "over-push": overpushCount++; break;
+        case "meltdown": meltdownCount++; break;
+      }
       hasFired = true;
       firedCount++;
       totalPts += sc.points ?? 0;
@@ -411,6 +492,10 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
       isClean: hasFired && firedCount === firedWithAllPenaltyData && totalPenaltyPts === 0,
       totalDelta: deltaCount > 0 ? totalDelta : null,
       totalMaxPts,
+      solidCount,
+      conservativeCount,
+      overpushCount,
+      meltdownCount,
     };
   });
 
@@ -446,25 +531,74 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
               <th className="text-left py-2 pr-4 font-medium text-muted-foreground">
                 Stage
               </th>
-              {competitors.map((comp) => (
-                <th
-                  key={comp.id}
-                  className="py-2 px-3 text-center font-medium min-w-[5.5rem] sm:min-w-32"
-                  style={{ borderBottom: `3px solid ${colorMap[comp.id]}` }}
-                >
-                  <div className="flex flex-col items-center gap-0.5">
-                    <span className="font-mono text-xs text-muted-foreground">
-                      #{comp.competitor_number}
-                    </span>
-                    <span>{comp.name.split(" ")[0]}</span>
-                    {comp.division && (
-                      <span className="text-xs text-muted-foreground uppercase tracking-wide">
-                        {comp.division}
+              {competitors.map((comp) => {
+                const t = totals.find((x) => x.id === comp.id);
+                const hasClassifications = t &&
+                  (t.solidCount + t.conservativeCount + t.overpushCount + t.meltdownCount) > 0;
+                const classificationSummaryLabel = t ? [
+                  t.solidCount > 0 && `${t.solidCount} solid`,
+                  t.conservativeCount > 0 && `${t.conservativeCount} conservative`,
+                  t.overpushCount > 0 && `${t.overpushCount} over-push`,
+                  t.meltdownCount > 0 && `${t.meltdownCount} meltdown`,
+                ].filter(Boolean).join(" · ") : "";
+                return (
+                  <th
+                    key={comp.id}
+                    className="py-2 px-3 text-center font-medium min-w-[5.5rem] sm:min-w-32"
+                    style={{ borderBottom: `3px solid ${colorMap[comp.id]}` }}
+                  >
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span className="font-mono text-xs text-muted-foreground">
+                        #{comp.competitor_number}
                       </span>
-                    )}
-                  </div>
-                </th>
-              ))}
+                      <span>{comp.name.split(" ")[0]}</span>
+                      {comp.division && (
+                        <span className="text-xs text-muted-foreground uppercase tracking-wide">
+                          {comp.division}
+                        </span>
+                      )}
+                      {hasClassifications && t && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span
+                              className="inline-flex items-center gap-1 cursor-help"
+                              aria-label={`Run classification summary: ${classificationSummaryLabel}`}
+                            >
+                              {t.solidCount > 0 && (
+                                <span className="inline-flex items-center gap-px text-[10px] text-emerald-500">
+                                  <CheckCircle2 className="w-2.5 h-2.5" aria-hidden={true} />
+                                  {t.solidCount}
+                                </span>
+                              )}
+                              {t.conservativeCount > 0 && (
+                                <span className="inline-flex items-center gap-px text-[10px] text-yellow-500">
+                                  <Shield className="w-2.5 h-2.5" aria-hidden={true} />
+                                  {t.conservativeCount}
+                                </span>
+                              )}
+                              {t.overpushCount > 0 && (
+                                <span className="inline-flex items-center gap-px text-[10px] text-orange-500">
+                                  <Zap className="w-2.5 h-2.5" aria-hidden={true} />
+                                  {t.overpushCount}
+                                </span>
+                              )}
+                              {t.meltdownCount > 0 && (
+                                <span className="inline-flex items-center gap-px text-[10px] text-red-500">
+                                  <Flame className="w-2.5 h-2.5" aria-hidden={true} />
+                                  {t.meltdownCount}
+                                </span>
+                              )}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="text-xs">
+                            {classificationSummaryLabel}
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
@@ -897,6 +1031,22 @@ function StageCell({
         noShoots={sc.no_shoots}
         procedurals={sc.procedurals}
       />
+      {/* Run classification badge */}
+      {(() => {
+        const totalHits =
+          (sc.a_hits ?? 0) + (sc.c_hits ?? 0) + (sc.d_hits ?? 0) + (sc.miss_count ?? 0);
+        const aPct = totalHits > 0 ? ((sc.a_hits ?? 0) / totalHits) * 100 : null;
+        return (
+          <StageClassificationBadge
+            classification={sc.stageClassification}
+            groupPercent={sc.group_percent}
+            aPct={aPct}
+            miss={sc.miss_count}
+            noShoots={sc.no_shoots}
+            procedurals={sc.procedurals}
+          />
+        );
+      })()}
     </div>
   );
 }

@@ -62,6 +62,7 @@ const baseData: CompareResponse = {
           miss_count: null,
           no_shoots: null,
           procedurals: null,
+          stageClassification: null,
         },
         2: {
           competitor_id: 2,
@@ -85,6 +86,7 @@ const baseData: CompareResponse = {
           miss_count: null,
           no_shoots: null,
           procedurals: null,
+          stageClassification: null,
         },
       },
     },

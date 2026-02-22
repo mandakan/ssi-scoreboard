@@ -31,6 +31,7 @@ const baseStageCompetitors = {
     miss_count: null,
     no_shoots: null,
     procedurals: null,
+    stageClassification: null,
   },
   2: {
     competitor_id: 2,
@@ -54,6 +55,7 @@ const baseStageCompetitors = {
     miss_count: null,
     no_shoots: null,
     procedurals: null,
+    stageClassification: null,
   },
 };
 
