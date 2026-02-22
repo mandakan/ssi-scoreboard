@@ -89,7 +89,7 @@ describe("ComparisonTable", () => {
     expect(screen.getAllByText("5.63").length).toBeGreaterThan(0);
   });
 
-  it("renders em-dash for dnf/not-fired stages", () => {
+  it("renders DNF badge for dnf stages", () => {
     const data: CompareResponse = {
       ...baseData,
       stages: [
@@ -102,6 +102,23 @@ describe("ComparisonTable", () => {
               hit_factor: null,
               points: null,
             },
+            2: baseData.stages[0].competitors[2],
+          },
+        },
+      ],
+    };
+    renderWithProviders(<ComparisonTable data={data} />);
+    expect(screen.getByText("DNF")).toBeInTheDocument();
+  });
+
+  it("renders em-dash for stages with no scorecard", () => {
+    const data: CompareResponse = {
+      ...baseData,
+      stages: [
+        {
+          ...baseData.stages[0],
+          competitors: {
+            // competitor 2 only — no scorecard for competitor 1
             2: baseData.stages[0].competitors[2],
           },
         },
@@ -126,6 +143,54 @@ describe("ComparisonTable", () => {
     };
     renderWithProviders(<ComparisonTable data={data} />);
     expect(screen.getByText("DQ")).toBeInTheDocument();
+  });
+
+  it("renders match-level DQ banner when all stages for a competitor are DQ", () => {
+    const data: CompareResponse = {
+      ...baseData,
+      stages: [
+        {
+          ...baseData.stages[0],
+          competitors: {
+            1: { ...baseData.stages[0].competitors[1], dq: true },
+            2: baseData.stages[0].competitors[2],
+          },
+        },
+      ],
+    };
+    renderWithProviders(<ComparisonTable data={data} />);
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByText("— Disqualified from match")).toBeInTheDocument();
+  });
+
+  it("does not render match-level DQ banner when only some stages are DQ", () => {
+    const data: CompareResponse = {
+      ...baseData,
+      stages: [
+        {
+          ...baseData.stages[0],
+          competitors: {
+            1: { ...baseData.stages[0].competitors[1], dq: true },
+            2: baseData.stages[0].competitors[2],
+          },
+        },
+        {
+          stage_id: 101,
+          stage_name: "Stage Two",
+          stage_num: 2,
+          max_points: 60,
+          group_leader_hf: 4.0,
+          group_leader_points: 58,
+          overall_leader_hf: 4.0,
+          competitors: {
+            1: { ...baseData.stages[0].competitors[1], dq: false },
+            2: baseData.stages[0].competitors[2],
+          },
+        },
+      ],
+    };
+    renderWithProviders(<ComparisonTable data={data} />);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("renders totals row with total points", () => {

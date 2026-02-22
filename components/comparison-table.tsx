@@ -155,6 +155,14 @@ function modeValues(
 export function ComparisonTable({ data }: ComparisonTableProps) {
   const { stages, competitors } = data;
   const [mode, setMode] = useState<PctMode>("group");
+
+  // Detect match-level DQ: every scorecard for a competitor has dq: true
+  const matchDqCompetitors = competitors.filter((comp) => {
+    const scorecards = stages
+      .map((s) => s.competitors[comp.id])
+      .filter((sc): sc is CompetitorSummary => sc !== undefined);
+    return scorecards.length > 0 && scorecards.every((sc) => sc.dq);
+  });
   const colorMap = buildColorMap(competitors.map((c) => c.id));
 
   // Compute totals per competitor: total raw points, average %, zone/penalty sums, and clean match status
@@ -217,6 +225,18 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
 
   return (
     <div className="space-y-3">
+      {/* Match-level DQ banners */}
+      {matchDqCompetitors.map((comp) => (
+        <div
+          key={comp.id}
+          role="alert"
+          className="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive dark:text-red-400"
+        >
+          <span className="font-medium">{comp.name}</span>
+          <span>— Disqualified from match</span>
+        </div>
+      ))}
+
       {/* Mode toggle */}
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground">% relative to:</span>
@@ -368,15 +388,47 @@ function StageCell({
   groupSize: number;
   divisionName: string | null;
 }) {
-  if (!sc || sc.dnf) {
+  if (!sc) {
     return <span className="text-muted-foreground text-xs">—</span>;
+  }
+
+  if (sc.dnf) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge
+            variant="secondary"
+            className="text-xs cursor-help"
+            aria-label="Stage not fired"
+            tabIndex={0}
+          >
+            DNF
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs">
+          Stage not fired
+        </TooltipContent>
+      </Tooltip>
+    );
   }
 
   if (sc.dq) {
     return (
-      <Badge variant="destructive" className="text-xs">
-        DQ
-      </Badge>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge
+            variant="destructive"
+            className="text-xs cursor-help"
+            aria-label="Disqualified"
+            tabIndex={0}
+          >
+            DQ
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs">
+          Disqualified — stage scored as 0
+        </TooltipContent>
+      </Tooltip>
     );
   }
 
@@ -384,16 +436,18 @@ function StageCell({
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <span>
-            <Badge
-              variant="outline"
-              className="text-xs border-orange-400 text-orange-600 cursor-help"
-            >
-              0
-            </Badge>
-          </span>
+          <Badge
+            variant="outline"
+            className="text-xs border-orange-400 text-orange-600 cursor-help"
+            aria-label="Stage zeroed"
+            tabIndex={0}
+          >
+            0
+          </Badge>
         </TooltipTrigger>
-        <TooltipContent>Stage zeroed</TooltipContent>
+        <TooltipContent side="top" className="text-xs">
+          Stage zeroed — 0 points, ranked last
+        </TooltipContent>
       </Tooltip>
     );
   }
