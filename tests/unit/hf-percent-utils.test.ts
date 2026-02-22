@@ -31,6 +31,8 @@ function makeStage(
       no_shoots: 0,
       procedurals: 0,
       stageClassification: null,
+      hitLossPoints: null,
+      penaltyLossPoints: 0,
       ...overrides,
     };
   }
