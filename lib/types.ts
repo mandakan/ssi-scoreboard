@@ -126,10 +126,20 @@ export type PctMode = "group" | "division" | "overall";
 // "delta"    — shows gap to the group leader per stage (±X.X pts)
 export type ViewMode = "absolute" | "delta";
 
+export interface CompetitorPenaltyStats {
+  totalPenalties: number;        // total miss + no_shoot + procedural count across all fired stages
+  penaltyCostPercent: number;    // group % lost to penalties (matchPctClean − matchPctActual)
+  matchPctActual: number;        // actual avg group % (matches "Avg Group %" in totals row)
+  matchPctClean: number;         // hypothetical avg group % with zero penalties
+  penaltiesPerStage: number;     // total_penalties / stages_shot
+  penaltiesPer100Rounds: number; // total_penalties / total_rounds_fired × 100
+}
+
 export interface CompareResponse {
   match_id: number;
   stages: StageComparison[];
   competitors: CompetitorInfo[];
+  penaltyStats: Record<number, CompetitorPenaltyStats>; // keyed by competitor_id
 }
 
 export interface EventSummary {
