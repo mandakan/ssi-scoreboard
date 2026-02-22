@@ -42,6 +42,15 @@ export default function RootLayout({
               </a>
             </span>
             <span aria-hidden="true">·</span>
+            <a
+              href="https://github.com/mandakan/ssi-scoreboard"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-foreground"
+            >
+              GitHub
+            </a>
+            <span aria-hidden="true">·</span>
             <Link
               href="/legal"
               className="hover:text-foreground underline underline-offset-4"
