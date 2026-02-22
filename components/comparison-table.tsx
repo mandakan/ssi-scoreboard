@@ -8,10 +8,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { AlertTriangle, ExternalLink } from "lucide-react";
-import { cn, formatHF, formatTime, formatPct } from "@/lib/utils";
+import { cn, formatHF, formatTime, formatPct, computePointsDelta, formatDelta } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
 import { HitZoneBar } from "@/components/hit-zone-bar";
-import type { CompareResponse, CompetitorSummary, PctMode } from "@/lib/types";
+import type { CompareResponse, CompetitorSummary, PctMode, ViewMode } from "@/lib/types";
 
 interface ComparisonTableProps {
   data: CompareResponse;
@@ -198,6 +198,55 @@ function ModeToggle({
   );
 }
 
+function ViewModeToggle({
+  viewMode,
+  onChange,
+}: {
+  viewMode: ViewMode;
+  onChange: (m: ViewMode) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Table view mode"
+      className="inline-flex rounded-md border text-xs"
+    >
+      {(["absolute", "delta"] as ViewMode[]).map((m, i, arr) => (
+        <button
+          key={m}
+          onClick={() => onChange(m)}
+          aria-pressed={viewMode === m}
+          className={cn(
+            "px-2.5 py-1 transition-colors capitalize",
+            i === 0 ? "rounded-l-md" : "",
+            i === arr.length - 1 ? "rounded-r-md" : "",
+            "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+            viewMode === m
+              ? "bg-foreground text-background font-medium"
+              : "text-muted-foreground hover:bg-muted"
+          )}
+        >
+          {m === "absolute" ? "Absolute" : "Delta"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Returns Tailwind bg classes for the delta heatmap cell based on the
+ * magnitude of the gap relative to stage max_points.
+ * Green = at/near leader; red = far behind.
+ */
+function deltaColorClasses(delta: number, maxPoints: number): string {
+  if (delta >= 0) return "bg-emerald-100 dark:bg-emerald-900/50";
+  const ratio = Math.abs(delta) / Math.max(maxPoints, 1);
+  if (ratio <= 0.15) return "bg-lime-100 dark:bg-lime-900/50";
+  if (ratio <= 0.30) return "bg-amber-100 dark:bg-amber-900/50";
+  if (ratio <= 0.50) return "bg-orange-100 dark:bg-orange-900/50";
+  return "bg-red-100 dark:bg-red-900/50";
+}
+
 /** Pick the rank and percent values for a given mode. */
 function modeValues(
   sc: CompetitorSummary,
@@ -216,6 +265,7 @@ function modeValues(
 export function ComparisonTable({ data }: ComparisonTableProps) {
   const { stages, competitors } = data;
   const [mode, setMode] = useState<PctMode>("group");
+  const [viewMode, setViewMode] = useState<ViewMode>("absolute");
 
   // Detect match-level DQ: every scorecard for a competitor has dq: true
   const matchDqCompetitors = competitors.filter((comp) => {
@@ -239,6 +289,9 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
     let hasPenaltyData = false;
     let totalPenaltyPts = 0;
     let firedWithAllPenaltyData = 0;
+    let totalDelta = 0;
+    let deltaCount = 0;
+    let totalMaxPts = 0;
 
     for (const stage of stages) {
       const sc = stage.competitors[comp.id];
@@ -267,6 +320,12 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
         firedWithAllPenaltyData++;
         totalPenaltyPts += (sc.miss_count + sc.no_shoots + sc.procedurals) * 10;
       }
+      const d = computePointsDelta(sc.points, stage.group_leader_points);
+      if (d != null) {
+        totalDelta += d;
+        deltaCount++;
+        totalMaxPts += stage.max_points;
+      }
     }
 
     return {
@@ -281,6 +340,8 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
       procedurals: hasPenaltyData ? pTotal : null,
       totalPenaltyPts,
       isClean: hasFired && firedCount === firedWithAllPenaltyData && totalPenaltyPts === 0,
+      totalDelta: deltaCount > 0 ? totalDelta : null,
+      totalMaxPts,
     };
   });
 
@@ -298,10 +359,15 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
         </div>
       ))}
 
-      {/* Mode toggle */}
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">% relative to:</span>
-        <ModeToggle mode={mode} onChange={setMode} />
+      {/* View mode toggle (Absolute / Delta) */}
+      <div className="flex flex-wrap items-center gap-3">
+        <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
+        {viewMode === "absolute" && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">% relative to:</span>
+            <ModeToggle mode={mode} onChange={setMode} />
+          </div>
+        )}
       </div>
 
       <div className="overflow-x-auto">
@@ -400,6 +466,8 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
                         sc={sc}
                         maxPoints={stage.max_points}
                         mode={mode}
+                        viewMode={viewMode}
+                        groupLeaderPoints={stage.group_leader_points}
                         groupSize={competitors.length}
                         divisionName={comp.division}
                       />
@@ -412,51 +480,75 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
             {/* Totals row */}
             <tr className="border-t-2 font-semibold bg-muted/20">
               <td className="py-2 pr-4 text-xs text-muted-foreground font-normal">
-                <div>Total pts</div>
-                <div>Avg {MODE_LABELS[mode]} %</div>
+                {viewMode === "delta" ? (
+                  <div>Total deficit</div>
+                ) : (
+                  <>
+                    <div>Total pts</div>
+                    <div>Avg {MODE_LABELS[mode]} %</div>
+                  </>
+                )}
               </td>
               {totals.map((t) => (
                 <td key={t.id} className="py-2 px-2 sm:px-3 text-center">
-                  <div className="flex flex-col items-center gap-0.5">
-                    <span>
-                      {t.points != null ? (
-                        t.points.toFixed(0)
-                      ) : (
-                        <span className="text-muted-foreground font-normal">—</span>
+                  {viewMode === "delta" ? (
+                    <div
+                      className={cn(
+                        "inline-flex flex-col items-center justify-center gap-0.5 py-1 px-2 rounded",
+                        t.totalDelta != null
+                          ? deltaColorClasses(t.totalDelta, t.totalMaxPts)
+                          : ""
                       )}
-                    </span>
-                    <span className="text-xs text-muted-foreground font-normal">
-                      {t.avgPct != null ? formatPct(t.avgPct) : "—"}
-                    </span>
-                    <HitZoneBar
-                      aHits={t.aHits}
-                      cHits={t.cHits}
-                      dHits={t.dHits}
-                      misses={t.misses}
-                      noShoots={t.noShoots}
-                      procedurals={t.procedurals}
-                    />
-                    {t.totalPenaltyPts > 0 && (
-                      <span className="text-xs font-medium text-red-600 dark:text-red-400 tabular-nums">
-                        {`\u2212${t.totalPenaltyPts}pts`}
+                    >
+                      <span className={cn(
+                        "font-semibold tabular-nums",
+                        t.totalDelta === 0 ? "text-muted-foreground" : "text-foreground"
+                      )}>
+                        {t.totalDelta != null ? formatDelta(t.totalDelta) : "—"}
                       </span>
-                    )}
-                    {t.isClean && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span
-                            className="text-xs text-green-600 dark:text-green-400 font-medium cursor-help"
-                            aria-label="Clean match: no penalties across all fired stages"
-                          >
-                            ✓ Clean
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="text-xs">
-                          No penalties across all fired stages
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span>
+                        {t.points != null ? (
+                          t.points.toFixed(0)
+                        ) : (
+                          <span className="text-muted-foreground font-normal">—</span>
+                        )}
+                      </span>
+                      <span className="text-xs text-muted-foreground font-normal">
+                        {t.avgPct != null ? formatPct(t.avgPct) : "—"}
+                      </span>
+                      <HitZoneBar
+                        aHits={t.aHits}
+                        cHits={t.cHits}
+                        dHits={t.dHits}
+                        misses={t.misses}
+                        noShoots={t.noShoots}
+                        procedurals={t.procedurals}
+                      />
+                      {t.totalPenaltyPts > 0 && (
+                        <span className="text-xs font-medium text-red-600 dark:text-red-400 tabular-nums">
+                          {`\u2212${t.totalPenaltyPts}pts`}
+                        </span>
+                      )}
+                      {t.isClean && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span
+                              className="text-xs text-green-600 dark:text-green-400 font-medium cursor-help"
+                              aria-label="Clean match: no penalties across all fired stages"
+                            >
+                              ✓ Clean
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs">
+                            No penalties across all fired stages
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                  )}
                 </td>
               ))}
             </tr>
@@ -508,12 +600,16 @@ function StageCell({
   sc,
   maxPoints,
   mode,
+  viewMode,
+  groupLeaderPoints,
   groupSize,
   divisionName,
 }: {
   sc: CompetitorSummary | undefined;
   maxPoints: number;
   mode: PctMode;
+  viewMode: ViewMode;
+  groupLeaderPoints: number | null;
   groupSize: number;
   divisionName: string | null;
 }) {
@@ -592,6 +688,31 @@ function StageCell({
             Stage zeroed — 0 points, ranked last
           </TooltipContent>
         </Tooltip>
+      </div>
+    );
+  }
+
+  // Delta mode: show gap to group leader with color-coded background
+  if (viewMode === "delta") {
+    const delta = computePointsDelta(sc.points, groupLeaderPoints);
+    return (
+      <div
+        className={cn(
+          "inline-flex flex-col items-center justify-center gap-0.5 py-1 px-2 rounded w-full",
+          delta != null ? deltaColorClasses(delta, maxPoints) : ""
+        )}
+      >
+        {sc.shooting_order != null && (
+          <ShootingOrderBadge order={sc.shooting_order} />
+        )}
+        <span
+          className={cn(
+            "font-semibold tabular-nums text-sm",
+            delta === 0 ? "text-muted-foreground" : "text-foreground"
+          )}
+        >
+          {delta != null ? formatDelta(delta) : "—"}
+        </span>
       </div>
     );
   }

@@ -121,6 +121,11 @@ export interface StageComparison {
 // "overall"  — HF % relative to the overall stage winner (full field, all divisions)
 export type PctMode = "group" | "division" | "overall";
 
+// View mode for the comparison table.
+// "absolute" — shows raw hit factor, points, and percentage
+// "delta"    — shows gap to the group leader per stage (±X.X pts)
+export type ViewMode = "absolute" | "delta";
+
 export interface CompareResponse {
   match_id: number;
   stages: StageComparison[];

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ComparisonTable } from "@/components/comparison-table";
 import type { CompareResponse } from "@/lib/types";
@@ -350,5 +350,138 @@ describe("ComparisonTable — incomplete scorecard indicator", () => {
     expect(
       screen.queryByLabelText("Incomplete scorecard (rule 9.7.6.2)")
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("ComparisonTable — delta view mode", () => {
+  it("renders Absolute and Delta toggle buttons", () => {
+    renderWithProviders(<ComparisonTable data={baseData} />);
+    expect(screen.getByRole("button", { name: "Absolute" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delta" })).toBeInTheDocument();
+  });
+
+  it("Absolute toggle is pressed by default", () => {
+    renderWithProviders(<ComparisonTable data={baseData} />);
+    expect(screen.getByRole("button", { name: "Absolute" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Delta" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("switches to delta mode when Delta button is clicked", () => {
+    renderWithProviders(<ComparisonTable data={baseData} />);
+    fireEvent.click(screen.getByRole("button", { name: "Delta" }));
+    expect(screen.getByRole("button", { name: "Delta" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Absolute" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("shows delta value (leader has ±0.0 pts) in delta mode", () => {
+    // Bob is the group leader (group_leader_points = 76, Bob.points = 76 → delta = 0)
+    renderWithProviders(<ComparisonTable data={baseData} />);
+    fireEvent.click(screen.getByRole("button", { name: "Delta" }));
+    expect(screen.getAllByText("±0.0 pts").length).toBeGreaterThan(0);
+  });
+
+  it("shows negative delta for the non-leader competitor in delta mode", () => {
+    // Alice: points=72, leader=76 → delta = -4 → "−4.0 pts"
+    renderWithProviders(<ComparisonTable data={baseData} />);
+    fireEvent.click(screen.getByRole("button", { name: "Delta" }));
+    expect(screen.getAllByText("\u22124.0 pts").length).toBeGreaterThan(0);
+  });
+
+  it("shows em-dash in delta mode for a competitor with no scorecard", () => {
+    const data: CompareResponse = {
+      ...baseData,
+      stages: [
+        {
+          ...baseData.stages[0],
+          competitors: {
+            // competitor 2 only — no scorecard for competitor 1
+            2: baseData.stages[0].competitors[2],
+          },
+        },
+      ],
+    };
+    renderWithProviders(<ComparisonTable data={data} />);
+    fireEvent.click(screen.getByRole("button", { name: "Delta" }));
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+
+  it("still shows DNF badge in delta mode", () => {
+    const data: CompareResponse = {
+      ...baseData,
+      stages: [
+        {
+          ...baseData.stages[0],
+          competitors: {
+            1: { ...baseData.stages[0].competitors[1], dnf: true, hit_factor: null, points: null },
+            2: baseData.stages[0].competitors[2],
+          },
+        },
+      ],
+    };
+    renderWithProviders(<ComparisonTable data={data} />);
+    fireEvent.click(screen.getByRole("button", { name: "Delta" }));
+    expect(screen.getByText("DNF")).toBeInTheDocument();
+  });
+
+  it("still shows DQ badge in delta mode", () => {
+    const data: CompareResponse = {
+      ...baseData,
+      stages: [
+        {
+          ...baseData.stages[0],
+          competitors: {
+            1: { ...baseData.stages[0].competitors[1], dq: true },
+            2: baseData.stages[0].competitors[2],
+          },
+        },
+      ],
+    };
+    renderWithProviders(<ComparisonTable data={data} />);
+    fireEvent.click(screen.getByRole("button", { name: "Delta" }));
+    expect(screen.getByText("DQ")).toBeInTheDocument();
+  });
+
+  it("totals row shows 'Total deficit' label in delta mode", () => {
+    renderWithProviders(<ComparisonTable data={baseData} />);
+    fireEvent.click(screen.getByRole("button", { name: "Delta" }));
+    expect(screen.getByText("Total deficit")).toBeInTheDocument();
+  });
+
+  it("totals row shows cumulative deficit for the non-leader in delta mode", () => {
+    // Alice: -4 pts across the 1 stage → total deficit = "−4.0 pts"
+    renderWithProviders(<ComparisonTable data={baseData} />);
+    fireEvent.click(screen.getByRole("button", { name: "Delta" }));
+    // Leader shows ±0.0 pts, non-leader shows −4.0 pts (appears at least once each)
+    expect(screen.getAllByText("±0.0 pts").length).toBeGreaterThanOrEqual(2); // per-stage + totals for leader
+    expect(screen.getAllByText("\u22124.0 pts").length).toBeGreaterThanOrEqual(2); // per-stage + totals for non-leader
+  });
+
+  it("hides % reference toggle in delta mode", () => {
+    renderWithProviders(<ComparisonTable data={baseData} />);
+    // % toggle visible in absolute mode
+    expect(screen.getByText("% relative to:")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Delta" }));
+    // % toggle hidden in delta mode
+    expect(screen.queryByText("% relative to:")).not.toBeInTheDocument();
+  });
+
+  it("tie case: two competitors with equal points both show ±0.0 pts in delta mode", () => {
+    const tieData: CompareResponse = {
+      ...baseData,
+      stages: [
+        {
+          ...baseData.stages[0],
+          group_leader_points: 76,
+          competitors: {
+            1: { ...baseData.stages[0].competitors[1], points: 76 },
+            2: { ...baseData.stages[0].competitors[2], points: 76 },
+          },
+        },
+      ],
+    };
+    renderWithProviders(<ComparisonTable data={tieData} />);
+    fireEvent.click(screen.getByRole("button", { name: "Delta" }));
+    // Both competitors show ±0.0 pts (per-stage); totals row also shows ±0.0 pts
+    expect(screen.getAllByText("±0.0 pts").length).toBeGreaterThanOrEqual(2);
   });
 });
