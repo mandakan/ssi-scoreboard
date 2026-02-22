@@ -9,7 +9,16 @@ describe("formatDivisionDisplay", () => {
 
   it("appends Minor when shoots_handgun_major is false", () => {
     expect(formatDivisionDisplay("Open", false)).toBe("Open Minor");
-    expect(formatDivisionDisplay("Production Optics", false)).toBe("Production Optics Minor");
+  });
+
+  it("returns base name for Production regardless of shoots_handgun_major", () => {
+    expect(formatDivisionDisplay("Production", true)).toBe("Production");
+    expect(formatDivisionDisplay("Production", false)).toBe("Production");
+  });
+
+  it("returns base name for Production Optics regardless of shoots_handgun_major", () => {
+    expect(formatDivisionDisplay("Production Optics", true)).toBe("Production Optics");
+    expect(formatDivisionDisplay("Production Optics", false)).toBe("Production Optics");
   });
 
   it("returns base name when shoots_handgun_major is null", () => {
