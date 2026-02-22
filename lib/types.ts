@@ -44,7 +44,8 @@ export interface StageResult {
   c_hits: number | null;
   d_hits: number | null;
   miss_count: number | null;
-  penalty_count: number | null;
+  no_shoots: number | null;
+  procedurals: number | null;
 }
 
 export interface ScoreCard {
@@ -73,6 +74,12 @@ export interface CompetitorSummary {
   dq: boolean;
   zeroed: boolean;
   dnf: boolean;
+  a_hits: number | null;
+  c_hits: number | null; // B-zone combined into C
+  d_hits: number | null;
+  miss_count: number | null;
+  no_shoots: number | null;
+  procedurals: number | null;
 }
 
 export interface StageComparison {

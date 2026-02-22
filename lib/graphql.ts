@@ -144,6 +144,13 @@ export const SCORECARDS_QUERY = `
               disqualified
               zeroed
               stage_not_fired
+              ascore
+              bscore
+              cscore
+              dscore
+              miss
+              no_shoots
+              procedurals
               competitor {
                 id
                 ... on IpscCompetitorNode {

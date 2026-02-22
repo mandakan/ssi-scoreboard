@@ -13,6 +13,13 @@ interface RawScCard {
   disqualified?: boolean | null;
   zeroed?: boolean | null;
   stage_not_fired?: boolean | null;
+  ascore?: number | string | null;
+  bscore?: number | string | null;
+  cscore?: number | string | null;
+  dscore?: number | string | null;
+  miss?: number | string | null;
+  no_shoots?: number | string | null;
+  procedurals?: number | string | null;
   competitor?: {
     id: string;
     first_name?: string;
@@ -148,6 +155,8 @@ export async function GET(req: Request) {
       const parseNum = (v: number | string | null | undefined) =>
         v != null ? parseFloat(String(v)) : null;
 
+      const b = parseNum(sc.bscore);
+      const c = parseNum(sc.cscore);
       rawScorecards.push({
         competitor_id: compId,
         competitor_division: sc.competitor.get_handgun_div_display ?? sc.competitor.handgun_div ?? null,
@@ -161,6 +170,12 @@ export async function GET(req: Request) {
         dq: sc.disqualified ?? false,
         zeroed: sc.zeroed ?? false,
         dnf: sc.stage_not_fired ?? false,
+        a_hits: parseNum(sc.ascore),
+        c_hits: b !== null || c !== null ? (b ?? 0) + (c ?? 0) : null,
+        d_hits: parseNum(sc.dscore),
+        miss_count: parseNum(sc.miss),
+        no_shoots: parseNum(sc.no_shoots),
+        procedurals: parseNum(sc.procedurals),
       });
     }
   }

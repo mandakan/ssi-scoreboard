@@ -20,6 +20,12 @@ export interface RawScorecard {
   dq: boolean;
   zeroed: boolean;
   dnf: boolean;
+  a_hits: number | null;
+  c_hits: number | null; // B-zone combined into C
+  d_hits: number | null;
+  miss_count: number | null;
+  no_shoots: number | null;
+  procedurals: number | null;
 }
 
 /**
@@ -164,6 +170,12 @@ export function computeGroupRankings(
           dq: sc?.dq ?? false,
           zeroed: sc?.zeroed ?? false,
           dnf: true,
+          a_hits: null,
+          c_hits: null,
+          d_hits: null,
+          miss_count: null,
+          no_shoots: null,
+          procedurals: null,
         };
       } else {
         const hf = effectiveHF(sc);
@@ -185,6 +197,12 @@ export function computeGroupRankings(
           dq: sc.dq,
           zeroed: sc.zeroed,
           dnf: false,
+          a_hits: sc.a_hits,
+          c_hits: sc.c_hits,
+          d_hits: sc.d_hits,
+          miss_count: sc.miss_count,
+          no_shoots: sc.no_shoots,
+          procedurals: sc.procedurals,
         };
       }
     }

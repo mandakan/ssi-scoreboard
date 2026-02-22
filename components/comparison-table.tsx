@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn, formatHF, formatTime, formatPct } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
+import { HitZoneBar } from "@/components/hit-zone-bar";
 import type { CompareResponse, CompetitorSummary, PctMode } from "@/lib/types";
 
 interface ComparisonTableProps {
@@ -117,12 +118,16 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
   const [mode, setMode] = useState<PctMode>("group");
   const colorMap = buildColorMap(competitors.map((c) => c.id));
 
-  // Compute totals per competitor: total raw points + average % in current mode
+  // Compute totals per competitor: total raw points, average %, and zone/penalty sums
   const totals = competitors.map((comp) => {
     let totalPts = 0;
     let pctSum = 0;
     let pctCount = 0;
     let hasFired = false;
+    let aTotal = 0, cTotal = 0, dTotal = 0, mTotal = 0;
+    let nsTotal = 0, pTotal = 0;
+    let hasZoneData = false;
+    let hasPenaltyData = false;
 
     for (const stage of stages) {
       const sc = stage.competitors[comp.id];
@@ -134,12 +139,30 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
         pctSum += pct;
         pctCount++;
       }
+      if (sc.a_hits !== null || sc.c_hits !== null || sc.d_hits !== null || sc.miss_count !== null) {
+        hasZoneData = true;
+        aTotal += sc.a_hits ?? 0;
+        cTotal += sc.c_hits ?? 0;
+        dTotal += sc.d_hits ?? 0;
+        mTotal += sc.miss_count ?? 0;
+      }
+      if (sc.no_shoots !== null || sc.procedurals !== null) {
+        hasPenaltyData = true;
+        nsTotal += sc.no_shoots ?? 0;
+        pTotal += sc.procedurals ?? 0;
+      }
     }
 
     return {
       id: comp.id,
       points: hasFired ? totalPts : null,
       avgPct: pctCount > 0 ? pctSum / pctCount : null,
+      aHits: hasZoneData ? aTotal : null,
+      cHits: hasZoneData ? cTotal : null,
+      dHits: hasZoneData ? dTotal : null,
+      misses: hasZoneData ? mTotal : null,
+      noShoots: hasPenaltyData ? nsTotal : null,
+      procedurals: hasPenaltyData ? pTotal : null,
     };
   });
 
@@ -226,6 +249,14 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
                     <span className="text-xs text-muted-foreground font-normal">
                       {t.avgPct != null ? formatPct(t.avgPct) : "—"}
                     </span>
+                    <HitZoneBar
+                      aHits={t.aHits}
+                      cHits={t.cHits}
+                      dHits={t.dHits}
+                      misses={t.misses}
+                      noShoots={t.noShoots}
+                      procedurals={t.procedurals}
+                    />
                   </div>
                 </td>
               ))}
@@ -327,6 +358,15 @@ function StageCell({
           {formatPct(pct)}
         </span>
       )}
+      {/* Hit zone distribution bar */}
+      <HitZoneBar
+        aHits={sc.a_hits}
+        cHits={sc.c_hits}
+        dHits={sc.d_hits}
+        misses={sc.miss_count}
+        noShoots={sc.no_shoots}
+        procedurals={sc.procedurals}
+      />
     </div>
   );
 }
