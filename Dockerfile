@@ -15,10 +15,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# SSI_API_KEY must be provided at build time (or via NEXT_PUBLIC_ — but we don't
-# expose it publicly). Pass it as a build arg and expose as env var for the build.
-ARG SSI_API_KEY
-ENV SSI_API_KEY=$SSI_API_KEY
+# Ensure public/ exists so the runner COPY never fails on an empty/absent dir
+RUN mkdir -p /app/public
 
 RUN pnpm build
 

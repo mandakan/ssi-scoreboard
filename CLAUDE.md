@@ -111,7 +111,11 @@ When adding new packages, always specify the exact latest stable version (check 
 ## Docker / Docker Compose
 ```bash
 cp .env.local.example .env.local   # fill in SSI_API_KEY
-docker compose up --build           # builds and runs on port 3000
+pnpm docker:build                  # builds image (passes --env-file .env.local)
+pnpm docker:up                     # runs on port 3000
 ```
+`docker:up` passes `--env-file .env.local` so `${SSI_API_KEY}` is available at runtime.
+The build step does not need the key — it has no `NEXT_PUBLIC_` prefix so Next.js
+never bakes it into the bundle.
 The Dockerfile uses multi-stage builds (deps → builder → runner) with a non-root user.
 `output: "standalone"` in `next.config.ts` is required for the Docker image to work.

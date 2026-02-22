@@ -2,8 +2,6 @@ services:
   app:
     build:
       context: .
-      args:
-        SSI_API_KEY: ${SSI_API_KEY}
     ports:
       - "3000:3000"
     environment:
