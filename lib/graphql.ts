@@ -90,6 +90,8 @@ export const MATCH_QUERY = `
             number
             club
             handgun_div
+            get_handgun_div_display
+            shoots_handgun_major
           }
         }
       }
@@ -129,6 +131,7 @@ export const SCORECARDS_QUERY = `
                   number
                   club
                   handgun_div
+                  get_handgun_div_display
                 }
               }
             }

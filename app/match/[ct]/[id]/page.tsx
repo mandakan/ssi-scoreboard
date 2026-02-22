@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { MatchHeader } from "@/components/match-header";
@@ -10,15 +10,51 @@ import { ComparisonChart } from "@/components/comparison-chart";
 import { useMatchQuery, useCompareQuery } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
 import { Loader2, AlertCircle, ArrowLeft, RefreshCw } from "lucide-react";
+import { useEffect } from "react";
+import {
+  saveRecentCompetition,
+  saveCompetitorSelection,
+  getCompetitorSelectionSnapshot,
+  SELECTION_CHANGED,
+} from "@/lib/competition-store";
 
 export default function MatchPage() {
   const params = useParams<{ ct: string; id: string }>();
   const { ct, id } = params;
 
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  // Use useSyncExternalStore to read competitor selection from localStorage.
+  // This handles SSR (server snapshot = []) and client-side hydration correctly,
+  // and avoids setState-in-effect for restoration.
+  const selectedIds = useSyncExternalStore(
+    useCallback(
+      (onChange) => {
+        const handler = (e: Event) => {
+          const ev = e as CustomEvent<{ ct: string; id: string }>;
+          if (ev.detail?.ct === ct && ev.detail?.id === id) onChange();
+        };
+        window.addEventListener(SELECTION_CHANGED, handler);
+        return () => window.removeEventListener(SELECTION_CHANGED, handler);
+      },
+      [ct, id]
+    ),
+    useCallback(() => getCompetitorSelectionSnapshot(ct, id), [ct, id]),
+    useCallback(() => [] as number[], [])
+  );
 
   const matchQuery = useMatchQuery(ct, id);
   const compareQuery = useCompareQuery(ct, id, selectedIds);
+
+  // Save match to recents whenever data loads/changes (localStorage write, no setState).
+  useEffect(() => {
+    if (matchQuery.data) {
+      saveRecentCompetition(ct, id, matchQuery.data);
+    }
+  }, [ct, id, matchQuery.data]);
+
+  function handleSelectionChange(ids: number[]) {
+    saveCompetitorSelection(ct, id, ids);
+    // useSyncExternalStore will re-render with the new snapshot automatically.
+  }
 
   if (matchQuery.isLoading) {
     return (
@@ -67,7 +103,7 @@ export default function MatchPage() {
         <CompetitorPicker
           competitors={match.competitors}
           selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
+          onSelectionChange={handleSelectionChange}
         />
       </div>
 

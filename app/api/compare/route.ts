@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { executeQuery, SCORECARDS_QUERY, MATCH_QUERY } from "@/lib/graphql";
+import { formatDivisionDisplay } from "@/lib/divisions";
 import { computeGroupRankings, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompareResponse, CompetitorInfo } from "@/lib/types";
 
@@ -19,6 +20,7 @@ interface RawScCard {
     number?: string;
     club?: string | null;
     handgun_div?: string | null;
+    get_handgun_div_display?: string | null;
   } | null;
 }
 
@@ -44,6 +46,8 @@ interface RawCompetitor {
   number?: string;
   club?: string | null;
   handgun_div?: string | null;
+  get_handgun_div_display?: string | null;
+  shoots_handgun_major?: boolean | null;
 }
 
 interface RawMatchData {
@@ -113,7 +117,7 @@ export async function GET(req: Request) {
         name: [c.first_name, c.last_name].filter(Boolean).join(" ") || "Unknown",
         competitor_number: c.number ?? "",
         club: c.club ?? null,
-        division: c.handgun_div ?? null,
+        division: formatDivisionDisplay(c.get_handgun_div_display ?? c.handgun_div, c.shoots_handgun_major),
       },
     ])
   );
@@ -146,7 +150,7 @@ export async function GET(req: Request) {
 
       rawScorecards.push({
         competitor_id: compId,
-        competitor_division: sc.competitor.handgun_div ?? null,
+        competitor_division: sc.competitor.get_handgun_div_display ?? sc.competitor.handgun_div ?? null,
         stage_id: stageId,
         stage_number: stage.number,
         stage_name: stage.name,

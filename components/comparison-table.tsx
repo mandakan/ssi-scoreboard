@@ -17,17 +17,30 @@ interface ComparisonTableProps {
 
 const RANK_COLORS = ["bg-yellow-400", "bg-gray-300", "bg-amber-600"];
 
-function RankBadge({ rank }: { rank: number }) {
+function RankBadge({
+  rank,
+  tooltip,
+}: {
+  rank: number;
+  tooltip: string;
+}) {
   const color = rank <= 3 ? RANK_COLORS[rank - 1] : undefined;
   return (
-    <span
-      className={cn(
-        "inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold text-white",
-        color ?? "bg-muted-foreground"
-      )}
-    >
-      {rank}
-    </span>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={cn(
+            "inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold text-white cursor-help",
+            color ?? "bg-muted-foreground"
+          )}
+        >
+          {rank}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-xs">
+        {tooltip}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -181,7 +194,13 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
                   const sc = stage.competitors[comp.id];
                   return (
                     <td key={comp.id} className="py-2 px-3 text-center align-top">
-                      <StageCell sc={sc} maxPoints={stage.max_points} mode={mode} />
+                      <StageCell
+                        sc={sc}
+                        maxPoints={stage.max_points}
+                        mode={mode}
+                        groupSize={competitors.length}
+                        divisionName={comp.division}
+                      />
                     </td>
                   );
                 })}
@@ -218,14 +237,36 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
   );
 }
 
+function rankTooltip(
+  rank: number,
+  mode: PctMode,
+  groupSize: number,
+  divisionName: string | null
+): string {
+  switch (mode) {
+    case "group":
+      return `Rank ${rank} of ${groupSize} in your group`;
+    case "division":
+      return divisionName
+        ? `Rank ${rank} in ${divisionName} (full field)`
+        : `Rank ${rank} in division (full field)`;
+    case "overall":
+      return `Rank ${rank} overall (all divisions)`;
+  }
+}
+
 function StageCell({
   sc,
   maxPoints,
   mode,
+  groupSize,
+  divisionName,
 }: {
   sc: CompetitorSummary | undefined;
   maxPoints: number;
   mode: PctMode;
+  groupSize: number;
+  divisionName: string | null;
 }) {
   if (!sc || sc.dnf) {
     return <span className="text-muted-foreground text-xs">—</span>;
@@ -263,7 +304,12 @@ function StageCell({
     <div className="flex flex-col items-center gap-0.5">
       {/* Primary: hit factor + rank badge */}
       <div className="flex items-center gap-1">
-        {rank != null && rank <= 3 && <RankBadge rank={rank} />}
+        {rank != null && (
+          <RankBadge
+            rank={rank}
+            tooltip={rankTooltip(rank, mode, groupSize, divisionName)}
+          />
+        )}
         <span className="font-semibold tabular-nums">
           {formatHF(sc.hit_factor)}
         </span>

@@ -11,8 +11,8 @@ function renderWithProviders(ui: React.ReactElement) {
 const baseData: CompareResponse = {
   match_id: 26547,
   competitors: [
-    { id: 1, name: "Alice Smith", competitor_number: "35", club: null, division: "hg1" },
-    { id: 2, name: "Bob Jones", competitor_number: "50", club: null, division: "hg3" },
+    { id: 1, name: "Alice Smith", competitor_number: "35", club: null, division: "Open Major" },
+    { id: 2, name: "Bob Jones", competitor_number: "50", club: null, division: "Production Minor" },
   ],
   stages: [
     {

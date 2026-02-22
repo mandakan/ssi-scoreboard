@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { executeQuery, MATCH_QUERY } from "@/lib/graphql";
+import { formatDivisionDisplay } from "@/lib/divisions";
 import type { MatchResponse, StageInfo, CompetitorInfo } from "@/lib/types";
 
 interface RawStage {
@@ -17,6 +18,8 @@ interface RawCompetitor {
   number?: string;
   club?: string | null;
   handgun_div?: string | null;
+  get_handgun_div_display?: string | null;
+  shoots_handgun_major?: boolean | null;
 }
 
 interface RawMatchData {
@@ -77,7 +80,7 @@ export async function GET(
     name: [c.first_name, c.last_name].filter(Boolean).join(" ") || "Unknown",
     competitor_number: c.number ?? "",
     club: c.club ?? null,
-    division: c.handgun_div ?? null,
+    division: formatDivisionDisplay(c.get_handgun_div_display ?? c.handgun_div, c.shoots_handgun_major),
   }));
 
   const response: MatchResponse = {
