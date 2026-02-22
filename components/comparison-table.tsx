@@ -276,7 +276,7 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
             {stages.map((stage) => (
               <tr key={stage.stage_id} className="border-b hover:bg-muted/30">
                 <td className="py-2 pr-4 font-medium">
-                  <div className="flex flex-col">
+                  <div className="flex flex-col gap-0.5">
                     {stage.ssi_url ? (
                       <a
                         href={stage.ssi_url}
@@ -295,6 +295,17 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
                       </span>
                     )}
                     <span className="truncate max-w-32">{stage.stage_name}</span>
+                    {/* Stage metadata: rounds / targets */}
+                    {(stage.min_rounds != null || stage.paper_targets != null ||
+                      (stage.steel_targets != null && stage.steel_targets > 0)) && (
+                      <span className="text-xs text-muted-foreground/70 tabular-nums">
+                        {[
+                          stage.min_rounds != null && `${stage.min_rounds} rds`,
+                          stage.paper_targets != null && `${stage.paper_targets} paper`,
+                          stage.steel_targets != null && stage.steel_targets > 0 && `${stage.steel_targets} steel`,
+                        ].filter(Boolean).join(" · ")}
+                      </span>
+                    )}
                   </div>
                 </td>
                 {competitors.map((comp) => {

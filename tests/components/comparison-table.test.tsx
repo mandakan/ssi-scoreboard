@@ -224,6 +224,20 @@ describe("ComparisonTable", () => {
     expect(screen.queryByRole("link", { name: /stage one.*shootnscoreit/i })).not.toBeInTheDocument();
     expect(screen.getByText("Stage 1")).toBeInTheDocument();
   });
+
+  it("renders stage metadata row when min_rounds and paper_targets are present", () => {
+    const dataWithMeta = {
+      ...baseData,
+      stages: [{ ...baseData.stages[0], min_rounds: 16, paper_targets: 8, steel_targets: 0 }],
+    };
+    renderWithProviders(<ComparisonTable data={dataWithMeta} />);
+    expect(screen.getByText("16 rds · 8 paper")).toBeInTheDocument();
+  });
+
+  it("omits metadata row when all optional fields are absent", () => {
+    renderWithProviders(<ComparisonTable data={baseData} />);
+    expect(screen.queryByText(/rds/)).not.toBeInTheDocument();
+  });
 });
 
 describe("ComparisonTable — penalty badge", () => {

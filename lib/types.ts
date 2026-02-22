@@ -92,6 +92,9 @@ export interface StageComparison {
   stage_num: number;
   max_points: number;
   ssi_url?: string | null;            // direct link to the stage on shootnscoreit.com
+  min_rounds?: number | null;
+  paper_targets?: number | null;
+  steel_targets?: number | null;
   group_leader_hf: number | null;     // best HF in selected group
   group_leader_points: number | null; // best raw pts in selected group — benchmark overlay hook, do not remove
   overall_leader_hf: number | null;   // best HF across full field — benchmark overlay hook

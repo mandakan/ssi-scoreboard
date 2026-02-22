@@ -64,6 +64,10 @@ interface RawMatchData {
       number: number;
       name: string;
       max_points: number;
+      minimum_rounds?: number | null;
+      paper?: number | null;
+      popper?: number | null;
+      plate?: number | null;
       get_full_absolute_url?: string | null;
     }[];
     competitors_approved_w_wo_results_not_dnf?: RawCompetitor[];
@@ -186,16 +190,23 @@ export async function GET(req: Request) {
     }
   }
 
-  // Build a map of stage_id → ssi_url from match data
-  const stageUrlMap = new Map<number, string | null>(
+  // Build a map of stage_id → stage metadata from match data
+  const stageMetaMap = new Map(
     (matchData.event.stages ?? []).map((s) => [
       parseInt(s.id, 10),
-      s.get_full_absolute_url ? `https://${s.get_full_absolute_url}` : null,
+      {
+        ssi_url: s.get_full_absolute_url ? `https://${s.get_full_absolute_url}` : null,
+        min_rounds: s.minimum_rounds ?? null,
+        paper_targets: s.paper ?? null,
+        steel_targets: (s.popper != null || s.plate != null)
+          ? (s.popper ?? 0) + (s.plate ?? 0)
+          : null,
+      },
     ])
   );
 
   const stages = computeGroupRankings(rawScorecards, requestedCompetitors).map(
-    (s) => ({ ...s, ssi_url: stageUrlMap.get(s.stage_id) ?? null })
+    (s) => ({ ...s, ...stageMetaMap.get(s.stage_id) })
   );
 
   const response: CompareResponse = {
