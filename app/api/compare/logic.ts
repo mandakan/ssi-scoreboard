@@ -106,6 +106,55 @@ function medianHF(scorecards: RawScorecard[]): { median: number | null; count: n
   return { median, count: valid.length };
 }
 
+const DIFFICULTY_LABELS: Record<1 | 2 | 3 | 4 | 5, string> = {
+  1: "easy",
+  2: "moderate",
+  3: "hard",
+  4: "very hard",
+  5: "brutal",
+};
+
+/**
+ * Map a normalised difficulty score [0, 1] to a 1–5 integer level.
+ * 0 = easiest (highest field median HF), 1 = hardest (lowest field median HF).
+ */
+function normalisedToLevel(score: number): 1 | 2 | 3 | 4 | 5 {
+  if (score < 0.2) return 1;
+  if (score < 0.4) return 2;
+  if (score < 0.6) return 3;
+  if (score < 0.8) return 4;
+  return 5;
+}
+
+/**
+ * Assign difficulty levels to a set of stages based on their field median HFs.
+ *
+ * Formula: difficulty[s] = 1 − (field_median_hf[s] / max(field_median_hf[]))
+ * Stages with a higher field median are easier (more shooters score well).
+ *
+ * Edge case: when all stages have equal median HF (or all are null/zero),
+ * every stage receives the middle difficulty level (3, "hard").
+ */
+export function assignDifficulty(
+  medians: (number | null)[]
+): { level: 1 | 2 | 3 | 4 | 5; label: string }[] {
+  const validMedians = medians.filter((m): m is number => m !== null && m > 0);
+  const maxMedian = validMedians.length > 0 ? Math.max(...validMedians) : 0;
+  const minMedian = validMedians.length > 0 ? Math.min(...validMedians) : 0;
+  const allEqual = maxMedian === 0 || maxMedian === minMedian;
+
+  return medians.map((median) => {
+    let level: 1 | 2 | 3 | 4 | 5;
+    if (allEqual || median === null || median <= 0) {
+      level = 3; // middle value when no differentiation is possible
+    } else {
+      const score = 1 - median / maxMedian;
+      level = normalisedToLevel(score);
+    }
+    return { level, label: DIFFICULTY_LABELS[level] };
+  });
+}
+
 /**
  * Given ALL scorecards for a match and the selected competitors, compute:
  *   - Group rankings (rank/% within selected competitors)
@@ -161,7 +210,7 @@ export function computeGroupRankings(
     return byStage.get(a)![0].stage_number - byStage.get(b)![0].stage_number;
   });
 
-  return stageIds.map((stageId) => {
+  const stageComparisons = stageIds.map((stageId) => {
     const allStage = byStage.get(stageId)!;
     const first = allStage[0];
 
@@ -276,9 +325,23 @@ export function computeGroupRankings(
       overall_leader_hf: overallLeaderHF,
       field_median_hf: fieldMedianHF,
       field_competitor_count: fieldCompetitorCount,
+      // Difficulty is a placeholder here; overwritten in the second pass below
+      // once all stage medians are known.
+      stageDifficultyLevel: 3,
+      stageDifficultyLabel: "hard",
       competitors: competitorMap,
     };
 
     return comparison;
   });
+
+  // Second pass: assign relative difficulty levels now that all stage medians are known.
+  const medians = stageComparisons.map((s) => s.field_median_hf);
+  const difficulties = assignDifficulty(medians);
+
+  return stageComparisons.map((s, i) => ({
+    ...s,
+    stageDifficultyLevel: difficulties[i].level,
+    stageDifficultyLabel: difficulties[i].label,
+  }));
 }

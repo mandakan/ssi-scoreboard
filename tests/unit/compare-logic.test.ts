@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeGroupRankings, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, assignDifficulty, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompetitorInfo } from "@/lib/types";
 
 const competitors: CompetitorInfo[] = [
@@ -540,5 +540,110 @@ describe("computeGroupRankings — incomplete scorecard flag", () => {
     ];
     const result = computeGroupRankings(scorecards, [competitors[0]]);
     expect(result[0].competitors[1].incomplete).toBe(false);
+  });
+});
+
+describe("assignDifficulty — normalisation logic", () => {
+  it("returns level 1 (easy) for the stage with the highest median HF", () => {
+    const result = assignDifficulty([10.0, 5.0, 2.0]);
+    expect(result[0].level).toBe(1);
+    expect(result[0].label).toBe("easy");
+  });
+
+  it("returns level 5 (brutal) for the stage with the lowest median HF when spread is large", () => {
+    // difficulty[2] = 1 - (2.0/10.0) = 0.8 → level 5
+    const result = assignDifficulty([10.0, 5.0, 2.0]);
+    expect(result[2].level).toBe(5);
+    expect(result[2].label).toBe("brutal");
+  });
+
+  it("maps correctly across all five bands", () => {
+    // Construct medians so that normalised scores land in each band:
+    // base = 100, scores: 0, 0.1, 0.3, 0.5, 0.7, 0.9
+    // HFs:        100, 90,  70,  50,  30,  10
+    const medians = [100, 90, 70, 50, 30, 10];
+    const result = assignDifficulty(medians);
+    expect(result[0].level).toBe(1); // score = 0.00 → easy
+    expect(result[1].level).toBe(1); // score = 0.10 → easy
+    expect(result[2].level).toBe(2); // score = 0.30 → moderate
+    expect(result[3].level).toBe(3); // score = 0.50 → hard
+    expect(result[4].level).toBe(4); // score = 0.70 → very hard
+    expect(result[5].level).toBe(5); // score = 0.90 → brutal
+  });
+
+  it("edge case: all stages have the same median HF → all return level 3 (hard)", () => {
+    const result = assignDifficulty([4.0, 4.0, 4.0]);
+    for (const r of result) {
+      expect(r.level).toBe(3);
+      expect(r.label).toBe("hard");
+    }
+  });
+
+  it("edge case: single stage → level 3 (hard, no relative comparison possible)", () => {
+    const result = assignDifficulty([7.5]);
+    expect(result[0].level).toBe(3);
+  });
+
+  it("edge case: all null medians → all return level 3", () => {
+    const result = assignDifficulty([null, null, null]);
+    for (const r of result) {
+      expect(r.level).toBe(3);
+      expect(r.label).toBe("hard");
+    }
+  });
+
+  it("edge case: empty array returns empty array", () => {
+    const result = assignDifficulty([]);
+    expect(result).toEqual([]);
+  });
+
+  it("null medians within a mixed list default to level 3, as do single-valid-value stages", () => {
+    // Only one valid median → max === min → "allEqual" edge case applies to both.
+    // Neither stage can be differentiated from the other, so both get middle value.
+    const result = assignDifficulty([10.0, null]);
+    expect(result[0].level).toBe(3);
+    expect(result[1].level).toBe(3);
+  });
+});
+
+describe("computeGroupRankings — stage difficulty integration", () => {
+  it("attaches stageDifficultyLevel and stageDifficultyLabel to each stage", () => {
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 5.0 }),
+      makeCard(2, 1, { hit_factor: 3.0 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    expect(result[0].stageDifficultyLevel).toBeGreaterThanOrEqual(1);
+    expect(result[0].stageDifficultyLevel).toBeLessThanOrEqual(5);
+    expect(typeof result[0].stageDifficultyLabel).toBe("string");
+    expect(result[0].stageDifficultyLabel.length).toBeGreaterThan(0);
+  });
+
+  it("hardest stage (lowest field median HF) gets a higher difficulty level than easiest stage", () => {
+    // stage 1: all shoot well → high median → easy
+    // stage 2: all shoot poorly → low median → hard
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 8.0, stage_number: 1 }),
+      makeCard(2, 1, { hit_factor: 9.0, stage_number: 1 }),
+      makeCard(1, 2, { hit_factor: 2.0, stage_number: 2 }),
+      makeCard(2, 2, { hit_factor: 1.0, stage_number: 2 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    const stage1 = result.find((s) => s.stage_num === 1)!;
+    const stage2 = result.find((s) => s.stage_num === 2)!;
+    expect(stage1.stageDifficultyLevel).toBeLessThan(stage2.stageDifficultyLevel);
+  });
+
+  it("all stages with same median HF all get level 3", () => {
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 5.0, stage_number: 1 }),
+      makeCard(1, 2, { hit_factor: 5.0, stage_number: 2 }),
+      makeCard(1, 3, { hit_factor: 5.0, stage_number: 3 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    for (const stage of result) {
+      expect(stage.stageDifficultyLevel).toBe(3);
+      expect(stage.stageDifficultyLabel).toBe("hard");
+    }
   });
 });

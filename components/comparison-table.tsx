@@ -17,6 +17,56 @@ interface ComparisonTableProps {
   data: CompareResponse;
 }
 
+const DIFFICULTY_COLORS: Record<1 | 2 | 3 | 4 | 5, string> = {
+  1: "text-emerald-500",
+  2: "text-lime-500",
+  3: "text-yellow-500",
+  4: "text-orange-500",
+  5: "text-red-500",
+};
+
+function StageDifficultyIcon({
+  level,
+  label,
+  medianHF,
+}: {
+  level: 1 | 2 | 3 | 4 | 5;
+  label: string;
+  medianHF: number | null;
+}) {
+  const color = DIFFICULTY_COLORS[level];
+  const tooltipText = medianHF != null
+    ? `${label.charAt(0).toUpperCase() + label.slice(1)} — field median HF: ${formatHF(medianHF)}`
+    : `${label.charAt(0).toUpperCase() + label.slice(1)}`;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={cn("inline-flex items-end gap-px cursor-help leading-none", color)}
+          aria-label={`Difficulty: ${label}`}
+          role="img"
+        >
+          {[1, 2, 3, 4, 5].map((bar) => (
+            <span
+              key={bar}
+              aria-hidden="true"
+              className={cn(
+                "inline-block w-1 rounded-sm",
+                bar <= level ? "opacity-100" : "opacity-20"
+              )}
+              style={{ height: `${bar * 3 + 3}px` }}
+            />
+          ))}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-xs">
+        {tooltipText}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 const RANK_COLORS = ["bg-yellow-400", "bg-gray-300", "bg-amber-600"];
 
 function ordinal(n: number): string {
@@ -316,23 +366,30 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
                         ].filter(Boolean).join(" · ")}
                       </span>
                     )}
-                    {/* Field median annotation */}
-                    {stage.field_median_hf != null && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span
-                            className="text-xs text-muted-foreground/60 tabular-nums cursor-help"
-                            aria-label={`Field median hit factor: ${formatHF(stage.field_median_hf)} across ${stage.field_competitor_count} competitors`}
-                          >
-                            {`med: ${formatHF(stage.field_median_hf)}`}
-                            <span className="opacity-60">{` (${stage.field_competitor_count})`}</span>
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="max-w-52 text-center text-xs">
-                          {`Field median hit factor: ${formatHF(stage.field_median_hf)} across ${stage.field_competitor_count} competitors (excludes DNF/DQ/zeroed)`}
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
+                    {/* Difficulty icon + field median annotation */}
+                    <div className="flex items-center gap-1.5">
+                      <StageDifficultyIcon
+                        level={stage.stageDifficultyLevel}
+                        label={stage.stageDifficultyLabel}
+                        medianHF={stage.field_median_hf}
+                      />
+                      {stage.field_median_hf != null && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span
+                              className="text-xs text-muted-foreground/60 tabular-nums cursor-help"
+                              aria-label={`Field median hit factor: ${formatHF(stage.field_median_hf)} across ${stage.field_competitor_count} competitors`}
+                            >
+                              {`med: ${formatHF(stage.field_median_hf)}`}
+                              <span className="opacity-60">{` (${stage.field_competitor_count})`}</span>
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-52 text-center text-xs">
+                            {`Field median hit factor: ${formatHF(stage.field_median_hf)} across ${stage.field_competitor_count} competitors (excludes DNF/DQ/zeroed)`}
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
                   </div>
                 </td>
                 {competitors.map((comp) => {
