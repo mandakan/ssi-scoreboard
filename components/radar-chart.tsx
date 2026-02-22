@@ -74,19 +74,14 @@ export function StageBalanceChart({ data }: StageBalanceChartProps) {
     <div>
       <ResponsiveContainer width="100%" height={320}>
         <RadarChart data={radarData} margin={{ top: 8, right: 24, bottom: 8, left: 24 }}>
-          <PolarGrid className="stroke-border" />
+          <PolarGrid stroke="var(--border)" />
           <PolarAngleAxis
             dataKey="stage"
-            tick={{ fontSize: 12 }}
-            className="fill-muted-foreground"
+            tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
           />
-          <PolarRadiusAxis
-            domain={[0, 100]}
-            tick={{ fontSize: 10 }}
-            tickCount={3}
-            tickFormatter={(v: number) => `${v}%`}
-            className="fill-muted-foreground"
-          />
+          {/* domain fixes the scale at 0–100%; tick=false avoids labels
+              overlapping the stage-name ticks around the perimeter */}
+          <PolarRadiusAxis domain={[0, 100]} tick={false} />
           <Tooltip
             contentStyle={popoverStyle}
             labelStyle={{ color: "var(--popover-foreground)", fontWeight: 600 }}
@@ -103,9 +98,9 @@ export function StageBalanceChart({ data }: StageBalanceChartProps) {
                 key={comp.id}
                 dataKey={String(comp.id)}
                 stroke={colorMap[comp.id]}
-                fill={colorMap[comp.id]}
-                fillOpacity={0.15}
-                dot={{ fill: colorMap[comp.id], r: 3 }}
+                strokeWidth={2}
+                fill="none"
+                dot={{ fill: colorMap[comp.id], r: 4, stroke: "var(--background)", strokeWidth: 1.5 }}
                 name={String(comp.id)}
               />
             ))}
