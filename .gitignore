@@ -1,14 +1,30 @@
+# Next.js
 .next/
 out/
+
+# Dependencies
 node_modules/
+
+# Environment variables
 .env.local
 .env*.local
 .env
+
+# OS / editor
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+
+# Claude Code
 .claude/settings.local.json
+
+# Testing
+/coverage/
 /test-results/
 /playwright-report/
 /playwright/.cache/
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
