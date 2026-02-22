@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Link from "next/link";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 
@@ -26,18 +27,38 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}>
-        <Providers>{children}</Providers>
-        <footer className="py-4 text-center text-xs text-muted-foreground">
-          Powered by{" "}
-          <a
-            href="https://shootnscoreit.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:text-foreground"
-          >
-            Shoot&apos;n Score It
-          </a>
-        </footer>
+        <Providers>
+          {children}
+          <footer className="w-full flex justify-center gap-4 p-4 text-xs text-muted-foreground border-t border-border mt-auto">
+            <span>
+              Powered by{" "}
+              <a
+                href="https://shootnscoreit.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-foreground"
+              >
+                Shoot&apos;n Score It
+              </a>
+            </span>
+            <span aria-hidden="true">·</span>
+            <a
+              href="https://github.com/mandakan/ssi-scoreboard"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-foreground"
+            >
+              GitHub
+            </a>
+            <span aria-hidden="true">·</span>
+            <Link
+              href="/legal"
+              className="hover:text-foreground underline underline-offset-4"
+            >
+              Terms &amp; Privacy
+            </Link>
+          </footer>
+        </Providers>
       </body>
     </html>
   );
