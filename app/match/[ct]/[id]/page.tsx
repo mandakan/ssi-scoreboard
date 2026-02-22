@@ -231,7 +231,7 @@ export default function MatchPage() {
                     </span>
                   )}
                 </div>
-                <ComparisonTable data={compareQuery.data} />
+                <ComparisonTable data={compareQuery.data} scoringCompleted={match.scoring_completed} />
               </div>
 
               <div className="rounded-lg border p-4 space-y-3">

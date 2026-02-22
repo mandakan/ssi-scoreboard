@@ -20,6 +20,7 @@ const baseData: CompareResponse = {
   },
   efficiencyStats: {},
   lossBreakdownStats: {},
+  whatIfStats: {},
   consistencyStats: {
     1: { coefficientOfVariation: null, label: null, stagesFired: 1 },
     2: { coefficientOfVariation: null, label: null, stagesFired: 1 },
@@ -98,18 +99,18 @@ const baseData: CompareResponse = {
 
 describe("ComparisonTable", () => {
   it("renders competitor names", () => {
-    renderWithProviders(<ComparisonTable data={baseData} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.getByText("Bob")).toBeInTheDocument();
   });
 
   it("renders stage name", () => {
-    renderWithProviders(<ComparisonTable data={baseData} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     expect(screen.getByText("Stage One")).toBeInTheDocument();
   });
 
   it("renders hit factors as primary metric", () => {
-    renderWithProviders(<ComparisonTable data={baseData} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     expect(screen.getAllByText("5.02").length).toBeGreaterThan(0);
     expect(screen.getAllByText("5.63").length).toBeGreaterThan(0);
   });
@@ -132,7 +133,7 @@ describe("ComparisonTable", () => {
         },
       ],
     };
-    renderWithProviders(<ComparisonTable data={data} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
     expect(screen.getByText("DNF")).toBeInTheDocument();
   });
 
@@ -149,7 +150,7 @@ describe("ComparisonTable", () => {
         },
       ],
     };
-    renderWithProviders(<ComparisonTable data={data} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 
@@ -166,7 +167,7 @@ describe("ComparisonTable", () => {
         },
       ],
     };
-    renderWithProviders(<ComparisonTable data={data} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
     expect(screen.getByText("DQ")).toBeInTheDocument();
   });
 
@@ -183,7 +184,7 @@ describe("ComparisonTable", () => {
         },
       ],
     };
-    renderWithProviders(<ComparisonTable data={data} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
     expect(screen.getByRole("alert")).toBeInTheDocument();
     expect(screen.getByText("— Disqualified from match")).toBeInTheDocument();
   });
@@ -218,26 +219,26 @@ describe("ComparisonTable", () => {
         },
       ],
     };
-    renderWithProviders(<ComparisonTable data={data} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("renders totals row with total points", () => {
-    renderWithProviders(<ComparisonTable data={baseData} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     expect(screen.getByText("Total pts")).toBeInTheDocument();
     expect(screen.getAllByText("72").length).toBeGreaterThan(0);
     expect(screen.getAllByText("76").length).toBeGreaterThan(0);
   });
 
   it("renders mode toggle buttons", () => {
-    renderWithProviders(<ComparisonTable data={baseData} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     expect(screen.getByText("Group")).toBeInTheDocument();
     expect(screen.getByText("Division")).toBeInTheDocument();
     expect(screen.getByText("Overall")).toBeInTheDocument();
   });
 
   it("renders SSI stage link when ssi_url is present", () => {
-    renderWithProviders(<ComparisonTable data={baseData} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     const link = screen.getByRole("link", { name: /stage one.*shootnscoreit/i });
     expect(link).toHaveAttribute("href", "https://shootnscoreit.com/event/stage/24/100/");
     expect(link).toHaveAttribute("target", "_blank");
@@ -248,7 +249,7 @@ describe("ComparisonTable", () => {
       ...baseData,
       stages: [{ ...baseData.stages[0], ssi_url: undefined }],
     };
-    renderWithProviders(<ComparisonTable data={dataNoUrl} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={dataNoUrl} />);
     expect(screen.queryByRole("link", { name: /stage one.*shootnscoreit/i })).not.toBeInTheDocument();
     expect(screen.getByText("Stage 1")).toBeInTheDocument();
   });
@@ -258,12 +259,12 @@ describe("ComparisonTable", () => {
       ...baseData,
       stages: [{ ...baseData.stages[0], min_rounds: 16, paper_targets: 8, steel_targets: 0 }],
     };
-    renderWithProviders(<ComparisonTable data={dataWithMeta} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={dataWithMeta} />);
     expect(screen.getByText("16 rds · 8 paper")).toBeInTheDocument();
   });
 
   it("omits metadata row when all optional fields are absent", () => {
-    renderWithProviders(<ComparisonTable data={baseData} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     expect(screen.queryByText(/rds/)).not.toBeInTheDocument();
   });
 });
@@ -292,7 +293,7 @@ describe("ComparisonTable — penalty badge", () => {
       { miss_count: 0, no_shoots: 0, procedurals: 0 },
       { miss_count: 0, no_shoots: 0, procedurals: 0 }
     );
-    renderWithProviders(<ComparisonTable data={data} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
     expect(screen.queryByText(/\u2212\d+pts/)).not.toBeInTheDocument();
   });
 
@@ -302,7 +303,7 @@ describe("ComparisonTable — penalty badge", () => {
       { miss_count: 2, no_shoots: 1, procedurals: 0 },
       { miss_count: 0, no_shoots: 0, procedurals: 0 }
     );
-    renderWithProviders(<ComparisonTable data={data} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
     expect(screen.getAllByText("\u221230pts").length).toBeGreaterThan(0);
   });
 
@@ -311,7 +312,7 @@ describe("ComparisonTable — penalty badge", () => {
       { miss_count: 0, no_shoots: 0, procedurals: 2 },
       { miss_count: 0, no_shoots: 0, procedurals: 0 }
     );
-    renderWithProviders(<ComparisonTable data={data} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
     expect(screen.getAllByText("\u221220pts").length).toBeGreaterThan(0);
   });
 
@@ -320,7 +321,7 @@ describe("ComparisonTable — penalty badge", () => {
       { miss_count: 0, no_shoots: 0, procedurals: 0 },
       { miss_count: 0, no_shoots: 0, procedurals: 0 }
     );
-    renderWithProviders(<ComparisonTable data={data} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
     expect(screen.getAllByText("✓ Clean").length).toBeGreaterThan(0);
   });
 
@@ -329,14 +330,14 @@ describe("ComparisonTable — penalty badge", () => {
       { miss_count: 1, no_shoots: 0, procedurals: 0 },
       { miss_count: 0, no_shoots: 0, procedurals: 0 }
     );
-    renderWithProviders(<ComparisonTable data={data} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
     // Only competitor 2 (all zeros) should be clean
     expect(screen.getAllByText("✓ Clean").length).toBe(1);
   });
 
   it("does not show clean match indicator when penalty data is null (unknown)", () => {
     // baseData has all nulls — no penalty data available, so we can't confirm clean
-    renderWithProviders(<ComparisonTable data={baseData} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     expect(screen.queryByText("✓ Clean")).not.toBeInTheDocument();
   });
 
@@ -357,12 +358,12 @@ describe("ComparisonTable — penalty badge", () => {
         },
       ],
     };
-    renderWithProviders(<ComparisonTable data={data} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
     expect(screen.getByText(/Penalty cost: −8\.5% match/)).toBeInTheDocument();
   });
 
   it("hides penalty cost badge in totals row when totalPenalties is zero", () => {
-    renderWithProviders(<ComparisonTable data={baseData} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     expect(screen.queryByText(/Penalty cost:/)).not.toBeInTheDocument();
   });
 });
@@ -381,14 +382,14 @@ describe("ComparisonTable — incomplete scorecard indicator", () => {
         },
       ],
     };
-    renderWithProviders(<ComparisonTable data={data} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
     expect(
       screen.getByLabelText("Incomplete scorecard (rule 9.7.6.2)")
     ).toBeInTheDocument();
   });
 
   it("does not show incomplete indicator when incomplete=false", () => {
-    renderWithProviders(<ComparisonTable data={baseData} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     expect(
       screen.queryByLabelText("Incomplete scorecard (rule 9.7.6.2)")
     ).not.toBeInTheDocument();
@@ -397,19 +398,19 @@ describe("ComparisonTable — incomplete scorecard indicator", () => {
 
 describe("ComparisonTable — delta view mode", () => {
   it("renders Absolute and Delta toggle buttons", () => {
-    renderWithProviders(<ComparisonTable data={baseData} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     expect(screen.getByRole("button", { name: "Absolute" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delta" })).toBeInTheDocument();
   });
 
   it("Absolute toggle is pressed by default", () => {
-    renderWithProviders(<ComparisonTable data={baseData} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     expect(screen.getByRole("button", { name: "Absolute" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "Delta" })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("switches to delta mode when Delta button is clicked", () => {
-    renderWithProviders(<ComparisonTable data={baseData} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     fireEvent.click(screen.getByRole("button", { name: "Delta" }));
     expect(screen.getByRole("button", { name: "Delta" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "Absolute" })).toHaveAttribute("aria-pressed", "false");
@@ -417,14 +418,14 @@ describe("ComparisonTable — delta view mode", () => {
 
   it("shows delta value (leader has ±0.0 pts) in delta mode", () => {
     // Bob is the group leader (group_leader_points = 76, Bob.points = 76 → delta = 0)
-    renderWithProviders(<ComparisonTable data={baseData} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     fireEvent.click(screen.getByRole("button", { name: "Delta" }));
     expect(screen.getAllByText("±0.0 pts").length).toBeGreaterThan(0);
   });
 
   it("shows negative delta for the non-leader competitor in delta mode", () => {
     // Alice: points=72, leader=76 → delta = -4 → "−4.0 pts"
-    renderWithProviders(<ComparisonTable data={baseData} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     fireEvent.click(screen.getByRole("button", { name: "Delta" }));
     expect(screen.getAllByText("\u22124.0 pts").length).toBeGreaterThan(0);
   });
@@ -442,7 +443,7 @@ describe("ComparisonTable — delta view mode", () => {
         },
       ],
     };
-    renderWithProviders(<ComparisonTable data={data} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
     fireEvent.click(screen.getByRole("button", { name: "Delta" }));
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
@@ -460,7 +461,7 @@ describe("ComparisonTable — delta view mode", () => {
         },
       ],
     };
-    renderWithProviders(<ComparisonTable data={data} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
     fireEvent.click(screen.getByRole("button", { name: "Delta" }));
     expect(screen.getByText("DNF")).toBeInTheDocument();
   });
@@ -478,20 +479,20 @@ describe("ComparisonTable — delta view mode", () => {
         },
       ],
     };
-    renderWithProviders(<ComparisonTable data={data} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
     fireEvent.click(screen.getByRole("button", { name: "Delta" }));
     expect(screen.getByText("DQ")).toBeInTheDocument();
   });
 
   it("totals row shows 'Total deficit' label in delta mode", () => {
-    renderWithProviders(<ComparisonTable data={baseData} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     fireEvent.click(screen.getByRole("button", { name: "Delta" }));
     expect(screen.getByText("Total deficit")).toBeInTheDocument();
   });
 
   it("totals row shows cumulative deficit for the non-leader in delta mode", () => {
     // Alice: -4 pts across the 1 stage → total deficit = "−4.0 pts"
-    renderWithProviders(<ComparisonTable data={baseData} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     fireEvent.click(screen.getByRole("button", { name: "Delta" }));
     // Leader shows ±0.0 pts, non-leader shows −4.0 pts (appears at least once each)
     expect(screen.getAllByText("±0.0 pts").length).toBeGreaterThanOrEqual(2); // per-stage + totals for leader
@@ -499,7 +500,7 @@ describe("ComparisonTable — delta view mode", () => {
   });
 
   it("hides % reference toggle in delta mode", () => {
-    renderWithProviders(<ComparisonTable data={baseData} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     // % toggle visible in absolute mode
     expect(screen.getByText("% relative to:")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Delta" }));
@@ -521,7 +522,7 @@ describe("ComparisonTable — delta view mode", () => {
         },
       ],
     };
-    renderWithProviders(<ComparisonTable data={tieData} />);
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={tieData} />);
     fireEvent.click(screen.getByRole("button", { name: "Delta" }));
     // Both competitors show ±0.0 pts (per-stage); totals row also shows ±0.0 pts
     expect(screen.getAllByText("±0.0 pts").length).toBeGreaterThanOrEqual(2);

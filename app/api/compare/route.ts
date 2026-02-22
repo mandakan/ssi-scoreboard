@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { executeQuery, SCORECARDS_QUERY, MATCH_QUERY } from "@/lib/graphql";
 import { formatDivisionDisplay } from "@/lib/divisions";
-import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompareResponse, CompetitorInfo } from "@/lib/types";
 
 // ─── Raw GraphQL response shapes ─────────────────────────────────────────────
@@ -236,6 +236,8 @@ export async function GET(req: Request) {
     requestedCompetitors.map((c) => [c.id, computeLossBreakdown(stages, c.id)])
   );
 
+  const whatIfStats = simulateWithoutWorstStage(stages, requestedCompetitors);
+
   const response: CompareResponse = {
     match_id: parseInt(id, 10),
     stages,
@@ -244,6 +246,7 @@ export async function GET(req: Request) {
     efficiencyStats,
     consistencyStats,
     lossBreakdownStats,
+    whatIfStats,
   };
 
   return NextResponse.json(response);

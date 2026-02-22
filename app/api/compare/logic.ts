@@ -10,6 +10,8 @@ import type {
   ConsistencyStats,
   LossBreakdownStats,
   StageClassification,
+  SimResult,
+  WhatIfResult,
 } from "@/lib/types";
 
 export interface RawScorecard {
@@ -730,4 +732,159 @@ export function computeConsistencyStats(
   const cv = stdDev / mean;
 
   return { coefficientOfVariation: cv, label: ciLabel(cv), stagesFired };
+}
+
+/**
+ * Rank competitors by avg match % descending, handling ties (shared rank,
+ * next rank skips). Returns a Map<competitor_id, rank>.
+ */
+function rankByMatchPct(pctMap: Map<number, number>): Map<number, number> {
+  const sorted = [...pctMap.entries()].sort((a, b) => b[1] - a[1]);
+  const rankMap = new Map<number, number>();
+  let currentRank = 1;
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0 && sorted[i][1] < sorted[i - 1][1]) currentRank = i + 1;
+    rankMap.set(sorted[i][0], currentRank);
+  }
+  return rankMap;
+}
+
+/**
+ * Simulate replacing each competitor's worst stage with two alternative
+ * performances and recompute match % and rank within the compared group.
+ *
+ * Scenarios:
+ *   1. Median replacement  — replace worst stage with the competitor's own
+ *      median group % across all other (non-worst) stages.
+ *   2. Second-worst replacement — replace worst stage with the competitor's
+ *      second-worst stage (conservative lower bound).
+ *
+ * Ranking is computed by substituting only the one competitor's simulated
+ * match % while all other competitors keep their actual match %.
+ *
+ * Returns null for competitors with fewer than 2 valid stages (not enough
+ * data to identify a "worst" vs a "rest").
+ *
+ * Valid stages: non-DNF, non-DQ, non-zeroed, with a non-null group_percent.
+ */
+export function simulateWithoutWorstStage(
+  stages: StageComparison[],
+  competitors: CompetitorInfo[]
+): Record<number, WhatIfResult | null> {
+  // Precompute each competitor's actual avg match % and total points.
+  const actualPcts = new Map<number, number>();
+  const actualTotalPoints = new Map<number, number>();
+
+  for (const comp of competitors) {
+    let pctSum = 0;
+    let pctCount = 0;
+    let totalPts = 0;
+    for (const stage of stages) {
+      const sc = stage.competitors[comp.id];
+      if (!sc) continue;
+      if (!sc.dnf) totalPts += sc.points ?? 0;
+      if (!sc.dnf && !sc.dq && !sc.zeroed && sc.group_percent != null) {
+        pctSum += sc.group_percent;
+        pctCount++;
+      }
+    }
+    actualPcts.set(comp.id, pctCount > 0 ? pctSum / pctCount : 0);
+    actualTotalPoints.set(comp.id, totalPts);
+  }
+
+  const actualRankMap = rankByMatchPct(actualPcts);
+
+  const result: Record<number, WhatIfResult | null> = {};
+
+  for (const comp of competitors) {
+    // Gather valid stages for this competitor.
+    const validStages: Array<{
+      stageNum: number;
+      groupPct: number;
+      actualPoints: number;
+      groupLeaderPoints: number | null;
+    }> = [];
+
+    for (const stage of stages) {
+      const sc = stage.competitors[comp.id];
+      if (!sc || sc.dnf || sc.dq || sc.zeroed || sc.group_percent == null) continue;
+      validStages.push({
+        stageNum: stage.stage_num,
+        groupPct: sc.group_percent,
+        actualPoints: sc.points ?? 0,
+        groupLeaderPoints: stage.group_leader_points,
+      });
+    }
+
+    if (validStages.length < 2) {
+      result[comp.id] = null;
+      continue;
+    }
+
+    // Sort ascending by group_percent (worst first); use stage_num as tiebreaker.
+    const sorted = [...validStages].sort(
+      (a, b) => a.groupPct - b.groupPct || a.stageNum - b.stageNum
+    );
+
+    const worstStage = sorted[0];
+    const remaining = sorted.slice(1); // all stages except the worst
+
+    // Median of remaining stages (sorted ascending already).
+    const remPcts = remaining.map((s) => s.groupPct); // already sorted ascending
+    const mid = Math.floor(remPcts.length / 2);
+    const medianPct =
+      remPcts.length % 2 === 0
+        ? (remPcts[mid - 1] + remPcts[mid]) / 2
+        : remPcts[mid];
+
+    // Second-worst = lowest of remaining (first in ascending sort).
+    const secondWorstPct = remaining[0].groupPct;
+
+    const actualMatchPct = actualPcts.get(comp.id) ?? 0;
+    const totalPts = actualTotalPoints.get(comp.id) ?? 0;
+    const pctSum = actualMatchPct * validStages.length;
+
+    function simulate(replacementPct: number): SimResult {
+      const simMatchPct =
+        (pctSum - worstStage.groupPct + replacementPct) / validStages.length;
+
+      // Estimate simulated points on the replaced stage via proportional scaling.
+      let simWorstPoints: number;
+      if (worstStage.groupLeaderPoints != null && worstStage.groupLeaderPoints > 0) {
+        simWorstPoints = (replacementPct / 100) * worstStage.groupLeaderPoints;
+      } else if (worstStage.groupPct > 0) {
+        simWorstPoints =
+          (replacementPct / worstStage.groupPct) * worstStage.actualPoints;
+      } else {
+        simWorstPoints = worstStage.actualPoints;
+      }
+
+      const simTotalPoints = Math.round(totalPts - worstStage.actualPoints + simWorstPoints);
+
+      // Rank: this competitor uses simulated pct; all others keep actual pct.
+      const simPcts = new Map<number, number>(actualPcts);
+      simPcts.set(comp.id, simMatchPct);
+      const simRankMap = rankByMatchPct(simPcts);
+
+      return {
+        replacementPct,
+        matchPct: simMatchPct,
+        totalPoints: simTotalPoints,
+        groupRank: simRankMap.get(comp.id) ?? 1,
+      };
+    }
+
+    result[comp.id] = {
+      competitorId: comp.id,
+      worstStageNum: worstStage.stageNum,
+      worstStageGroupPct: worstStage.groupPct,
+      actualMatchPct,
+      actualTotalPoints: totalPts,
+      actualGroupRank: actualRankMap.get(comp.id) ?? 1,
+      medianReplacement: simulate(medianPct),
+      secondWorstReplacement: simulate(secondWorstPct),
+    };
+  }
+
+  return result;
 }

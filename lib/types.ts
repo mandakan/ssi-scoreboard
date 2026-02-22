@@ -173,6 +173,28 @@ export interface LossBreakdownStats {
   hasHitZoneData: boolean;  // true if at least one stage had zone data (so hit loss is meaningful)
 }
 
+// Result of one what-if simulation scenario: replace the worst stage with
+// a substitute performance and see what the match outcome would have been.
+export interface SimResult {
+  replacementPct: number; // group % used as the substitute for the worst stage
+  matchPct: number;       // simulated avg group % after replacement
+  totalPoints: number;    // simulated total match points after replacement
+  groupRank: number;      // simulated rank within compared group (1-based)
+}
+
+// What-if analysis for one competitor.
+// null = fewer than 2 valid stages — no meaningful simulation is possible.
+export interface WhatIfResult {
+  competitorId: number;
+  worstStageNum: number;        // stage_num of the identified worst stage
+  worstStageGroupPct: number;   // actual group % on the worst stage
+  actualMatchPct: number;       // actual avg group % across all valid stages
+  actualTotalPoints: number;    // actual total match points
+  actualGroupRank: number;      // actual rank within compared group
+  medianReplacement: SimResult;       // scenario 1: replace worst with competitor's median
+  secondWorstReplacement: SimResult;  // scenario 2: replace worst with second-worst (lower bound)
+}
+
 export interface CompareResponse {
   match_id: number;
   stages: StageComparison[];
@@ -181,6 +203,7 @@ export interface CompareResponse {
   efficiencyStats: Record<number, EfficiencyStats>;     // keyed by competitor_id
   consistencyStats: Record<number, ConsistencyStats>;   // keyed by competitor_id
   lossBreakdownStats: Record<number, LossBreakdownStats>; // keyed by competitor_id
+  whatIfStats: Record<number, WhatIfResult | null>;     // keyed by competitor_id; null = not enough stages
 }
 
 export interface EventSummary {

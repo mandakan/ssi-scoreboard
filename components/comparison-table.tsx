@@ -11,10 +11,11 @@ import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, ExternalLink, Flam
 import { cn, formatHF, formatTime, formatPct, computePointsDelta, formatDelta } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
 import { HitZoneBar } from "@/components/hit-zone-bar";
-import type { CompareResponse, CompetitorInfo, CompetitorSummary, LossBreakdownStats, PctMode, StageClassification, ViewMode } from "@/lib/types";
+import type { CompareResponse, CompetitorInfo, CompetitorSummary, LossBreakdownStats, PctMode, StageClassification, ViewMode, WhatIfResult } from "@/lib/types";
 
 interface ComparisonTableProps {
   data: CompareResponse;
+  scoringCompleted: number;
 }
 
 /**
@@ -577,11 +578,12 @@ function modeValues(
   }
 }
 
-export function ComparisonTable({ data }: ComparisonTableProps) {
-  const { stages, competitors, penaltyStats, efficiencyStats, consistencyStats, lossBreakdownStats } = data;
+export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps) {
+  const { stages, competitors, penaltyStats, efficiencyStats, consistencyStats, lossBreakdownStats, whatIfStats } = data;
   const [mode, setMode] = useState<PctMode>("group");
   const [viewMode, setViewMode] = useState<ViewMode>("absolute");
   const [showAnalysis, setShowAnalysis] = useState(false);
+  const [showWhatIf, setShowWhatIf] = useState(false);
 
   // Detect match-level DQ: every scorecard for a competitor has dq: true
   const matchDqCompetitors = competitors.filter((comp) => {
@@ -1091,6 +1093,129 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
           )}
         </div>
       )}
+
+      {/* What if? panel — only rendered when match is ≥ 80 % complete */}
+      {scoringCompleted >= 80 && competitors.some((c) => whatIfStats[c.id] != null) && (
+        <div className="rounded-lg border border-sky-200 dark:border-sky-900/50">
+          <button
+            onClick={() => setShowWhatIf((v) => !v)}
+            className={cn(
+              "flex w-full items-center justify-between px-4 py-3 text-sm font-medium",
+              "hover:bg-muted/30 transition-colors rounded-lg",
+              "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+            )}
+            aria-expanded={showWhatIf}
+            aria-controls="whatif-panel"
+          >
+            <span className="flex items-center gap-2">
+              <span className="text-sky-700 dark:text-sky-400">What if?</span>
+              <span className="text-xs text-muted-foreground font-normal">
+                One stage away
+              </span>
+            </span>
+            {showWhatIf
+              ? <ChevronUp className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+              : <ChevronDown className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+            }
+          </button>
+
+          {showWhatIf && (
+            <div
+              id="whatif-panel"
+              className="px-4 pb-4 space-y-4 border-t border-sky-200 dark:border-sky-900/50 pt-4"
+            >
+              <div className="space-y-5">
+                {competitors.map((comp) => {
+                  const wi = whatIfStats[comp.id];
+                  if (!wi) return null;
+                  const stageName =
+                    stages.find((s) => s.stage_num === wi.worstStageNum)?.stage_name ??
+                    `Stage ${wi.worstStageNum}`;
+                  return (
+                    <WhatIfCompetitorPanel
+                      key={comp.id}
+                      comp={comp}
+                      wi={wi}
+                      stageName={stageName}
+                      color={colorMap[comp.id]}
+                    />
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground/70">
+                Simulates replacing each competitor&apos;s worst stage (lowest group %) with
+                their median or second-worst stage performance. All other competitors keep
+                their actual scores.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WhatIfCompetitorPanel({
+  comp,
+  wi,
+  stageName,
+  color,
+}: {
+  comp: CompetitorInfo;
+  wi: WhatIfResult;
+  stageName: string;
+  color: string;
+}) {
+  const medianChange = wi.medianReplacement.groupRank - wi.actualGroupRank;
+  const secondWorstChange = wi.secondWorstReplacement.groupRank - wi.actualGroupRank;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <span
+          className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
+          style={{ backgroundColor: color }}
+          aria-hidden="true"
+        />
+        <span className="text-sm font-medium">{comp.name}</span>
+      </div>
+      {/* Median replacement scenario */}
+      <p className="text-xs text-muted-foreground pl-4">
+        If {stageName} ({formatPct(wi.worstStageGroupPct)} group) had been at your
+        median ({formatPct(wi.medianReplacement.replacementPct)}%): match %{" "}
+        <span className="text-foreground font-medium">
+          {formatPct(wi.medianReplacement.matchPct)}
+        </span>{" "}
+        <span className="text-muted-foreground/70">
+          (vs actual {formatPct(wi.actualMatchPct)})
+        </span>
+        {" — "}rank{" "}
+        <span className="font-medium">{ordinal(wi.actualGroupRank)}</span>
+        {" "}
+        <span className={medianChange < 0 ? "text-emerald-600 dark:text-emerald-400 font-medium" : medianChange > 0 ? "text-red-600 dark:text-red-400 font-medium" : "text-muted-foreground"}>
+          →{" "}{ordinal(wi.medianReplacement.groupRank)}
+          {medianChange < 0 && " ↑"}
+          {medianChange > 0 && " ↓"}
+        </span>
+        {" "}in group.
+      </p>
+      {/* Second-worst replacement scenario */}
+      <p className="text-xs text-muted-foreground/75 pl-4">
+        Conservative (second-worst {formatPct(wi.secondWorstReplacement.replacementPct)}%): match %{" "}
+        <span className="font-medium text-muted-foreground">
+          {formatPct(wi.secondWorstReplacement.matchPct)}
+        </span>
+        {" — "}rank{" "}
+        <span className={cn(
+          "font-medium",
+          secondWorstChange < 0 ? "text-emerald-600 dark:text-emerald-400" : ""
+        )}>
+          {ordinal(wi.secondWorstReplacement.groupRank)}
+        </span>
+        {secondWorstChange < 0 && " ↑"}
+        {secondWorstChange > 0 && " ↓"}
+        {" "}in group.
+      </p>
     </div>
   );
 }

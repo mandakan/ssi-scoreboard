@@ -11,6 +11,7 @@ const baseData: CompareResponse = {
   },
   efficiencyStats: {},
   lossBreakdownStats: {},
+  whatIfStats: {},
   consistencyStats: {
     1: { coefficientOfVariation: null, label: null, stagesFired: 1 },
     2: { coefficientOfVariation: null, label: null, stagesFired: 1 },

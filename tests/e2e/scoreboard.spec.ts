@@ -47,6 +47,7 @@ const MOCK_COMPARE: CompareResponse = {
     200: { totalHitLoss: 0, totalPenaltyLoss: 0, totalLoss: 0, stagesFired: 2, hasHitZoneData: false },
     300: { totalHitLoss: 0, totalPenaltyLoss: 0, totalLoss: 0, stagesFired: 2, hasHitZoneData: false },
   },
+  whatIfStats: { 100: null, 200: null, 300: null },
   stages: [
     {
       stage_id: 1,
