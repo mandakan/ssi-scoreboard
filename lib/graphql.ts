@@ -16,7 +16,8 @@ interface GraphQLResponse<T> {
 
 export async function executeQuery<T>(
   query: string,
-  variables?: Record<string, unknown>
+  variables?: Record<string, unknown>,
+  revalidate: number | false = false,
 ): Promise<T> {
   const apiKey = process.env.SSI_API_KEY;
   if (!apiKey) throw new Error("SSI_API_KEY is not configured");
@@ -28,7 +29,8 @@ export async function executeQuery<T>(
       Authorization: `Api-Key ${apiKey}`,
     },
     body: JSON.stringify({ query, variables }),
-    cache: "no-store",
+    cache: revalidate === false ? "no-store" : undefined,
+    next: revalidate !== false ? { revalidate } : undefined,
   });
 
   if (!response.ok) {

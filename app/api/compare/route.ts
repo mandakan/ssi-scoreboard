@@ -102,8 +102,8 @@ export async function GET(req: Request) {
 
   try {
     [scorecardsData, matchData] = await Promise.all([
-      executeQuery<RawScorecardsData>(SCORECARDS_QUERY, { ct: ctNum, id }),
-      executeQuery<RawMatchData>(MATCH_QUERY, { ct: ctNum, id }),
+      executeQuery<RawScorecardsData>(SCORECARDS_QUERY, { ct: ctNum, id }, 30),
+      executeQuery<RawMatchData>(MATCH_QUERY, { ct: ctNum, id }, 30),
     ]);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Upstream error";
