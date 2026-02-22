@@ -174,6 +174,7 @@ export const SCORECARDS_QUERY = `
               disqualified
               zeroed
               stage_not_fired
+              incomplete
               ascore
               bscore
               cscore

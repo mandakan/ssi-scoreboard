@@ -27,6 +27,7 @@ function makeCard(
     dq: false,
     zeroed: false,
     dnf: false,
+    incomplete: false,
     a_hits: 10,
     c_hits: 2,
     d_hits: 0,
@@ -294,6 +295,7 @@ describe("computeGroupRankings — shooting order", () => {
       dq: false,
       zeroed: false,
       dnf: false,
+      incomplete: false,
       a_hits: null,
       c_hits: null,
       d_hits: null,
@@ -405,6 +407,7 @@ describe("computeGroupRankings — field median HF", () => {
       dq: false,
       zeroed: false,
       dnf: false,
+      incomplete: false,
       a_hits: 12,
       c_hits: 0,
       d_hits: 0,
@@ -490,6 +493,7 @@ describe("computeGroupRankings — overall rankings", () => {
       dq: false,
       zeroed: false,
       dnf: false,
+      incomplete: false,
       a_hits: 12,
       c_hits: 0,
       d_hits: 0,
@@ -505,5 +509,36 @@ describe("computeGroupRankings — overall rankings", () => {
     expect(result[0].overall_leader_hf).toBe(8.0);
     expect(result[0].competitors[1].overall_rank).toBe(2);
     expect(result[0].competitors[1].overall_percent).toBeCloseTo(62.5, 3);
+  });
+});
+
+describe("computeGroupRankings — incomplete scorecard flag", () => {
+  it("passes incomplete=true through to CompetitorSummary", () => {
+    const scorecards = [
+      makeCard(1, 1, { incomplete: true }),
+      makeCard(2, 1, { incomplete: false }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    expect(result[0].competitors[1].incomplete).toBe(true);
+    expect(result[0].competitors[2].incomplete).toBe(false);
+  });
+
+  it("incomplete scorecard is still ranked by hit_factor", () => {
+    // Incomplete stages are flagged but still participate in ranking
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 5.0, incomplete: true }),
+      makeCard(2, 1, { hit_factor: 3.0, incomplete: false }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    expect(result[0].competitors[1].group_rank).toBe(1);
+    expect(result[0].competitors[2].group_rank).toBe(2);
+  });
+
+  it("sets incomplete=false for a DNF stage (no scorecard)", () => {
+    const scorecards = [
+      makeCard(1, 1, { dnf: true, incomplete: false }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    expect(result[0].competitors[1].incomplete).toBe(false);
   });
 });

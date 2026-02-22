@@ -41,6 +41,7 @@ const baseData: CompareResponse = {
           dq: false,
           zeroed: false,
           dnf: false,
+          incomplete: false,
           a_hits: null,
           c_hits: null,
           d_hits: null,
@@ -62,6 +63,7 @@ const baseData: CompareResponse = {
           dq: false,
           zeroed: false,
           dnf: false,
+          incomplete: false,
           a_hits: null,
           c_hits: null,
           d_hits: null,
@@ -314,5 +316,33 @@ describe("ComparisonTable — penalty badge", () => {
     // baseData has all nulls — no penalty data available, so we can't confirm clean
     renderWithProviders(<ComparisonTable data={baseData} />);
     expect(screen.queryByText("✓ Clean")).not.toBeInTheDocument();
+  });
+});
+
+describe("ComparisonTable — incomplete scorecard indicator", () => {
+  it("shows incomplete warning indicator when incomplete=true", () => {
+    const data: CompareResponse = {
+      ...baseData,
+      stages: [
+        {
+          ...baseData.stages[0],
+          competitors: {
+            1: { ...baseData.stages[0].competitors[1], incomplete: true },
+            2: baseData.stages[0].competitors[2],
+          },
+        },
+      ],
+    };
+    renderWithProviders(<ComparisonTable data={data} />);
+    expect(
+      screen.getByLabelText("Incomplete scorecard (rule 9.7.6.2)")
+    ).toBeInTheDocument();
+  });
+
+  it("does not show incomplete indicator when incomplete=false", () => {
+    renderWithProviders(<ComparisonTable data={baseData} />);
+    expect(
+      screen.queryByLabelText("Incomplete scorecard (rule 9.7.6.2)")
+    ).not.toBeInTheDocument();
   });
 });

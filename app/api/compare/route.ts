@@ -14,6 +14,7 @@ interface RawScCard {
   disqualified?: boolean | null;
   zeroed?: boolean | null;
   stage_not_fired?: boolean | null;
+  incomplete?: boolean | null;
   ascore?: number | string | null;
   bscore?: number | string | null;
   cscore?: number | string | null;
@@ -181,6 +182,7 @@ export async function GET(req: Request) {
         dq: sc.disqualified ?? false,
         zeroed: sc.zeroed ?? false,
         dnf: sc.stage_not_fired ?? false,
+        incomplete: sc.incomplete ?? false,
         a_hits: parseNum(sc.ascore),
         c_hits: b !== null || c !== null ? (b ?? 0) + (c ?? 0) : null,
         d_hits: parseNum(sc.dscore),

@@ -20,6 +20,7 @@ export interface RawScorecard {
   dq: boolean;
   zeroed: boolean;
   dnf: boolean;
+  incomplete: boolean;
   a_hits: number | null;
   c_hits: number | null; // B-zone combined into C
   d_hits: number | null;
@@ -224,6 +225,7 @@ export function computeGroupRankings(
           dq: sc?.dq ?? false,
           zeroed: sc?.zeroed ?? false,
           dnf: true,
+          incomplete: sc?.incomplete ?? false,
           a_hits: null,
           c_hits: null,
           d_hits: null,
@@ -252,6 +254,7 @@ export function computeGroupRankings(
           dq: sc.dq,
           zeroed: sc.zeroed,
           dnf: false,
+          incomplete: sc.incomplete,
           a_hits: sc.a_hits,
           c_hits: sc.c_hits,
           d_hits: sc.d_hits,
