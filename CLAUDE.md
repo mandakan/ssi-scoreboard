@@ -54,6 +54,19 @@ The SSI API uses Django content-type discrimination. Match URLs encode this:
 - CI runs: lint → typecheck → test → build → test:e2e
 - **All tests must pass, all linters and type checkers must produce zero errors and zero warnings**
 
+## Mobile-First Design (non-negotiable)
+
+This app is used courtside during live IPSC competitions — on a phone, outdoors, one-handed.
+**Every feature must be designed mobile-first.** Desktop is an enhancement, not the baseline.
+
+- Design for **390px width** (iPhone 14) as the primary breakpoint
+- **No unintentional horizontal page overflow** at any viewport width
+- All interactive elements: minimum **44×44px touch target** (enforced in `globals.css`)
+- Data readable without zooming: ≥14px for values, ≥12px for secondary labels
+- Test every UI change at mobile width before considering it done
+- The comparison table is the hardest challenge — prefer card layouts or constrained
+  column widths on small screens over bare horizontal scroll
+
 ## UX & Accessibility
 - Follow **WCAG 2.1 AA** throughout — all interactive elements must be keyboard-navigable
   and have accessible names (`aria-label`, `aria-labelledby`, or visible text).
