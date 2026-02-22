@@ -8,6 +8,7 @@ const EMPTY_IDS: number[] = [];
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { MatchHeader } from "@/components/match-header";
+import { ShareButton } from "@/components/share-button";
 import { CompetitorPicker } from "@/components/competitor-picker";
 import { ComparisonTable } from "@/components/comparison-table";
 import { ComparisonChart } from "@/components/comparison-chart";
@@ -117,14 +118,17 @@ export default function MatchPage() {
 
   return (
     <div className="min-h-screen p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
-      {/* Back link */}
-      <Link
-        href="/"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="w-3.5 h-3.5" />
-        All matches
-      </Link>
+      {/* Back link + share */}
+      <div className="flex items-center justify-between">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          All matches
+        </Link>
+        <ShareButton title={match.name} />
+      </div>
 
       {/* Match header */}
       <MatchHeader match={match} />
