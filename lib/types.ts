@@ -97,3 +97,15 @@ export interface CompareResponse {
   stages: StageComparison[];
   competitors: CompetitorInfo[];
 }
+
+export interface EventSummary {
+  id: number;
+  content_type: number;
+  name: string;
+  venue: string | null;
+  date: string; // ISO timestamp
+  status: string; // "on" | "cp" | "dr" | "cs" | "pr" | "ol"
+  region: string;
+  discipline: string; // e.g. "IPSC Handgun & PCC"
+  level: string; // e.g. "Level II"
+}

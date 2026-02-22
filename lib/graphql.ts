@@ -99,6 +99,27 @@ export const MATCH_QUERY = `
   }
 `;
 
+// ─── Query: list IPSC handgun events ─────────────────────────────────────────
+// Returns all publicly-visible IPSC handgun & PCC matches (firearms:"hg")
+// filtered by optional free-text search and date range.
+// Results include both IpscMatchNode (ct=22) and IpscSerieNode (ct=43) —
+// filter to ct=22 in the route handler.
+export const EVENTS_QUERY = `
+  query GetEvents($search: String, $starts_after: String, $starts_before: String) {
+    events(rule: "ip", firearms: "hg", search: $search, starts_after: $starts_after, starts_before: $starts_before) {
+      id
+      get_content_type_key
+      name
+      venue
+      starts
+      status
+      region
+      get_full_rule_display
+      get_full_level_display
+    }
+  }
+`;
+
 // ─── Query: all stage scorecards for a match ─────────────────────────────────
 // Returns raw scorecard data for every competitor on every stage.
 // `get_results` (official placement) is blocked during active matches — this

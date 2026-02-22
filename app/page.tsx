@@ -1,5 +1,6 @@
 import { UrlInputForm } from "@/components/url-input-form";
 import { RecentCompetitions } from "@/components/recent-competitions";
+import { EventSearch } from "@/components/event-search";
 import { Target } from "lucide-react";
 
 export default function HomePage() {
@@ -16,15 +17,25 @@ export default function HomePage() {
         </p>
       </div>
 
-      <div className="w-full max-w-2xl space-y-2">
-        <p className="text-sm font-medium">Add a match URL</p>
-        <UrlInputForm />
-        <p className="text-xs text-muted-foreground">
-          Example:{" "}
-          <code className="bg-muted px-1 py-0.5 rounded text-xs">
-            https://shootnscoreit.com/event/22/26547/
-          </code>
-        </p>
+      <div className="w-full max-w-2xl space-y-6">
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Browse competitions</p>
+          <EventSearch />
+          <p className="text-xs text-muted-foreground">
+            IPSC handgun &amp; PCC — past 3 months and upcoming
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Or paste a match URL</p>
+          <UrlInputForm />
+          <p className="text-xs text-muted-foreground">
+            Example:{" "}
+            <code className="bg-muted px-1 py-0.5 rounded text-xs">
+              https://shootnscoreit.com/event/22/26547/
+            </code>
+          </p>
+        </div>
       </div>
 
       <RecentCompetitions />
