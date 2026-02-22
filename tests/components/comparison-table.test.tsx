@@ -142,3 +142,76 @@ describe("ComparisonTable", () => {
     expect(screen.getByText("Overall")).toBeInTheDocument();
   });
 });
+
+describe("ComparisonTable — penalty badge", () => {
+  function makeDataWithPenalties(
+    penaltiesComp1: { miss_count: number; no_shoots: number; procedurals: number },
+    penaltiesComp2: { miss_count: number; no_shoots: number; procedurals: number }
+  ): CompareResponse {
+    return {
+      ...baseData,
+      stages: [
+        {
+          ...baseData.stages[0],
+          competitors: {
+            1: { ...baseData.stages[0].competitors[1], ...penaltiesComp1 },
+            2: { ...baseData.stages[0].competitors[2], ...penaltiesComp2 },
+          },
+        },
+      ],
+    };
+  }
+
+  it("hides penalty badge when all penalties are explicitly zero", () => {
+    const data = makeDataWithPenalties(
+      { miss_count: 0, no_shoots: 0, procedurals: 0 },
+      { miss_count: 0, no_shoots: 0, procedurals: 0 }
+    );
+    renderWithProviders(<ComparisonTable data={data} />);
+    expect(screen.queryByText(/\u2212\d+pts/)).not.toBeInTheDocument();
+  });
+
+  it("shows penalty badge with correct total when miss penalties exist", () => {
+    // 2 misses + 1 no-shoot = 30 pts penalty
+    const data = makeDataWithPenalties(
+      { miss_count: 2, no_shoots: 1, procedurals: 0 },
+      { miss_count: 0, no_shoots: 0, procedurals: 0 }
+    );
+    renderWithProviders(<ComparisonTable data={data} />);
+    expect(screen.getAllByText("\u221230pts").length).toBeGreaterThan(0);
+  });
+
+  it("shows penalty badge for procedurals only", () => {
+    const data = makeDataWithPenalties(
+      { miss_count: 0, no_shoots: 0, procedurals: 2 },
+      { miss_count: 0, no_shoots: 0, procedurals: 0 }
+    );
+    renderWithProviders(<ComparisonTable data={data} />);
+    expect(screen.getAllByText("\u221220pts").length).toBeGreaterThan(0);
+  });
+
+  it("shows clean match indicator in totals row when all stages have zero penalties", () => {
+    const data = makeDataWithPenalties(
+      { miss_count: 0, no_shoots: 0, procedurals: 0 },
+      { miss_count: 0, no_shoots: 0, procedurals: 0 }
+    );
+    renderWithProviders(<ComparisonTable data={data} />);
+    expect(screen.getAllByText("✓ Clean").length).toBeGreaterThan(0);
+  });
+
+  it("hides clean match indicator when penalties exist", () => {
+    const data = makeDataWithPenalties(
+      { miss_count: 1, no_shoots: 0, procedurals: 0 },
+      { miss_count: 0, no_shoots: 0, procedurals: 0 }
+    );
+    renderWithProviders(<ComparisonTable data={data} />);
+    // Only competitor 2 (all zeros) should be clean
+    expect(screen.getAllByText("✓ Clean").length).toBe(1);
+  });
+
+  it("does not show clean match indicator when penalty data is null (unknown)", () => {
+    // baseData has all nulls — no penalty data available, so we can't confirm clean
+    renderWithProviders(<ComparisonTable data={baseData} />);
+    expect(screen.queryByText("✓ Clean")).not.toBeInTheDocument();
+  });
+});
