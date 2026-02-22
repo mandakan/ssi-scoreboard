@@ -84,6 +84,9 @@ export interface CompetitorSummary {
   miss_count: number | null;
   no_shoots: number | null;
   procedurals: number | null;
+  // 1-based index of this stage in the order this competitor shot it.
+  // Derived from scorecard submission timestamps (reflects actual shooting order).
+  shooting_order?: number | null;
 }
 
 export interface StageComparison {

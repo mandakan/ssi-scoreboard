@@ -167,6 +167,7 @@ export const SCORECARDS_QUERY = `
           }
           scorecards {
             ... on IpscScoreCardNode {
+              created
               points
               hitfactor
               time

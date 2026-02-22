@@ -223,6 +223,96 @@ describe("computeGroupRankings — penalty fields", () => {
   });
 });
 
+describe("computeGroupRankings — shooting order", () => {
+  it("derives shooting order from scorecard_created timestamps", () => {
+    // Alice shot stage 2 first, then stage 1
+    const scorecards = [
+      makeCard(1, 1, { scorecard_created: "2026-02-22T12:00:00Z" }),
+      makeCard(1, 2, { scorecard_created: "2026-02-22T10:00:00Z" }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    // stage 2 was first (earlier timestamp) → shooting_order 1
+    const stage2 = result.find((s) => s.stage_num === 2)!;
+    expect(stage2.competitors[1].shooting_order).toBe(1);
+    // stage 1 was second → shooting_order 2
+    const stage1 = result.find((s) => s.stage_num === 1)!;
+    expect(stage1.competitors[1].shooting_order).toBe(2);
+  });
+
+  it("two competitors can have different shooting orders for the same stage", () => {
+    // Alice: stage 1 first, stage 2 second
+    // Bob:   stage 2 first, stage 1 second
+    const scorecards = [
+      makeCard(1, 1, { scorecard_created: "2026-02-22T10:00:00Z" }),
+      makeCard(1, 2, { scorecard_created: "2026-02-22T12:00:00Z" }),
+      makeCard(2, 1, { scorecard_created: "2026-02-22T12:30:00Z" }),
+      makeCard(2, 2, { scorecard_created: "2026-02-22T10:30:00Z" }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    const stage1 = result.find((s) => s.stage_num === 1)!;
+    expect(stage1.competitors[1].shooting_order).toBe(1); // Alice shot stage 1 first
+    expect(stage1.competitors[2].shooting_order).toBe(2); // Bob shot stage 1 second
+    const stage2 = result.find((s) => s.stage_num === 2)!;
+    expect(stage2.competitors[1].shooting_order).toBe(2); // Alice shot stage 2 second
+    expect(stage2.competitors[2].shooting_order).toBe(1); // Bob shot stage 2 first
+  });
+
+  it("shooting_order is null when no scorecard_created timestamps are present", () => {
+    const scorecards = [
+      makeCard(1, 1),
+      makeCard(1, 2),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    for (const stage of result) {
+      expect(stage.competitors[1].shooting_order).toBeNull();
+    }
+  });
+
+  it("shooting_order is null for stages with no timestamp even when other stages have one", () => {
+    // stage 1 has a timestamp, stage 2 does not
+    const scorecards = [
+      makeCard(1, 1, { scorecard_created: "2026-02-22T10:00:00Z" }),
+      makeCard(1, 2, { scorecard_created: null }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    const stage2 = result.find((s) => s.stage_num === 2)!;
+    expect(stage2.competitors[1].shooting_order).toBeNull();
+  });
+
+  it("non-selected competitors do not affect shooting order computation", () => {
+    // comp id 99 is not selected — should be ignored
+    const nonSelected: RawScorecard = {
+      competitor_id: 99,
+      competitor_division: "hg1",
+      stage_id: 1,
+      stage_number: 1,
+      stage_name: "Stage 1",
+      max_points: 100,
+      points: 80,
+      hit_factor: 4.0,
+      time: 20,
+      dq: false,
+      zeroed: false,
+      dnf: false,
+      a_hits: null,
+      c_hits: null,
+      d_hits: null,
+      miss_count: null,
+      no_shoots: null,
+      procedurals: null,
+      scorecard_created: "2026-02-22T08:00:00Z",
+    };
+    const scorecards = [
+      nonSelected,
+      makeCard(1, 1, { scorecard_created: "2026-02-22T10:00:00Z" }),
+      makeCard(1, 2, { scorecard_created: "2026-02-22T12:00:00Z" }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    const stage1 = result.find((s) => s.stage_num === 1)!;
+    expect(stage1.competitors[1].shooting_order).toBe(1);
+  });
+});
+
 describe("computeGroupRankings — overall rankings", () => {
   it("ranks competitors across all divisions by HF", () => {
     const scorecards = [
