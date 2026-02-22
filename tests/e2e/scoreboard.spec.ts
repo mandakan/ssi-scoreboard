@@ -45,9 +45,9 @@ const MOCK_COMPARE: CompareResponse = {
       stageDifficultyLevel: 3,
       stageDifficultyLabel: "hard",
       competitors: {
-        100: { competitor_id: 100, points: 72, hit_factor: 5.02, time: 14.34, group_rank: 2, group_percent: 87.6, div_rank: 1, div_percent: 100, overall_rank: 2, overall_percent: 87.6, dq: false, zeroed: false, dnf: false, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
-        200: { competitor_id: 200, points: 76, hit_factor: 5.63, time: 13.49, group_rank: 2, group_percent: 98.3, div_rank: 1, div_percent: 100, overall_rank: 2, overall_percent: 98.3, dq: false, zeroed: false, dnf: false, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
-        300: { competitor_id: 300, points: 76, hit_factor: 5.73, time: 13.26, group_rank: 1, group_percent: 100,  div_rank: 1, div_percent: 100, overall_rank: 1, overall_percent: 100,  dq: false, zeroed: false, dnf: false, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
+        100: { competitor_id: 100, points: 72, hit_factor: 5.02, time: 14.34, group_rank: 2, group_percent: 87.6, div_rank: 1, div_percent: 100, overall_rank: 2, overall_percent: 87.6, overall_percentile: 0.0, dq: false, zeroed: false, dnf: false, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
+        200: { competitor_id: 200, points: 76, hit_factor: 5.63, time: 13.49, group_rank: 2, group_percent: 98.3, div_rank: 1, div_percent: 100, overall_rank: 2, overall_percent: 98.3, overall_percentile: 0.0, dq: false, zeroed: false, dnf: false, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
+        300: { competitor_id: 300, points: 76, hit_factor: 5.73, time: 13.26, group_rank: 1, group_percent: 100,  div_rank: 1, div_percent: 100, overall_rank: 1, overall_percent: 100,  overall_percentile: 1.0, dq: false, zeroed: false, dnf: false, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
       },
     },
     {
@@ -63,9 +63,9 @@ const MOCK_COMPARE: CompareResponse = {
       stageDifficultyLevel: 3,
       stageDifficultyLabel: "hard",
       competitors: {
-        100: { competitor_id: 100, points: 26, hit_factor: 1.30, time: 20.0,  group_rank: 3, group_percent: 35.8, div_rank: 2, div_percent: 35.8, overall_rank: 3, overall_percent: 35.8, dq: false, zeroed: false, dnf: false, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
-        200: { competitor_id: 200, points: 58, hit_factor: 3.63, time: 15.98, group_rank: 1, group_percent: 100,  div_rank: 1, div_percent: 100,  overall_rank: 1, overall_percent: 100,  dq: false, zeroed: false, dnf: false, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
-        300: { competitor_id: 300, points: 54, hit_factor: 3.16, time: 17.09, group_rank: 2, group_percent: 87.1, div_rank: 1, div_percent: 100,  overall_rank: 2, overall_percent: 87.1, dq: false, zeroed: false, dnf: false, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
+        100: { competitor_id: 100, points: 26, hit_factor: 1.30, time: 20.0,  group_rank: 3, group_percent: 35.8, div_rank: 2, div_percent: 35.8, overall_rank: 3, overall_percent: 35.8, overall_percentile: 0.0, dq: false, zeroed: false, dnf: false, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
+        200: { competitor_id: 200, points: 58, hit_factor: 3.63, time: 15.98, group_rank: 1, group_percent: 100,  div_rank: 1, div_percent: 100,  overall_rank: 1, overall_percent: 100,  overall_percentile: 1.0, dq: false, zeroed: false, dnf: false, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
+        300: { competitor_id: 300, points: 54, hit_factor: 3.16, time: 17.09, group_rank: 2, group_percent: 87.1, div_rank: 1, div_percent: 100,  overall_rank: 2, overall_percent: 87.1, overall_percentile: 0.5, dq: false, zeroed: false, dnf: false, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
       },
     },
     {
@@ -81,9 +81,9 @@ const MOCK_COMPARE: CompareResponse = {
       stageDifficultyLevel: 3,
       stageDifficultyLabel: "hard",
       competitors: {
-        100: { competitor_id: 100, points: null, hit_factor: null, time: null, group_rank: null, group_percent: null, div_rank: null, div_percent: null, overall_rank: null, overall_percent: null, dq: false, zeroed: false, dnf: true, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
-        200: { competitor_id: 200, points: null, hit_factor: null, time: null, group_rank: null, group_percent: null, div_rank: null, div_percent: null, overall_rank: null, overall_percent: null, dq: false, zeroed: false, dnf: true, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
-        300: { competitor_id: 300, points: null, hit_factor: null, time: null, group_rank: null, group_percent: null, div_rank: null, div_percent: null, overall_rank: null, overall_percent: null, dq: false, zeroed: false, dnf: true, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
+        100: { competitor_id: 100, points: null, hit_factor: null, time: null, group_rank: null, group_percent: null, div_rank: null, div_percent: null, overall_rank: null, overall_percent: null, overall_percentile: null, dq: false, zeroed: false, dnf: true, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
+        200: { competitor_id: 200, points: null, hit_factor: null, time: null, group_rank: null, group_percent: null, div_rank: null, div_percent: null, overall_rank: null, overall_percent: null, overall_percentile: null, dq: false, zeroed: false, dnf: true, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
+        300: { competitor_id: 300, points: null, hit_factor: null, time: null, group_rank: null, group_percent: null, div_rank: null, div_percent: null, overall_rank: null, overall_percent: null, overall_percentile: null, dq: false, zeroed: false, dnf: true, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
       },
     },
   ],
