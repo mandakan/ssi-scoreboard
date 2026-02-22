@@ -173,6 +173,7 @@ export const SCORECARDS_QUERY = `
               cscore
               dscore
               miss
+              penalty
               procedural
               competitor {
                 id

@@ -18,6 +18,7 @@ interface RawScCard {
   cscore?: number | string | null;
   dscore?: number | string | null;
   miss?: number | string | null;
+  penalty?: number | string | null;
   procedural?: number | string | null;
   competitor?: {
     id: string;
@@ -173,7 +174,7 @@ export async function GET(req: Request) {
         c_hits: b !== null || c !== null ? (b ?? 0) + (c ?? 0) : null,
         d_hits: parseNum(sc.dscore),
         miss_count: parseNum(sc.miss),
-        no_shoots: null,
+        no_shoots: parseNum(sc.penalty),
         procedurals: parseNum(sc.procedural),
       });
     }
