@@ -45,6 +45,7 @@ export interface StageResult {
   dq: boolean;
   zeroed: boolean;
   dnf: boolean;
+  incomplete: boolean;
   a_hits: number | null;
   c_hits: number | null;
   d_hits: number | null;
@@ -79,6 +80,7 @@ export interface CompetitorSummary {
   dq: boolean;
   zeroed: boolean;
   dnf: boolean;
+  incomplete: boolean;
   a_hits: number | null;
   c_hits: number | null; // B-zone combined into C
   d_hits: number | null;

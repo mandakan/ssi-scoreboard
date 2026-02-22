@@ -7,7 +7,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ExternalLink } from "lucide-react";
+import { AlertTriangle, ExternalLink } from "lucide-react";
 import { cn, formatHF, formatTime, formatPct } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
 import { HitZoneBar } from "@/components/hit-zone-bar";
@@ -558,6 +558,21 @@ function StageCell({
         <span className="font-semibold tabular-nums">
           {formatHF(sc.hit_factor)}
         </span>
+        {sc.incomplete && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                className="inline-flex cursor-help text-amber-500 dark:text-amber-400"
+                aria-label="Incomplete scorecard (rule 9.7.6.2)"
+              >
+                <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-52 text-center text-xs">
+              Incomplete scorecard (rule 9.7.6.2) — insufficient hits or misses recorded
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
       {/* Secondary: raw points and time */}
       <div className="text-xs text-muted-foreground tabular-nums">
