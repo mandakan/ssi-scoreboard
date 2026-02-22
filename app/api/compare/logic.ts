@@ -84,6 +84,22 @@ function pct(hf: number | null, leaderHF: number | null): number | null {
 }
 
 /**
+ * Compute percentile placement for a competitor within a ranked field.
+ *   percentile = 1 − (rank − 1) / (N − 1)
+ * where rank is 1-indexed (1 = best) and N = total ranked (non-DNF) competitors.
+ *
+ * Edge cases:
+ *   - rank null → null (DNF)
+ *   - N = 0    → null (no competitors)
+ *   - N = 1    → 1.0  (sole competitor, by definition P100)
+ */
+export function computePercentile(rank: number | null, n: number): number | null {
+  if (rank === null || n === 0) return null;
+  if (n === 1) return 1.0;
+  return 1 - (rank - 1) / (n - 1);
+}
+
+/**
  * Compute the median HF for a set of scorecards.
  * Excludes DNF, DQ, and zeroed scorecards, and entries with null hit_factor.
  * Returns the median and the count of valid competitors included.
@@ -224,6 +240,8 @@ export function computeGroupRankings(
     // Overall rankings — all competitors across all divisions
     const { rankMap: overallRankMap, leaderHF: overallLeaderHF } =
       rankByHF(allStage);
+    // N for percentile: number of non-DNF competitors in the full field on this stage
+    const overallN = overallRankMap.size;
 
     // Full-field median HF (excluding DNF/DQ/zeroed)
     const { median: fieldMedianHF, count: fieldCompetitorCount } =
@@ -271,6 +289,7 @@ export function computeGroupRankings(
           div_percent: null,
           overall_rank: null,
           overall_percent: null,
+          overall_percentile: null,
           dq: sc?.dq ?? false,
           zeroed: sc?.zeroed ?? false,
           dnf: true,
@@ -288,6 +307,7 @@ export function computeGroupRankings(
         const pts = sc.dq || sc.zeroed ? 0 : (sc.points ?? null);
         const divKey = sc.competitor_division ?? "__none__";
         const divInfo = divResults.get(divKey);
+        const overallRank = overallRankMap.get(comp.id) ?? null;
 
         competitorMap[comp.id] = {
           competitor_id: comp.id,
@@ -298,8 +318,9 @@ export function computeGroupRankings(
           group_percent: pct(hf, groupLeaderHF),
           div_rank: divInfo ? (divInfo.rankMap.get(comp.id) ?? null) : null,
           div_percent: divInfo ? pct(hf, divInfo.leaderHF) : null,
-          overall_rank: overallRankMap.get(comp.id) ?? null,
+          overall_rank: overallRank,
           overall_percent: pct(hf, overallLeaderHF),
+          overall_percentile: computePercentile(overallRank, overallN),
           dq: sc.dq,
           zeroed: sc.zeroed,
           dnf: false,

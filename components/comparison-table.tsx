@@ -644,6 +644,22 @@ function StageCell({
           {formatPct(pct)}
         </span>
       )}
+      {/* Percentile placement in full field */}
+      {sc.overall_percentile != null && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className="text-[10px] text-muted-foreground/70 tabular-nums cursor-help leading-none"
+              aria-label={`Field percentile: P${Math.round(sc.overall_percentile * 100)}`}
+            >
+              {`P${Math.round(sc.overall_percentile * 100)}`}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-52 text-center text-xs">
+            {`P${Math.round(sc.overall_percentile * 100)} — top ${Math.round(sc.overall_percentile * 100)}% of all field competitors on this stage`}
+          </TooltipContent>
+        </Tooltip>
+      )}
       {/* Hit zone distribution bar */}
       <HitZoneBar
         aHits={sc.a_hits}

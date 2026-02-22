@@ -90,6 +90,10 @@ export interface CompetitorSummary {
   // 1-based index of this stage in the order this competitor shot it.
   // Derived from scorecard submission timestamps (reflects actual shooting order).
   shooting_order?: number | null;
+  // Percentile placement within the full field for this stage (0–1, 1 = top).
+  // Formula: 1 − (overall_rank − 1) / (N − 1) where N = non-DNF field competitors.
+  // null for DNF or when N = 0.
+  overall_percentile: number | null;
 }
 
 export interface StageComparison {
