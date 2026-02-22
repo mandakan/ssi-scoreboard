@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { StageBalanceChart } from "@/components/radar-chart";
 import type { CompareResponse } from "@/lib/types";
 
@@ -121,5 +121,24 @@ describe("StageBalanceChart", () => {
   it("renders the recharts container when there is valid data", () => {
     const { container } = render(<StageBalanceChart data={baseData} />);
     expect(container.querySelector(".recharts-responsive-container")).not.toBeNull();
+  });
+
+  it("renders Group and Overall mode toggle buttons", () => {
+    render(<StageBalanceChart data={baseData} />);
+    expect(screen.getByRole("button", { name: "Group" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Overall" })).toBeInTheDocument();
+  });
+
+  it("Group button is active by default", () => {
+    render(<StageBalanceChart data={baseData} />);
+    expect(screen.getByRole("button", { name: "Group" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Overall" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("switches to Overall mode when button is clicked", () => {
+    render(<StageBalanceChart data={baseData} />);
+    fireEvent.click(screen.getByRole("button", { name: "Overall" }));
+    expect(screen.getByRole("button", { name: "Overall" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Group" })).toHaveAttribute("aria-pressed", "false");
   });
 });
