@@ -403,7 +403,7 @@ function modeValues(
 }
 
 export function ComparisonTable({ data }: ComparisonTableProps) {
-  const { stages, competitors, penaltyStats, efficiencyStats } = data;
+  const { stages, competitors, penaltyStats, efficiencyStats, consistencyStats } = data;
   const [mode, setMode] = useState<PctMode>("group");
   const [viewMode, setViewMode] = useState<ViewMode>("absolute");
 
@@ -766,6 +766,28 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
                             fieldCount={efficiencyStats[t.id].fieldCount}
                           />
                         </div>
+                      )}
+                      {consistencyStats[t.id]?.coefficientOfVariation != null && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-xs font-medium cursor-help tabular-nums",
+                                consistencyStats[t.id].stagesFired < 4 && "opacity-40"
+                              )}
+                              aria-label={`Consistency index: ${consistencyStats[t.id].coefficientOfVariation!.toFixed(2)} — ${consistencyStats[t.id].label}`}
+                            >
+                              {`CI ${consistencyStats[t.id].coefficientOfVariation!.toFixed(2)} · ${consistencyStats[t.id].label}`}
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs space-y-0.5 max-w-56 text-center">
+                            <div className="font-medium">Consistency Index (CI)</div>
+                            <div>Coefficient of variation of HF% across stages. Lower = more consistent.</div>
+                            <div className="text-muted-foreground">{`Based on ${consistencyStats[t.id].stagesFired} stage${consistencyStats[t.id].stagesFired === 1 ? "" : "s"}`}</div>
+                            <div className="text-muted-foreground">{"< 0.05 very consistent · 0.05–0.10 consistent · 0.10–0.15 moderate · 0.15–0.20 variable · > 0.20 streaky"}</div>
+                          </TooltipContent>
+                        </Tooltip>
                       )}
                       {t.isClean && (
                         <Tooltip>

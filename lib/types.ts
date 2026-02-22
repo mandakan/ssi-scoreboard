@@ -151,12 +151,19 @@ export interface EfficiencyStats {
   fieldCount: number;            // number of competitors contributing to the distribution
 }
 
+export interface ConsistencyStats {
+  coefficientOfVariation: number | null; // σ/μ of group_percent; null when fewer than 2 valid stages or mean is 0
+  label: string | null;                  // "very consistent" | "consistent" | "moderate" | "variable" | "streaky"
+  stagesFired: number;                   // non-DNF, non-DQ, non-zeroed stages with valid group_percent
+}
+
 export interface CompareResponse {
   match_id: number;
   stages: StageComparison[];
   competitors: CompetitorInfo[];
   penaltyStats: Record<number, CompetitorPenaltyStats>; // keyed by competitor_id
   efficiencyStats: Record<number, EfficiencyStats>;     // keyed by competitor_id
+  consistencyStats: Record<number, ConsistencyStats>;  // keyed by competitor_id
 }
 
 export interface EventSummary {
