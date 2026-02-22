@@ -7,6 +7,7 @@ import type {
   CompetitorInfo,
   CompetitorPenaltyStats,
   EfficiencyStats,
+  ConsistencyStats,
   StageClassification,
 } from "@/lib/types";
 
@@ -614,4 +615,51 @@ export function computeFieldPPSDistribution(
     fieldMax: sorted[sorted.length - 1],
     fieldCount: sorted.length,
   };
+}
+
+function ciLabel(cv: number): string {
+  if (cv < 0.05) return "very consistent";
+  if (cv < 0.10) return "consistent";
+  if (cv < 0.15) return "moderate";
+  if (cv < 0.20) return "variable";
+  return "streaky";
+}
+
+/**
+ * Compute per-competitor consistency index (coefficient of variation of group HF%).
+ *
+ *   CI = σ / μ   (population std dev divided by mean)
+ *
+ * Only non-DNF, non-DQ, non-zeroed stages with a valid group_percent contribute.
+ * Returns null when fewer than 2 stages are available or when the mean is zero.
+ */
+export function computeConsistencyStats(
+  stages: StageComparison[],
+  competitorId: number
+): ConsistencyStats {
+  const values: number[] = [];
+
+  for (const stage of stages) {
+    const sc = stage.competitors[competitorId];
+    if (!sc || sc.dnf || sc.dq || sc.zeroed) continue;
+    if (sc.group_percent != null) values.push(sc.group_percent);
+  }
+
+  const stagesFired = values.length;
+
+  if (stagesFired < 2) {
+    return { coefficientOfVariation: null, label: null, stagesFired };
+  }
+
+  const mean = values.reduce((a, b) => a + b, 0) / stagesFired;
+
+  if (mean === 0) {
+    return { coefficientOfVariation: null, label: null, stagesFired };
+  }
+
+  const variance = values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / stagesFired;
+  const stdDev = Math.sqrt(variance);
+  const cv = stdDev / mean;
+
+  return { coefficientOfVariation: cv, label: ciLabel(cv), stagesFired };
 }

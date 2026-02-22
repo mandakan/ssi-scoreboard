@@ -19,6 +19,10 @@ const baseData: CompareResponse = {
     2: { totalPenalties: 0, penaltyCostPercent: 0, matchPctActual: 100, matchPctClean: 100, penaltiesPerStage: 0, penaltiesPer100Rounds: 0 },
   },
   efficiencyStats: {},
+  consistencyStats: {
+    1: { coefficientOfVariation: null, label: null, stagesFired: 1 },
+    2: { coefficientOfVariation: null, label: null, stagesFired: 1 },
+  },
   stages: [
     {
       stage_id: 100,
