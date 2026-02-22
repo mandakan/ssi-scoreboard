@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useSyncExternalStore } from "react";
-import { useParams } from "next/navigation";
+import { useCallback, useSyncExternalStore, useEffect, useRef } from "react";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { MatchHeader } from "@/components/match-header";
 import { CompetitorPicker } from "@/components/competitor-picker";
@@ -10,7 +10,6 @@ import { ComparisonChart } from "@/components/comparison-chart";
 import { useMatchQuery, useCompareQuery } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
 import { Loader2, AlertCircle, ArrowLeft, RefreshCw } from "lucide-react";
-import { useEffect } from "react";
 import {
   saveRecentCompetition,
   saveCompetitorSelection,
@@ -21,6 +20,32 @@ import {
 export default function MatchPage() {
   const params = useParams<{ ct: string; id: string }>();
   const { ct, id } = params;
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // On mount: seed localStorage from ?competitors= URL param (shared links),
+  // or reflect existing localStorage selection into the URL (backward compat).
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (seededRef.current) return;
+    seededRef.current = true;
+
+    const competitorsParam = searchParams.get("competitors");
+    if (competitorsParam) {
+      const ids = competitorsParam
+        .split(",")
+        .map(Number)
+        .filter((n) => Number.isFinite(n) && n > 0);
+      if (ids.length > 0) {
+        saveCompetitorSelection(ct, id, ids);
+      }
+    } else {
+      const localIds = getCompetitorSelectionSnapshot(ct, id);
+      if (localIds.length > 0) {
+        router.replace(`?competitors=${localIds.join(",")}`, { scroll: false });
+      }
+    }
+  }, [ct, id, searchParams, router]);
 
   // Use useSyncExternalStore to read competitor selection from localStorage.
   // This handles SSR (server snapshot = []) and client-side hydration correctly,
@@ -53,7 +78,9 @@ export default function MatchPage() {
 
   function handleSelectionChange(ids: number[]) {
     saveCompetitorSelection(ct, id, ids);
-    // useSyncExternalStore will re-render with the new snapshot automatically.
+    // Sync selection to URL so it can be bookmarked or shared.
+    const qs = ids.length > 0 ? `?competitors=${ids.join(",")}` : "";
+    router.replace(`${window.location.pathname}${qs}`, { scroll: false });
   }
 
   if (matchQuery.isLoading) {
