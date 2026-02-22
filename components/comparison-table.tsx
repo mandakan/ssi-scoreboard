@@ -7,6 +7,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { ExternalLink } from "lucide-react";
 import { cn, formatHF, formatTime, formatPct } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
 import { HitZoneBar } from "@/components/hit-zone-bar";
@@ -275,11 +276,36 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
             {stages.map((stage) => (
               <tr key={stage.stage_id} className="border-b hover:bg-muted/30">
                 <td className="py-2 pr-4 font-medium">
-                  <div className="flex flex-col">
-                    <span className="text-xs text-muted-foreground">
-                      Stage {stage.stage_num}
-                    </span>
+                  <div className="flex flex-col gap-0.5">
+                    {stage.ssi_url ? (
+                      <a
+                        href={stage.ssi_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        aria-label={`Open ${stage.stage_name} on ShootNScoreIt (opens in new tab)`}
+                      >
+                        Stage {stage.stage_num}
+                        <ExternalLink className="w-3 h-3" aria-hidden="true" />
+                        <span className="sr-only">(opens in new tab)</span>
+                      </a>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        Stage {stage.stage_num}
+                      </span>
+                    )}
                     <span className="truncate max-w-32">{stage.stage_name}</span>
+                    {/* Stage metadata: rounds / targets */}
+                    {(stage.min_rounds != null || stage.paper_targets != null ||
+                      (stage.steel_targets != null && stage.steel_targets > 0)) && (
+                      <span className="text-xs text-muted-foreground/70 tabular-nums">
+                        {[
+                          stage.min_rounds != null && `${stage.min_rounds} rds`,
+                          stage.paper_targets != null && `${stage.paper_targets} paper`,
+                          stage.steel_targets != null && stage.steel_targets > 0 && `${stage.steel_targets} steel`,
+                        ].filter(Boolean).join(" · ")}
+                      </span>
+                    )}
                   </div>
                 </td>
                 {competitors.map((comp) => {

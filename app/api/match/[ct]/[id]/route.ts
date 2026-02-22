@@ -8,6 +8,11 @@ interface RawStage {
   number: number;
   name: string;
   max_points?: number | null; // on IpscStageNode inline fragment
+  minimum_rounds?: number | null;
+  paper?: number | null;
+  popper?: number | null;
+  plate?: number | null;
+  get_full_absolute_url?: string | null;
 }
 
 interface RawCompetitor {
@@ -71,6 +76,14 @@ export async function GET(
     name: s.name,
     stage_number: s.number,
     max_points: s.max_points ?? 0,
+    min_rounds: s.minimum_rounds ?? null,
+    paper_targets: s.paper ?? null,
+    steel_targets: (s.popper != null || s.plate != null)
+      ? (s.popper ?? 0) + (s.plate ?? 0)
+      : null,
+    ssi_url: s.get_full_absolute_url
+      ? `https://${s.get_full_absolute_url}`
+      : null,
   }));
 
   const competitors: CompetitorInfo[] = (
