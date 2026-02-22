@@ -12,9 +12,17 @@ export async function fetchMatch(ct: string, id: string): Promise<MatchResponse>
   return res.json();
 }
 
-export async function fetchEvents(q: string): Promise<EventSummary[]> {
+export async function fetchEvents(
+  q: string,
+  starts_after?: string,
+  starts_before?: string,
+  firearms?: string,
+): Promise<EventSummary[]> {
   const params = new URLSearchParams();
   if (q) params.set("q", q);
+  if (starts_after) params.set("starts_after", starts_after);
+  if (starts_before) params.set("starts_before", starts_before);
+  if (firearms) params.set("firearms", firearms);
   const res = await fetch(`/api/events?${params}`);
   if (!res.ok) {
     const body = await res.text();

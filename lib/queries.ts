@@ -13,10 +13,15 @@ export function useMatchQuery(ct: string, id: string) {
   });
 }
 
-export function useEventsQuery(q: string) {
+export function useEventsQuery(
+  q: string,
+  starts_after?: string,
+  starts_before?: string,
+  firearms?: string,
+) {
   return useQuery<EventSummary[], Error>({
-    queryKey: ["events", q],
-    queryFn: () => fetchEvents(q),
+    queryKey: ["events", q, starts_after, starts_before, firearms],
+    queryFn: () => fetchEvents(q, starts_after, starts_before, firearms),
     staleTime: 300_000, // 5 minutes — well inside 1h server cache TTL
   });
 }

@@ -29,6 +29,93 @@ const STATUS_LABEL: Record<string, string> = {
   ol: "Online",
 };
 
+type DatePreset = {
+  label: string;
+  after: (now: Date) => Date;
+  before: (now: Date) => Date;
+};
+
+const DATE_PRESETS: { id: string; label: string; preset: DatePreset }[] = [
+  {
+    id: "upcoming",
+    label: "Upcoming",
+    preset: {
+      label: "Upcoming",
+      after: (now) => now,
+      before: (now) => {
+        const d = new Date(now);
+        d.setMonth(d.getMonth() + 6);
+        return d;
+      },
+    },
+  },
+  {
+    id: "3months",
+    label: "3 months",
+    preset: {
+      label: "3 months",
+      after: (now) => {
+        const d = new Date(now);
+        d.setMonth(d.getMonth() - 3);
+        return d;
+      },
+      before: (now) => {
+        const d = new Date(now);
+        d.setMonth(d.getMonth() + 3);
+        return d;
+      },
+    },
+  },
+  {
+    id: "6months",
+    label: "6 months",
+    preset: {
+      label: "6 months",
+      after: (now) => {
+        const d = new Date(now);
+        d.setMonth(d.getMonth() - 6);
+        return d;
+      },
+      before: (now) => {
+        const d = new Date(now);
+        d.setMonth(d.getMonth() + 3);
+        return d;
+      },
+    },
+  },
+  {
+    id: "1year",
+    label: "1 year",
+    preset: {
+      label: "1 year",
+      after: (now) => {
+        const d = new Date(now);
+        d.setFullYear(d.getFullYear() - 1);
+        return d;
+      },
+      before: (now) => {
+        const d = new Date(now);
+        d.setMonth(d.getMonth() + 3);
+        return d;
+      },
+    },
+  },
+];
+
+const DEFAULT_PRESET_ID = "3months";
+
+const FIREARMS_OPTIONS = [
+  { id: "hg", label: "Handgun & PCC" },
+  { id: "rf", label: "Rifle" },
+  { id: "sg", label: "Shotgun" },
+] as const;
+
+const DEFAULT_FIREARMS = "hg";
+
+function toISODate(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+
 function formatEventDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-GB", {
     day: "numeric",
@@ -42,13 +129,25 @@ export function EventSearch() {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [presetId, setPresetId] = useState(DEFAULT_PRESET_ID);
+  const [firearms, setFirearms] = useState(DEFAULT_FIREARMS);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(inputValue), 300);
     return () => clearTimeout(timer);
   }, [inputValue]);
 
-  const { data: events = [], isLoading } = useEventsQuery(debouncedQuery);
+  const now = new Date();
+  const selected = DATE_PRESETS.find((p) => p.id === presetId)!;
+  const starts_after = toISODate(selected.preset.after(now));
+  const starts_before = toISODate(selected.preset.before(now));
+
+  const { data: events = [], isLoading } = useEventsQuery(
+    debouncedQuery,
+    starts_after,
+    starts_before,
+    firearms,
+  );
 
   function handleSelect(event: EventSummary) {
     setOpen(false);
@@ -75,6 +174,54 @@ export function EventSearch() {
         className="w-[var(--radix-popover-trigger-width)] p-0"
         align="start"
       >
+        {/* Filters */}
+        <div className="px-3 py-2 border-b space-y-2">
+          <div role="group" aria-label="Date range" className="flex gap-1.5 flex-wrap">
+            {DATE_PRESETS.map(({ id, label }) => {
+              const active = id === presetId;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setPresetId(id)}
+                  className={[
+                    "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    active
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80",
+                  ].join(" ")}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <div role="group" aria-label="Firearms" className="flex gap-1.5 flex-wrap">
+            {FIREARMS_OPTIONS.map(({ id, label }) => {
+              const active = id === firearms;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setFirearms(id)}
+                  className={[
+                    "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    active
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80",
+                  ].join(" ")}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <Command shouldFilter={false}>
           <CommandInput
             placeholder="Search by name…"
