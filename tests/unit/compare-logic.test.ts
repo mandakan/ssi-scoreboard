@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeGroupRankings, assignDifficulty, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, assignDifficulty, computePercentile, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompetitorInfo } from "@/lib/types";
 
 const competitors: CompetitorInfo[] = [
@@ -645,5 +645,131 @@ describe("computeGroupRankings — stage difficulty integration", () => {
       expect(stage.stageDifficultyLevel).toBe(3);
       expect(stage.stageDifficultyLabel).toBe("hard");
     }
+  });
+});
+
+describe("computePercentile — edge cases and formula", () => {
+  it("returns 1.0 for rank 1 of N competitors (top of field)", () => {
+    // percentile = 1 - (1-1)/(N-1) = 1 - 0 = 1.0
+    expect(computePercentile(1, 3)).toBe(1.0);
+  });
+
+  it("returns 0.0 for last place (rank = N)", () => {
+    // percentile = 1 - (N-1)/(N-1) = 1 - 1 = 0.0
+    expect(computePercentile(3, 3)).toBe(0.0);
+  });
+
+  it("computes mid-field percentile correctly", () => {
+    // rank 3 of 5: percentile = 1 - (3-1)/(5-1) = 1 - 0.5 = 0.5
+    expect(computePercentile(3, 5)).toBeCloseTo(0.5, 5);
+  });
+
+  it("edge case N=1: sole competitor returns 1.0 (P100)", () => {
+    expect(computePercentile(1, 1)).toBe(1.0);
+  });
+
+  it("edge case N=0: returns null (no competitors to rank)", () => {
+    expect(computePercentile(1, 0)).toBeNull();
+  });
+
+  it("returns null for null rank (DNF competitor)", () => {
+    expect(computePercentile(null, 10)).toBeNull();
+  });
+
+  it("tied competitors share the same rank and therefore same percentile", () => {
+    // rank 1 tied: both get percentile = 1.0 regardless
+    expect(computePercentile(1, 3)).toBe(computePercentile(1, 3));
+    // rank 3 of 5 produces 0.5
+    expect(computePercentile(3, 5)).toBeCloseTo(0.5, 5);
+  });
+
+  it("rank 2 of 5: percentile = 1 - 1/4 = 0.75", () => {
+    expect(computePercentile(2, 5)).toBeCloseTo(0.75, 5);
+  });
+});
+
+describe("computeGroupRankings — overall_percentile", () => {
+  it("assigns overall_percentile based on full-field rank, not group", () => {
+    // 3 full-field competitors. Selected: Alice (rank 2 overall), Bob (rank 3).
+    // Non-selected comp 99 has the highest HF (rank 1, P100).
+    const nonSelected: RawScorecard = {
+      competitor_id: 99,
+      competitor_division: "hg1",
+      stage_id: 1,
+      stage_number: 1,
+      stage_name: "Stage 1",
+      max_points: 100,
+      points: 100,
+      hit_factor: 8.0,
+      time: 12.5,
+      dq: false,
+      zeroed: false,
+      dnf: false,
+      incomplete: false,
+      a_hits: 12,
+      c_hits: 0,
+      d_hits: 0,
+      miss_count: 0,
+      no_shoots: 0,
+      procedurals: 0,
+    };
+    const scorecards = [
+      nonSelected,
+      makeCard(1, 1, { hit_factor: 5.0 }), // Alice — rank 2
+      makeCard(2, 1, { hit_factor: 3.0 }), // Bob   — rank 3
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    const stage = result[0];
+    // N = 3, rank 2 → percentile = 1 - 1/2 = 0.5
+    expect(stage.competitors[1].overall_percentile).toBeCloseTo(0.5, 5);
+    // N = 3, rank 3 → percentile = 1 - 2/2 = 0.0
+    expect(stage.competitors[2].overall_percentile).toBeCloseTo(0.0, 5);
+  });
+
+  it("sole non-DNF competitor on a stage gets overall_percentile = 1.0", () => {
+    const scorecards = [makeCard(1, 1, { hit_factor: 4.0 })];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    expect(result[0].competitors[1].overall_percentile).toBe(1.0);
+  });
+
+  it("DNF competitor has null overall_percentile", () => {
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 4.0 }),
+      makeCard(2, 1, { dnf: true }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    expect(result[0].competitors[2].overall_percentile).toBeNull();
+  });
+
+  it("per-stage N is used, not match-level N (competitor DNF on one stage only)", () => {
+    // Stage 1: Alice + Bob both fire → N=2
+    // Stage 2: only Alice fires, Bob DNF → N=1 → Alice gets percentile 1.0
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 5.0, stage_number: 1 }),
+      makeCard(2, 1, { hit_factor: 3.0, stage_number: 1 }),
+      makeCard(1, 2, { hit_factor: 4.0, stage_number: 2 }),
+      makeCard(2, 2, { dnf: true, stage_number: 2 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    const stage1 = result.find((s) => s.stage_num === 1)!;
+    const stage2 = result.find((s) => s.stage_num === 2)!;
+    // Stage 1: Alice rank 1/2, percentile = 1.0; Bob rank 2/2, percentile = 0.0
+    expect(stage1.competitors[1].overall_percentile).toBe(1.0);
+    expect(stage1.competitors[2].overall_percentile).toBe(0.0);
+    // Stage 2: Alice is sole competitor (N=1) → percentile = 1.0
+    expect(stage2.competitors[1].overall_percentile).toBe(1.0);
+    expect(stage2.competitors[2].overall_percentile).toBeNull();
+  });
+
+  it("all-tied competitors get the same percentile", () => {
+    // Alice and Bob both have HF 4.0 → both rank 1 out of 2 → percentile 1.0
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 4.0 }),
+      makeCard(2, 1, { hit_factor: 4.0 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    // rank 1 of N=2: percentile = 1 - 0/1 = 1.0
+    expect(result[0].competitors[1].overall_percentile).toBe(1.0);
+    expect(result[0].competitors[2].overall_percentile).toBe(1.0);
   });
 });
