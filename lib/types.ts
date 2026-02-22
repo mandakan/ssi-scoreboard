@@ -61,8 +61,15 @@ export interface CompetitorSummary {
   points: number | null;
   hit_factor: number | null;
   time: number | null;
-  group_rank: number | null; // rank within the selected group for this stage
-  group_percent: number | null; // percentage of stage leader's points (within group)
+  // Group context: rank/% within the selected set of competitors
+  group_rank: number | null;
+  group_percent: number | null; // HF as % of group leader's HF
+  // Division context: rank/% within competitor's own division (computed from full field)
+  div_rank: number | null;
+  div_percent: number | null; // HF as % of division leader's HF
+  // Overall context: rank/% across all competitors in the match regardless of division
+  overall_rank: number | null;
+  overall_percent: number | null; // HF as % of overall stage leader's HF
   dq: boolean;
   zeroed: boolean;
   dnf: boolean;
@@ -73,9 +80,17 @@ export interface StageComparison {
   stage_name: string;
   stage_num: number;
   max_points: number;
-  group_leader_points: number | null; // reserved for future benchmark overlay — do not remove
+  group_leader_hf: number | null;     // best HF in selected group
+  group_leader_points: number | null; // best raw pts in selected group — benchmark overlay hook, do not remove
+  overall_leader_hf: number | null;   // best HF across full field — benchmark overlay hook
   competitors: Record<number, CompetitorSummary>; // keyed by competitor_id
 }
+
+// Percentage context for the comparison view.
+// "group"    — HF % relative to the group leader (selected competitors only)
+// "division" — HF % relative to the division winner (full field, per competitor's division)
+// "overall"  — HF % relative to the overall stage winner (full field, all divisions)
+export type PctMode = "group" | "division" | "overall";
 
 export interface CompareResponse {
   match_id: number;

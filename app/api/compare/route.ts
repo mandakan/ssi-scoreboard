@@ -130,8 +130,8 @@ export async function GET(req: Request) {
     );
   });
 
-  // Flatten raw stage scorecards into RawScorecard objects, filtered to requested competitors
-  const competitorIdSet = new Set(competitorIds);
+  // Flatten ALL stage scorecards — not filtered to requested competitors.
+  // computeGroupRankings needs the full field to compute division and overall rankings.
   const rawScorecards: RawScorecard[] = [];
 
   for (const stage of scorecardsData.event.stages ?? []) {
@@ -140,13 +140,13 @@ export async function GET(req: Request) {
     for (const sc of stage.scorecards ?? []) {
       if (!sc.competitor) continue;
       const compId = parseInt(sc.competitor.id, 10);
-      if (!competitorIdSet.has(compId)) continue;
 
       const parseNum = (v: number | string | null | undefined) =>
         v != null ? parseFloat(String(v)) : null;
 
       rawScorecards.push({
         competitor_id: compId,
+        competitor_division: sc.competitor.handgun_div ?? null,
         stage_id: stageId,
         stage_number: stage.number,
         stage_name: stage.name,

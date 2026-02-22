@@ -1,13 +1,18 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { ComparisonTable } from "@/components/comparison-table";
 import type { CompareResponse } from "@/lib/types";
+
+function renderWithProviders(ui: React.ReactElement) {
+  return render(<TooltipProvider>{ui}</TooltipProvider>);
+}
 
 const baseData: CompareResponse = {
   match_id: 26547,
   competitors: [
-    { id: 1, name: "Alice Smith", competitor_number: "35", club: null, division: null },
-    { id: 2, name: "Bob Jones", competitor_number: "50", club: null, division: null },
+    { id: 1, name: "Alice Smith", competitor_number: "35", club: null, division: "hg1" },
+    { id: 2, name: "Bob Jones", competitor_number: "50", club: null, division: "hg3" },
   ],
   stages: [
     {
@@ -15,7 +20,9 @@ const baseData: CompareResponse = {
       stage_name: "Stage One",
       stage_num: 1,
       max_points: 80,
+      group_leader_hf: 5.63,
       group_leader_points: 76,
+      overall_leader_hf: 5.63,
       competitors: {
         1: {
           competitor_id: 1,
@@ -23,7 +30,11 @@ const baseData: CompareResponse = {
           hit_factor: 5.02,
           time: 14.34,
           group_rank: 2,
-          group_percent: 94.7,
+          group_percent: 89.2,
+          div_rank: 1,
+          div_percent: 100,
+          overall_rank: 2,
+          overall_percent: 89.2,
           dq: false,
           zeroed: false,
           dnf: false,
@@ -35,6 +46,10 @@ const baseData: CompareResponse = {
           time: 13.49,
           group_rank: 1,
           group_percent: 100,
+          div_rank: 1,
+          div_percent: 100,
+          overall_rank: 1,
+          overall_percent: 100,
           dq: false,
           zeroed: false,
           dnf: false,
@@ -46,21 +61,20 @@ const baseData: CompareResponse = {
 
 describe("ComparisonTable", () => {
   it("renders competitor names", () => {
-    render(<ComparisonTable data={baseData} />);
+    renderWithProviders(<ComparisonTable data={baseData} />);
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.getByText("Bob")).toBeInTheDocument();
   });
 
   it("renders stage name", () => {
-    render(<ComparisonTable data={baseData} />);
+    renderWithProviders(<ComparisonTable data={baseData} />);
     expect(screen.getByText("Stage One")).toBeInTheDocument();
   });
 
-  it("renders points for valid scorecards", () => {
-    render(<ComparisonTable data={baseData} />);
-    // Points appear in both the stage row and the totals row
-    expect(screen.getAllByText("72").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("76").length).toBeGreaterThan(0);
+  it("renders hit factors as primary metric", () => {
+    renderWithProviders(<ComparisonTable data={baseData} />);
+    expect(screen.getAllByText("5.02").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("5.63").length).toBeGreaterThan(0);
   });
 
   it("renders em-dash for dnf/not-fired stages", () => {
@@ -70,13 +84,18 @@ describe("ComparisonTable", () => {
         {
           ...baseData.stages[0],
           competitors: {
-            1: { ...baseData.stages[0].competitors[1], dnf: true, points: null },
+            1: {
+              ...baseData.stages[0].competitors[1],
+              dnf: true,
+              hit_factor: null,
+              points: null,
+            },
             2: baseData.stages[0].competitors[2],
           },
         },
       ],
     };
-    render(<ComparisonTable data={data} />);
+    renderWithProviders(<ComparisonTable data={data} />);
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 
@@ -93,15 +112,21 @@ describe("ComparisonTable", () => {
         },
       ],
     };
-    render(<ComparisonTable data={data} />);
+    renderWithProviders(<ComparisonTable data={data} />);
     expect(screen.getByText("DQ")).toBeInTheDocument();
   });
 
-  it("renders totals row", () => {
-    render(<ComparisonTable data={baseData} />);
-    expect(screen.getByText("Total")).toBeInTheDocument();
-    // Alice: 72, Bob: 76
+  it("renders totals row with total points", () => {
+    renderWithProviders(<ComparisonTable data={baseData} />);
+    expect(screen.getByText("Total pts")).toBeInTheDocument();
     expect(screen.getAllByText("72").length).toBeGreaterThan(0);
     expect(screen.getAllByText("76").length).toBeGreaterThan(0);
+  });
+
+  it("renders mode toggle buttons", () => {
+    renderWithProviders(<ComparisonTable data={baseData} />);
+    expect(screen.getByText("Group")).toBeInTheDocument();
+    expect(screen.getByText("Division")).toBeInTheDocument();
+    expect(screen.getByText("Overall")).toBeInTheDocument();
   });
 });

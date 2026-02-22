@@ -112,7 +112,7 @@ export default function MatchPage() {
               </div>
 
               <div className="rounded-lg border p-4 space-y-3">
-                <h2 className="font-semibold">Points by stage</h2>
+                <h2 className="font-semibold">Hit factor by stage</h2>
                 <ComparisonChart data={compareQuery.data} />
               </div>
             </>

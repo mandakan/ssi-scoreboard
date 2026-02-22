@@ -9,7 +9,7 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  // ReferenceLine, // future: benchmark overlay (see GitHub issue #1)
+  // ReferenceLine, // future: benchmark overlay — overall_leader_hf (see GitHub issue #1)
 } from "recharts";
 import { buildColorMap } from "@/lib/colors";
 import type { CompareResponse } from "@/lib/types";
@@ -34,7 +34,7 @@ export function ComparisonChart({ data }: ComparisonChartProps) {
         row[key] = 0;
         row[`${key}_opacity`] = 0.25;
       } else {
-        row[key] = sc.points ?? 0;
+        row[key] = sc.hit_factor ?? 0;
         row[`${key}_opacity`] = sc.zeroed ? 0.3 : 1;
       }
     }
@@ -61,7 +61,15 @@ export function ComparisonChart({ data }: ComparisonChartProps) {
         <YAxis
           tick={{ fontSize: 12 }}
           className="fill-muted-foreground"
-          allowDecimals={false}
+          allowDecimals
+          tickFormatter={(v: number) => v.toFixed(1)}
+          label={{
+            value: "Hit Factor",
+            angle: -90,
+            position: "insideLeft",
+            offset: 10,
+            style: { fontSize: 11, fill: "hsl(var(--muted-foreground))" },
+          }}
         />
         <Tooltip
           contentStyle={{
@@ -72,7 +80,10 @@ export function ComparisonChart({ data }: ComparisonChartProps) {
           }}
           formatter={(value: number | undefined, name: string | undefined) => {
             const id = parseInt((name ?? "").split("_").pop() ?? "0", 10);
-            return [(value ?? 0).toFixed(0), formatLabel(id)];
+            return [
+              typeof value === "number" ? value.toFixed(4) : "—",
+              formatLabel(id),
+            ];
           }}
         />
         <Legend
@@ -83,7 +94,7 @@ export function ComparisonChart({ data }: ComparisonChartProps) {
         />
         {/* future benchmark overlay hook — do not remove:
         {showBenchmark && stages[0] && (
-          <ReferenceLine y={stages[0].group_leader_points ?? 0} stroke="gray" strokeDasharray="4 2" />
+          <ReferenceLine y={stages[0].overall_leader_hf ?? 0} stroke="gray" strokeDasharray="4 2" label="Field leader" />
         )}
         */}
         {competitors.map((comp) => {
