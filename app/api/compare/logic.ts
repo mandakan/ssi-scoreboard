@@ -6,6 +6,7 @@ import type {
   CompetitorSummary,
   CompetitorInfo,
   CompetitorPenaltyStats,
+  EfficiencyStats,
 } from "@/lib/types";
 
 export interface RawScorecard {
@@ -436,5 +437,80 @@ export function computePenaltyStats(
     matchPctClean,
     penaltiesPerStage: stagesShot > 0 ? totalPenalties / stagesShot : 0,
     penaltiesPer100Rounds: totalRounds > 0 ? (totalPenalties / totalRounds) * 100 : 0,
+  };
+}
+
+/**
+ * Compute match-level points-per-shot for a single selected competitor using
+ * already-ranked stage data.
+ *
+ *   points_per_shot = sum(points) / sum(rounds_fired)
+ *
+ * rounds_fired = A + C + D + miss (no-shoots are passive targets, excluded).
+ * Returns null when the competitor fired zero rounds (guards against division by zero).
+ */
+export function computeCompetitorPPS(
+  stages: StageComparison[],
+  competitorId: number
+): number | null {
+  let totalPoints = 0;
+  let totalRounds = 0;
+
+  for (const stage of stages) {
+    const sc = stage.competitors[competitorId];
+    if (!sc || sc.dnf) continue;
+    totalPoints += sc.points ?? 0;
+    totalRounds +=
+      (sc.a_hits ?? 0) + (sc.c_hits ?? 0) + (sc.d_hits ?? 0) + (sc.miss_count ?? 0);
+  }
+
+  if (totalRounds === 0) return null;
+  return totalPoints / totalRounds;
+}
+
+/**
+ * Compute the field-wide pts/shot distribution from ALL raw scorecards.
+ *
+ * For each competitor, aggregates points and rounds across all non-DNF stages.
+ * Competitors with zero rounds fired are excluded (avoids division-by-zero outliers).
+ *
+ * Returns min, median, max, and the count of competitors included.
+ * All values are null when no valid competitors exist.
+ */
+export function computeFieldPPSDistribution(
+  allScorecards: RawScorecard[]
+): Pick<EfficiencyStats, "fieldMin" | "fieldMedian" | "fieldMax" | "fieldCount"> {
+  const byComp = new Map<number, { points: number; rounds: number }>();
+
+  for (const sc of allScorecards) {
+    if (sc.dnf) continue;
+    const entry = byComp.get(sc.competitor_id) ?? { points: 0, rounds: 0 };
+    entry.points += sc.points ?? 0;
+    entry.rounds +=
+      (sc.a_hits ?? 0) + (sc.c_hits ?? 0) + (sc.d_hits ?? 0) + (sc.miss_count ?? 0);
+    byComp.set(sc.competitor_id, entry);
+  }
+
+  const ppsList: number[] = [];
+  for (const { points, rounds } of byComp.values()) {
+    if (rounds > 0) ppsList.push(points / rounds);
+  }
+
+  if (ppsList.length === 0) {
+    return { fieldMin: null, fieldMedian: null, fieldMax: null, fieldCount: 0 };
+  }
+
+  const sorted = [...ppsList].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const fieldMedian =
+    sorted.length % 2 === 0
+      ? (sorted[mid - 1] + sorted[mid]) / 2
+      : sorted[mid];
+
+  return {
+    fieldMin: sorted[0],
+    fieldMedian,
+    fieldMax: sorted[sorted.length - 1],
+    fieldCount: sorted.length,
   };
 }

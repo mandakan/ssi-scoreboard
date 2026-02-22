@@ -135,11 +135,20 @@ export interface CompetitorPenaltyStats {
   penaltiesPer100Rounds: number; // total_penalties / total_rounds_fired × 100
 }
 
+export interface EfficiencyStats {
+  pointsPerShot: number | null;  // total_points / total_rounds_fired for this competitor
+  fieldMin: number | null;       // min pts/shot across all match competitors
+  fieldMedian: number | null;    // median pts/shot across all match competitors
+  fieldMax: number | null;       // max pts/shot across all match competitors
+  fieldCount: number;            // number of competitors contributing to the distribution
+}
+
 export interface CompareResponse {
   match_id: number;
   stages: StageComparison[];
   competitors: CompetitorInfo[];
   penaltyStats: Record<number, CompetitorPenaltyStats>; // keyed by competitor_id
+  efficiencyStats: Record<number, EfficiencyStats>;     // keyed by competitor_id
 }
 
 export interface EventSummary {
