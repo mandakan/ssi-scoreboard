@@ -99,7 +99,8 @@ test.describe("Scoreboard E2E", () => {
     await page.goto("/");
     await page.getByRole("textbox").fill("https://example.com/event/22/26547/");
     await page.getByRole("button", { name: /load/i }).click();
-    await expect(page.getByRole("alert")).toBeVisible();
+    // Scope to the <p> alert to avoid matching the Next.js route announcer
+    await expect(page.locator("p[role='alert']")).toBeVisible();
   });
 
   test("valid URL navigates to match page", async ({ page }) => {
@@ -135,10 +136,10 @@ test.describe("Scoreboard E2E", () => {
 
     // Table should appear
     await expect(page.getByText("Stage results")).toBeVisible();
-    // 3 competitor columns in header
-    await expect(page.getByText("#35")).toBeVisible();
-    await expect(page.getByText("#50")).toBeVisible();
-    await expect(page.getByText("#116")).toBeVisible();
+    // 3 competitor columns in table header (scoped to avoid matching picker options)
+    await expect(page.getByRole("table").getByText("#35")).toBeVisible();
+    await expect(page.getByRole("table").getByText("#50")).toBeVisible();
+    await expect(page.getByRole("table").getByText("#116")).toBeVisible();
   });
 
   test("chart renders as SVG after competitor selection", async ({ page }) => {
@@ -153,18 +154,66 @@ test.describe("Scoreboard E2E", () => {
     await page.getByRole("button", { name: /add competitor/i }).click();
     await page.getByRole("option", { name: /alice/i }).click();
 
-    await expect(page.locator("svg")).toBeVisible();
+    // Check the chart section renders (contains recharts SVG)
+    await expect(page.getByText("Hit factor by stage")).toBeVisible();
+  });
+
+  test("?competitors param pre-selects competitors on load", async ({ page }) => {
+    await page.route("/api/match/22/26547", (route) =>
+      route.fulfill({ json: MOCK_MATCH })
+    );
+    await page.route(/\/api\/compare/, (route) =>
+      route.fulfill({ json: MOCK_COMPARE_2 })
+    );
+
+    await page.goto("/match/22/26547?competitors=100,200");
+    await expect(page.getByText("Test IPSC Match")).toBeVisible();
+
+    // Pre-selected competitors should appear without manually opening the picker
+    await expect(page.getByText("Stage results")).toBeVisible();
+    await expect(page.getByRole("table").getByText("#35")).toBeVisible(); // Alice
+    await expect(page.getByRole("table").getByText("#50")).toBeVisible(); // Bob
+  });
+
+  test("selecting a competitor updates the URL", async ({ page }) => {
+    await page.route("/api/match/22/26547", (route) =>
+      route.fulfill({ json: MOCK_MATCH })
+    );
+    await page.route(/\/api\/compare/, (route) =>
+      route.fulfill({ json: MOCK_COMPARE_2 })
+    );
+
+    await page.goto("/match/22/26547");
+    await page.getByRole("button", { name: /add competitor/i }).click();
+    await page.getByRole("option", { name: /alice/i }).click();
+    await page.getByRole("option", { name: /bob/i }).click();
+
+    await expect(page).toHaveURL(/\?competitors=100,200/);
+  });
+
+  test("deselecting a competitor updates the URL", async ({ page }) => {
+    await page.route("/api/match/22/26547", (route) =>
+      route.fulfill({ json: MOCK_MATCH })
+    );
+    await page.route(/\/api\/compare/, (route) =>
+      route.fulfill({ json: MOCK_COMPARE_2 })
+    );
+
+    await page.goto("/match/22/26547?competitors=100,200");
+    await expect(page.getByText("Stage results")).toBeVisible();
+
+    await page.getByRole("button", { name: /remove alice/i }).click();
+    await expect(page).toHaveURL(/\?competitors=200/);
   });
 
   test("deselecting a competitor updates the table", async ({ page }) => {
     await page.route("/api/match/22/26547", (route) =>
       route.fulfill({ json: MOCK_MATCH })
     );
-    // First response: 3 competitors; second: 2 competitors
-    let callCount = 0;
+    // Return 3-competitor response when Charlie (id=300) is requested; 2-competitor otherwise
     await page.route(/\/api\/compare/, (route) => {
-      callCount++;
-      route.fulfill({ json: callCount === 1 ? MOCK_COMPARE : MOCK_COMPARE_2 });
+      const ids = new URL(route.request().url()).searchParams.get("competitor_ids") ?? "";
+      route.fulfill({ json: ids.includes("300") ? MOCK_COMPARE : MOCK_COMPARE_2 });
     });
 
     await page.goto("/match/22/26547");
@@ -172,10 +221,11 @@ test.describe("Scoreboard E2E", () => {
     await page.getByRole("option", { name: /alice/i }).click();
     await page.getByRole("option", { name: /bob/i }).click();
     await page.getByRole("option", { name: /charlie/i }).click();
-    await expect(page.getByText("#116")).toBeVisible();
+    // Scope to table to avoid matching the picker's still-open option list
+    await expect(page.getByRole("table").getByText("#116")).toBeVisible();
 
     // Deselect Charlie by clicking the X badge
     await page.getByRole("button", { name: /remove charlie/i }).click();
-    await expect(page.getByText("#116")).not.toBeVisible();
+    await expect(page.getByRole("table").getByText("#116")).not.toBeVisible();
   });
 });
