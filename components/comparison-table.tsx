@@ -18,6 +18,45 @@ interface ComparisonTableProps {
 
 const RANK_COLORS = ["bg-yellow-400", "bg-gray-300", "bg-amber-600"];
 
+function PenaltyBadge({
+  miss,
+  noShoots,
+  procedurals,
+}: {
+  miss: number | null;
+  noShoots: number | null;
+  procedurals: number | null;
+}) {
+  const m = miss ?? 0;
+  const ns = noShoots ?? 0;
+  const p = procedurals ?? 0;
+  const total = (m + ns + p) * 10;
+
+  if (total === 0) return null;
+
+  const parts: string[] = [];
+  if (m > 0) parts.push(`${m} miss (\u2212${m * 10})`);
+  if (ns > 0) parts.push(`${ns} no-shoot (\u2212${ns * 10})`);
+  if (p > 0) parts.push(`${p} procedural (\u2212${p * 10})`);
+  const tooltipText = `${parts.join(" + ")} = \u2212${total} pts`;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className="text-xs font-medium text-red-600 dark:text-red-400 tabular-nums cursor-help"
+          aria-label={`Penalties: ${tooltipText}`}
+        >
+          {`\u2212${total}pts`}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-xs">
+        {tooltipText}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 function RankBadge({
   rank,
   tooltip,
@@ -118,21 +157,25 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
   const [mode, setMode] = useState<PctMode>("group");
   const colorMap = buildColorMap(competitors.map((c) => c.id));
 
-  // Compute totals per competitor: total raw points, average %, and zone/penalty sums
+  // Compute totals per competitor: total raw points, average %, zone/penalty sums, and clean match status
   const totals = competitors.map((comp) => {
     let totalPts = 0;
     let pctSum = 0;
     let pctCount = 0;
     let hasFired = false;
+    let firedCount = 0;
     let aTotal = 0, cTotal = 0, dTotal = 0, mTotal = 0;
     let nsTotal = 0, pTotal = 0;
     let hasZoneData = false;
     let hasPenaltyData = false;
+    let totalPenaltyPts = 0;
+    let firedWithAllPenaltyData = 0;
 
     for (const stage of stages) {
       const sc = stage.competitors[comp.id];
       if (!sc || sc.dnf) continue;
       hasFired = true;
+      firedCount++;
       totalPts += sc.points ?? 0;
       const { pct } = modeValues(sc, mode);
       if (pct != null) {
@@ -151,6 +194,10 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
         nsTotal += sc.no_shoots ?? 0;
         pTotal += sc.procedurals ?? 0;
       }
+      if (sc.miss_count !== null && sc.no_shoots !== null && sc.procedurals !== null) {
+        firedWithAllPenaltyData++;
+        totalPenaltyPts += (sc.miss_count + sc.no_shoots + sc.procedurals) * 10;
+      }
     }
 
     return {
@@ -163,6 +210,8 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
       misses: hasZoneData ? mTotal : null,
       noShoots: hasPenaltyData ? nsTotal : null,
       procedurals: hasPenaltyData ? pTotal : null,
+      totalPenaltyPts,
+      isClean: hasFired && firedCount === firedWithAllPenaltyData && totalPenaltyPts === 0,
     };
   });
 
@@ -257,6 +306,26 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
                       noShoots={t.noShoots}
                       procedurals={t.procedurals}
                     />
+                    {t.totalPenaltyPts > 0 && (
+                      <span className="text-xs font-medium text-red-600 dark:text-red-400 tabular-nums">
+                        {`\u2212${t.totalPenaltyPts}pts`}
+                      </span>
+                    )}
+                    {t.isClean && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span
+                            className="text-xs text-green-600 dark:text-green-400 font-medium cursor-help"
+                            aria-label="Clean match: no penalties across all fired stages"
+                          >
+                            ✓ Clean
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs">
+                          No penalties across all fired stages
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
                   </div>
                 </td>
               ))}
@@ -364,6 +433,12 @@ function StageCell({
         cHits={sc.c_hits}
         dHits={sc.d_hits}
         misses={sc.miss_count}
+        noShoots={sc.no_shoots}
+        procedurals={sc.procedurals}
+      />
+      {/* Penalty badge */}
+      <PenaltyBadge
+        miss={sc.miss_count}
         noShoots={sc.no_shoots}
         procedurals={sc.procedurals}
       />

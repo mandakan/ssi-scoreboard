@@ -188,6 +188,41 @@ describe("computeGroupRankings — division rankings", () => {
   });
 });
 
+describe("computeGroupRankings — penalty fields", () => {
+  it("passes miss_count, no_shoots, and procedurals through to CompetitorSummary", () => {
+    const scorecards = [
+      makeCard(1, 1, { miss_count: 2, no_shoots: 1, procedurals: 1 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    const sc = result[0].competitors[1];
+    expect(sc.miss_count).toBe(2);
+    expect(sc.no_shoots).toBe(1);
+    expect(sc.procedurals).toBe(1);
+  });
+
+  it("preserves zero penalty fields for a clean stage", () => {
+    const scorecards = [
+      makeCard(1, 1, { miss_count: 0, no_shoots: 0, procedurals: 0 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    const sc = result[0].competitors[1];
+    expect(sc.miss_count).toBe(0);
+    expect(sc.no_shoots).toBe(0);
+    expect(sc.procedurals).toBe(0);
+  });
+
+  it("sets all penalty fields to null for a DNF stage", () => {
+    const scorecards = [
+      makeCard(1, 1, { dnf: true, miss_count: 2, no_shoots: 0, procedurals: 1 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    const sc = result[0].competitors[1];
+    expect(sc.miss_count).toBeNull();
+    expect(sc.no_shoots).toBeNull();
+    expect(sc.procedurals).toBeNull();
+  });
+});
+
 describe("computeGroupRankings — overall rankings", () => {
   it("ranks competitors across all divisions by HF", () => {
     const scorecards = [
