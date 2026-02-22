@@ -8,6 +8,7 @@ const EMPTY_IDS: number[] = [];
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { MatchHeader } from "@/components/match-header";
+import { StageList } from "@/components/stage-list";
 import { ShareButton } from "@/components/share-button";
 import { CompetitorPicker } from "@/components/competitor-picker";
 import { ComparisonTable } from "@/components/comparison-table";
@@ -132,6 +133,9 @@ export default function MatchPage() {
 
       {/* Match header */}
       <MatchHeader match={match} />
+
+      {/* Stage list */}
+      <StageList stages={match.stages} />
 
       {/* Competitor picker */}
       <div className="space-y-1">

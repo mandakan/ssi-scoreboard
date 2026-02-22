@@ -20,6 +20,7 @@ const baseData: CompareResponse = {
       stage_name: "Stage One",
       stage_num: 1,
       max_points: 80,
+      ssi_url: "https://shootnscoreit.com/event/stage/24/100/",
       group_leader_hf: 5.63,
       group_leader_points: 76,
       overall_leader_hf: 5.63,
@@ -205,6 +206,23 @@ describe("ComparisonTable", () => {
     expect(screen.getByText("Group")).toBeInTheDocument();
     expect(screen.getByText("Division")).toBeInTheDocument();
     expect(screen.getByText("Overall")).toBeInTheDocument();
+  });
+
+  it("renders SSI stage link when ssi_url is present", () => {
+    renderWithProviders(<ComparisonTable data={baseData} />);
+    const link = screen.getByRole("link", { name: /stage one.*shootnscoreit/i });
+    expect(link).toHaveAttribute("href", "https://shootnscoreit.com/event/stage/24/100/");
+    expect(link).toHaveAttribute("target", "_blank");
+  });
+
+  it("renders plain text stage label when ssi_url is absent", () => {
+    const dataNoUrl = {
+      ...baseData,
+      stages: [{ ...baseData.stages[0], ssi_url: undefined }],
+    };
+    renderWithProviders(<ComparisonTable data={dataNoUrl} />);
+    expect(screen.queryByRole("link", { name: /stage one.*shootnscoreit/i })).not.toBeInTheDocument();
+    expect(screen.getByText("Stage 1")).toBeInTheDocument();
   });
 });
 

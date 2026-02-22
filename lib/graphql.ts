@@ -103,6 +103,11 @@ export const MATCH_QUERY = `
           name
           ... on IpscStageNode {
             max_points
+            minimum_rounds
+            paper
+            popper
+            plate
+            get_full_absolute_url
           }
         }
         competitors_approved_w_wo_results_not_dnf {
