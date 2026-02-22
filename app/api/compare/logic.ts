@@ -83,6 +83,29 @@ function pct(hf: number | null, leaderHF: number | null): number | null {
 }
 
 /**
+ * Compute the median HF for a set of scorecards.
+ * Excludes DNF, DQ, and zeroed scorecards, and entries with null hit_factor.
+ * Returns the median and the count of valid competitors included.
+ */
+function medianHF(scorecards: RawScorecard[]): { median: number | null; count: number } {
+  const valid = scorecards
+    .filter((sc) => !sc.dnf && !sc.dq && !sc.zeroed)
+    .map((sc) => sc.hit_factor)
+    .filter((hf): hf is number => hf != null);
+
+  if (valid.length === 0) return { median: null, count: 0 };
+
+  const sorted = [...valid].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const median =
+    sorted.length % 2 === 0
+      ? (sorted[mid - 1] + sorted[mid]) / 2
+      : sorted[mid];
+
+  return { median, count: valid.length };
+}
+
+/**
  * Given ALL scorecards for a match and the selected competitors, compute:
  *   - Group rankings (rank/% within selected competitors)
  *   - Division rankings (rank/% within each competitor's own division, full field)
@@ -151,6 +174,10 @@ export function computeGroupRankings(
     // Overall rankings — all competitors across all divisions
     const { rankMap: overallRankMap, leaderHF: overallLeaderHF } =
       rankByHF(allStage);
+
+    // Full-field median HF (excluding DNF/DQ/zeroed)
+    const { median: fieldMedianHF, count: fieldCompetitorCount } =
+      medianHF(allStage);
 
     // Division rankings — group by division string, rank within each
     const byDivision = new Map<string, RawScorecard[]>();
@@ -244,6 +271,8 @@ export function computeGroupRankings(
       group_leader_hf: groupLeaderHF,
       group_leader_points: groupLeaderPoints,
       overall_leader_hf: overallLeaderHF,
+      field_median_hf: fieldMedianHF,
+      field_competitor_count: fieldCompetitorCount,
       competitors: competitorMap,
     };
 

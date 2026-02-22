@@ -24,13 +24,16 @@ export function ComparisonChart({ data, showBenchmark = false }: ComparisonChart
   const colorMap = buildColorMap(competitors.map((c) => c.id));
   const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
   const [benchmarkVisible, setBenchmarkVisible] = useState(showBenchmark);
+  const [medianVisible, setMedianVisible] = useState(false);
 
   const hasBenchmark = stages.some((s) => s.overall_leader_hf != null);
+  const hasMedian = stages.some((s) => s.field_median_hf != null);
 
   const chartData = stages.map((stage) => {
     const row: Record<string, string | number | null> = {
       name: `S${stage.stage_num}`,
       overall_leader_hf: stage.overall_leader_hf,
+      field_median_hf: stage.field_median_hf,
     };
     for (const comp of competitors) {
       const sc = stage.competitors[comp.id];
@@ -102,6 +105,9 @@ export function ComparisonChart({ data, showBenchmark = false }: ComparisonChart
               if (name === "overall_leader_hf") {
                 return [typeof value === "number" ? value.toFixed(4) : "—", "Field leader"];
               }
+              if (name === "field_median_hf") {
+                return [typeof value === "number" ? value.toFixed(4) : "—", "Field median"];
+              }
               const id = parseInt((name ?? "").split("_").pop() ?? "0", 10);
               return [
                 typeof value === "number" ? value.toFixed(4) : "—",
@@ -119,6 +125,19 @@ export function ComparisonChart({ data, showBenchmark = false }: ComparisonChart
               activeDot={false}
               legendType="none"
               name="overall_leader_hf"
+              connectNulls={false}
+            />
+          )}
+          {medianVisible && hasMedian && (
+            <Line
+              dataKey="field_median_hf"
+              stroke="var(--muted-foreground)"
+              strokeDasharray="1 3"
+              strokeWidth={1.5}
+              dot={false}
+              activeDot={false}
+              legendType="none"
+              name="field_median_hf"
               connectNulls={false}
             />
           )}
@@ -160,6 +179,26 @@ export function ComparisonChart({ data, showBenchmark = false }: ComparisonChart
               aria-hidden="true"
             />
             <span className={benchmarkVisible ? "" : "line-through"}>Field leader</span>
+          </button>
+        )}
+        {hasMedian && (
+          <button
+            type="button"
+            onClick={() => setMedianVisible((v) => !v)}
+            aria-pressed={medianVisible}
+            className="flex items-center gap-2 rounded-full border px-3 text-sm transition-opacity"
+            style={{
+              borderColor: medianVisible ? "var(--muted-foreground)55" : "transparent",
+              backgroundColor: medianVisible ? "var(--muted-foreground)18" : undefined,
+              opacity: medianVisible ? undefined : 0.4,
+            }}
+          >
+            <span
+              className="inline-block w-4"
+              style={{ borderTop: "2px dotted var(--muted-foreground)" }}
+              aria-hidden="true"
+            />
+            <span className={medianVisible ? "" : "line-through"}>Field median</span>
           </button>
         )}
         {competitors.map((comp) => {
