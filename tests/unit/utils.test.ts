@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseMatchUrl, formatHF, formatTime, formatPct } from "@/lib/utils";
+import { parseMatchUrl, formatHF, formatTime, formatPct, computePointsDelta, formatDelta } from "@/lib/utils";
 
 describe("parseMatchUrl", () => {
   it("parses a valid shootnscoreit.com URL", () => {
@@ -70,5 +70,58 @@ describe("formatPct", () => {
 
   it("returns em-dash for null", () => {
     expect(formatPct(null)).toBe("—");
+  });
+});
+
+describe("computePointsDelta", () => {
+  it("returns 0 for a tie (competitor equals group leader)", () => {
+    expect(computePointsDelta(76, 76)).toBe(0);
+  });
+
+  it("returns negative delta when competitor is behind the leader", () => {
+    expect(computePointsDelta(72, 76)).toBe(-4);
+  });
+
+  it("returns positive delta when competitor somehow exceeds leader (rounding edge)", () => {
+    // group_leader_points may lag if computed from a subset; positive delta is valid
+    expect(computePointsDelta(80, 76)).toBe(4);
+  });
+
+  it("returns null when competitor points are null (DNF)", () => {
+    expect(computePointsDelta(null, 76)).toBeNull();
+  });
+
+  it("returns null when group_leader_points are null (no valid scorecards on stage)", () => {
+    expect(computePointsDelta(72, null)).toBeNull();
+  });
+
+  it("returns null when both values are null", () => {
+    expect(computePointsDelta(null, null)).toBeNull();
+  });
+
+  it("handles zero points (zeroed/DQ competitor vs leader)", () => {
+    expect(computePointsDelta(0, 76)).toBe(-76);
+  });
+});
+
+describe("formatDelta", () => {
+  it("formats zero as '±0.0 pts'", () => {
+    expect(formatDelta(0)).toBe("±0.0 pts");
+  });
+
+  it("formats a negative delta with real minus sign", () => {
+    expect(formatDelta(-4.2)).toBe("\u22124.2 pts");
+  });
+
+  it("formats a positive delta with '+' prefix", () => {
+    expect(formatDelta(3.5)).toBe("+3.5 pts");
+  });
+
+  it("rounds to 1 decimal place", () => {
+    expect(formatDelta(-12.567)).toBe("\u221212.6 pts");
+  });
+
+  it("formats a large negative delta correctly", () => {
+    expect(formatDelta(-100)).toBe("\u2212100.0 pts");
   });
 });
