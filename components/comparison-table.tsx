@@ -161,7 +161,7 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
               {competitors.map((comp) => (
                 <th
                   key={comp.id}
-                  className="py-2 px-3 text-center font-medium min-w-32"
+                  className="py-2 px-3 text-center font-medium min-w-[5.5rem] sm:min-w-32"
                   style={{ borderBottom: `3px solid ${colorMap[comp.id]}` }}
                 >
                   <div className="flex flex-col items-center gap-0.5">
@@ -193,7 +193,7 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
                 {competitors.map((comp) => {
                   const sc = stage.competitors[comp.id];
                   return (
-                    <td key={comp.id} className="py-2 px-3 text-center align-top">
+                    <td key={comp.id} className="py-2 px-2 sm:px-3 text-center align-top">
                       <StageCell
                         sc={sc}
                         maxPoints={stage.max_points}
@@ -214,7 +214,7 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
                 <div>Avg {MODE_LABELS[mode]} %</div>
               </td>
               {totals.map((t) => (
-                <td key={t.id} className="py-2 px-3 text-center">
+                <td key={t.id} className="py-2 px-2 sm:px-3 text-center">
                   <div className="flex flex-col items-center gap-0.5">
                     <span>
                       {t.points != null ? (

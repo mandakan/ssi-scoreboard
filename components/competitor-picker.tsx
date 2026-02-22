@@ -68,7 +68,7 @@ export function CompetitorPicker({
               )}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="p-0 w-72" align="start">
+          <PopoverContent className="p-0 w-[min(18rem,calc(100vw-2rem))]" align="start">
             <Command>
               <CommandInput placeholder="Search by name, number, or club…" />
               <CommandList>
