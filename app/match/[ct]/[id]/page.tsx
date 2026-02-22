@@ -7,6 +7,7 @@ import { MatchHeader } from "@/components/match-header";
 import { CompetitorPicker } from "@/components/competitor-picker";
 import { ComparisonTable } from "@/components/comparison-table";
 import { ComparisonChart } from "@/components/comparison-chart";
+import { SpeedAccuracyChart } from "@/components/scatter-chart";
 import { useMatchQuery, useCompareQuery } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
 import { Loader2, AlertCircle, ArrowLeft, RefreshCw } from "lucide-react";
@@ -177,6 +178,15 @@ export default function MatchPage() {
               <div className="rounded-lg border p-4 space-y-3">
                 <h2 className="font-semibold">Hit factor by stage</h2>
                 <ComparisonChart data={compareQuery.data} />
+              </div>
+
+              <div className="rounded-lg border p-4 space-y-3">
+                <h2 className="font-semibold">Speed vs. accuracy</h2>
+                <p className="text-xs text-muted-foreground">
+                  Time vs. points per stage. Diagonal lines show equal hit
+                  factor (HF) — steeper = higher HF.
+                </p>
+                <SpeedAccuracyChart data={compareQuery.data} />
               </div>
             </>
           )}
