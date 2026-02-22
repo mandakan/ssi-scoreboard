@@ -36,6 +36,7 @@ const MOCK_COMPARE: CompareResponse = {
     200: { totalPenalties: 0, penaltyCostPercent: 0, matchPctActual: 99.15, matchPctClean: 99.15, penaltiesPerStage: 0, penaltiesPer100Rounds: 0 },
     300: { totalPenalties: 0, penaltyCostPercent: 0, matchPctActual: 93.55, matchPctClean: 93.55, penaltiesPerStage: 0, penaltiesPer100Rounds: 0 },
   },
+  efficiencyStats: {},
   stages: [
     {
       stage_id: 1,

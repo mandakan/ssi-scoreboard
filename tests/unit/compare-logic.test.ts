@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computeCompetitorPPS, computeFieldPPSDistribution, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompetitorInfo } from "@/lib/types";
 
 const competitors: CompetitorInfo[] = [
@@ -907,5 +907,123 @@ describe("computePenaltyStats", () => {
     expect(stats.totalPenalties).toBe(2);
     // pctCount = 0 → matchPctActual = 0, matchPctClean = 0, penaltyCostPercent = 0
     expect(stats.penaltyCostPercent).toBeCloseTo(0, 5);
+  });
+});
+
+describe("computeCompetitorPPS", () => {
+  it("returns points / rounds for a normal stage", () => {
+    // 10 A-hits, 0 others, 100 pts → 100/10 = 10.0 pts/shot
+    const scorecards = [
+      makeCard(1, 1, { points: 100, a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    expect(computeCompetitorPPS(stages, 1)).toBeCloseTo(10.0, 5);
+  });
+
+  it("aggregates across multiple stages", () => {
+    // Stage 1: 60 pts, 6 rounds. Stage 2: 40 pts, 4 rounds. Total: 100/10 = 10.0
+    const scorecards = [
+      makeCard(1, 1, { points: 60, a_hits: 6, c_hits: 0, d_hits: 0, miss_count: 0 }),
+      makeCard(1, 2, { points: 40, a_hits: 4, c_hits: 0, d_hits: 0, miss_count: 0 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    expect(computeCompetitorPPS(stages, 1)).toBeCloseTo(10.0, 5);
+  });
+
+  it("includes misses in round count", () => {
+    // 9 A-hits + 1 miss = 10 rounds, 90 pts (miss costs 10) → 90/10 = 9.0
+    const scorecards = [
+      makeCard(1, 1, { points: 90, a_hits: 9, c_hits: 0, d_hits: 0, miss_count: 1 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    expect(computeCompetitorPPS(stages, 1)).toBeCloseTo(9.0, 5);
+  });
+
+  it("excludes DNF stages from calculation", () => {
+    const scorecards = [
+      makeCard(1, 1, { points: 80, a_hits: 8, c_hits: 0, d_hits: 0, miss_count: 0 }),
+      makeCard(1, 2, { dnf: true }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    // Only stage 1 contributes: 80/8 = 10.0
+    expect(computeCompetitorPPS(stages, 1)).toBeCloseTo(10.0, 5);
+  });
+
+  it("returns null when all stages are DNF (zero rounds)", () => {
+    const scorecards = [
+      makeCard(1, 1, { dnf: true }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    expect(computeCompetitorPPS(stages, 1)).toBeNull();
+  });
+
+  it("returns null when all hit counts are null (zero rounds fired)", () => {
+    const scorecards = [
+      makeCard(1, 1, { points: 80, a_hits: null, c_hits: null, d_hits: null, miss_count: null }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    expect(computeCompetitorPPS(stages, 1)).toBeNull();
+  });
+});
+
+describe("computeFieldPPSDistribution", () => {
+  it("computes correct min/median/max for a simple field", () => {
+    // Comp 1: 100pts / 10 rounds = 10.0; Comp 2: 80pts / 10 rounds = 8.0
+    const scorecards = [
+      makeCard(1, 1, { points: 100, a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0 }),
+      makeCard(2, 1, { points: 80, a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0 }),
+    ];
+    const dist = computeFieldPPSDistribution(scorecards);
+    expect(dist.fieldMin).toBeCloseTo(8.0, 5);
+    expect(dist.fieldMax).toBeCloseTo(10.0, 5);
+    expect(dist.fieldMedian).toBeCloseTo(9.0, 5); // (8+10)/2
+    expect(dist.fieldCount).toBe(2);
+  });
+
+  it("excludes DNF stages from competitor totals", () => {
+    // Comp 1: stage1 50pts/5rounds=10.0, stage2 DNF → 10.0
+    // Comp 2: 80pts/10rounds = 8.0
+    const scorecards = [
+      makeCard(1, 1, { points: 50, a_hits: 5, c_hits: 0, d_hits: 0, miss_count: 0 }),
+      makeCard(1, 2, { dnf: true }),
+      makeCard(2, 1, { points: 80, a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0 }),
+    ];
+    const dist = computeFieldPPSDistribution(scorecards);
+    expect(dist.fieldCount).toBe(2);
+    expect(dist.fieldMin).toBeCloseTo(8.0, 5);
+    expect(dist.fieldMax).toBeCloseTo(10.0, 5);
+  });
+
+  it("excludes competitors with zero rounds", () => {
+    // Comp 1: 0 rounds → excluded. Comp 2: 8.0
+    const scorecards = [
+      makeCard(1, 1, { points: 0, a_hits: 0, c_hits: 0, d_hits: 0, miss_count: 0 }),
+      makeCard(2, 1, { points: 80, a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0 }),
+    ];
+    const dist = computeFieldPPSDistribution(scorecards);
+    expect(dist.fieldCount).toBe(1);
+    expect(dist.fieldMin).toBeCloseTo(8.0, 5);
+    expect(dist.fieldMax).toBeCloseTo(8.0, 5);
+  });
+
+  it("returns null values and count 0 when no valid competitors", () => {
+    const scorecards = [makeCard(1, 1, { dnf: true })];
+    const dist = computeFieldPPSDistribution(scorecards);
+    expect(dist.fieldMin).toBeNull();
+    expect(dist.fieldMedian).toBeNull();
+    expect(dist.fieldMax).toBeNull();
+    expect(dist.fieldCount).toBe(0);
+  });
+
+  it("computes correct median for odd-count field", () => {
+    // 3 comps: 6.0, 8.0, 10.0 → median = 8.0
+    const scorecards = [
+      makeCard(1, 1, { points: 60, a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0 }),
+      makeCard(2, 1, { points: 80, a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0 }),
+      makeCard(3, 1, { points: 100, a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0 }),
+    ];
+    const dist = computeFieldPPSDistribution(scorecards);
+    expect(dist.fieldMedian).toBeCloseTo(8.0, 5);
+    expect(dist.fieldCount).toBe(3);
   });
 });

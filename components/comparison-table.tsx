@@ -17,6 +17,75 @@ interface ComparisonTableProps {
   data: CompareResponse;
 }
 
+/**
+ * Inline SVG range strip showing where this competitor sits in the full field
+ * pts/shot distribution. The dot marks the competitor's value; the tick marks
+ * the field median; the bar spans min–max.
+ */
+function FieldDistributionStrip({
+  value,
+  fieldMin,
+  fieldMedian,
+  fieldMax,
+  fieldCount,
+}: {
+  value: number | null;
+  fieldMin: number | null;
+  fieldMedian: number | null;
+  fieldMax: number | null;
+  fieldCount: number;
+}) {
+  if (
+    value == null ||
+    fieldMin == null ||
+    fieldMax == null ||
+    fieldMin === fieldMax
+  )
+    return null;
+
+  const range = fieldMax - fieldMin;
+  const toPx = (v: number) => 2 + ((v - fieldMin) / range) * 52;
+  const valuePx = toPx(value);
+  const medianPx = fieldMedian != null ? toPx(fieldMedian) : null;
+
+  const label = `${value.toFixed(2)} pts/shot — field: ${fieldMin.toFixed(2)}–${fieldMax.toFixed(2)}${fieldMedian != null ? `, median ${fieldMedian.toFixed(2)}` : ""} (${fieldCount} competitors)`;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <svg
+          width="56"
+          height="12"
+          aria-label={label}
+          role="img"
+          className="cursor-help"
+        >
+          {/* Range bar */}
+          <rect x="2" y="5" width="52" height="2" rx="1" fill="currentColor" opacity="0.2" />
+          {/* Median tick */}
+          {medianPx != null && (
+            <rect
+              x={medianPx - 0.5}
+              y="3"
+              width="1"
+              height="6"
+              fill="currentColor"
+              opacity="0.45"
+            />
+          )}
+          {/* Competitor dot */}
+          <circle cx={valuePx} cy="6" r="3" fill="currentColor" opacity="0.85" />
+        </svg>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-xs max-w-56 text-center">
+        {`${value.toFixed(2)} pts/shot · field range: ${fieldMin.toFixed(2)}–${fieldMax.toFixed(2)}`}
+        {fieldMedian != null && ` · median: ${fieldMedian.toFixed(2)}`}
+        {` (${fieldCount} competitors)`}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 const DIFFICULTY_COLORS: Record<1 | 2 | 3 | 4 | 5, string> = {
   1: "text-emerald-500",
   2: "text-lime-500",
@@ -263,7 +332,7 @@ function modeValues(
 }
 
 export function ComparisonTable({ data }: ComparisonTableProps) {
-  const { stages, competitors, penaltyStats } = data;
+  const { stages, competitors, penaltyStats, efficiencyStats } = data;
   const [mode, setMode] = useState<PctMode>("group");
   const [viewMode, setViewMode] = useState<ViewMode>("absolute");
 
@@ -486,6 +555,7 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
                   <>
                     <div>Total pts</div>
                     <div>Avg {MODE_LABELS[mode]} %</div>
+                    <div>pts/shot</div>
                   </>
                 )}
               </td>
@@ -548,6 +618,20 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
                             <div className="text-muted-foreground">{`${penaltyStats[t.id].penaltiesPerStage.toFixed(1)} penalties/stage \u00b7 ${penaltyStats[t.id].penaltiesPer100Rounds.toFixed(1)}/100 rounds`}</div>
                           </TooltipContent>
                         </Tooltip>
+                      )}
+                      {efficiencyStats[t.id]?.pointsPerShot != null && (
+                        <div className="flex flex-col items-center gap-0">
+                          <span className="text-xs text-muted-foreground font-normal tabular-nums">
+                            {`${efficiencyStats[t.id].pointsPerShot!.toFixed(2)} pts/shot`}
+                          </span>
+                          <FieldDistributionStrip
+                            value={efficiencyStats[t.id].pointsPerShot}
+                            fieldMin={efficiencyStats[t.id].fieldMin}
+                            fieldMedian={efficiencyStats[t.id].fieldMedian}
+                            fieldMax={efficiencyStats[t.id].fieldMax}
+                            fieldCount={efficiencyStats[t.id].fieldCount}
+                          />
+                        </div>
                       )}
                       {t.isClean && (
                         <Tooltip>
