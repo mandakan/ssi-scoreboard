@@ -32,6 +32,8 @@ const baseData: CompareResponse = {
       overall_leader_hf: 5.63,
       field_median_hf: 4.0,
       field_competitor_count: 50,
+      stageDifficultyLevel: 3,
+      stageDifficultyLabel: "hard",
       competitors: {
         1: {
           competitor_id: 1,

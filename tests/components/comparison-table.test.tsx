@@ -26,6 +26,8 @@ const baseData: CompareResponse = {
       overall_leader_hf: 5.63,
       field_median_hf: 4.0,
       field_competitor_count: 50,
+      stageDifficultyLevel: 3,
+      stageDifficultyLabel: "hard",
       competitors: {
         1: {
           competitor_id: 1,
@@ -189,6 +191,8 @@ describe("ComparisonTable", () => {
           overall_leader_hf: 4.0,
           field_median_hf: 4.0,
           field_competitor_count: 50,
+          stageDifficultyLevel: 3,
+          stageDifficultyLabel: "hard",
           competitors: {
             1: { ...baseData.stages[0].competitors[1], dq: false },
             2: baseData.stages[0].competitors[2],
