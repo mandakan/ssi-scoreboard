@@ -22,6 +22,9 @@ export async function executeQuery<T>(
   const apiKey = process.env.SSI_API_KEY;
   if (!apiKey) throw new Error("SSI_API_KEY is not configured");
 
+  // Extract the operation name for log context, e.g. "GetMatchScorecards"
+  const operationName = query.match(/query\s+(\w+)/)?.[1] ?? "unknown";
+
   const response = await fetch(GRAPHQL_ENDPOINT, {
     method: "POST",
     headers: {
@@ -34,16 +37,35 @@ export async function executeQuery<T>(
   });
 
   if (!response.ok) {
-    throw new Error(`Upstream HTTP ${response.status}: ${response.statusText}`);
+    const retryAfter = response.headers.get("Retry-After");
+    let body = "";
+    try { body = (await response.text()).slice(0, 300); } catch { /* ignore */ }
+
+    const parts = [
+      `[ssi-api] ${operationName} failed`,
+      `HTTP ${response.status} ${response.statusText}`,
+      `vars=${JSON.stringify(variables ?? {})}`,
+      retryAfter ? `Retry-After=${retryAfter}` : null,
+      body ? `body=${body}` : null,
+    ].filter(Boolean);
+    console.error(parts.join(" | "));
+
+    const clientMsg = retryAfter
+      ? `Upstream HTTP ${response.status}: ${response.statusText} (Retry-After: ${retryAfter}s)`
+      : `Upstream HTTP ${response.status}: ${response.statusText}`;
+    throw new Error(clientMsg);
   }
 
   const result: GraphQLResponse<T> = await response.json();
 
   if (result.errors?.length) {
-    throw new Error(result.errors.map((e) => e.message).join("; "));
+    const msg = result.errors.map((e) => e.message).join("; ");
+    console.error(`[ssi-api] ${operationName} GraphQL error | vars=${JSON.stringify(variables ?? {})} | ${msg}`);
+    throw new Error(msg);
   }
 
   if (!result.data) {
+    console.error(`[ssi-api] ${operationName} empty response | vars=${JSON.stringify(variables ?? {})}`);
     throw new Error("Empty response from upstream API");
   }
 
