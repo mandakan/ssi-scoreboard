@@ -313,6 +313,142 @@ describe("computeGroupRankings — shooting order", () => {
   });
 });
 
+describe("computeGroupRankings — field median HF", () => {
+  it("computes median for an odd number of competitors", () => {
+    // sorted: [3.0, 4.0, 5.0] → median = 4.0
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 5.0 }),
+      makeCard(2, 1, { hit_factor: 3.0 }),
+      makeCard(3, 1, { hit_factor: 4.0 }),
+    ];
+    const result = computeGroupRankings(scorecards, competitors);
+    expect(result[0].field_median_hf).toBe(4.0);
+    expect(result[0].field_competitor_count).toBe(3);
+  });
+
+  it("computes median for an even number of competitors", () => {
+    // sorted: [3.0, 5.0] → median = (3.0 + 5.0) / 2 = 4.0
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 5.0 }),
+      makeCard(2, 1, { hit_factor: 3.0 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    expect(result[0].field_median_hf).toBe(4.0);
+    expect(result[0].field_competitor_count).toBe(2);
+  });
+
+  it("excludes DNF competitors from the median", () => {
+    // sorted valid: [3.0, 5.0] → median = 4.0; DNF is excluded
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 5.0 }),
+      makeCard(2, 1, { hit_factor: 3.0 }),
+      makeCard(3, 1, { dnf: true, hit_factor: null }),
+    ];
+    const result = computeGroupRankings(scorecards, competitors);
+    expect(result[0].field_median_hf).toBe(4.0);
+    expect(result[0].field_competitor_count).toBe(2);
+  });
+
+  it("excludes DQ competitors from the median", () => {
+    // DQ competitor has reported HF=6.0 but is excluded from median
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 5.0 }),
+      makeCard(2, 1, { hit_factor: 3.0 }),
+      makeCard(3, 1, { dq: true, hit_factor: 6.0 }),
+    ];
+    const result = computeGroupRankings(scorecards, competitors);
+    expect(result[0].field_median_hf).toBe(4.0);
+    expect(result[0].field_competitor_count).toBe(2);
+  });
+
+  it("excludes zeroed competitors from the median", () => {
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 5.0 }),
+      makeCard(2, 1, { hit_factor: 3.0 }),
+      makeCard(3, 1, { zeroed: true, hit_factor: 4.5 }),
+    ];
+    const result = computeGroupRankings(scorecards, competitors);
+    expect(result[0].field_median_hf).toBe(4.0);
+    expect(result[0].field_competitor_count).toBe(2);
+  });
+
+  it("returns null median and count 0 when all competitors have DNF", () => {
+    const scorecards = [
+      makeCard(1, 1, { dnf: true }),
+      makeCard(2, 1, { dnf: true }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    expect(result[0].field_median_hf).toBeNull();
+    expect(result[0].field_competitor_count).toBe(0);
+  });
+
+  it("returns correct median and count for a single competitor", () => {
+    const scorecards = [makeCard(1, 1, { hit_factor: 4.5 })];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    expect(result[0].field_median_hf).toBe(4.5);
+    expect(result[0].field_competitor_count).toBe(1);
+  });
+
+  it("includes non-selected competitors in the full-field median", () => {
+    // Non-selected competitor (id=99) contributes to median
+    // sorted valid: [3.0, 5.0, 8.0] → median = 5.0
+    const nonSelected: RawScorecard = {
+      competitor_id: 99,
+      competitor_division: "hg1",
+      stage_id: 1,
+      stage_number: 1,
+      stage_name: "Stage 1",
+      max_points: 100,
+      points: 100,
+      hit_factor: 8.0,
+      time: 12.5,
+      dq: false,
+      zeroed: false,
+      dnf: false,
+      a_hits: 12,
+      c_hits: 0,
+      d_hits: 0,
+      miss_count: 0,
+      no_shoots: 0,
+      procedurals: 0,
+    };
+    const scorecards = [
+      nonSelected,
+      makeCard(1, 1, { hit_factor: 5.0 }),
+      makeCard(2, 1, { hit_factor: 3.0 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    expect(result[0].field_median_hf).toBe(5.0);
+    expect(result[0].field_competitor_count).toBe(3);
+  });
+
+  it("excludes null hit_factor entries from the median", () => {
+    // hit_factor=null means API hasn't computed it yet
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 5.0 }),
+      makeCard(2, 1, { hit_factor: null }),
+      makeCard(3, 1, { hit_factor: 3.0 }),
+    ];
+    const result = computeGroupRankings(scorecards, competitors);
+    expect(result[0].field_median_hf).toBe(4.0);
+    expect(result[0].field_competitor_count).toBe(2);
+  });
+
+  it("computes median per stage independently", () => {
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 2.0 }),
+      makeCard(2, 1, { hit_factor: 4.0 }),
+      makeCard(1, 2, { hit_factor: 6.0, stage_number: 2 }),
+      makeCard(2, 2, { hit_factor: 8.0, stage_number: 2 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    const stage1 = result.find((s) => s.stage_num === 1)!;
+    const stage2 = result.find((s) => s.stage_num === 2)!;
+    expect(stage1.field_median_hf).toBe(3.0);
+    expect(stage2.field_median_hf).toBe(7.0);
+  });
+});
+
 describe("computeGroupRankings — overall rankings", () => {
   it("ranks competitors across all divisions by HF", () => {
     const scorecards = [

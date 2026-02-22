@@ -316,6 +316,23 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
                         ].filter(Boolean).join(" · ")}
                       </span>
                     )}
+                    {/* Field median annotation */}
+                    {stage.field_median_hf != null && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span
+                            className="text-xs text-muted-foreground/60 tabular-nums cursor-help"
+                            aria-label={`Field median hit factor: ${formatHF(stage.field_median_hf)} across ${stage.field_competitor_count} competitors`}
+                          >
+                            {`med: ${formatHF(stage.field_median_hf)}`}
+                            <span className="opacity-60">{` (${stage.field_competitor_count})`}</span>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-52 text-center text-xs">
+                          {`Field median hit factor: ${formatHF(stage.field_median_hf)} across ${stage.field_competitor_count} competitors (excludes DNF/DQ/zeroed)`}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
                   </div>
                 </td>
                 {competitors.map((comp) => {

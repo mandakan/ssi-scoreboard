@@ -40,6 +40,8 @@ const MOCK_COMPARE: CompareResponse = {
       group_leader_hf: 5.73,
       group_leader_points: 76,
       overall_leader_hf: 5.73,
+      field_median_hf: 4.0,
+      field_competitor_count: 50,
       competitors: {
         100: { competitor_id: 100, points: 72, hit_factor: 5.02, time: 14.34, group_rank: 2, group_percent: 87.6, div_rank: 1, div_percent: 100, overall_rank: 2, overall_percent: 87.6, dq: false, zeroed: false, dnf: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
         200: { competitor_id: 200, points: 76, hit_factor: 5.63, time: 13.49, group_rank: 2, group_percent: 98.3, div_rank: 1, div_percent: 100, overall_rank: 2, overall_percent: 98.3, dq: false, zeroed: false, dnf: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
@@ -54,6 +56,8 @@ const MOCK_COMPARE: CompareResponse = {
       group_leader_hf: 3.63,
       group_leader_points: 58,
       overall_leader_hf: 3.63,
+      field_median_hf: 4.0,
+      field_competitor_count: 50,
       competitors: {
         100: { competitor_id: 100, points: 26, hit_factor: 1.30, time: 20.0,  group_rank: 3, group_percent: 35.8, div_rank: 2, div_percent: 35.8, overall_rank: 3, overall_percent: 35.8, dq: false, zeroed: false, dnf: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
         200: { competitor_id: 200, points: 58, hit_factor: 3.63, time: 15.98, group_rank: 1, group_percent: 100,  div_rank: 1, div_percent: 100,  overall_rank: 1, overall_percent: 100,  dq: false, zeroed: false, dnf: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
@@ -68,6 +72,8 @@ const MOCK_COMPARE: CompareResponse = {
       group_leader_hf: null,
       group_leader_points: null,
       overall_leader_hf: null,
+      field_median_hf: null,
+      field_competitor_count: 0,
       competitors: {
         100: { competitor_id: 100, points: null, hit_factor: null, time: null, group_rank: null, group_percent: null, div_rank: null, div_percent: null, overall_rank: null, overall_percent: null, dq: false, zeroed: false, dnf: true, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },
         200: { competitor_id: 200, points: null, hit_factor: null, time: null, group_rank: null, group_percent: null, div_rank: null, div_percent: null, overall_rank: null, overall_percent: null, dq: false, zeroed: false, dnf: true, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null },

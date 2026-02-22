@@ -102,6 +102,8 @@ export interface StageComparison {
   group_leader_hf: number | null;     // best HF in selected group
   group_leader_points: number | null; // best raw pts in selected group — benchmark overlay hook, do not remove
   overall_leader_hf: number | null;   // best HF across full field — benchmark overlay hook
+  field_median_hf: number | null;     // median HF across the full field (excludes DNF/DQ/zeroed)
+  field_competitor_count: number;     // count of valid field competitors contributing to the median
   competitors: Record<number, CompetitorSummary>; // keyed by competitor_id
 }
 
