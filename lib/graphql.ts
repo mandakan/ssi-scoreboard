@@ -173,8 +173,7 @@ export const SCORECARDS_QUERY = `
               cscore
               dscore
               miss
-              no_shoots
-              procedurals
+              procedural
               competitor {
                 id
                 ... on IpscCompetitorNode {
