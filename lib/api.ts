@@ -1,0 +1,34 @@
+// Client-safe API helpers — these call our own Next.js Route Handlers,
+// NOT the SSI API directly (which has no CORS headers).
+
+import type { MatchResponse, CompareResponse } from "@/lib/types";
+
+export async function fetchMatch(ct: string, id: string): Promise<MatchResponse> {
+  const res = await fetch(`/api/match/${ct}/${id}`);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Match fetch failed (${res.status}): ${body}`);
+  }
+  return res.json();
+}
+
+export async function fetchCompare(
+  ct: string,
+  id: string,
+  competitorIds: number[]
+): Promise<CompareResponse> {
+  if (competitorIds.length === 0) {
+    throw new Error("No competitor IDs provided");
+  }
+  const params = new URLSearchParams({
+    ct,
+    id,
+    competitor_ids: competitorIds.join(","),
+  });
+  const res = await fetch(`/api/compare?${params}`);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Compare fetch failed (${res.status}): ${body}`);
+  }
+  return res.json();
+}

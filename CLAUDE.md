@@ -6,15 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 pnpm dev          # start Next.js dev server (port 3000)
 pnpm build        # production build
-pnpm lint         # ESLint via next lint
-pnpm typecheck    # tsc --noEmit
+pnpm lint         # ESLint (eslint .) — zero warnings required
+pnpm typecheck    # tsc --noEmit — zero errors required
 pnpm test         # vitest run (unit + component)
 pnpm test:watch   # vitest watch mode
-pnpm test:e2e     # playwright test
+pnpm test:e2e     # playwright test (mocked API, no live key needed)
 pnpm test:e2e:ui  # playwright --ui
 ```
 
-Always run `pnpm typecheck` and `pnpm test` after making changes.
+**All checks must pass cleanly:** `pnpm typecheck && pnpm test` must produce zero errors
+and zero warnings before committing. `pnpm lint` must also produce zero warnings.
 
 ## Architecture
 
@@ -43,7 +44,7 @@ The SSI API uses Django content-type discrimination. Match URLs encode this:
 - IPSC matches: `content_type = 22`
 - All queries use inline fragments: `... on IpscMatchNode { }`, `... on IpscCompetitorNode { }`
 - `get_results` (official standings) is blocked during active matches — use raw scorecard data instead
-- Fetch competitors concurrently: `Promise.all(ids.map(id => fetchCompetitorScorecards(ct, id)))`
+- Scorecard data is available via `event -> stages -> scorecards` path
 
 ## Testing Approach
 - **Unit tests** (`tests/unit/`): pure functions only — `parseMatchUrl`, `buildColorMap`, `computeGroupRankings`
@@ -51,13 +52,39 @@ The SSI API uses Django content-type discrimination. Match URLs encode this:
 - **E2E tests** (`tests/e2e/`): Playwright with `route.fulfill()` to mock `/api/*` — no live API key needed in CI
 - Extract I/O-free logic into separate files to keep unit tests fast and reliable
 - CI runs: lint → typecheck → test → build → test:e2e
+- **All tests must pass, all linters and type checkers must produce zero errors and zero warnings**
+
+## UX & Accessibility
+- Follow **WCAG 2.1 AA** throughout — all interactive elements must be keyboard-navigable
+  and have accessible names (`aria-label`, `aria-labelledby`, or visible text).
+- Minimum touch target: 44×44px (`min-height: 2.75rem` applied globally in `globals.css`)
+- All error states must use `role="alert"` so screen readers announce them immediately.
+- Focus ring is enforced globally via `:focus-visible` in `globals.css` — never suppress it
+  with `outline-none` without providing an alternative visible focus indicator.
+- Color is never the sole means of conveying information — always pair with text, icons, or shape.
+- Images and icons must have `alt` text or `aria-hidden="true"` if decorative.
+- Use semantic HTML elements (`<button>`, `<nav>`, `<main>`, `<table>`, `<th scope>`, etc.)
+  rather than `<div>` with click handlers.
+
+## Design System & Tailwind v4
+- Use **Tailwind v4** utility classes everywhere — no inline styles.
+- All colors, spacing, and radii come from **CSS custom property design tokens** defined
+  in `app/globals.css`. Prefer semantic tokens (`bg-background`, `text-foreground`,
+  `text-muted-foreground`, `border-border`) over raw palette classes (`bg-gray-100`).
+- The color palette uses **OKLCH** for perceptual uniformity — extend tokens in `globals.css`
+  under `@theme inline` when new semantic colors are needed. Do not hard-code hex/rgb.
+- Dark mode is supported via the `.dark` class — all tokens have dark-mode values.
+- shadcn/ui components in `components/ui/` are the primary component library.
+  Do not modify them directly; use `pnpm dlx shadcn@latest add` to add/update.
+- Competitor colors (`lib/colors.ts`) use explicit hex values chosen for WCAG contrast
+  against both light and dark backgrounds — update with care.
 
 ## Code Conventions
 - All interfaces in `lib/types.ts` — do not define inline types in components
 - `lib/graphql.ts` is server-only — never import it from client components
 - Competitor colors are deterministic by index in `selectedIds` array (see `lib/colors.ts`)
 - `group_leader_points` on `StageComparison` is reserved for the future benchmark overlay feature — do not remove
-- shadcn components live in `components/ui/` — do not modify generated files directly, re-run `pnpm dlx shadcn@latest add` to update
+- shadcn components live in `components/ui/` — do not modify generated files directly
 
 ## Environment Variables
 | Variable | Where used | Notes |
@@ -67,3 +94,11 @@ The SSI API uses Django content-type discrimination. Match URLs encode this:
 ## Package Manager
 This project uses **pnpm@10.30.1**. Do not use npm or yarn. Use `pnpm add` / `pnpm add -D`.
 When adding new packages, always specify the exact latest stable version (check with `npm show <pkg> version`).
+
+## Docker / Docker Compose
+```bash
+cp .env.local.example .env.local   # fill in SSI_API_KEY
+docker compose up --build           # builds and runs on port 3000
+```
+The Dockerfile uses multi-stage builds (deps → builder → runner) with a non-root user.
+`output: "standalone"` in `next.config.ts` is required for the Docker image to work.
