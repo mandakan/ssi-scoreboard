@@ -22,16 +22,21 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q") ?? "";
 
-  // Default date range: 3 months back to 3 months forward
+  // Caller may override the date window; fall back to ±3 months from today.
   const now = new Date();
-  const after = new Date(now);
-  after.setMonth(after.getMonth() - 3);
-  const before = new Date(now);
-  before.setMonth(before.getMonth() + 3);
+  const defaultAfter = new Date(now);
+  defaultAfter.setMonth(defaultAfter.getMonth() - 3);
+  const defaultBefore = new Date(now);
+  defaultBefore.setMonth(defaultBefore.getMonth() + 3);
 
   const variables: Record<string, string> = {
-    starts_after: after.toISOString().slice(0, 10),
-    starts_before: before.toISOString().slice(0, 10),
+    starts_after:
+      searchParams.get("starts_after") ??
+      defaultAfter.toISOString().slice(0, 10),
+    starts_before:
+      searchParams.get("starts_before") ??
+      defaultBefore.toISOString().slice(0, 10),
+    firearms: searchParams.get("firearms") ?? "hg",
   };
   if (q) variables.search = q;
 
