@@ -26,6 +26,8 @@ export interface RawScorecard {
   miss_count: number | null;
   no_shoots: number | null;
   procedurals: number | null;
+  // ISO datetime string from the API — used to derive per-competitor shooting order
+  scorecard_created?: string | null;
 }
 
 /**
@@ -99,6 +101,29 @@ export function computeGroupRankings(
 ): StageComparison[] {
   const selectedIds = new Set(selectedCompetitors.map((c) => c.id));
 
+  // Pre-compute per-competitor shooting order for selected competitors.
+  // Strategy: sort each competitor's scorecards by scorecard_created (ISO string, lexicographic
+  // sort works correctly). The position in that sorted list is their 1-based shooting order
+  // for each stage. This reflects actual shooting order as recorded by the RO at the stage.
+  const shootingOrderMap = new Map<number, Map<number, number>>(); // competitor_id → stage_id → order
+  const byCompetitor = new Map<number, RawScorecard[]>();
+  for (const sc of allScorecards) {
+    if (!selectedIds.has(sc.competitor_id)) continue;
+    const existing = byCompetitor.get(sc.competitor_id) ?? [];
+    existing.push(sc);
+    byCompetitor.set(sc.competitor_id, existing);
+  }
+  for (const [compId, cards] of byCompetitor) {
+    const withTimestamp = cards.filter((sc) => sc.scorecard_created);
+    if (withTimestamp.length === 0) continue;
+    const sorted = [...withTimestamp].sort((a, b) =>
+      a.scorecard_created!.localeCompare(b.scorecard_created!)
+    );
+    const orderMap = new Map<number, number>();
+    sorted.forEach((sc, i) => orderMap.set(sc.stage_id, i + 1));
+    shootingOrderMap.set(compId, orderMap);
+  }
+
   // Group ALL scorecards by stage
   const byStage = new Map<number, RawScorecard[]>();
   for (const sc of allScorecards) {
@@ -155,6 +180,8 @@ export function computeGroupRankings(
     for (const comp of selectedCompetitors) {
       const sc = allStage.find((s) => s.competitor_id === comp.id);
 
+      const shooting_order = shootingOrderMap.get(comp.id)?.get(stageId) ?? null;
+
       if (!sc || sc.dnf) {
         competitorMap[comp.id] = {
           competitor_id: comp.id,
@@ -176,6 +203,7 @@ export function computeGroupRankings(
           miss_count: null,
           no_shoots: null,
           procedurals: null,
+          shooting_order,
         };
       } else {
         const hf = effectiveHF(sc);
@@ -203,6 +231,7 @@ export function computeGroupRankings(
           miss_count: sc.miss_count,
           no_shoots: sc.no_shoots,
           procedurals: sc.procedurals,
+          shooting_order,
         };
       }
     }

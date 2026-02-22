@@ -7,6 +7,7 @@ import type { CompareResponse, CompetitorInfo } from "@/lib/types";
 // ─── Raw GraphQL response shapes ─────────────────────────────────────────────
 
 interface RawScCard {
+  created?: string | null;
   points?: number | string | null;
   hitfactor?: number | string | null;
   time?: number | string | null;
@@ -186,6 +187,7 @@ export async function GET(req: Request) {
         miss_count: parseNum(sc.miss),
         no_shoots: parseNum(sc.penalty),
         procedurals: parseNum(sc.procedural),
+        scorecard_created: sc.created ?? null,
       });
     }
   }

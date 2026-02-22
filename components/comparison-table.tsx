@@ -19,6 +19,16 @@ interface ComparisonTableProps {
 
 const RANK_COLORS = ["bg-yellow-400", "bg-gray-300", "bg-amber-600"];
 
+function ordinal(n: number): string {
+  const mod100 = n % 100;
+  const mod10 = n % 10;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  if (mod10 === 1) return `${n}st`;
+  if (mod10 === 2) return `${n}nd`;
+  if (mod10 === 3) return `${n}rd`;
+  return `${n}th`;
+}
+
 function PenaltyBadge({
   miss,
   noShoots,
@@ -401,6 +411,25 @@ function rankTooltip(
   }
 }
 
+function ShootingOrderBadge({ order }: { order: number }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className="text-[10px] text-muted-foreground/60 tabular-nums cursor-help leading-none"
+          aria-label={`Shot this stage ${ordinal(order)} in their rotation`}
+        >
+          {ordinal(order)}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-52 text-center text-xs">
+        This was the {ordinal(order)} stage this competitor shot — derived from
+        scorecard submission timestamps
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 function StageCell({
   sc,
   maxPoints,
@@ -420,61 +449,76 @@ function StageCell({
 
   if (sc.dnf) {
     return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Badge
-            variant="secondary"
-            className="text-xs cursor-help"
-            aria-label="Stage not fired"
-            tabIndex={0}
-          >
-            DNF
-          </Badge>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">
-          Stage not fired
-        </TooltipContent>
-      </Tooltip>
+      <div className="flex flex-col items-center gap-0.5">
+        {sc.shooting_order != null && (
+          <ShootingOrderBadge order={sc.shooting_order} />
+        )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge
+              variant="secondary"
+              className="text-xs cursor-help"
+              aria-label="Stage not fired"
+              tabIndex={0}
+            >
+              DNF
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs">
+            Stage not fired
+          </TooltipContent>
+        </Tooltip>
+      </div>
     );
   }
 
   if (sc.dq) {
     return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Badge
-            variant="destructive"
-            className="text-xs cursor-help"
-            aria-label="Disqualified"
-            tabIndex={0}
-          >
-            DQ
-          </Badge>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">
-          Disqualified — stage scored as 0
-        </TooltipContent>
-      </Tooltip>
+      <div className="flex flex-col items-center gap-0.5">
+        {sc.shooting_order != null && (
+          <ShootingOrderBadge order={sc.shooting_order} />
+        )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge
+              variant="destructive"
+              className="text-xs cursor-help"
+              aria-label="Disqualified"
+              tabIndex={0}
+            >
+              DQ
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs">
+            Disqualified — stage scored as 0
+          </TooltipContent>
+        </Tooltip>
+      </div>
     );
   }
 
   if (sc.zeroed) {
     return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Badge
-            variant="outline"
-            className="text-xs border-orange-400 text-orange-600 cursor-help"
-            aria-label="Stage zeroed"
-            tabIndex={0}
-          >
-            0
-          </Badge>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">
-          Stage zeroed — 0 points, ranked last
-        </TooltipContent>
-      </Tooltip>
+      <div className="flex flex-col items-center gap-0.5">
+        {sc.shooting_order != null && (
+          <ShootingOrderBadge order={sc.shooting_order} />
+        )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge
+              variant="outline"
+              className="text-xs border-orange-400 text-orange-600 cursor-help"
+              aria-label="Stage zeroed"
+              tabIndex={0}
+            >
+              0
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs">
+            Stage zeroed — 0 points, ranked last
+          </TooltipContent>
+        </Tooltip>
+      </div>
     );
   }
 
@@ -482,6 +526,10 @@ function StageCell({
 
   return (
     <div className="flex flex-col items-center gap-0.5">
+      {/* Shooting order indicator */}
+      {sc.shooting_order != null && (
+        <ShootingOrderBadge order={sc.shooting_order} />
+      )}
       {/* Primary: hit factor + rank badge */}
       <div className="flex items-center gap-1">
         {rank != null && (
