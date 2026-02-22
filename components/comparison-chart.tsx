@@ -2,31 +2,35 @@
 
 import { useState } from "react";
 import {
-  BarChart,
+  ComposedChart,
   Bar,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  // ReferenceLine, // future: benchmark overlay — overall_leader_hf (see GitHub issue #1)
 } from "recharts";
 import { buildColorMap } from "@/lib/colors";
 import type { CompareResponse } from "@/lib/types";
 
 interface ComparisonChartProps {
   data: CompareResponse;
-  // showBenchmark?: boolean; // future: benchmark overlay (see GitHub issue #1)
+  showBenchmark?: boolean;
 }
 
-export function ComparisonChart({ data }: ComparisonChartProps) {
+export function ComparisonChart({ data, showBenchmark = false }: ComparisonChartProps) {
   const { stages, competitors } = data;
   const colorMap = buildColorMap(competitors.map((c) => c.id));
   const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
+  const [benchmarkVisible, setBenchmarkVisible] = useState(showBenchmark);
+
+  const hasBenchmark = stages.some((s) => s.overall_leader_hf != null);
 
   const chartData = stages.map((stage) => {
-    const row: Record<string, string | number> = {
+    const row: Record<string, string | number | null> = {
       name: `S${stage.stage_num}`,
+      overall_leader_hf: stage.overall_leader_hf,
     };
     for (const comp of competitors) {
       const sc = stage.competitors[comp.id];
@@ -59,7 +63,7 @@ export function ComparisonChart({ data }: ComparisonChartProps) {
   return (
     <div>
       <ResponsiveContainer width="100%" height={320}>
-        <BarChart
+        <ComposedChart
           data={chartData}
           margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
         >
@@ -95,6 +99,9 @@ export function ComparisonChart({ data }: ComparisonChartProps) {
             itemStyle={{ color: "var(--popover-foreground)" }}
             cursor={{ fill: "var(--muted-foreground)", opacity: 0.08 }}
             formatter={(value: number | undefined, name: string | undefined) => {
+              if (name === "overall_leader_hf") {
+                return [typeof value === "number" ? value.toFixed(4) : "—", "Field leader"];
+              }
               const id = parseInt((name ?? "").split("_").pop() ?? "0", 10);
               return [
                 typeof value === "number" ? value.toFixed(4) : "—",
@@ -102,11 +109,19 @@ export function ComparisonChart({ data }: ComparisonChartProps) {
               ];
             }}
           />
-          {/* future benchmark overlay hook — do not remove:
-          {showBenchmark && stages[0] && (
-            <ReferenceLine y={stages[0].overall_leader_hf ?? 0} stroke="gray" strokeDasharray="4 2" label="Field leader" />
+          {benchmarkVisible && hasBenchmark && (
+            <Line
+              dataKey="overall_leader_hf"
+              stroke="var(--muted-foreground)"
+              strokeDasharray="4 2"
+              strokeWidth={1.5}
+              dot={false}
+              activeDot={false}
+              legendType="none"
+              name="overall_leader_hf"
+              connectNulls={false}
+            />
           )}
-          */}
           {competitors.map((comp) => {
             if (hiddenIds.has(comp.id)) return null;
             const key = `${comp.competitor_number}_${comp.id}`;
@@ -120,13 +135,33 @@ export function ComparisonChart({ data }: ComparisonChartProps) {
               />
             );
           })}
-        </BarChart>
+        </ComposedChart>
       </ResponsiveContainer>
       <div
         role="group"
-        aria-label="Toggle competitors"
+        aria-label="Chart legend"
         className="flex flex-wrap justify-center gap-2 pt-2"
       >
+        {hasBenchmark && (
+          <button
+            type="button"
+            onClick={() => setBenchmarkVisible((v) => !v)}
+            aria-pressed={benchmarkVisible}
+            className="flex items-center gap-2 rounded-full border px-3 text-sm transition-opacity"
+            style={{
+              borderColor: benchmarkVisible ? "var(--muted-foreground)55" : "transparent",
+              backgroundColor: benchmarkVisible ? "var(--muted-foreground)18" : undefined,
+              opacity: benchmarkVisible ? undefined : 0.4,
+            }}
+          >
+            <span
+              className="inline-block w-4"
+              style={{ borderTop: "2px dashed var(--muted-foreground)" }}
+              aria-hidden="true"
+            />
+            <span className={benchmarkVisible ? "" : "line-through"}>Field leader</span>
+          </button>
+        )}
         {competitors.map((comp) => {
           const hidden = hiddenIds.has(comp.id);
           const label = formatLabel(comp.id);
