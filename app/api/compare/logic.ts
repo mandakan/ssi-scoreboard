@@ -5,6 +5,7 @@ import type {
   StageComparison,
   CompetitorSummary,
   CompetitorInfo,
+  CompetitorPenaltyStats,
 } from "@/lib/types";
 
 export interface RawScorecard {
@@ -365,4 +366,75 @@ export function computeGroupRankings(
     stageDifficultyLevel: difficulties[i].level,
     stageDifficultyLabel: difficulties[i].label,
   }));
+}
+
+/**
+ * Compute per-competitor penalty statistics from already-ranked stage comparisons.
+ *
+ * Penalty metrics:
+ *   - penaltiesPerStage        = total_penalties / stages_shot
+ *   - penaltiesPer100Rounds    = total_penalties / total_rounds_fired × 100
+ *
+ * Penalty impact on match %:
+ *   For each valid (non-DNF, non-DQ, non-zeroed) stage, compute the "clean" HF
+ *   by adding back the penalty points (miss + no_shoot + procedural × 10 pts each),
+ *   then compare average group % actual vs clean.
+ *
+ *   penaltyCostPercent = matchPctClean − matchPctActual
+ */
+export function computePenaltyStats(
+  stages: StageComparison[],
+  competitorId: number
+): CompetitorPenaltyStats {
+  let totalPenalties = 0;
+  let totalRounds = 0;
+  let stagesShot = 0;
+  let actualPctSum = 0;
+  let cleanPctSum = 0;
+  let pctCount = 0;
+
+  for (const stage of stages) {
+    const sc = stage.competitors[competitorId];
+    if (!sc || sc.dnf) continue;
+
+    stagesShot++;
+    const miss = sc.miss_count ?? 0;
+    const ns = sc.no_shoots ?? 0;
+    const proc = sc.procedurals ?? 0;
+    totalPenalties += miss + ns + proc;
+
+    // Total rounds on paper = hits + misses (procedurals are not per-round)
+    totalRounds += (sc.a_hits ?? 0) + (sc.c_hits ?? 0) + (sc.d_hits ?? 0) + miss;
+
+    // Penalty impact on match %: only meaningful for valid (non-DQ, non-zeroed) stages
+    if (
+      !sc.dq &&
+      !sc.zeroed &&
+      stage.group_leader_hf != null &&
+      stage.group_leader_hf > 0 &&
+      sc.time != null &&
+      sc.time > 0
+    ) {
+      const actualHF = sc.hit_factor ?? 0;
+      actualPctSum += (actualHF / stage.group_leader_hf) * 100;
+
+      const cleanPoints = (sc.points ?? 0) + (miss + ns + proc) * 10;
+      const cleanHF = cleanPoints / sc.time;
+      cleanPctSum += (cleanHF / stage.group_leader_hf) * 100;
+
+      pctCount++;
+    }
+  }
+
+  const matchPctActual = pctCount > 0 ? actualPctSum / pctCount : 0;
+  const matchPctClean = pctCount > 0 ? cleanPctSum / pctCount : 0;
+
+  return {
+    totalPenalties,
+    penaltyCostPercent: matchPctClean - matchPctActual,
+    matchPctActual,
+    matchPctClean,
+    penaltiesPerStage: stagesShot > 0 ? totalPenalties / stagesShot : 0,
+    penaltiesPer100Rounds: totalRounds > 0 ? (totalPenalties / totalRounds) * 100 : 0,
+  };
 }

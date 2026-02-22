@@ -14,6 +14,10 @@ const baseData: CompareResponse = {
     { id: 1, name: "Alice Smith", competitor_number: "35", club: null, division: "Open Major" },
     { id: 2, name: "Bob Jones", competitor_number: "50", club: null, division: "Production Minor" },
   ],
+  penaltyStats: {
+    1: { totalPenalties: 0, penaltyCostPercent: 0, matchPctActual: 89.2, matchPctClean: 89.2, penaltiesPerStage: 0, penaltiesPer100Rounds: 0 },
+    2: { totalPenalties: 0, penaltyCostPercent: 0, matchPctActual: 100, matchPctClean: 100, penaltiesPerStage: 0, penaltiesPer100Rounds: 0 },
+  },
   stages: [
     {
       stage_id: 100,
@@ -322,6 +326,32 @@ describe("ComparisonTable — penalty badge", () => {
     // baseData has all nulls — no penalty data available, so we can't confirm clean
     renderWithProviders(<ComparisonTable data={baseData} />);
     expect(screen.queryByText("✓ Clean")).not.toBeInTheDocument();
+  });
+
+  it("shows penalty cost badge in totals row when penaltyStats has totalPenalties > 0", () => {
+    const data: CompareResponse = {
+      ...baseData,
+      penaltyStats: {
+        1: { totalPenalties: 2, penaltyCostPercent: 8.5, matchPctActual: 81.5, matchPctClean: 90.0, penaltiesPerStage: 1.0, penaltiesPer100Rounds: 12.5 },
+        2: { totalPenalties: 0, penaltyCostPercent: 0, matchPctActual: 100, matchPctClean: 100, penaltiesPerStage: 0, penaltiesPer100Rounds: 0 },
+      },
+      stages: [
+        {
+          ...baseData.stages[0],
+          competitors: {
+            1: { ...baseData.stages[0].competitors[1], miss_count: 2, no_shoots: 0, procedurals: 0 },
+            2: baseData.stages[0].competitors[2],
+          },
+        },
+      ],
+    };
+    renderWithProviders(<ComparisonTable data={data} />);
+    expect(screen.getByText(/Penalty cost: −8\.5% match/)).toBeInTheDocument();
+  });
+
+  it("hides penalty cost badge in totals row when totalPenalties is zero", () => {
+    renderWithProviders(<ComparisonTable data={baseData} />);
+    expect(screen.queryByText(/Penalty cost:/)).not.toBeInTheDocument();
   });
 });
 

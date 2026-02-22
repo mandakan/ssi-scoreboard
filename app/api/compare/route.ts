@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { executeQuery, SCORECARDS_QUERY, MATCH_QUERY } from "@/lib/graphql";
 import { formatDivisionDisplay } from "@/lib/divisions";
-import { computeGroupRankings, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompareResponse, CompetitorInfo } from "@/lib/types";
 
 // ─── Raw GraphQL response shapes ─────────────────────────────────────────────
@@ -213,10 +213,15 @@ export async function GET(req: Request) {
     (s) => ({ ...s, ...stageMetaMap.get(s.stage_id) })
   );
 
+  const penaltyStats = Object.fromEntries(
+    requestedCompetitors.map((c) => [c.id, computePenaltyStats(stages, c.id)])
+  );
+
   const response: CompareResponse = {
     match_id: parseInt(id, 10),
     stages,
     competitors: requestedCompetitors,
+    penaltyStats,
   };
 
   return NextResponse.json(response);

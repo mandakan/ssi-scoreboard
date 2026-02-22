@@ -263,7 +263,7 @@ function modeValues(
 }
 
 export function ComparisonTable({ data }: ComparisonTableProps) {
-  const { stages, competitors } = data;
+  const { stages, competitors, penaltyStats } = data;
   const [mode, setMode] = useState<PctMode>("group");
   const [viewMode, setViewMode] = useState<ViewMode>("absolute");
 
@@ -531,6 +531,23 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
                         <span className="text-xs font-medium text-red-600 dark:text-red-400 tabular-nums">
                           {`\u2212${t.totalPenaltyPts}pts`}
                         </span>
+                      )}
+                      {penaltyStats[t.id]?.totalPenalties > 0 && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge
+                              variant="outline"
+                              className="text-xs font-medium border-red-400 text-red-600 dark:text-red-400 cursor-help tabular-nums"
+                              aria-label={`Penalty cost: ${penaltyStats[t.id].penaltyCostPercent.toFixed(1)}% match percentage`}
+                            >
+                              {`Penalty cost: \u2212${penaltyStats[t.id].penaltyCostPercent.toFixed(1)}% match`}
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs space-y-0.5">
+                            <div>{`Without penalties: ${formatPct(penaltyStats[t.id].matchPctActual)} \u2192 ${formatPct(penaltyStats[t.id].matchPctClean)}`}</div>
+                            <div className="text-muted-foreground">{`${penaltyStats[t.id].penaltiesPerStage.toFixed(1)} penalties/stage \u00b7 ${penaltyStats[t.id].penaltiesPer100Rounds.toFixed(1)}/100 rounds`}</div>
+                          </TooltipContent>
+                        </Tooltip>
                       )}
                       {t.isClean && (
                         <Tooltip>

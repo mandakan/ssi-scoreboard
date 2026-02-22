@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeGroupRankings, assignDifficulty, computePercentile, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompetitorInfo } from "@/lib/types";
 
 const competitors: CompetitorInfo[] = [
@@ -771,5 +771,141 @@ describe("computeGroupRankings — overall_percentile", () => {
     // rank 1 of N=2: percentile = 1 - 0/1 = 1.0
     expect(result[0].competitors[1].overall_percentile).toBe(1.0);
     expect(result[0].competitors[2].overall_percentile).toBe(1.0);
+  });
+});
+
+describe("computePenaltyStats", () => {
+  it("returns zero cost when competitor has no penalties", () => {
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 5.0, points: 100, time: 20, miss_count: 0, no_shoots: 0, procedurals: 0, a_hits: 10, c_hits: 0, d_hits: 0 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    const stats = computePenaltyStats(stages, 1);
+    expect(stats.totalPenalties).toBe(0);
+    expect(stats.penaltyCostPercent).toBeCloseTo(0, 5);
+    expect(stats.matchPctActual).toBeCloseTo(100, 4);
+    expect(stats.matchPctClean).toBeCloseTo(100, 4);
+    expect(stats.penaltiesPerStage).toBe(0);
+    expect(stats.penaltiesPer100Rounds).toBe(0);
+  });
+
+  it("computes penalty cost for a single miss (10 pts lost)", () => {
+    // Leader = comp 1 itself. actual pts=90, time=20 → actual HF=4.5, group_leader_hf=4.5, actual pct=100%
+    // Wait — since comp 1 is the only one, group_leader_hf = their effective HF = 4.5
+    // clean pts = 90+10=100, clean HF = 5.0, clean pct = 5.0/4.5 * 100 ≈ 111.1%
+    // But let's use two competitors so comp 1 is not the leader
+    // Comp 1: points=90, time=20, HF=4.5, miss=1. Comp 2: points=100, time=20, HF=5.0 (leader)
+    // actual pct = 4.5/5.0*100 = 90%. clean pts = 100, clean HF = 5.0, clean pct = 5.0/5.0*100 = 100%
+    // penaltyCostPercent = 100 - 90 = 10%
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 4.5, points: 90, time: 20, miss_count: 1, no_shoots: 0, procedurals: 0, a_hits: 9, c_hits: 0, d_hits: 0 }),
+      makeCard(2, 1, { hit_factor: 5.0, points: 100, time: 20, miss_count: 0, no_shoots: 0, procedurals: 0, a_hits: 10, c_hits: 0, d_hits: 0 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    const stats = computePenaltyStats(stages, 1);
+    expect(stats.totalPenalties).toBe(1);
+    expect(stats.matchPctActual).toBeCloseTo(90, 4);
+    expect(stats.matchPctClean).toBeCloseTo(100, 4);
+    expect(stats.penaltyCostPercent).toBeCloseTo(10, 4);
+    expect(stats.penaltiesPerStage).toBeCloseTo(1, 5);
+    // 1 miss / (9 a_hits + 0 + 0 + 1 miss) = 1/10 * 100 = 10
+    expect(stats.penaltiesPer100Rounds).toBeCloseTo(10, 4);
+  });
+
+  it("sums miss + no_shoot + procedural into totalPenalties", () => {
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 3.0, points: 60, time: 20, miss_count: 2, no_shoots: 1, procedurals: 1 }),
+      makeCard(2, 1, { hit_factor: 5.0, points: 100, time: 20 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    const stats = computePenaltyStats(stages, 1);
+    expect(stats.totalPenalties).toBe(4); // 2 miss + 1 NS + 1 proc
+  });
+
+  it("averages penalty cost across multiple stages", () => {
+    // Stage 1: 1 miss, clean pct = 100%, actual pct = 90% → cost = 10%
+    // Stage 2: 0 penalties, actual pct = 80%, clean pct = 80% → cost = 0%
+    // avg cost = (10 + 0) / 2 = 5%
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 4.5, points: 90, time: 20, miss_count: 1, no_shoots: 0, procedurals: 0 }),
+      makeCard(2, 1, { hit_factor: 5.0, points: 100, time: 20, miss_count: 0, no_shoots: 0, procedurals: 0 }),
+      makeCard(1, 2, { hit_factor: 4.0, points: 80, time: 20, miss_count: 0, no_shoots: 0, procedurals: 0 }),
+      makeCard(2, 2, { hit_factor: 5.0, points: 100, time: 20, miss_count: 0, no_shoots: 0, procedurals: 0 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    const stats = computePenaltyStats(stages, 1);
+    // stage 1 actual pct = 90%, clean pct = 100% → cost 10%
+    // stage 2 actual pct = 80%, clean pct = 80% → cost 0%
+    expect(stats.penaltyCostPercent).toBeCloseTo(5, 4);
+  });
+
+  it("excludes DNF stages from all calculations", () => {
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 4.5, points: 90, time: 20, miss_count: 1, no_shoots: 0, procedurals: 0, a_hits: 9, c_hits: 0, d_hits: 0 }),
+      makeCard(1, 2, { dnf: true }),
+      makeCard(2, 1, { hit_factor: 5.0, points: 100, time: 20 }),
+      makeCard(2, 2, { hit_factor: 5.0, points: 100, time: 20 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    const stats = computePenaltyStats(stages, 1);
+    expect(stats.totalPenalties).toBe(1); // only stage 1 counted
+    expect(stats.penaltiesPerStage).toBeCloseTo(1, 5); // 1 penalty / 1 fired stage
+  });
+
+  it("treats null penalty fields as zero", () => {
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 4.0, points: 80, time: 20, miss_count: null, no_shoots: null, procedurals: null }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    const stats = computePenaltyStats(stages, 1);
+    expect(stats.totalPenalties).toBe(0);
+    expect(stats.penaltyCostPercent).toBeCloseTo(0, 5);
+  });
+
+  it("computes penaltiesPerStage over multiple stages with varying penalty counts", () => {
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 4.0, points: 80, time: 20, miss_count: 3, no_shoots: 0, procedurals: 0 }),
+      makeCard(1, 2, { hit_factor: 4.0, points: 80, time: 20, miss_count: 0, no_shoots: 0, procedurals: 0 }),
+      makeCard(2, 1, { hit_factor: 5.0, points: 100, time: 20 }),
+      makeCard(2, 2, { hit_factor: 5.0, points: 100, time: 20 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    const stats = computePenaltyStats(stages, 1);
+    expect(stats.totalPenalties).toBe(3);
+    expect(stats.penaltiesPerStage).toBeCloseTo(1.5, 5); // 3 / 2 stages
+  });
+
+  it("computes penaltiesPer100Rounds correctly", () => {
+    // 9 A hits + 0 C + 0 D + 1 miss = 10 rounds, 1 miss penalty → 10/100 rounds
+    const scorecards = [
+      makeCard(1, 1, { a_hits: 9, c_hits: 0, d_hits: 0, miss_count: 1, no_shoots: 0, procedurals: 0 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    const stats = computePenaltyStats(stages, 1);
+    expect(stats.penaltiesPer100Rounds).toBeCloseTo(10, 4); // 1/10 * 100 = 10
+  });
+
+  it("penaltiesPer100Rounds is 0 when no rounds data (all null hits)", () => {
+    // a_hits, c_hits, d_hits, miss_count all null → totalRounds = 0
+    const scorecards = [
+      makeCard(1, 1, { a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: 0, procedurals: 0 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    const stats = computePenaltyStats(stages, 1);
+    expect(stats.penaltiesPer100Rounds).toBe(0);
+  });
+
+  it("DQ stages: penalties counted in totals but excluded from pct impact", () => {
+    // Comp 1 DQ on stage 1 with 2 misses — these count toward totalPenalties
+    // but DQ stage does not contribute to pct calculation
+    const scorecards = [
+      makeCard(1, 1, { dq: true, hit_factor: 0, points: 0, time: 15, miss_count: 2, no_shoots: 0, procedurals: 0 }),
+      makeCard(2, 1, { hit_factor: 5.0, points: 100, time: 20 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    const stats = computePenaltyStats(stages, 1);
+    expect(stats.totalPenalties).toBe(2);
+    // pctCount = 0 → matchPctActual = 0, matchPctClean = 0, penaltyCostPercent = 0
+    expect(stats.penaltyCostPercent).toBeCloseTo(0, 5);
   });
 });
