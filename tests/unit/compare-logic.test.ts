@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompetitorInfo } from "@/lib/types";
 
 const competitors: CompetitorInfo[] = [
@@ -1592,5 +1592,187 @@ describe("computeLossBreakdown", () => {
     expect(stats.totalPenaltyLoss).toBe(10);
     expect(stats.totalHitLoss).toBe(0);
     expect(stats.totalLoss).toBe(10);
+  });
+});
+
+describe("simulateWithoutWorstStage", () => {
+  it("returns null for a competitor with only one valid stage", () => {
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 4.0, points: 80 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    const result = simulateWithoutWorstStage(stages, [competitors[0]]);
+    expect(result[1]).toBeNull();
+  });
+
+  it("returns null for a competitor with all stages DNF", () => {
+    const scorecards = [
+      makeCard(1, 1, { dnf: true, hit_factor: null, points: null }),
+      makeCard(1, 2, { dnf: true, hit_factor: null, points: null }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    const result = simulateWithoutWorstStage(stages, [competitors[0]]);
+    expect(result[1]).toBeNull();
+  });
+
+  it("identifies the worst stage (lowest group_percent)", () => {
+    // Stage 1: Alice 50%, Stage 2: Alice 90%, Stage 3: Alice 80%
+    // Leader on each stage has HF 5.0. Alice has HF 2.5 / 4.5 / 4.0
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 2.5, points: 50 }),  // 50% of leader
+      makeCard(2, 1, { hit_factor: 5.0, points: 100 }),  // leader
+      makeCard(1, 2, { hit_factor: 4.5, points: 90 }),  // 90% of leader
+      makeCard(2, 2, { hit_factor: 5.0, points: 100 }),  // leader
+      makeCard(1, 3, { hit_factor: 4.0, points: 80 }),  // 80% of leader
+      makeCard(2, 3, { hit_factor: 5.0, points: 100 }),  // leader
+    ];
+    const twoComps = [competitors[0], competitors[1]];
+    const stages = computeGroupRankings(scorecards, twoComps);
+    const result = simulateWithoutWorstStage(stages, twoComps);
+    const wi = result[1];
+    expect(wi).not.toBeNull();
+    expect(wi!.worstStageNum).toBe(1); // stage 1 has the lowest group_percent for Alice
+    expect(wi!.worstStageGroupPct).toBeCloseTo(50, 0);
+  });
+
+  it("computes median of remaining stages correctly", () => {
+    // Alice stages: 50% (worst), 80%, 90%
+    // Median of [80, 90] = 85
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 2.5, points: 50 }),
+      makeCard(2, 1, { hit_factor: 5.0, points: 100 }),
+      makeCard(1, 2, { hit_factor: 4.0, points: 80 }),
+      makeCard(2, 2, { hit_factor: 5.0, points: 100 }),
+      makeCard(1, 3, { hit_factor: 4.5, points: 90 }),
+      makeCard(2, 3, { hit_factor: 5.0, points: 100 }),
+    ];
+    const twoComps = [competitors[0], competitors[1]];
+    const stages = computeGroupRankings(scorecards, twoComps);
+    const result = simulateWithoutWorstStage(stages, twoComps);
+    const wi = result[1]!;
+    // Median of [80, 90] = 85
+    expect(wi.medianReplacement.replacementPct).toBeCloseTo(85, 1);
+    // Second-worst = 80 (lowest of remaining)
+    expect(wi.secondWorstReplacement.replacementPct).toBeCloseTo(80, 1);
+  });
+
+  it("computes simulated match % correctly", () => {
+    // Alice: stages 50%, 80%, 90% → actual avg = 73.33%
+    // With median (85%) replacing 50%: (73.33 * 3 - 50 + 85) / 3 = (220 - 50 + 85)/3 = 255/3 = 85
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 2.5, points: 50 }),
+      makeCard(2, 1, { hit_factor: 5.0, points: 100 }),
+      makeCard(1, 2, { hit_factor: 4.0, points: 80 }),
+      makeCard(2, 2, { hit_factor: 5.0, points: 100 }),
+      makeCard(1, 3, { hit_factor: 4.5, points: 90 }),
+      makeCard(2, 3, { hit_factor: 5.0, points: 100 }),
+    ];
+    const twoComps = [competitors[0], competitors[1]];
+    const stages = computeGroupRankings(scorecards, twoComps);
+    const result = simulateWithoutWorstStage(stages, twoComps);
+    const wi = result[1]!;
+    expect(wi.actualMatchPct).toBeCloseTo((50 + 80 + 90) / 3, 1);
+    expect(wi.medianReplacement.matchPct).toBeCloseTo(85, 1);
+  });
+
+  it("computes rank improvement when simulated pct surpasses another competitor", () => {
+    // Alice: stages 50%, 80%, 90% → avg ≈ 73.3%
+    // Bob:   stages 100%, 100%, 100% → avg = 100%  (always 1st, leader)
+    // Alice is 2nd. With median replacement (85%), Alice avg = 85% → still 2nd behind Bob (100%)
+    // With Charlie at 75%, Alice at 73.3% is 3rd; with 85% Alice moves to 2nd
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 2.5, points: 50 }),
+      makeCard(2, 1, { hit_factor: 5.0, points: 100 }),
+      makeCard(3, 1, { hit_factor: 3.75, points: 75 }),
+      makeCard(1, 2, { hit_factor: 4.0, points: 80 }),
+      makeCard(2, 2, { hit_factor: 5.0, points: 100 }),
+      makeCard(3, 2, { hit_factor: 3.75, points: 75 }),
+      makeCard(1, 3, { hit_factor: 4.5, points: 90 }),
+      makeCard(2, 3, { hit_factor: 5.0, points: 100 }),
+      makeCard(3, 3, { hit_factor: 3.75, points: 75 }),
+    ];
+    const stages = computeGroupRankings(scorecards, competitors);
+    const result = simulateWithoutWorstStage(stages, competitors);
+    const wi = result[1]!; // Alice
+    // Alice actual avg ≈ 73.3%, Charlie actual avg = 75% → Alice is 3rd
+    expect(wi.actualGroupRank).toBe(3);
+    // After median replacement (85%), Alice avg = 85% > Charlie (75%) → Alice moves to 2nd
+    expect(wi.medianReplacement.groupRank).toBe(2);
+  });
+
+  it("handles only two valid stages (median = second-worst)", () => {
+    // With only 2 stages, remaining has 1 stage → median = second-worst = that stage's pct
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 3.0, points: 60 }),
+      makeCard(2, 1, { hit_factor: 5.0, points: 100 }),
+      makeCard(1, 2, { hit_factor: 4.5, points: 90 }),
+      makeCard(2, 2, { hit_factor: 5.0, points: 100 }),
+    ];
+    const twoComps = [competitors[0], competitors[1]];
+    const stages = computeGroupRankings(scorecards, twoComps);
+    const result = simulateWithoutWorstStage(stages, twoComps);
+    const wi = result[1]!;
+    expect(wi).not.toBeNull();
+    // median == second-worst when only one remaining stage
+    expect(wi.medianReplacement.replacementPct).toBeCloseTo(
+      wi.secondWorstReplacement.replacementPct,
+      5
+    );
+  });
+
+  it("handles all stages equal (no improvement)", () => {
+    // All stages: Alice 80% of leader → worst = median = second-worst = 80%
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 4.0, points: 80 }),
+      makeCard(2, 1, { hit_factor: 5.0, points: 100 }),
+      makeCard(1, 2, { hit_factor: 4.0, points: 80 }),
+      makeCard(2, 2, { hit_factor: 5.0, points: 100 }),
+      makeCard(1, 3, { hit_factor: 4.0, points: 80 }),
+      makeCard(2, 3, { hit_factor: 5.0, points: 100 }),
+    ];
+    const twoComps = [competitors[0], competitors[1]];
+    const stages = computeGroupRankings(scorecards, twoComps);
+    const result = simulateWithoutWorstStage(stages, twoComps);
+    const wi = result[1]!;
+    // Replacement = same as actual worst → no change in matchPct or rank
+    expect(wi.medianReplacement.matchPct).toBeCloseTo(wi.actualMatchPct, 5);
+    expect(wi.medianReplacement.groupRank).toBe(wi.actualGroupRank);
+  });
+
+  it("uses stage_num as tiebreaker when two stages have the same worst group_percent", () => {
+    // Alice: stage 1 = 60%, stage 2 = 60%, stage 3 = 90%
+    // Both stage 1 and 2 are tied as worst → picks stage 1 (lower stage_num)
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 3.0, points: 60 }),
+      makeCard(2, 1, { hit_factor: 5.0, points: 100 }),
+      makeCard(1, 2, { hit_factor: 3.0, points: 60 }),
+      makeCard(2, 2, { hit_factor: 5.0, points: 100 }),
+      makeCard(1, 3, { hit_factor: 4.5, points: 90 }),
+      makeCard(2, 3, { hit_factor: 5.0, points: 100 }),
+    ];
+    const twoComps = [competitors[0], competitors[1]];
+    const stages = computeGroupRankings(scorecards, twoComps);
+    const result = simulateWithoutWorstStage(stages, twoComps);
+    const wi = result[1]!;
+    expect(wi.worstStageNum).toBe(1); // stage 1 wins tiebreak (lower stage_num)
+  });
+
+  it("excludes DNF/DQ/zeroed stages from consideration", () => {
+    // Alice: stage 1 = 80%, stage 2 = DNF (excluded), stage 3 = 90%
+    // Worst valid = stage 1 (80%), remaining = [stage 3 (90%)]
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 4.0, points: 80 }),
+      makeCard(2, 1, { hit_factor: 5.0, points: 100 }),
+      makeCard(1, 2, { dnf: true, hit_factor: null, points: null }),
+      makeCard(2, 2, { hit_factor: 5.0, points: 100 }),
+      makeCard(1, 3, { hit_factor: 4.5, points: 90 }),
+      makeCard(2, 3, { hit_factor: 5.0, points: 100 }),
+    ];
+    const twoComps = [competitors[0], competitors[1]];
+    const stages = computeGroupRankings(scorecards, twoComps);
+    const result = simulateWithoutWorstStage(stages, twoComps);
+    const wi = result[1]!;
+    expect(wi).not.toBeNull();
+    expect(wi.worstStageNum).toBe(1); // stage 2 DNF excluded, stage 1 (80%) is worst valid
   });
 });
