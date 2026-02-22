@@ -3,7 +3,7 @@ services:
     build:
       context: .
     ports:
-      - "3000:3000"
+      - "${PORT:-3666}:3000"
     environment:
       SSI_API_KEY: ${SSI_API_KEY}
     restart: unless-stopped
