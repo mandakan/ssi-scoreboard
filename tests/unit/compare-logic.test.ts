@@ -27,6 +27,12 @@ function makeCard(
     dq: false,
     zeroed: false,
     dnf: false,
+    a_hits: 10,
+    c_hits: 2,
+    d_hits: 0,
+    miss_count: 0,
+    no_shoots: 0,
+    procedurals: 0,
     ...overrides,
   };
 }
@@ -223,6 +229,12 @@ describe("computeGroupRankings — overall rankings", () => {
       dq: false,
       zeroed: false,
       dnf: false,
+      a_hits: 12,
+      c_hits: 0,
+      d_hits: 0,
+      miss_count: 0,
+      no_shoots: 0,
+      procedurals: 0,
     };
     const scorecards = [
       nonSelected,
