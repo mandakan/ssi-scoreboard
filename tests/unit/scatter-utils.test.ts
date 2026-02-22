@@ -131,6 +131,8 @@ function makeStage(overrides: StageOverrides = {}): StageComparison {
         no_shoots: null,
         procedurals: null,
         stageClassification: null,
+        hitLossPoints: null,
+        penaltyLossPoints: 0,
       },
     },
   };
@@ -239,6 +241,8 @@ describe("buildScatterData", () => {
           no_shoots: null,
           procedurals: null,
           stageClassification: null,
+          hitLossPoints: null,
+          penaltyLossPoints: 0,
         },
         2: {
           competitor_id: 2,
@@ -263,6 +267,8 @@ describe("buildScatterData", () => {
           no_shoots: null,
           procedurals: null,
           stageClassification: null,
+          hitLossPoints: null,
+          penaltyLossPoints: 0,
         },
       },
     };

@@ -32,6 +32,8 @@ const baseStageCompetitors = {
     no_shoots: null,
     procedurals: null,
     stageClassification: null,
+    hitLossPoints: null,
+    penaltyLossPoints: 0,
   },
   2: {
     competitor_id: 2,
@@ -56,6 +58,8 @@ const baseStageCompetitors = {
     no_shoots: null,
     procedurals: null,
     stageClassification: null,
+    hitLossPoints: null,
+    penaltyLossPoints: 0,
   },
 };
 
@@ -66,6 +70,7 @@ const baseData: CompareResponse = {
     2: { totalPenalties: 0, penaltyCostPercent: 0, matchPctActual: 80, matchPctClean: 80, penaltiesPerStage: 0, penaltiesPer100Rounds: 0 },
   },
   efficiencyStats: {},
+  lossBreakdownStats: {},
   consistencyStats: {
     1: { coefficientOfVariation: null, label: null, stagesFired: 1 },
     2: { coefficientOfVariation: null, label: null, stagesFired: 1 },

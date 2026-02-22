@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompetitorInfo } from "@/lib/types";
 
 const competitors: CompetitorInfo[] = [
@@ -1373,5 +1373,224 @@ describe("computeConsistencyStats", () => {
     // Actually on stage 4 Bob has hf=10.2 and Alice has hf=10.0, so Bob leads → 100%.
     // Let's just check the label exists and is a valid string
     expect(["very consistent", "consistent", "moderate", "variable", "streaky"]).toContain(r1.label);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Per-stage hitLossPoints / penaltyLossPoints (on CompetitorSummary)
+// ---------------------------------------------------------------------------
+
+describe("computeGroupRankings — hitLossPoints / penaltyLossPoints per stage", () => {
+  it("all A-zone hits, no penalties: hitLossPoints = 0, penaltyLossPoints = 0", () => {
+    // 10 A-hits × 5 pts = 50 pts scored, no misses, no penalties
+    const scorecards = [
+      makeCard(1, 1, { a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0, points: 50 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    const sc = result[0].competitors[1];
+    expect(sc.hitLossPoints).toBe(0);
+    expect(sc.penaltyLossPoints).toBe(0);
+  });
+
+  it("C-zone hits cost hit quality but not penalties (minor scoring)", () => {
+    // 8 A + 2 C (minor: C=3 → points = 8×5 + 2×3 = 46). 10 rounds × 5 = 50 max.
+    // hit_loss = 50 - 46 - 0 = 4, penalty_loss = 0
+    const scorecards = [
+      makeCard(1, 1, { a_hits: 8, c_hits: 2, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0, points: 46 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    const sc = result[0].competitors[1];
+    expect(sc.hitLossPoints).toBe(4);
+    expect(sc.penaltyLossPoints).toBe(0);
+  });
+
+  it("1 miss: miss cost splits between hit quality loss (5 pts) and penalty loss (10 pts)", () => {
+    // 9 A + 1 miss, points = 9×5 - 10 = 35. 10 rounds × 5 = 50 max.
+    // penalty_loss = 10, hit_loss = 50 - 35 - 10 = 5
+    const scorecards = [
+      makeCard(1, 1, { a_hits: 9, c_hits: 0, d_hits: 0, miss_count: 1, no_shoots: 0, procedurals: 0, points: 35 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    const sc = result[0].competitors[1];
+    expect(sc.penaltyLossPoints).toBe(10);
+    expect(sc.hitLossPoints).toBe(5);
+  });
+
+  it("1 no-shoot: penalty_loss = 10, hit_loss includes the ns as a wasted round", () => {
+    // 10 A + 1 NS, points = 10×5 - 10 = 40. 11 rounds × 5 = 55 max.
+    // penalty_loss = 10, hit_loss = 55 - 40 - 10 = 5
+    const scorecards = [
+      makeCard(1, 1, { a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0, no_shoots: 1, procedurals: 0, points: 40 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    const sc = result[0].competitors[1];
+    expect(sc.penaltyLossPoints).toBe(10);
+    expect(sc.hitLossPoints).toBe(5);
+  });
+
+  it("procedural-only penalty: penaltyLossPoints = 10, hit_loss unaffected (no extra round)", () => {
+    // 10 A, 1 procedural (no rounds fired), points = 10×5 - 10 = 40. 10 rounds × 5 = 50 max.
+    // penalty_loss = 10, hit_loss = 50 - 40 - 10 = 0
+    const scorecards = [
+      makeCard(1, 1, { a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 1, points: 40 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    const sc = result[0].competitors[1];
+    expect(sc.penaltyLossPoints).toBe(10);
+    expect(sc.hitLossPoints).toBe(0);
+  });
+
+  it("null zone data → hitLossPoints is null, penaltyLossPoints computed from counts", () => {
+    // No zone data, but we have penalty counts
+    const scorecards = [
+      makeCard(1, 1, { a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: 1, procedurals: 0, points: 40 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    const sc = result[0].competitors[1];
+    expect(sc.hitLossPoints).toBeNull();
+    expect(sc.penaltyLossPoints).toBe(10);
+  });
+
+  it("null a_hits but non-null miss_count → hitLossPoints is null (incomplete zone data)", () => {
+    const scorecards = [
+      makeCard(1, 1, { a_hits: null, c_hits: null, d_hits: null, miss_count: 1, no_shoots: 0, procedurals: 0, points: 35 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    const sc = result[0].competitors[1];
+    expect(sc.hitLossPoints).toBeNull();
+  });
+
+  it("DNF stage → both loss fields are null/0", () => {
+    const scorecards = [makeCard(1, 1, { dnf: true })];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    const sc = result[0].competitors[1];
+    expect(sc.hitLossPoints).toBeNull();
+    expect(sc.penaltyLossPoints).toBe(0);
+  });
+
+  it("DQ stage → hitLossPoints is null, penaltyLossPoints from counts", () => {
+    const scorecards = [
+      makeCard(1, 1, { dq: true, a_hits: 8, c_hits: 0, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0, points: 40 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    const sc = result[0].competitors[1];
+    expect(sc.hitLossPoints).toBeNull();
+    expect(sc.penaltyLossPoints).toBe(0);
+  });
+
+  it("zeroed stage → hitLossPoints is null", () => {
+    const scorecards = [
+      makeCard(1, 1, { zeroed: true, a_hits: 8, c_hits: 0, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0, points: 40 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    const sc = result[0].competitors[1];
+    expect(sc.hitLossPoints).toBeNull();
+  });
+
+  it("all misses: high hit loss and penalty loss", () => {
+    // 0 A, 0 C, 0 D, 10 misses: points = 0 - 100 = -100 (but IPSC usually floors at 0 — treat as computed)
+    // For test purposes: points = -100 stored by API, total_rounds = 10, aMax = 50
+    // penalty_loss = 100, hit_loss = 50 - (-100) - 100 = 50... but hitLoss clamped to max(0, ...)
+    // Actually: aMax = 10×5 = 50, sc.points = -100, hit_loss = 50 - (-100) - 100 = 50
+    // penalty_loss = 100
+    // Hmm, that doesn't make sense. All misses means 0 A hits but 10 miss rounds.
+    // If points=-100, and penalty_loss=100, then hit_loss=50-(-100)-100=50.
+    // This means: 10 missed rounds × 5 = 50 pts opportunity cost from hit quality.
+    // Makes sense: if you'd hit all those 10 rounds in A-zone you'd score 50 instead of -100.
+    // total_loss = 50 + 100 = 150 = aMax - points = 50 - (-100) = 150. ✓
+    const scorecards = [
+      makeCard(1, 1, { a_hits: 0, c_hits: 0, d_hits: 0, miss_count: 10, no_shoots: 0, procedurals: 0, points: -100 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    const sc = result[0].competitors[1];
+    expect(sc.penaltyLossPoints).toBe(100);
+    expect(sc.hitLossPoints).toBe(50);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeLossBreakdown — match-level aggregation
+// ---------------------------------------------------------------------------
+
+describe("computeLossBreakdown", () => {
+  it("returns zero totals when competitor has all As and no penalties", () => {
+    const scorecards = [
+      makeCard(1, 1, { a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0, points: 50 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    const stats = computeLossBreakdown(stages, 1);
+    expect(stats.totalHitLoss).toBe(0);
+    expect(stats.totalPenaltyLoss).toBe(0);
+    expect(stats.totalLoss).toBe(0);
+    expect(stats.stagesFired).toBe(1);
+    expect(stats.hasHitZoneData).toBe(true);
+  });
+
+  it("aggregates hit loss and penalty loss across multiple stages", () => {
+    // Stage 1: 8 A + 2 C minor (pts=46) → hit_loss=4, penalty_loss=0
+    // Stage 2: 9 A + 1 miss (pts=35) → hit_loss=5, penalty_loss=10
+    const scorecards = [
+      makeCard(1, 1, { a_hits: 8, c_hits: 2, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0, points: 46 }),
+      makeCard(1, 2, { a_hits: 9, c_hits: 0, d_hits: 0, miss_count: 1, no_shoots: 0, procedurals: 0, points: 35 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    const stats = computeLossBreakdown(stages, 1);
+    expect(stats.totalHitLoss).toBe(9);      // 4 + 5
+    expect(stats.totalPenaltyLoss).toBe(10); // 0 + 10
+    expect(stats.totalLoss).toBe(19);
+    expect(stats.stagesFired).toBe(2);
+    expect(stats.hasHitZoneData).toBe(true);
+  });
+
+  it("excludes DNF stages from aggregation", () => {
+    const scorecards = [
+      makeCard(1, 1, { a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0, points: 50 }),
+      makeCard(1, 2, { dnf: true }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    const stats = computeLossBreakdown(stages, 1);
+    expect(stats.stagesFired).toBe(1);
+  });
+
+  it("excludes DQ stages from aggregation", () => {
+    const scorecards = [
+      makeCard(1, 1, { a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0, points: 50 }),
+      makeCard(1, 2, { dq: true, a_hits: 5, c_hits: 0, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0, points: 25 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    const stats = computeLossBreakdown(stages, 1);
+    expect(stats.stagesFired).toBe(1);
+  });
+
+  it("returns hasHitZoneData = false when all stages lack zone data", () => {
+    // no zone data (null a_hits etc.) → hitLossPoints is null on each stage
+    const scorecards = [
+      makeCard(1, 1, { a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: 0, procedurals: 0, points: 50 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    const stats = computeLossBreakdown(stages, 1);
+    expect(stats.hasHitZoneData).toBe(false);
+    expect(stats.totalHitLoss).toBe(0); // no zone data → 0 (not counted)
+  });
+
+  it("returns hasHitZoneData = true when at least one stage has zone data", () => {
+    const scorecards = [
+      makeCard(1, 1, { a_hits: null, c_hits: null, d_hits: null, miss_count: null, points: 50 }),
+      makeCard(1, 2, { a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0, points: 50 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    const stats = computeLossBreakdown(stages, 1);
+    expect(stats.hasHitZoneData).toBe(true);
+  });
+
+  it("procedural-only penalty is counted in totalPenaltyLoss only", () => {
+    const scorecards = [
+      makeCard(1, 1, { a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 1, points: 40 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    const stats = computeLossBreakdown(stages, 1);
+    expect(stats.totalPenaltyLoss).toBe(10);
+    expect(stats.totalHitLoss).toBe(0);
+    expect(stats.totalLoss).toBe(10);
   });
 });

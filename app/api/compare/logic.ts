@@ -8,6 +8,7 @@ import type {
   CompetitorPenaltyStats,
   EfficiencyStats,
   ConsistencyStats,
+  LossBreakdownStats,
   StageClassification,
 } from "@/lib/types";
 
@@ -395,6 +396,8 @@ export function computeGroupRankings(
           procedurals: null,
           shooting_order,
           stageClassification: null,
+          hitLossPoints: null,
+          penaltyLossPoints: 0,
         };
       } else {
         const hf = effectiveHF(sc);
@@ -403,6 +406,27 @@ export function computeGroupRankings(
         const divInfo = divResults.get(divKey);
         const overallRank = overallRankMap.get(comp.id) ?? null;
         const groupPercent = pct(hf, groupLeaderHF);
+
+        // Compute points-left-on-the-table split: hit quality vs. penalties.
+        // penalty_loss = (miss + ns + proc) × 10 (each penalty costs 10 pts)
+        // hit_loss     = (total_rounds × A_value) − sc.points − penalty_loss
+        //              where A_value = 5 (constant regardless of major/minor).
+        // hit_loss is null when zone data is unavailable (a/c/d/miss counts all null).
+        const scMiss = sc.miss_count ?? 0;
+        const scNs = sc.no_shoots ?? 0;
+        const scProc = sc.procedurals ?? 0;
+        const penaltyLossPoints = (scMiss + scNs + scProc) * 10;
+
+        let hitLossPoints: number | null = null;
+        if (
+          !sc.dq && !sc.zeroed &&
+          sc.points != null &&
+          sc.a_hits != null && sc.c_hits != null && sc.d_hits != null && sc.miss_count != null
+        ) {
+          const totalRounds = sc.a_hits + sc.c_hits + sc.d_hits + sc.miss_count + scNs;
+          const aMax = totalRounds * 5;
+          hitLossPoints = Math.max(0, aMax - sc.points - penaltyLossPoints);
+        }
 
         competitorMap[comp.id] = {
           competitor_id: comp.id,
@@ -436,6 +460,8 @@ export function computeGroupRankings(
             sc.no_shoots,
             sc.procedurals
           ),
+          hitLossPoints,
+          penaltyLossPoints,
         };
       }
     }
@@ -614,6 +640,48 @@ export function computeFieldPPSDistribution(
     fieldMedian,
     fieldMax: sorted[sorted.length - 1],
     fieldCount: sorted.length,
+  };
+}
+
+/**
+ * Aggregate per-stage hit-quality and penalty losses into match-level totals.
+ *
+ * Only non-DNF, non-DQ, non-zeroed stages are included (mirrors the coaching
+ * intent: those stages had valid, countable results).
+ *
+ * hit_loss per stage  = (total_rounds × 5) − points − penalty_loss
+ *   where total_rounds = a + c + d + miss + ns  (every round fired)
+ * penalty_loss per stage = (miss + ns + proc) × 10
+ *
+ * hitLossPoints is null when zone data was unavailable on a stage.
+ * Such stages still count toward stagesFired but not toward hasHitZoneData.
+ */
+export function computeLossBreakdown(
+  stages: StageComparison[],
+  competitorId: number
+): LossBreakdownStats {
+  let totalHitLoss = 0;
+  let totalPenaltyLoss = 0;
+  let stagesFired = 0;
+  let hasHitZoneData = false;
+
+  for (const stage of stages) {
+    const sc = stage.competitors[competitorId];
+    if (!sc || sc.dnf || sc.dq || sc.zeroed) continue;
+    stagesFired++;
+    totalPenaltyLoss += sc.penaltyLossPoints;
+    if (sc.hitLossPoints != null) {
+      totalHitLoss += sc.hitLossPoints;
+      hasHitZoneData = true;
+    }
+  }
+
+  return {
+    totalHitLoss,
+    totalPenaltyLoss,
+    totalLoss: totalHitLoss + totalPenaltyLoss,
+    stagesFired,
+    hasHitZoneData,
   };
 }
 

@@ -7,11 +7,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { AlertTriangle, CheckCircle2, ExternalLink, Flame, Shield, Zap } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, ExternalLink, Flame, Shield, Zap } from "lucide-react";
 import { cn, formatHF, formatTime, formatPct, computePointsDelta, formatDelta } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
 import { HitZoneBar } from "@/components/hit-zone-bar";
-import type { CompareResponse, CompetitorSummary, PctMode, StageClassification, ViewMode } from "@/lib/types";
+import type { CompareResponse, CompetitorInfo, CompetitorSummary, LossBreakdownStats, PctMode, StageClassification, ViewMode } from "@/lib/types";
 
 interface ComparisonTableProps {
   data: CompareResponse;
@@ -258,6 +258,181 @@ function StageClassificationBadge({
   );
 }
 
+/**
+ * Horizontal stacked bar showing: remaining points / hit-quality loss / penalty loss.
+ * Width is proportional to best-possible (a_max) score.
+ * Only rendered when we have hit zone data so the bar is meaningful.
+ */
+function LossStackedBar({
+  stats,
+  totalPossible,
+}: {
+  stats: LossBreakdownStats;
+  totalPossible: number;
+}) {
+  if (!stats.hasHitZoneData || totalPossible === 0) return null;
+
+  const remaining = totalPossible - stats.totalHitLoss - stats.totalPenaltyLoss;
+  const remainPct = Math.max(0, (remaining / totalPossible) * 100);
+  const hitLossPct = Math.max(0, (stats.totalHitLoss / totalPossible) * 100);
+  const penaltyLossPct = Math.max(0, (stats.totalPenaltyLoss / totalPossible) * 100);
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          className="flex h-3 w-full rounded overflow-hidden cursor-help"
+          role="img"
+          aria-label={`Points breakdown: ${remaining} scored, ${stats.totalHitLoss} hit-quality loss, ${stats.totalPenaltyLoss} penalty loss`}
+        >
+          <div
+            className="h-full bg-emerald-500"
+            style={{ width: `${remainPct}%` }}
+            aria-hidden="true"
+          />
+          <div
+            className="h-full bg-amber-400"
+            style={{ width: `${hitLossPct}%` }}
+            aria-hidden="true"
+          />
+          <div
+            className="h-full bg-red-500"
+            style={{ width: `${penaltyLossPct}%` }}
+            aria-hidden="true"
+          />
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-xs space-y-0.5">
+        <div className="font-medium">Points on the table</div>
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block w-2.5 h-2.5 rounded-sm bg-emerald-500" aria-hidden="true" />
+          {`Scored: ${remaining} pts`}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block w-2.5 h-2.5 rounded-sm bg-amber-400" aria-hidden="true" />
+          {`Hit quality loss: ${stats.totalHitLoss} pts`}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block w-2.5 h-2.5 rounded-sm bg-red-500" aria-hidden="true" />
+          {`Penalty loss: ${stats.totalPenaltyLoss} pts`}
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * Per-competitor analysis panel: stacked bar + per-stage breakdown of loss.
+ * Only shown when the "Show coaching data" panel is expanded.
+ */
+function CompetitorLossPanel({
+  comp,
+  stages,
+  stats,
+  color,
+}: {
+  comp: CompetitorInfo;
+  stages: CompareResponse["stages"];
+  stats: LossBreakdownStats;
+  color: string;
+}) {
+  // Compute total possible across all fired stages for the bar's denominator.
+  // total_possible = scored + hit_loss + penalty_loss (i.e. a_max aggregated)
+  const totalPossible = stats.totalHitLoss + stats.totalPenaltyLoss +
+    stages.reduce((sum, stage) => {
+      const sc = stage.competitors[comp.id];
+      if (!sc || sc.dnf || sc.dq || sc.zeroed) return sum;
+      return sum + (sc.points ?? 0) + sc.penaltyLossPoints;
+    }, 0);
+
+  const firedStages = stages.filter((stage) => {
+    const sc = stage.competitors[comp.id];
+    return sc && !sc.dnf && !sc.dq && !sc.zeroed;
+  });
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <span
+          className="inline-block w-2 h-2 rounded-full"
+          style={{ backgroundColor: color }}
+          aria-hidden="true"
+        />
+        <span className="text-xs font-medium">{comp.name.split(" ")[0]}</span>
+        {stats.totalLoss > 0 && (
+          <span className="text-xs text-muted-foreground">
+            {`−${stats.totalLoss} pts total`}
+            {stats.totalHitLoss > 0 && ` (${stats.totalHitLoss} hit quality`}
+            {stats.totalHitLoss > 0 && stats.totalPenaltyLoss > 0 && ` + ${stats.totalPenaltyLoss} penalties)`}
+            {stats.totalHitLoss > 0 && stats.totalPenaltyLoss === 0 && `)`}
+            {stats.totalHitLoss === 0 && stats.totalPenaltyLoss > 0 && ` (${stats.totalPenaltyLoss} penalties)`}
+          </span>
+        )}
+        {stats.totalLoss === 0 && stats.stagesFired > 0 && (
+          <span className="text-xs text-emerald-600 dark:text-emerald-400">Perfect A-zone run</span>
+        )}
+      </div>
+
+      <LossStackedBar stats={stats} totalPossible={totalPossible} />
+
+      {/* Per-stage breakdown table */}
+      {firedStages.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="border-b text-muted-foreground">
+                <th className="text-left py-1 pr-3 font-normal">Stage</th>
+                <th className="text-right py-1 px-2 font-normal">Hit quality loss</th>
+                <th className="text-right py-1 px-2 font-normal">Penalty loss</th>
+                <th className="text-right py-1 pl-2 font-normal">Total loss</th>
+              </tr>
+            </thead>
+            <tbody>
+              {firedStages.map((stage) => {
+                const sc = stage.competitors[comp.id];
+                if (!sc) return null;
+                const hitLoss = sc.hitLossPoints;
+                const penLoss = sc.penaltyLossPoints;
+                const stageTotalLoss = hitLoss != null ? hitLoss + penLoss : null;
+                return (
+                  <tr key={stage.stage_id} className="border-b border-border/40 hover:bg-muted/20">
+                    <td className="py-1 pr-3 text-muted-foreground">
+                      {`S${stage.stage_num}`}
+                    </td>
+                    <td className="py-1 px-2 text-right tabular-nums">
+                      {hitLoss != null ? (
+                        <span className={hitLoss > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}>
+                          {hitLoss > 0 ? `−${hitLoss}` : "—"}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground/50" title="Zone data unavailable">n/a</span>
+                      )}
+                    </td>
+                    <td className="py-1 px-2 text-right tabular-nums">
+                      <span className={penLoss > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}>
+                        {penLoss > 0 ? `−${penLoss}` : "—"}
+                      </span>
+                    </td>
+                    <td className="py-1 pl-2 text-right tabular-nums font-medium">
+                      {stageTotalLoss != null ? (
+                        <span className={stageTotalLoss > 0 ? "text-foreground" : "text-muted-foreground"}>
+                          {stageTotalLoss > 0 ? `−${stageTotalLoss}` : "—"}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground/50">n/a</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RankBadge({
   rank,
   tooltip,
@@ -403,9 +578,10 @@ function modeValues(
 }
 
 export function ComparisonTable({ data }: ComparisonTableProps) {
-  const { stages, competitors, penaltyStats, efficiencyStats, consistencyStats } = data;
+  const { stages, competitors, penaltyStats, efficiencyStats, consistencyStats, lossBreakdownStats } = data;
   const [mode, setMode] = useState<PctMode>("group");
   const [viewMode, setViewMode] = useState<ViewMode>("absolute");
+  const [showAnalysis, setShowAnalysis] = useState(false);
 
   // Detect match-level DQ: every scorecard for a competitor has dq: true
   const matchDqCompetitors = competitors.filter((comp) => {
@@ -789,6 +965,32 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
                           </TooltipContent>
                         </Tooltip>
                       )}
+                      {(() => {
+                        const lbs = lossBreakdownStats[t.id];
+                        if (!lbs || lbs.totalLoss === 0) return null;
+                        const hasBoth = lbs.totalHitLoss > 0 && lbs.totalPenaltyLoss > 0;
+                        const label = hasBoth
+                          ? `−${lbs.totalLoss} pts on table`
+                          : lbs.totalPenaltyLoss > 0
+                            ? `−${lbs.totalPenaltyLoss} pts to penalties`
+                            : `−${lbs.totalHitLoss} pts hit quality`;
+                        return (
+                          <button
+                            onClick={() => setShowAnalysis((v) => !v)}
+                            className={cn(
+                              "inline-flex items-center gap-1 rounded border px-1.5 py-0.5",
+                              "text-xs font-medium tabular-nums cursor-pointer",
+                              "border-amber-400 text-amber-700 dark:text-amber-400",
+                              "hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors",
+                              "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                            )}
+                            aria-label={`${label} — click to ${showAnalysis ? "hide" : "show"} coaching analysis`}
+                            aria-expanded={showAnalysis}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })()}
                       {t.isClean && (
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -812,6 +1014,83 @@ export function ComparisonTable({ data }: ComparisonTableProps) {
           </tbody>
         </table>
       </div>
+
+      {/* Coaching analysis panel — collapsible, hidden by default */}
+      {competitors.some((c) => {
+        const lbs = lossBreakdownStats[c.id];
+        return lbs && lbs.totalLoss > 0;
+      }) && (
+        <div className="rounded-lg border border-amber-200 dark:border-amber-900/50">
+          <button
+            onClick={() => setShowAnalysis((v) => !v)}
+            className={cn(
+              "flex w-full items-center justify-between px-4 py-3 text-sm font-medium",
+              "hover:bg-muted/30 transition-colors rounded-lg",
+              "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+            )}
+            aria-expanded={showAnalysis}
+            aria-controls="coaching-analysis-panel"
+          >
+            <span className="flex items-center gap-2">
+              <span className="text-amber-700 dark:text-amber-400">Coaching analysis</span>
+              <span className="text-xs text-muted-foreground font-normal">
+                Points left on the table per shooter
+              </span>
+            </span>
+            {showAnalysis
+              ? <ChevronUp className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+              : <ChevronDown className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+            }
+          </button>
+
+          {showAnalysis && (
+            <div
+              id="coaching-analysis-panel"
+              className="px-4 pb-4 space-y-5 border-t border-amber-200 dark:border-amber-900/50 pt-4"
+            >
+              {/* Legend */}
+              <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-3 rounded-sm bg-emerald-500" aria-hidden="true" />
+                  Scored
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-3 rounded-sm bg-amber-400" aria-hidden="true" />
+                  Hit quality loss (C/D/miss vs A)
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-3 rounded-sm bg-red-500" aria-hidden="true" />
+                  Penalty loss (miss/NS/procedural)
+                </span>
+              </div>
+
+              {/* Per-competitor breakdown */}
+              <div className="space-y-5">
+                {competitors.map((comp) => {
+                  const lbs = lossBreakdownStats[comp.id];
+                  if (!lbs || lbs.stagesFired === 0) return null;
+                  return (
+                    <CompetitorLossPanel
+                      key={comp.id}
+                      comp={comp}
+                      stages={stages}
+                      stats={lbs}
+                      color={colorMap[comp.id]}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Explanation note */}
+              <p className="text-xs text-muted-foreground/70">
+                Hit quality loss = points left on table from C/D/miss vs best possible A-zone.
+                Penalty loss = miss + no-shoot + procedural penalties (10 pts each).
+                Only valid (non-DQ, non-zeroed, non-DNF) stages are included.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

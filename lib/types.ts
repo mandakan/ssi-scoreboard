@@ -97,6 +97,12 @@ export interface CompetitorSummary {
   // Run quality classification based on HF% vs group leader, A%, and penalty counts.
   // null when there is insufficient data or the run is DNF.
   stageClassification: StageClassification | null;
+  // Points left on table due to non-A hit quality (C/D/miss opportunity cost).
+  // null when zone data (a_hits, c_hits, d_hits, miss_count) is unavailable, or for DNF/DQ/zeroed.
+  hitLossPoints: number | null;
+  // Points lost to penalties (miss + no_shoot + procedural × 10 each).
+  // Always 0 for DNF; always ≥ 0 for fired stages.
+  penaltyLossPoints: number;
 }
 
 export interface StageComparison {
@@ -157,13 +163,24 @@ export interface ConsistencyStats {
   stagesFired: number;                   // non-DNF, non-DQ, non-zeroed stages with valid group_percent
 }
 
+// Match-level aggregate of points-left-on-the-table per competitor.
+// Separates lost points into two root causes: hit quality and penalties.
+export interface LossBreakdownStats {
+  totalHitLoss: number;     // sum of hitLossPoints across non-DNF, non-DQ, non-zeroed stages
+  totalPenaltyLoss: number; // sum of penaltyLossPoints across non-DNF, non-DQ, non-zeroed stages
+  totalLoss: number;        // totalHitLoss + totalPenaltyLoss
+  stagesFired: number;      // non-DNF, non-DQ, non-zeroed stages included in the breakdown
+  hasHitZoneData: boolean;  // true if at least one stage had zone data (so hit loss is meaningful)
+}
+
 export interface CompareResponse {
   match_id: number;
   stages: StageComparison[];
   competitors: CompetitorInfo[];
   penaltyStats: Record<number, CompetitorPenaltyStats>; // keyed by competitor_id
   efficiencyStats: Record<number, EfficiencyStats>;     // keyed by competitor_id
-  consistencyStats: Record<number, ConsistencyStats>;  // keyed by competitor_id
+  consistencyStats: Record<number, ConsistencyStats>;   // keyed by competitor_id
+  lossBreakdownStats: Record<number, LossBreakdownStats>; // keyed by competitor_id
 }
 
 export interface EventSummary {
