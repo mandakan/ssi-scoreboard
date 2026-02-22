@@ -37,7 +37,7 @@ export async function GET(req: Request) {
 
   let data: RawEventsData;
   try {
-    data = await executeQuery<RawEventsData>(EVENTS_QUERY, variables);
+    data = await executeQuery<RawEventsData>(EVENTS_QUERY, variables, 3600);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Upstream error";
     return NextResponse.json({ error: message }, { status: 502 });

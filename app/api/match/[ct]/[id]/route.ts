@@ -54,7 +54,7 @@ export async function GET(
 
   let data: RawMatchData;
   try {
-    data = await executeQuery<RawMatchData>(MATCH_QUERY, { ct: ctNum, id });
+    data = await executeQuery<RawMatchData>(MATCH_QUERY, { ct: ctNum, id }, 30);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Upstream error";
     return NextResponse.json({ error: message }, { status: 502 });

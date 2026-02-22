@@ -17,7 +17,7 @@ export function useEventsQuery(q: string) {
   return useQuery<EventSummary[], Error>({
     queryKey: ["events", q],
     queryFn: () => fetchEvents(q),
-    staleTime: 60_000, // 1 minute
+    staleTime: 300_000, // 5 minutes — well inside 1h server cache TTL
   });
 }
 
@@ -29,7 +29,7 @@ export function useCompareQuery(
   return useQuery<CompareResponse, Error>({
     queryKey: ["compare", ct, id, competitorIds],
     queryFn: () => fetchCompare(ct, id, competitorIds),
-    staleTime: 15_000, // 15 seconds
+    staleTime: 30_000, // 30 seconds — aligned with server cache TTL
     refetchInterval: 30_000, // poll every 30s while mounted
     enabled: Boolean(ct && id && competitorIds.length > 0),
   });

@@ -1,6 +1,10 @@
 "use client";
 
 import { useCallback, useSyncExternalStore, useEffect, useRef } from "react";
+
+// Stable empty array for useSyncExternalStore server snapshot — must be a
+// constant reference so React's referential equality check doesn't loop.
+const EMPTY_IDS: number[] = [];
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { MatchHeader } from "@/components/match-header";
@@ -64,7 +68,7 @@ export default function MatchPage() {
       [ct, id]
     ),
     useCallback(() => getCompetitorSelectionSnapshot(ct, id), [ct, id]),
-    useCallback(() => [] as number[], [])
+    () => EMPTY_IDS
   );
 
   const matchQuery = useMatchQuery(ct, id);
