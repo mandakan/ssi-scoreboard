@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   ScatterChart,
   Scatter,
@@ -7,7 +8,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   usePlotArea,
   useXAxisDomain,
@@ -16,7 +16,7 @@ import {
 import { buildColorMap } from "@/lib/colors";
 import { computeIsoHfLines, buildScatterData } from "@/lib/scatter-utils";
 import type { ScatterPoint } from "@/lib/scatter-utils";
-import type { CompareResponse } from "@/lib/types";
+import type { CompareResponse, CompetitorInfo } from "@/lib/types";
 
 // --------------------------------------------------------------------------
 // Custom tooltip
@@ -39,17 +39,19 @@ function CustomTooltip({
   return (
     <div
       style={{
-        backgroundColor: "hsl(var(--popover))",
-        border: "1px solid hsl(var(--border))",
+        backgroundColor: "var(--popover)",
+        color: "var(--popover-foreground)",
+        border: "1px solid var(--border)",
         borderRadius: 6,
         padding: "8px 10px",
         fontSize: 12,
         lineHeight: 1.6,
+        boxShadow: "0 4px 16px rgba(0,0,0,0.14), 0 1px 4px rgba(0,0,0,0.08)",
       }}
     >
       <p style={{ fontWeight: 600, marginBottom: 2 }}>{pt.competitorName}</p>
-      <p style={{ color: "hsl(var(--muted-foreground))", marginBottom: 6 }}>
-        Stage {pt.stageNum}: {pt.stageName}
+      <p style={{ color: "var(--muted-foreground)", marginBottom: 6 }}>
+        {pt.stageName}
       </p>
       <div
         style={{
@@ -58,14 +60,55 @@ function CustomTooltip({
           columnGap: 12,
         }}
       >
-        <span style={{ color: "hsl(var(--muted-foreground))" }}>Time</span>
+        <span style={{ color: "var(--muted-foreground)" }}>Time</span>
         <span>{pt.time.toFixed(2)} s</span>
-        <span style={{ color: "hsl(var(--muted-foreground))" }}>Points</span>
+        <span style={{ color: "var(--muted-foreground)" }}>Points</span>
         <span>{pt.points}</span>
-        <span style={{ color: "hsl(var(--muted-foreground))" }}>HF</span>
+        <span style={{ color: "var(--muted-foreground)" }}>HF</span>
         <span>{pt.hitFactor.toFixed(4)}</span>
       </div>
     </div>
+  );
+}
+
+// --------------------------------------------------------------------------
+// Custom dot: competitor color fill + stage number label inside
+// --------------------------------------------------------------------------
+
+interface DotProps {
+  cx?: number;
+  cy?: number;
+  fill?: string;
+  payload?: ScatterPoint;
+}
+
+function StageNumberDot({ cx, cy, fill, payload }: DotProps) {
+  if (cx === undefined || cy === undefined || !payload) return null;
+  return (
+    <g>
+      {/* Enlarged transparent touch/click hit area */}
+      <circle cx={cx} cy={cy} r={18} fill="transparent" />
+      <circle
+        cx={cx}
+        cy={cy}
+        r={9}
+        fill={fill}
+        stroke="white"
+        strokeWidth={1.5}
+        opacity={0.9}
+      />
+      <text
+        x={cx}
+        y={cy + 3.5}
+        textAnchor="middle"
+        fontSize={8}
+        fill="white"
+        fontWeight="bold"
+        className="pointer-events-none select-none"
+      >
+        {payload.stageNum}
+      </text>
+    </g>
   );
 }
 
@@ -112,8 +155,8 @@ function IsoHfLinesOverlay({
         const px2 = toPixelX(x2);
         const py2 = toPixelY(y2);
         // Label sits just beyond the line end; nudge inside bounds if near edge
-        const labelX = px2 <= plotArea.x + plotArea.width - 20 ? px2 + 4 : px2 - 24;
-        const labelY = py2 >= plotArea.y + 12 ? py2 - 4 : py2 + 12;
+        const labelX = px2 <= plotArea.x + plotArea.width - 20 ? px2 + 4 : px2 - 28;
+        const labelY = py2 >= plotArea.y + 14 ? py2 - 4 : py2 + 14;
 
         return (
           <g key={hf}>
@@ -123,19 +166,20 @@ function IsoHfLinesOverlay({
               x2={px2}
               y2={py2}
               style={{
-                stroke: "hsl(var(--muted-foreground))",
-                strokeDasharray: "4 3",
-                strokeWidth: 1,
-                opacity: 0.4,
+                stroke: "var(--muted-foreground)",
+                strokeDasharray: "5 3",
+                strokeWidth: 1.5,
+                opacity: 0.55,
               }}
             />
             <text
               x={labelX}
               y={labelY}
               style={{
-                fontSize: 9,
-                fill: "hsl(var(--muted-foreground))",
-                opacity: 0.65,
+                fontSize: 10,
+                fill: "var(--muted-foreground)",
+                opacity: 0.8,
+                fontWeight: 500,
               }}
             >
               HF {hf}
@@ -144,6 +188,59 @@ function IsoHfLinesOverlay({
         );
       })}
     </g>
+  );
+}
+
+// --------------------------------------------------------------------------
+// Interactive accessible legend
+// --------------------------------------------------------------------------
+
+interface LegendItem {
+  id: number;
+  label: string;
+  color: string;
+}
+
+function ToggleLegend({
+  items,
+  hiddenIds,
+  onToggle,
+}: {
+  items: LegendItem[];
+  hiddenIds: Set<number>;
+  onToggle: (id: number) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Toggle competitors"
+      className="flex flex-wrap justify-center gap-2 pt-2"
+    >
+      {items.map(({ id, label, color }) => {
+        const hidden = hiddenIds.has(id);
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onToggle(id)}
+            aria-pressed={!hidden}
+            className="flex items-center gap-2 rounded-full border px-3 text-sm transition-opacity"
+            style={{
+              borderColor: hidden ? "transparent" : color + "55",
+              backgroundColor: hidden ? undefined : color + "18",
+              opacity: hidden ? 0.4 : undefined,
+            }}
+          >
+            <span
+              className="inline-block h-3 w-3 flex-none rounded-full"
+              style={{ backgroundColor: color }}
+              aria-hidden="true"
+            />
+            <span className={hidden ? "line-through" : ""}>{label}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -159,6 +256,7 @@ export function SpeedAccuracyChart({ data }: SpeedAccuracyChartProps) {
   const { stages, competitors } = data;
   const colorMap = buildColorMap(competitors.map((c) => c.id));
   const dataByCompetitor = buildScatterData(stages, competitors);
+  const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
 
   const hasData = competitors.some(
     (c) => (dataByCompetitor[c.id]?.length ?? 0) > 0,
@@ -172,62 +270,89 @@ export function SpeedAccuracyChart({ data }: SpeedAccuracyChartProps) {
     );
   }
 
-  const formatLabel = (id: number) => {
-    const comp = competitors.find((c) => c.id === id);
-    return comp
-      ? `#${comp.competitor_number} ${comp.name.split(" ")[0]}`
-      : String(id);
+  const formatLabel = (comp: CompetitorInfo) =>
+    `#${comp.competitor_number} ${comp.name.split(" ")[0]}`;
+
+  const toggleSeries = (id: number) => {
+    setHiddenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
+  const legendItems: LegendItem[] = competitors.map((comp) => ({
+    id: comp.id,
+    label: formatLabel(comp),
+    color: colorMap[comp.id],
+  }));
+
   return (
-    <ResponsiveContainer width="100%" height={360}>
-      <ScatterChart margin={{ top: 16, right: 28, left: 0, bottom: 20 }}>
-        <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-        <XAxis
-          type="number"
-          dataKey="time"
-          name="Time"
-          domain={[0, "auto"]}
-          tick={{ fontSize: 12 }}
-          className="fill-muted-foreground"
-          label={{
-            value: "Time (s)",
-            position: "insideBottom",
-            offset: -10,
-            style: { fontSize: 11, fill: "hsl(var(--muted-foreground))" },
-          }}
-        />
-        <YAxis
-          type="number"
-          dataKey="points"
-          name="Points"
-          domain={[0, "auto"]}
-          tick={{ fontSize: 12 }}
-          className="fill-muted-foreground"
-          label={{
-            value: "Points",
-            angle: -90,
-            position: "insideLeft",
-            offset: 10,
-            style: { fontSize: 11, fill: "hsl(var(--muted-foreground))" },
-          }}
-        />
-        <Tooltip
-          content={<CustomTooltip />}
-          cursor={{ strokeDasharray: "3 3" }}
-        />
-        <Legend />
-        {/* Iso-HF reference lines — rendered inside chart SVG via Recharts 3 direct children */}
-        <IsoHfLinesOverlay />
-        {competitors.map((comp) => (
-          <Scatter
-            key={comp.id}
-            name={formatLabel(comp.id)}
-            data={dataByCompetitor[comp.id]}
-            fill={colorMap[comp.id]}
+    <div>
+      <ResponsiveContainer width="100%" height={360}>
+        <ScatterChart margin={{ top: 16, right: 28, left: 0, bottom: 20 }}>
+          <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+          <XAxis
+            type="number"
+            dataKey="time"
+            name="Time"
+            domain={[0, "auto"]}
+            tick={{ fontSize: 12 }}
+            className="fill-muted-foreground"
+            label={{
+              value: "Time (s)",
+              position: "insideBottom",
+              offset: -10,
+              style: { fontSize: 11, fill: "var(--muted-foreground)" },
+            }}
           />
-        ))}
-      </ScatterChart>
-    </ResponsiveContainer>
+          <YAxis
+            type="number"
+            dataKey="points"
+            name="Points"
+            domain={[0, "auto"]}
+            tick={{ fontSize: 12 }}
+            className="fill-muted-foreground"
+            label={{
+              value: "Points",
+              angle: -90,
+              position: "insideLeft",
+              offset: 10,
+              style: { fontSize: 11, fill: "var(--muted-foreground)" },
+            }}
+          />
+          <Tooltip
+            content={<CustomTooltip />}
+            cursor={{ strokeDasharray: "3 3" }}
+          />
+          {/* Iso-HF reference lines — rendered inside chart SVG via Recharts 3 direct children */}
+          <IsoHfLinesOverlay />
+          {competitors.map((comp) =>
+            hiddenIds.has(comp.id) ? null : (
+              <Scatter
+                key={comp.id}
+                name={formatLabel(comp)}
+                data={dataByCompetitor[comp.id]}
+                fill={colorMap[comp.id]}
+                shape={(props) => (
+                  <StageNumberDot
+                    cx={(props as DotProps).cx}
+                    cy={(props as DotProps).cy}
+                    fill={colorMap[comp.id]}
+                    payload={(props as DotProps).payload}
+                  />
+                )}
+              />
+            ),
+          )}
+        </ScatterChart>
+      </ResponsiveContainer>
+      <ToggleLegend
+        items={legendItems}
+        hiddenIds={hiddenIds}
+        onToggle={toggleSeries}
+      />
+    </div>
   );
 }
