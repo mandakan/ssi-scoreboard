@@ -106,6 +106,7 @@ const DEFAULT_PRESET_ID = "3months";
 
 const FIREARMS_OPTIONS = [
   { id: "hg", label: "Handgun & PCC" },
+  { id: "pc", label: "PCC" },
   { id: "rf", label: "Rifle" },
   { id: "sg", label: "Shotgun" },
 ] as const;

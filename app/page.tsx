@@ -22,7 +22,7 @@ export default function HomePage() {
           <p className="text-sm font-medium">Browse competitions</p>
           <EventSearch />
           <p className="text-xs text-muted-foreground">
-            IPSC handgun &amp; PCC
+            IPSC handgun, PCC, rifle &amp; shotgun
           </p>
         </div>
 
