@@ -27,6 +27,17 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}>
         <Providers>{children}</Providers>
+        <footer className="py-4 text-center text-xs text-muted-foreground">
+          Powered by{" "}
+          <a
+            href="https://shootnscoreit.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-foreground"
+          >
+            Shoot&apos;n Score It
+          </a>
+        </footer>
       </body>
     </html>
   );
