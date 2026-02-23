@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import { Crosshair, Github } from "lucide-react";
 import { Providers } from "@/components/providers";
 import { ThemeToggle } from "@/components/theme-toggle";
 import "./globals.css";
@@ -31,32 +32,29 @@ export default function RootLayout({
         <Providers>
           {children}
           <footer className="w-full flex flex-col items-center gap-2 p-4 text-xs text-muted-foreground border-t border-border mt-auto">
-            <div className="flex flex-wrap justify-center items-center gap-4">
+            <div className="flex items-center gap-4">
               <ThemeToggle />
-              <span>
-                Powered by{" "}
-                <a
-                  href="https://shootnscoreit.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline hover:text-foreground"
-                >
-                  Shoot&apos;n Score It
-                </a>
-              </span>
-              <span aria-hidden="true">·</span>
+              <a
+                href="https://shootnscoreit.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-foreground transition-colors"
+                aria-label="Shoot'n Score It (opens in new tab)"
+              >
+                <Crosshair className="w-4 h-4" aria-hidden="true" />
+              </a>
               <a
                 href="https://github.com/mandakan/ssi-scoreboard"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="underline hover:text-foreground"
+                className="hover:text-foreground transition-colors"
+                aria-label="Source code on GitHub (opens in new tab)"
               >
-                GitHub
+                <Github className="w-4 h-4" aria-hidden="true" />
               </a>
-              <span aria-hidden="true">·</span>
               <Link
                 href="/legal"
-                className="hover:text-foreground underline underline-offset-4"
+                className="hover:text-foreground transition-colors"
               >
                 Terms &amp; Privacy
               </Link>
