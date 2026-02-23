@@ -69,13 +69,15 @@ function CompetitionCard({
   );
 }
 
+const EMPTY_COMPETITIONS: StoredCompetition[] = [];
+
 export function RecentCompetitions() {
   // useSyncExternalStore handles SSR safety: getServerSnapshot returns []
   // and the client snapshot reads from localStorage after hydration.
   const competitions = useSyncExternalStore(
     subscribeRecent,
     getRecentCompetitionsSnapshot,
-    () => [] as StoredCompetition[]
+    () => EMPTY_COMPETITIONS
   );
 
   if (competitions.length === 0) {
