@@ -711,16 +711,15 @@ export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps
                           href={stage.ssi_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                          aria-label={`Open ${stage.stage_name} on ShootNScoreIt (opens in new tab)`}
+                          className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-1.5 -mx-1.5"
+                          aria-label={`Stage ${stage.stage_num}: open ${stage.stage_name} on ShootNScoreIt (opens in new tab)`}
                         >
-                          Stage {stage.stage_num}
+                          S{stage.stage_num}
                           <ExternalLink className="w-3 h-3" aria-hidden="true" />
-                          <span className="sr-only">(opens in new tab)</span>
                         </a>
                       ) : (
                         <span className="text-xs text-muted-foreground">
-                          Stage {stage.stage_num}
+                          S{stage.stage_num}
                         </span>
                       )}
                       <Popover>
