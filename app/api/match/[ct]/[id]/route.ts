@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { executeQuery, MATCH_QUERY } from "@/lib/graphql";
+import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
+import redis from "@/lib/redis";
 import { formatDivisionDisplay } from "@/lib/divisions";
 import type { MatchResponse, StageInfo, CompetitorInfo } from "@/lib/types";
 
@@ -58,9 +59,16 @@ export async function GET(
     return NextResponse.json({ error: "Invalid content_type" }, { status: 400 });
   }
 
+  const matchKey = gqlCacheKey("GetMatch", { ct: ctNum, id });
   let data: RawMatchData;
+  let cachedAt: string | null;
   try {
-    data = await executeQuery<RawMatchData>(MATCH_QUERY, { ct: ctNum, id }, 30);
+    ({ data, cachedAt } = await cachedExecuteQuery<RawMatchData>(
+      matchKey,
+      MATCH_QUERY,
+      { ct: ctNum, id },
+      30,
+    ));
   } catch (err) {
     const message = err instanceof Error ? err.message : "Upstream error";
     return NextResponse.json({ error: message }, { status: 502 });
@@ -74,6 +82,18 @@ export async function GET(
   }
 
   const ev = data.event;
+
+  // Determine if match is complete — upgrade to permanent cache if so
+  const scoringPct = Math.round(parseFloat(String(ev.scoring_completed ?? 0)));
+  const matchDate = ev.starts ? new Date(ev.starts) : null;
+  const daysSince = matchDate ? (Date.now() - matchDate.getTime()) / 86_400_000 : 0;
+  const isComplete = scoringPct >= 95 || daysSince > 3;
+  if (isComplete) {
+    try {
+      const raw = await redis.get(matchKey);
+      if (raw) await redis.persist(matchKey); // remove TTL → permanent
+    } catch { /* ignore */ }
+  }
 
   const stages: StageInfo[] = (ev.stages ?? []).map((s) => ({
     id: parseInt(s.id, 10),
@@ -116,6 +136,7 @@ export async function GET(
     ssi_url: `https://shootnscoreit.com/event/${ct}/${id}/`,
     stages,
     competitors,
+    cacheInfo: { cachedAt },
   };
 
   const tDone = performance.now();

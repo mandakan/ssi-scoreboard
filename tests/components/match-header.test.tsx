@@ -5,6 +5,7 @@ import type { MatchResponse } from "@/lib/types";
 
 const baseMatch: MatchResponse = {
   name: "Test Championship",
+  cacheInfo: { cachedAt: null },
   venue: "Shooting Range Alpha",
   date: "2026-03-15T09:00:00+00:00",
   level: "l2",

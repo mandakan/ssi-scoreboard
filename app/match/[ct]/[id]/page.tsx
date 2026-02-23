@@ -19,6 +19,7 @@ import { StageBalanceChart } from "@/components/radar-chart";
 import { StyleFingerprintChart } from "@/components/style-fingerprint-chart";
 import { ShooterStyleRadarChart } from "@/components/shooter-style-radar-chart";
 import { useMatchQuery, useCompareQuery } from "@/lib/queries";
+import { CacheInfoBadge } from "@/components/cache-info-badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Loader2, AlertCircle, ArrowLeft, RefreshCw, ChevronDown, ChevronUp, HelpCircle } from "lucide-react";
@@ -160,6 +161,17 @@ export default function MatchPage() {
 
   const match = matchQuery.data;
 
+  // Pick the older (more stale) cachedAt between match and compare responses.
+  // null means "just fetched live" — prefer non-null if one is cached.
+  const matchCachedAt = match.cacheInfo.cachedAt;
+  const compareCachedAt = compareQuery.data?.cacheInfo.cachedAt ?? null;
+  const stalestCachedAt =
+    matchCachedAt && compareCachedAt
+      ? new Date(matchCachedAt) < new Date(compareCachedAt)
+        ? matchCachedAt
+        : compareCachedAt
+      : matchCachedAt ?? compareCachedAt;
+
   return (
     <div className="min-h-screen p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
       {/* Back link + share */}
@@ -171,7 +183,10 @@ export default function MatchPage() {
           <ArrowLeft className="w-3.5 h-3.5" />
           All matches
         </Link>
-        <ShareButton title={match.name} />
+        <div className="flex items-center gap-3">
+          <CacheInfoBadge ct={ct} id={id} cachedAt={stalestCachedAt} />
+          <ShareButton title={match.name} />
+        </div>
       </div>
 
       {/* Match header */}

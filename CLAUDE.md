@@ -115,6 +115,8 @@ actionable interpretation tips. Keep language concise — max ~4 short paragraph
 | Variable | Where used | Notes |
 |---|---|---|
 | `SSI_API_KEY` | `lib/graphql.ts` (server-only) | Never use `NEXT_PUBLIC_` prefix |
+| `REDIS_URL` | `lib/redis.ts` | `redis://localhost:6379` locally, `rediss://...` for Upstash etc. |
+| `CACHE_PURGE_SECRET` | `app/api/admin/cache/purge/route.ts` | Any strong random string; never `NEXT_PUBLIC_` |
 
 ## Package Manager
 This project uses **pnpm@10.30.1**. Do not use npm or yarn. Use `pnpm add` / `pnpm add -D`.
