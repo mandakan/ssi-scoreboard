@@ -124,12 +124,21 @@ When adding new packages, always specify the exact latest stable version (check 
 
 ## Docker / Docker Compose
 ```bash
-cp .env.local.example .env.local   # fill in SSI_API_KEY
+cp .env.local.example .env.local   # fill in SSI_API_KEY, CACHE_PURGE_SECRET
 pnpm docker:build                  # builds image (passes --env-file .env.local)
-pnpm docker:up                     # runs on port 3000
+pnpm docker:up                     # starts redis + app on port 3000
 ```
-`docker:up` passes `--env-file .env.local` so `${SSI_API_KEY}` is available at runtime.
-The build step does not need the key — it has no `NEXT_PUBLIC_` prefix so Next.js
+`docker:up` passes `--env-file .env.local` so `${SSI_API_KEY}`, `${CACHE_PURGE_SECRET}` are
+available at runtime. `REDIS_URL` is set automatically via the compose service name
+(`redis://redis:6379`) — no manual entry needed.
+The build step does not need the API key — it has no `NEXT_PUBLIC_` prefix so Next.js
 never bakes it into the bundle.
 The Dockerfile uses multi-stage builds (deps → builder → runner) with a non-root user.
 `output: "standalone"` in `next.config.ts` is required for the Docker image to work.
+The `redis_data` volume persists the cache across container restarts.
+
+### Deploying without Docker Compose (e.g. bare server, Kubernetes, Fly.io)
+Run a Redis instance (managed or self-hosted) and set `REDIS_URL` to its connection string.
+Use `rediss://` (TLS) for cloud-managed providers such as Upstash or Redis Cloud.
+The app connects with `lazyConnect: true`, so a missing Redis at startup is non-fatal —
+requests will fall back to direct GraphQL fetches until Redis is reachable.
