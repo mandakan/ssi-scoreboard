@@ -596,17 +596,19 @@ export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps
       ))}
 
       {/* View mode toggle (Absolute / Delta) */}
-      <div className="flex flex-wrap items-center gap-3">
-        <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
-        {viewMode === "absolute" && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">% relative to:</span>
-            <ModeToggle mode={mode} onChange={setMode} />
-          </div>
-        )}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
+          {viewMode === "absolute" && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">% relative to:</span>
+              <ModeToggle mode={mode} onChange={setMode} />
+            </div>
+          )}
+        </div>
         <button
           onClick={() => setHelpOpen(true)}
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground rounded px-1.5 py-1 hover:bg-muted transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring ml-auto"
+          className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground rounded px-1.5 py-1 hover:bg-muted transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
           aria-label="How to read this table"
         >
           <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
