@@ -1122,14 +1122,15 @@ export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps
                       wi={wi}
                       stageName={stageName}
                       color={colorMap[comp.id]}
+                      mode={mode}
                     />
                   );
                 })}
               </div>
               <p className="text-xs text-muted-foreground/70">
-                Simulates replacing each competitor&apos;s worst stage (lowest group %) with
-                their median or second-worst stage performance. All other competitors keep
-                their actual scores.
+                Simulates replacing each competitor&apos;s worst group-% stage with their
+                median or second-worst performance. Rank shown in the currently selected
+                context ({mode === "group" ? "compared group" : mode === "division" ? "division, full field" : "overall, full field"}).
               </p>
             </section>
           )}
@@ -1146,14 +1147,37 @@ function WhatIfCompetitorPanel({
   wi,
   stageName,
   color,
+  mode,
 }: {
   comp: CompetitorInfo;
   wi: WhatIfResult;
   stageName: string;
   color: string;
+  mode: PctMode;
 }) {
-  const medianChange = wi.medianReplacement.groupRank - wi.actualGroupRank;
-  const secondWorstChange = wi.secondWorstReplacement.groupRank - wi.actualGroupRank;
+  // Pick ranks based on the selected mode, falling back to group when div/overall data is absent.
+  const actualRank =
+    mode === "division" ? (wi.actualDivRank ?? wi.actualGroupRank)
+    : mode === "overall" ? (wi.actualOverallRank ?? wi.actualGroupRank)
+    : wi.actualGroupRank;
+  const medianSimRank =
+    mode === "division" ? (wi.medianReplacement.divRank ?? wi.medianReplacement.groupRank)
+    : mode === "overall" ? (wi.medianReplacement.overallRank ?? wi.medianReplacement.groupRank)
+    : wi.medianReplacement.groupRank;
+  const secondWorstSimRank =
+    mode === "division" ? (wi.secondWorstReplacement.divRank ?? wi.secondWorstReplacement.groupRank)
+    : mode === "overall" ? (wi.secondWorstReplacement.overallRank ?? wi.secondWorstReplacement.groupRank)
+    : wi.secondWorstReplacement.groupRank;
+
+  const rankLabel =
+    mode === "division"
+      ? (comp.division ? `in ${comp.division}` : "in division")
+      : mode === "overall"
+      ? "overall"
+      : "in group";
+
+  const medianChange = medianSimRank - actualRank;
+  const secondWorstChange = secondWorstSimRank - actualRank;
 
   return (
     <div className="space-y-1.5">
@@ -1176,14 +1200,14 @@ function WhatIfCompetitorPanel({
           (vs actual {formatPct(wi.actualMatchPct)})
         </span>
         {" — "}rank{" "}
-        <span className="font-medium">{ordinal(wi.actualGroupRank)}</span>
+        <span className="font-medium">{ordinal(actualRank)}</span>
         {" "}
         <span className={medianChange < 0 ? "text-emerald-600 dark:text-emerald-400 font-medium" : medianChange > 0 ? "text-red-600 dark:text-red-400 font-medium" : "text-muted-foreground"}>
-          →{" "}{ordinal(wi.medianReplacement.groupRank)}
+          →{" "}{ordinal(medianSimRank)}
           {medianChange < 0 && " ↑"}
           {medianChange > 0 && " ↓"}
         </span>
-        {" "}in group.
+        {" "}{rankLabel}.
       </p>
       {/* Second-worst replacement scenario */}
       <p className="text-xs text-muted-foreground/75 pl-4">
@@ -1196,11 +1220,11 @@ function WhatIfCompetitorPanel({
           "font-medium",
           secondWorstChange < 0 ? "text-emerald-600 dark:text-emerald-400" : ""
         )}>
-          {ordinal(wi.secondWorstReplacement.groupRank)}
+          {ordinal(secondWorstSimRank)}
         </span>
         {secondWorstChange < 0 && " ↑"}
         {secondWorstChange > 0 && " ↓"}
-        {" "}in group.
+        {" "}{rankLabel}.
       </p>
     </div>
   );

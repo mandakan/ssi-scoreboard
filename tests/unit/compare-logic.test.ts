@@ -1775,6 +1775,87 @@ describe("simulateWithoutWorstStage", () => {
     expect(wi).not.toBeNull();
     expect(wi.worstStageNum).toBe(1); // stage 2 DNF excluded, stage 1 (80%) is worst valid
   });
+
+  it("returns null divRank/overallRank when rawScorecards not provided", () => {
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 2.5, points: 50 }),
+      makeCard(2, 1, { hit_factor: 5.0, points: 100 }),
+      makeCard(1, 2, { hit_factor: 4.5, points: 90 }),
+      makeCard(2, 2, { hit_factor: 5.0, points: 100 }),
+    ];
+    const twoComps = [competitors[0], competitors[1]];
+    const stages = computeGroupRankings(scorecards, twoComps);
+    // Called without rawScorecards (default [])
+    const result = simulateWithoutWorstStage(stages, twoComps);
+    const wi = result[1]!;
+    expect(wi.actualDivRank).toBeNull();
+    expect(wi.actualOverallRank).toBeNull();
+    expect(wi.medianReplacement.divRank).toBeNull();
+    expect(wi.medianReplacement.overallRank).toBeNull();
+  });
+
+  it("computes actualDivRank and actualOverallRank when rawScorecards provided", () => {
+    // Alice (hg1) and Charlie (hg1) are in the same division.
+    // Bob (hg3) is in a different division.
+    // Full field: Alice HF 2.5, Bob HF 5.0, Charlie HF 3.75 on each stage.
+    // Alice overall rank = 3 (last), div rank = 2 (behind Charlie in hg1).
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 2.5, points: 50 }),
+      makeCard(2, 1, { hit_factor: 5.0, points: 100 }),
+      makeCard(3, 1, { hit_factor: 3.75, points: 75 }),
+      makeCard(1, 2, { hit_factor: 2.5, points: 50 }),
+      makeCard(2, 2, { hit_factor: 5.0, points: 100 }),
+      makeCard(3, 2, { hit_factor: 3.75, points: 75 }),
+    ];
+    // Select all three
+    const stages = computeGroupRankings(scorecards, competitors);
+    const result = simulateWithoutWorstStage(stages, competitors, scorecards);
+    const wi = result[1]!; // Alice
+    // Alice is 3rd overall (HF 2.5 < Charlie 3.75 < Bob 5.0)
+    expect(wi.actualOverallRank).toBe(3);
+    // Alice is 2nd in hg1 (behind Charlie 3.75)
+    expect(wi.actualDivRank).toBe(2);
+  });
+
+  it("computes simulated divRank improvement when rawScorecards provided", () => {
+    // Alice (hg1): worst stage HF=2.5 (50% of Bob), other stages HF=4.5 (90%)
+    // Charlie (hg1): both stages HF=3.75 (75% of Bob)
+    // Bob (hg3): HF=5.0 (leader on all stages)
+    // Alice actual div rank (hg1): 2 (behind Charlie 75% avg vs Alice 70% avg)
+    // With median replacement on stage 1 (Alice avg goes to 90%), Alice beats Charlie → div rank 1
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 2.5, points: 50 }),   // Alice worst
+      makeCard(2, 1, { hit_factor: 5.0, points: 100 }),  // Bob (hg3, div leader)
+      makeCard(3, 1, { hit_factor: 3.75, points: 75 }),  // Charlie
+      makeCard(1, 2, { hit_factor: 4.5, points: 90 }),   // Alice
+      makeCard(2, 2, { hit_factor: 5.0, points: 100 }),
+      makeCard(3, 2, { hit_factor: 3.75, points: 75 }),
+    ];
+    const stages = computeGroupRankings(scorecards, competitors);
+    const result = simulateWithoutWorstStage(stages, competitors, scorecards);
+    const wi = result[1]!; // Alice
+    expect(wi.actualDivRank).toBe(2);
+    // After median replacement Alice div avg improves; she should beat Charlie
+    expect(wi.medianReplacement.divRank).toBe(1);
+  });
+
+  it("computes simulated overallRank improvement when rawScorecards provided", () => {
+    // Alice worst stage 50% overall, other stages 90% → actual overall rank 3
+    // After replacement overall rank improves (Alice surpasses Charlie)
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 2.5, points: 50 }),
+      makeCard(2, 1, { hit_factor: 5.0, points: 100 }),
+      makeCard(3, 1, { hit_factor: 3.75, points: 75 }),
+      makeCard(1, 2, { hit_factor: 4.5, points: 90 }),
+      makeCard(2, 2, { hit_factor: 5.0, points: 100 }),
+      makeCard(3, 2, { hit_factor: 3.75, points: 75 }),
+    ];
+    const stages = computeGroupRankings(scorecards, competitors);
+    const result = simulateWithoutWorstStage(stages, competitors, scorecards);
+    const wi = result[1]!; // Alice
+    expect(wi.actualOverallRank).toBe(3);
+    expect(wi.medianReplacement.overallRank).toBe(2);
+  });
 });
 
 // ─── computePercentileRank ───────────────────────────────────────────────────
