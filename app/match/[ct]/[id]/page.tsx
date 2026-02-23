@@ -358,28 +358,37 @@ export default function MatchPage() {
 
               {/* Coaching / analysis view — hidden by default (not for courtside use) */}
               <div className="rounded-lg border p-4 space-y-3">
-                <button
-                  type="button"
-                  onClick={() => setShowCoachingView((v) => !v)}
-                  className="flex w-full items-center justify-between text-left"
-                  aria-expanded={showCoachingView}
-                  aria-controls="coaching-view-panel"
-                >
-                  <div>
-                    <h2 className="font-semibold">Coaching analysis</h2>
-                    <p className="text-xs text-muted-foreground">
-                      Post-match aggregate view — not recommended during active shooting.
-                    </p>
-                  </div>
-                  {showCoachingView ? (
-                    <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-                  )}
-                </button>
+                {/* WAI-ARIA accordion pattern: heading wraps the disclosure button */}
+                <h2 className="font-semibold text-base m-0 leading-none">
+                  <button
+                    type="button"
+                    id="coaching-view-heading"
+                    onClick={() => setShowCoachingView((v) => !v)}
+                    className="flex w-full items-center justify-between text-left gap-2"
+                    aria-expanded={showCoachingView}
+                    aria-controls="coaching-view-panel"
+                  >
+                    <span>
+                      Coaching analysis
+                      <span className="block text-xs font-normal text-muted-foreground mt-0.5">
+                        Post-match aggregate view — not recommended during active shooting.
+                      </span>
+                    </span>
+                    {showCoachingView ? (
+                      <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                    )}
+                  </button>
+                </h2>
 
                 {showCoachingView && (
-                  <div id="coaching-view-panel" className="space-y-6 pt-2">
+                  <section
+                    id="coaching-view-panel"
+                    role="region"
+                    aria-labelledby="coaching-view-heading"
+                    className="space-y-6 pt-2"
+                  >
                     <div className="space-y-2">
                       <div className="flex items-center gap-1.5">
                         <h3 className="text-sm font-semibold">Shooter style fingerprint</h3>
@@ -408,7 +417,7 @@ export default function MatchPage() {
                       </div>
                       <StyleFingerprintChart data={compareQuery.data} />
                     </div>
-                  </div>
+                  </section>
                 )}
               </div>
             </>

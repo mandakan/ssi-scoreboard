@@ -887,13 +887,14 @@ export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps
         </table>
       </div>
 
-      {/* Coaching analysis panel — collapsible, hidden by default */}
+      {/* Points on the table panel — collapsible, hidden by default */}
       {competitors.some((c) => {
         const lbs = lossBreakdownStats[c.id];
         return lbs && lbs.totalLoss > 0;
       }) && (
         <div className="rounded-lg border border-amber-200 dark:border-amber-900/50">
           <button
+            id="loss-breakdown-heading"
             onClick={() => setShowAnalysis((v) => !v)}
             className={cn(
               "flex w-full items-center justify-between px-4 py-3 text-sm font-medium",
@@ -901,12 +902,12 @@ export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps
               "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
             )}
             aria-expanded={showAnalysis}
-            aria-controls="coaching-analysis-panel"
+            aria-controls="loss-breakdown-panel"
           >
             <span className="flex items-center gap-2">
-              <span className="text-amber-700 dark:text-amber-400">Coaching analysis</span>
+              <span className="text-amber-700 dark:text-amber-400">Points on the table</span>
               <span className="text-xs text-muted-foreground font-normal">
-                Points left on the table per shooter
+                Hit quality vs. penalty losses per shooter
               </span>
             </span>
             {showAnalysis
@@ -916,8 +917,10 @@ export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps
           </button>
 
           {showAnalysis && (
-            <div
-              id="coaching-analysis-panel"
+            <section
+              id="loss-breakdown-panel"
+              role="region"
+              aria-labelledby="loss-breakdown-heading"
               className="px-4 pb-4 space-y-5 border-t border-amber-200 dark:border-amber-900/50 pt-4"
             >
               {/* Legend */}
@@ -959,7 +962,7 @@ export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps
                 Penalty loss = miss + no-shoot + procedural penalties (10 pts each).
                 Only valid (non-DQ, non-zeroed, non-DNF) stages are included.
               </p>
-            </div>
+            </section>
           )}
         </div>
       )}
@@ -968,6 +971,7 @@ export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps
       {scoringCompleted >= 80 && competitors.some((c) => whatIfStats[c.id] != null) && (
         <div className="rounded-lg border border-sky-200 dark:border-sky-900/50">
           <button
+            id="whatif-heading"
             onClick={() => setShowWhatIf((v) => !v)}
             className={cn(
               "flex w-full items-center justify-between px-4 py-3 text-sm font-medium",
@@ -990,8 +994,10 @@ export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps
           </button>
 
           {showWhatIf && (
-            <div
+            <section
               id="whatif-panel"
+              role="region"
+              aria-labelledby="whatif-heading"
               className="px-4 pb-4 space-y-4 border-t border-sky-200 dark:border-sky-900/50 pt-4"
             >
               <div className="space-y-5">
@@ -1017,7 +1023,7 @@ export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps
                 their median or second-worst stage performance. All other competitors keep
                 their actual scores.
               </p>
-            </div>
+            </section>
           )}
         </div>
       )}
