@@ -59,7 +59,7 @@ describe("RecentCompetitions", () => {
     mockGetSnapshot.mockReturnValue([]);
     render(<RecentCompetitions />);
     expect(
-      screen.getByText(/no recent competitions/i)
+      screen.getByText(/your recently viewed competitions will appear here/i)
     ).toBeInTheDocument();
   });
 
