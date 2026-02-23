@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computePercentileRank, assignArchetype, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computePercentileRank, assignArchetype, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computeStylePercentiles, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompetitorInfo } from "@/lib/types";
 
 const competitors: CompetitorInfo[] = [
@@ -2032,4 +2032,94 @@ describe("computeAllFingerprintPoints", () => {
     // penaltyRate = 1 / (10+0+0+0 + 6+4+0+1) = 1/21
     expect(p.penaltyRate).toBeCloseTo(1 / 21, 6);
   });
+
+  it("sets cv=null for competitor with 1 stage (< 2 hfValues)", () => {
+    const cards = [
+      makeCard(1, 1, { a_hits: 8, c_hits: 2, d_hits: 0, miss_count: 0, points: 40, time: 10 }),
+    ];
+    const result = computeAllFingerprintPoints(cards, divMap);
+    expect(result).toHaveLength(1);
+    expect(result[0].cv).toBeNull();
+  });
+
+  it("sets cv to a number for competitor with 2+ stages", () => {
+    const cards = [
+      makeCard(1, 1, { a_hits: 8, c_hits: 2, d_hits: 0, miss_count: 0, points: 40, time: 10 }),
+      makeCard(1, 2, { a_hits: 6, c_hits: 2, d_hits: 2, miss_count: 0, points: 30, time: 8 }),
+    ];
+    const result = computeAllFingerprintPoints(cards, divMap);
+    expect(result).toHaveLength(1);
+    expect(result[0].cv).not.toBeNull();
+    expect(typeof result[0].cv).toBe("number");
+  });
+
+  it("sets cv=0 when all stages have the same HF", () => {
+    // Both stages: 40pts / 10s = HF 4.0 → σ=0 → CV=0
+    const cards = [
+      makeCard(1, 1, { a_hits: 8, c_hits: 2, d_hits: 0, miss_count: 0, points: 40, time: 10 }),
+      makeCard(1, 2, { a_hits: 8, c_hits: 2, d_hits: 0, miss_count: 0, points: 40, time: 10 }),
+    ];
+    const result = computeAllFingerprintPoints(cards, divMap);
+    expect(result[0].cv).toBe(0);
+  });
+});
+
+// ─── computeStylePercentiles ──────────────────────────────────────────────────
+
+describe("computeStylePercentiles", () => {
+  function makeFieldPoint(competitorId: number, alphaRatio: number, pointsPerSecond: number, penaltyRate: number, cv: number | null) {
+    return { competitorId, division: null, alphaRatio, pointsPerSecond, penaltyRate, cv, accuracyPercentile: 50, speedPercentile: 50 };
+  }
+
+  it("high penalty rate → low composure percentile (inversion correct)", () => {
+    const field = [
+      makeFieldPoint(1, 0.8, 4.0, 0.01, 0.1),
+      makeFieldPoint(2, 0.7, 3.5, 0.05, 0.2),
+      makeFieldPoint(3, 0.6, 3.0, 0.20, 0.3),
+    ];
+    // Competitor with high penalty rate (0.20) should have low composure
+    const highPenaltyStats = computeStyleFingerprint(
+      computeGroupRankings([
+        makeCard(1, 1, { a_hits: 6, c_hits: 2, d_hits: 2, miss_count: 2, no_shoots: 0, procedurals: 0, points: 30, time: 10 }),
+      ], [competitors[0]]),
+      1
+    );
+    const lowPenaltyStats = computeStyleFingerprint(
+      computeGroupRankings([
+        makeCard(1, 1, { a_hits: 10, c_hits: 2, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0, points: 50, time: 10 }),
+      ], [competitors[0]]),
+      1
+    );
+    const highPenResult = computeStylePercentiles(highPenaltyStats, null, field);
+    const lowPenResult = computeStylePercentiles(lowPenaltyStats, null, field);
+    expect(highPenResult.composurePercentile).toBeLessThan(lowPenResult.composurePercentile);
+  });
+
+  it("high CV → low consistency percentile (inversion correct)", () => {
+    const field = [
+      makeFieldPoint(1, 0.8, 4.0, 0.01, 0.1),
+      makeFieldPoint(2, 0.7, 3.5, 0.05, 0.2),
+      makeFieldPoint(3, 0.6, 3.0, 0.05, 0.4),
+    ];
+    const baseStats = computeStyleFingerprint(
+      computeGroupRankings([makeCard(1, 1, { points: 50, time: 10 })], [competitors[0]]),
+      1
+    );
+    const lowCv = 0.05;
+    const highCv = 0.4;
+    const lowCvResult = computeStylePercentiles(baseStats, lowCv, field);
+    const highCvResult = computeStylePercentiles(baseStats, highCv, field);
+    expect(highCvResult.consistencyPercentile).toBeLessThan(lowCvResult.consistencyPercentile);
+  });
+
+  it("competitorCv=null → consistencyPercentile=50", () => {
+    const field = [makeFieldPoint(1, 0.8, 4.0, 0.01, 0.1)];
+    const baseStats = computeStyleFingerprint(
+      computeGroupRankings([makeCard(1, 1, { points: 50, time: 10 })], [competitors[0]]),
+      1
+    );
+    const result = computeStylePercentiles(baseStats, null, field);
+    expect(result.consistencyPercentile).toBe(50);
+  });
+
 });

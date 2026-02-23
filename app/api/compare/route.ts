@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { executeQuery, SCORECARDS_QUERY, MATCH_QUERY } from "@/lib/graphql";
 import { formatDivisionDisplay } from "@/lib/divisions";
-import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompareResponse, CompetitorInfo } from "@/lib/types";
 
 // ─── Raw GraphQL response shapes ─────────────────────────────────────────────
@@ -260,6 +260,9 @@ export async function GET(req: Request) {
         base.pointsPerSecond != null
           ? computePercentileRank(base.pointsPerSecond, fieldSpeeds)
           : null;
+      const fieldPoint = fieldFingerprintPoints.find((p) => p.competitorId === c.id);
+      const { composurePercentile, consistencyPercentile } =
+        computeStylePercentiles(base, fieldPoint?.cv ?? null, fieldFingerprintPoints);
       return [
         c.id,
         {
@@ -267,6 +270,8 @@ export async function GET(req: Request) {
           accuracyPercentile,
           speedPercentile,
           archetype: assignArchetype(accuracyPercentile, speedPercentile),
+          composurePercentile,
+          consistencyPercentile,
         },
       ];
     })
