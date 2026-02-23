@@ -242,9 +242,11 @@ describe("ComparisonTable", () => {
 
   it("renders SSI stage link when ssi_url is present", () => {
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
-    const link = screen.getByRole("link", { name: /stage one.*shootnscoreit/i });
-    expect(link).toHaveAttribute("href", "https://shootnscoreit.com/event/stage/24/100/");
-    expect(link).toHaveAttribute("target", "_blank");
+    // Both mobile and desktop views render the link — use getAllByRole
+    const links = screen.getAllByRole("link", { name: /stage one.*shootnscoreit/i });
+    expect(links.length).toBeGreaterThan(0);
+    expect(links[0]).toHaveAttribute("href", "https://shootnscoreit.com/event/stage/24/100/");
+    expect(links[0]).toHaveAttribute("target", "_blank");
   });
 
   it("renders plain text stage label when ssi_url is absent", () => {
@@ -253,8 +255,9 @@ describe("ComparisonTable", () => {
       stages: [{ ...baseData.stages[0], ssi_url: undefined }],
     };
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={dataNoUrl} />);
-    expect(screen.queryByRole("link", { name: /stage one.*shootnscoreit/i })).not.toBeInTheDocument();
-    expect(screen.getByText("Stage 1")).toBeInTheDocument();
+    expect(screen.queryAllByRole("link", { name: /stage one.*shootnscoreit/i })).toHaveLength(0);
+    // Both mobile and desktop views render the label — use getAllByText
+    expect(screen.getAllByText("Stage 1").length).toBeGreaterThan(0);
   });
 
   it("renders stage metadata row when min_rounds and paper_targets are present", () => {
@@ -362,7 +365,7 @@ describe("ComparisonTable — penalty badge", () => {
       ],
     };
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
-    expect(screen.getByText(/Penalty cost: −8\.5% match/)).toBeInTheDocument();
+    expect(screen.getByText("pen \u22128.5%")).toBeInTheDocument();
   });
 
   it("hides penalty cost badge in totals row when totalPenalties is zero", () => {

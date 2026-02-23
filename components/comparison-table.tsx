@@ -7,7 +7,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Crosshair, ExternalLink, Flame, Gauge, HelpCircle, Shield, Target, TrendingUp, Zap } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Crosshair, ExternalLink, Flame, Gauge, HelpCircle, Info, Shield, Target, TrendingUp, Zap } from "lucide-react";
 import { cn, formatHF, formatTime, formatPct, computePointsDelta, formatDelta } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
 import { HitZoneBar } from "@/components/hit-zone-bar";
@@ -697,8 +702,8 @@ export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps
               <tr key={stage.stage_id} className="border-b hover:bg-muted/30">
                 <td className="py-2 pr-4 font-medium">
                   <div className="flex flex-col gap-0.5">
-                    {/* Line 1: stage number link + difficulty bars */}
-                    <div className="inline-flex items-center gap-1.5">
+                    {/* Mobile: stage number + info popover icon */}
+                    <div className="flex items-center gap-1 sm:hidden">
                       {stage.ssi_url ? (
                         <a
                           href={stage.ssi_url}
@@ -716,41 +721,99 @@ export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps
                           Stage {stage.stage_num}
                         </span>
                       )}
-                      <StageDifficultyIcon
-                        level={stage.stageDifficultyLevel}
-                        label={stage.stageDifficultyLabel}
-                        medianHF={stage.field_median_hf}
-                      />
-                    </div>
-                    {/* Line 2: stage name */}
-                    <span className="truncate max-w-32">{stage.stage_name}</span>
-                    {/* Line 3: stage config — rounds · paper · steel */}
-                    {(stage.min_rounds != null || stage.paper_targets != null ||
-                      (stage.steel_targets != null && stage.steel_targets > 0)) && (
-                      <span className="text-xs text-muted-foreground/70 tabular-nums">
-                        {[
-                          stage.min_rounds != null ? `${stage.min_rounds} rds` : null,
-                          stage.paper_targets != null ? `${stage.paper_targets} paper` : null,
-                          stage.steel_targets != null && stage.steel_targets > 0 ? `${stage.steel_targets} steel` : null,
-                        ].filter(Boolean).join(" · ")}
-                      </span>
-                    )}
-                    {/* Line 4: field median */}
-                    {stage.field_median_hf != null && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span
-                            className="text-xs text-muted-foreground/60 tabular-nums cursor-help"
-                            aria-label={`Field median hit factor: ${formatHF(stage.field_median_hf)} across ${stage.field_competitor_count} competitors`}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button
+                            className="text-muted-foreground hover:text-foreground transition-colors"
+                            aria-label={`Details for Stage ${stage.stage_num}`}
                           >
-                            {`med: ${formatHF(stage.field_median_hf)}`}
+                            <Info className="w-3.5 h-3.5" aria-hidden="true" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent align="start" side="bottom" className="w-56 p-3 text-sm">
+                          <div className="flex flex-col gap-1.5">
+                            <div className="flex items-center gap-1.5 font-medium">
+                              <span>{stage.stage_name}</span>
+                              <StageDifficultyIcon
+                                level={stage.stageDifficultyLevel}
+                                label={stage.stageDifficultyLabel}
+                                medianHF={stage.field_median_hf}
+                              />
+                            </div>
+                            {(stage.min_rounds != null || stage.paper_targets != null ||
+                              (stage.steel_targets != null && stage.steel_targets > 0)) && (
+                              <span className="text-xs text-muted-foreground/70 tabular-nums">
+                                {[
+                                  stage.min_rounds != null ? `${stage.min_rounds} rds` : null,
+                                  stage.paper_targets != null ? `${stage.paper_targets} paper` : null,
+                                  stage.steel_targets != null && stage.steel_targets > 0 ? `${stage.steel_targets} steel` : null,
+                                ].filter(Boolean).join(" · ")}
+                              </span>
+                            )}
+                            {stage.field_median_hf != null && (
+                              <span className="text-xs text-muted-foreground/60 tabular-nums">
+                                {`Field median: ${formatHF(stage.field_median_hf)}`}
+                                {stage.field_competitor_count != null && ` (${stage.field_competitor_count} competitors)`}
+                              </span>
+                            )}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    {/* Desktop: full 4-line layout */}
+                    <div className="hidden sm:flex flex-col gap-0.5">
+                      <div className="inline-flex items-center gap-1.5">
+                        {stage.ssi_url ? (
+                          <a
+                            href={stage.ssi_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            aria-label={`Open ${stage.stage_name} on ShootNScoreIt (opens in new tab)`}
+                          >
+                            Stage {stage.stage_num}
+                            <ExternalLink className="w-3 h-3" aria-hidden="true" />
+                            <span className="sr-only">(opens in new tab)</span>
+                          </a>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            Stage {stage.stage_num}
                           </span>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="max-w-52 text-center text-xs">
-                          {`Field median hit factor: ${formatHF(stage.field_median_hf)} across ${stage.field_competitor_count} competitors (excludes DNF/DQ/zeroed)`}
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
+                        )}
+                        <StageDifficultyIcon
+                          level={stage.stageDifficultyLevel}
+                          label={stage.stageDifficultyLabel}
+                          medianHF={stage.field_median_hf}
+                        />
+                      </div>
+                      <span className="truncate max-w-32">{stage.stage_name}</span>
+                      {(stage.min_rounds != null || stage.paper_targets != null ||
+                        (stage.steel_targets != null && stage.steel_targets > 0)) && (
+                        <span className="text-xs text-muted-foreground/70 tabular-nums">
+                          {[
+                            stage.min_rounds != null ? `${stage.min_rounds} rds` : null,
+                            stage.paper_targets != null ? `${stage.paper_targets} paper` : null,
+                            stage.steel_targets != null && stage.steel_targets > 0 ? `${stage.steel_targets} steel` : null,
+                          ].filter(Boolean).join(" · ")}
+                        </span>
+                      )}
+                      {stage.field_median_hf != null && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span
+                              className="text-xs text-muted-foreground/60 tabular-nums cursor-help"
+                              aria-label={`Field median hit factor: ${formatHF(stage.field_median_hf)} across ${stage.field_competitor_count} competitors`}
+                            >
+                              {`med: ${formatHF(stage.field_median_hf)}`}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-52 text-center text-xs">
+                            {`Field median hit factor: ${formatHF(stage.field_median_hf)} across ${stage.field_competitor_count} competitors (excludes DNF/DQ/zeroed)`}
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
                   </div>
                 </td>
                 {competitors.map((comp) => {
