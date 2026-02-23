@@ -173,6 +173,8 @@ export interface LossBreakdownStats {
   hasHitZoneData: boolean;  // true if at least one stage had zone data (so hit loss is meaningful)
 }
 
+export type ShooterArchetype = "Gunslinger" | "Surgeon" | "Speed Demon" | "Grinder";
+
 // A single competitor's position in the style-fingerprint space, computed
 // from raw scorecards across the full field (not only selected competitors).
 // Used to render the background cohort cloud on the scatter chart.
@@ -182,6 +184,10 @@ export interface FieldFingerprintPoint {
   alphaRatio: number;        // total_A / (total_A + total_C + total_D)
   pointsPerSecond: number;   // total_points / total_time
   penaltyRate: number;       // total_penalties / total_rounds_fired
+  /** Percentile rank within the full field, 0–100 (100 = best accuracy). */
+  accuracyPercentile: number;
+  /** Percentile rank within the full field, 0–100 (100 = fastest). */
+  speedPercentile: number;
 }
 
 // Match-level aggregate "style fingerprint" for one competitor.
@@ -199,6 +205,12 @@ export interface StyleFingerprintStats {
   totalPenalties: number;
   totalRounds: number;
   stagesFired: number;
+  /** Percentile rank vs full field, 0–100. Null until enriched in route.ts. */
+  accuracyPercentile: number | null;
+  /** Percentile rank vs full field, 0–100. Null until enriched in route.ts. */
+  speedPercentile: number | null;
+  /** Archetype derived from quadrant of (accuracyPercentile, speedPercentile). */
+  archetype: ShooterArchetype | null;
 }
 
 // Result of one what-if simulation scenario: replace the worst stage with

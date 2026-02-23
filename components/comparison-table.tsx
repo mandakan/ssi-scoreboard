@@ -7,13 +7,13 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, ExternalLink, Flame, HelpCircle, Shield, Zap } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Crosshair, ExternalLink, Flame, Gauge, HelpCircle, Shield, Target, TrendingUp, Zap } from "lucide-react";
 import { cn, formatHF, formatTime, formatPct, computePointsDelta, formatDelta } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
 import { HitZoneBar } from "@/components/hit-zone-bar";
 import { RankBadge, PenaltyBadge, ShootingOrderBadge, StageClassificationBadge, ordinal } from "@/components/stage-cell-parts";
 import { CellHelpModal } from "@/components/cell-help-modal";
-import type { CompareResponse, CompetitorInfo, CompetitorSummary, LossBreakdownStats, PctMode, ViewMode, WhatIfResult } from "@/lib/types";
+import type { CompareResponse, CompetitorInfo, CompetitorSummary, LossBreakdownStats, PctMode, ShooterArchetype, ViewMode, WhatIfResult } from "@/lib/types";
 
 interface ComparisonTableProps {
   data: CompareResponse;
@@ -432,8 +432,45 @@ function modeValues(
   }
 }
 
+// --------------------------------------------------------------------------
+// Archetype pill — icon + label, coloured with competitor's chart colour
+// --------------------------------------------------------------------------
+
+const ARCHETYPE_ICON: Record<ShooterArchetype, React.ComponentType<{ className?: string; "aria-hidden"?: boolean | "true" | "false" }>> = {
+  Gunslinger: Target,
+  Surgeon: Crosshair,
+  "Speed Demon": Gauge,
+  Grinder: TrendingUp,
+};
+
+function ArchetypePill({ archetype, color }: { archetype: ShooterArchetype; color: string }) {
+  const Icon = ARCHETYPE_ICON[archetype];
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold cursor-default"
+          style={{ backgroundColor: color + "22", color }}
+          aria-label={`Archetype: ${archetype}`}
+        >
+          <Icon className="w-3 h-3" aria-hidden="true" />
+          {archetype}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="text-xs max-w-44 text-center">
+        {{
+          Gunslinger: "Fast & accurate — above field median on both axes",
+          Surgeon: "Precise but leaving time on table — high accuracy, below-median speed",
+          "Speed Demon": "Fast but bleeding points — high speed, below-median accuracy",
+          Grinder: "Room to grow on both accuracy and speed",
+        }[archetype]}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps) {
-  const { stages, competitors, penaltyStats, efficiencyStats, consistencyStats, lossBreakdownStats, whatIfStats } = data;
+  const { stages, competitors, penaltyStats, efficiencyStats, consistencyStats, lossBreakdownStats, whatIfStats, styleFingerprintStats } = data;
   const [mode, setMode] = useState<PctMode>("group");
   const [viewMode, setViewMode] = useState<ViewMode>("absolute");
   const [showAnalysis, setShowAnalysis] = useState(false);
@@ -643,6 +680,12 @@ export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps
                           </TooltipContent>
                         </Tooltip>
                       )}
+                      {(() => {
+                        const archetype = styleFingerprintStats[comp.id]?.archetype;
+                        return archetype ? (
+                          <ArchetypePill archetype={archetype} color={colorMap[comp.id]} />
+                        ) : null;
+                      })()}
                     </div>
                   </th>
                 );
