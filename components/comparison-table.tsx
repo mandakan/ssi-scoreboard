@@ -697,59 +697,64 @@ export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps
               <tr key={stage.stage_id} className="border-b hover:bg-muted/30">
                 <td className="py-2 pr-4 font-medium">
                   <div className="flex flex-col gap-0.5">
-                    {stage.ssi_url ? (
-                      <a
-                        href={stage.ssi_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                        aria-label={`Open ${stage.stage_name} on ShootNScoreIt (opens in new tab)`}
-                      >
-                        Stage {stage.stage_num}
-                        <ExternalLink className="w-3 h-3" aria-hidden="true" />
-                        <span className="sr-only">(opens in new tab)</span>
-                      </a>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">
-                        Stage {stage.stage_num}
-                      </span>
-                    )}
-                    <span className="truncate max-w-32">{stage.stage_name}</span>
-                    {/* Stage metadata: rounds / targets */}
-                    {(stage.min_rounds != null || stage.paper_targets != null ||
-                      (stage.steel_targets != null && stage.steel_targets > 0)) && (
-                      <span className="text-xs text-muted-foreground/70 tabular-nums">
-                        {[
-                          stage.min_rounds != null && `${stage.min_rounds} rds`,
-                          stage.paper_targets != null && `${stage.paper_targets} paper`,
-                          stage.steel_targets != null && stage.steel_targets > 0 && `${stage.steel_targets} steel`,
-                        ].filter(Boolean).join(" · ")}
-                      </span>
-                    )}
-                    {/* Difficulty icon + field median annotation */}
-                    <div className="flex items-center gap-1.5">
+                    {/* Line 1: stage number link + difficulty bars */}
+                    <div className="inline-flex items-center gap-1.5">
+                      {stage.ssi_url ? (
+                        <a
+                          href={stage.ssi_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          aria-label={`Open ${stage.stage_name} on ShootNScoreIt (opens in new tab)`}
+                        >
+                          Stage {stage.stage_num}
+                          <ExternalLink className="w-3 h-3" aria-hidden="true" />
+                          <span className="sr-only">(opens in new tab)</span>
+                        </a>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          Stage {stage.stage_num}
+                        </span>
+                      )}
                       <StageDifficultyIcon
                         level={stage.stageDifficultyLevel}
                         label={stage.stageDifficultyLabel}
                         medianHF={stage.field_median_hf}
                       />
-                      {stage.field_median_hf != null && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span
-                              className="text-xs text-muted-foreground/60 tabular-nums cursor-help"
-                              aria-label={`Field median hit factor: ${formatHF(stage.field_median_hf)} across ${stage.field_competitor_count} competitors`}
-                            >
-                              {`med: ${formatHF(stage.field_median_hf)}`}
-                              <span className="opacity-60">{` (${stage.field_competitor_count})`}</span>
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="max-w-52 text-center text-xs">
-                            {`Field median hit factor: ${formatHF(stage.field_median_hf)} across ${stage.field_competitor_count} competitors (excludes DNF/DQ/zeroed)`}
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
                     </div>
+                    {/* Line 2: stage name */}
+                    <span className="truncate max-w-32">{stage.stage_name}</span>
+                    {/* Line 3: compact metadata — rounds · paper · steel · med */}
+                    {(() => {
+                      const metaParts = [
+                        stage.min_rounds != null ? `${stage.min_rounds} rds` : null,
+                        stage.paper_targets != null ? `${stage.paper_targets} paper` : null,
+                        stage.steel_targets != null && stage.steel_targets > 0 ? `${stage.steel_targets} steel` : null,
+                      ].filter((p): p is string => p !== null);
+                      const hasAnyMeta = metaParts.length > 0 || stage.field_median_hf != null;
+                      if (!hasAnyMeta) return null;
+                      return (
+                        <span className="text-xs text-muted-foreground/70 tabular-nums whitespace-nowrap">
+                          {metaParts.join(" · ")}
+                          {metaParts.length > 0 && stage.field_median_hf != null && " · "}
+                          {stage.field_median_hf != null && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span
+                                  className="cursor-help"
+                                  aria-label={`Field median hit factor: ${formatHF(stage.field_median_hf)} across ${stage.field_competitor_count} competitors`}
+                                >
+                                  {`med: ${formatHF(stage.field_median_hf)}`}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="max-w-52 text-center text-xs">
+                                {`Field median hit factor: ${formatHF(stage.field_median_hf)} across ${stage.field_competitor_count} competitors (excludes DNF/DQ/zeroed)`}
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </td>
                 {competitors.map((comp) => {

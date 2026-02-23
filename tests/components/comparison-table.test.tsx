@@ -260,7 +260,7 @@ describe("ComparisonTable", () => {
   it("renders stage metadata row when min_rounds and paper_targets are present", () => {
     const dataWithMeta = {
       ...baseData,
-      stages: [{ ...baseData.stages[0], min_rounds: 16, paper_targets: 8, steel_targets: 0 }],
+      stages: [{ ...baseData.stages[0], min_rounds: 16, paper_targets: 8, steel_targets: 0, field_median_hf: null }],
     };
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={dataWithMeta} />);
     expect(screen.getByText("16 rds · 8 paper")).toBeInTheDocument();
