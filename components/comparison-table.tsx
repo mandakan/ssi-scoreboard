@@ -724,37 +724,33 @@ export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps
                     </div>
                     {/* Line 2: stage name */}
                     <span className="truncate max-w-32">{stage.stage_name}</span>
-                    {/* Line 3: compact metadata — rounds · paper · steel · med */}
-                    {(() => {
-                      const metaParts = [
-                        stage.min_rounds != null ? `${stage.min_rounds} rds` : null,
-                        stage.paper_targets != null ? `${stage.paper_targets} paper` : null,
-                        stage.steel_targets != null && stage.steel_targets > 0 ? `${stage.steel_targets} steel` : null,
-                      ].filter((p): p is string => p !== null);
-                      const hasAnyMeta = metaParts.length > 0 || stage.field_median_hf != null;
-                      if (!hasAnyMeta) return null;
-                      return (
-                        <span className="text-xs text-muted-foreground/70 tabular-nums whitespace-nowrap">
-                          {metaParts.join(" · ")}
-                          {metaParts.length > 0 && stage.field_median_hf != null && " · "}
-                          {stage.field_median_hf != null && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span
-                                  className="cursor-help"
-                                  aria-label={`Field median hit factor: ${formatHF(stage.field_median_hf)} across ${stage.field_competitor_count} competitors`}
-                                >
-                                  {`med: ${formatHF(stage.field_median_hf)}`}
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" className="max-w-52 text-center text-xs">
-                                {`Field median hit factor: ${formatHF(stage.field_median_hf)} across ${stage.field_competitor_count} competitors (excludes DNF/DQ/zeroed)`}
-                              </TooltipContent>
-                            </Tooltip>
-                          )}
-                        </span>
-                      );
-                    })()}
+                    {/* Line 3: stage config — rounds · paper · steel */}
+                    {(stage.min_rounds != null || stage.paper_targets != null ||
+                      (stage.steel_targets != null && stage.steel_targets > 0)) && (
+                      <span className="text-xs text-muted-foreground/70 tabular-nums">
+                        {[
+                          stage.min_rounds != null ? `${stage.min_rounds} rds` : null,
+                          stage.paper_targets != null ? `${stage.paper_targets} paper` : null,
+                          stage.steel_targets != null && stage.steel_targets > 0 ? `${stage.steel_targets} steel` : null,
+                        ].filter(Boolean).join(" · ")}
+                      </span>
+                    )}
+                    {/* Line 4: field median */}
+                    {stage.field_median_hf != null && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span
+                            className="text-xs text-muted-foreground/60 tabular-nums cursor-help"
+                            aria-label={`Field median hit factor: ${formatHF(stage.field_median_hf)} across ${stage.field_competitor_count} competitors`}
+                          >
+                            {`med: ${formatHF(stage.field_median_hf)}`}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-52 text-center text-xs">
+                          {`Field median hit factor: ${formatHF(stage.field_median_hf)} across ${stage.field_competitor_count} competitors (excludes DNF/DQ/zeroed)`}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
                   </div>
                 </td>
                 {competitors.map((comp) => {
