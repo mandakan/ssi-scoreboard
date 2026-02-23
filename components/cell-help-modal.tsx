@@ -17,6 +17,7 @@ import {
   ShootingOrderBadge,
   StageClassificationBadge,
 } from "@/components/stage-cell-parts";
+import { CheckCircle2, Flame, Shield, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { StageClassification } from "@/lib/types";
 
@@ -53,7 +54,7 @@ function DiagramRow({
   visual: ReactNode;
   badge: string;
   title: string;
-  description: string;
+  description: ReactNode;
   last?: boolean;
 }) {
   return (
@@ -185,7 +186,16 @@ function StageCellDiagram() {
           }
           badge="⑧"
           title="Run classification"
-          description="Solid ✓ / Conservative 🛡 / Over-push ⚡ / Meltdown 🔥 — a run quality label based on your HF%, A-zone rate, and penalty count relative to the group leader."
+          description={<>
+            <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="w-3 h-3" aria-hidden="true" /> Solid</span>
+            {" / "}
+            <span className="inline-flex items-center gap-0.5 text-yellow-600 dark:text-yellow-400"><Shield className="w-3 h-3" aria-hidden="true" /> Conservative</span>
+            {" / "}
+            <span className="inline-flex items-center gap-0.5 text-orange-600 dark:text-orange-400"><Zap className="w-3 h-3" aria-hidden="true" /> Over-push</span>
+            {" / "}
+            <span className="inline-flex items-center gap-0.5 text-red-600 dark:text-red-400"><Flame className="w-3 h-3" aria-hidden="true" /> Meltdown</span>
+            {" — a run quality label based on your HF%, A-zone rate, and penalty count relative to the group leader."}
+          </>}
         />
       </div>
     </section>

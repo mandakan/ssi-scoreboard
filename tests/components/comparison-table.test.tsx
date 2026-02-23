@@ -328,7 +328,7 @@ describe("ComparisonTable — penalty badge", () => {
       { miss_count: 0, no_shoots: 0, procedurals: 0 }
     );
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
-    expect(screen.getAllByText("✓ Clean").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Clean").length).toBeGreaterThan(0);
   });
 
   it("hides clean match indicator when penalties exist", () => {
@@ -338,13 +338,13 @@ describe("ComparisonTable — penalty badge", () => {
     );
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
     // Only competitor 2 (all zeros) should be clean
-    expect(screen.getAllByText("✓ Clean").length).toBe(1);
+    expect(screen.getAllByText("Clean").length).toBe(1);
   });
 
   it("does not show clean match indicator when penalty data is null (unknown)", () => {
     // baseData has all nulls — no penalty data available, so we can't confirm clean
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
-    expect(screen.queryByText("✓ Clean")).not.toBeInTheDocument();
+    expect(screen.queryByText("Clean")).not.toBeInTheDocument();
   });
 
   it("shows penalty cost badge in totals row when penaltyStats has totalPenalties > 0", () => {

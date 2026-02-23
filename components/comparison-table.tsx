@@ -977,7 +977,7 @@ export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps
                               className="text-xs text-green-600 dark:text-green-400 font-medium cursor-help"
                               aria-label="Clean match: no penalties across all fired stages"
                             >
-                              ✓ Clean
+                              <CheckCircle2 className="w-3 h-3 inline-block align-text-bottom mr-0.5" aria-hidden="true" />Clean
                             </span>
                           </TooltipTrigger>
                           <TooltipContent side="top" className="text-xs">
