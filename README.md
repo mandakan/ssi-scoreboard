@@ -88,6 +88,8 @@ so a missing Redis at startup is non-fatal — requests fall back to direct Grap
 - **Shareable URLs** — `?competitors=` query param persists and shares selections
 - **Recent matches** — localStorage-backed list of recently viewed competitions
 - **Firearms filter** — filter event search by Handgun+PCC, PCC only, Rifle, or Shotgun
+- **Country filter** — filter event search by country (ISO 3166-1 alpha-3), defaults to Sweden (SWE)
+- **Extended date range** — event search window up to 5 years back (Upcoming / 3 mo / 6 mo / 1 yr / 2 yr / 3 yr / 5 yr)
 - **Redis cache** — server-side GraphQL caching with smart TTL and admin purge endpoint
 - **Mobile-first** — designed for one-handed use at 390px; no unintentional horizontal overflow
 
@@ -113,7 +115,7 @@ Browser → Next.js Route Handlers → shootnscoreit.com/graphql/
 
 - **`app/api/match/[ct]/[id]/`** — match metadata: stages, competitors, scoring progress
 - **`app/api/compare/`** — fans out scorecard queries, merges ranking data
-- **`app/api/events/`** — event search with date range and firearms filters
+- **`app/api/events/`** — event search with date range, firearms, and country filters
 - **`app/api/admin/cache/purge/`** — authenticated endpoint to flush the Redis cache
 - **`app/api/compare/logic.ts`** — pure `computeGroupRankings()` function, no I/O, fully unit-tested
 - **`lib/graphql.ts`** — GraphQL query strings and `executeQuery()` helper (server-only)

@@ -131,10 +131,13 @@ export const MATCH_QUERY = `
 `;
 
 // ─── Query: list IPSC handgun events ─────────────────────────────────────────
-// Returns all publicly-visible IPSC handgun & PCC matches (firearms:"hg")
-// filtered by optional free-text search and date range.
+// Returns all publicly-visible IPSC matches filtered by optional free-text
+// search, date range, and firearms type.
 // Results include both IpscMatchNode (ct=22) and IpscSerieNode (ct=43) —
 // filter to ct=22 in the route handler.
+// `region` is an ISO 3166-1 alpha-3 country code (e.g. "SWE", "NOR", "DNK",
+// "FIN"). Country filtering is done server-side in the route handler after
+// the GraphQL response is received — the SSI API has no region filter param.
 export const EVENTS_QUERY = `
   query GetEvents($search: String, $starts_after: String, $starts_before: String, $firearms: String) {
     events(rule: "ip", firearms: $firearms, search: $search, starts_after: $starts_after, starts_before: $starts_before) {

@@ -22,12 +22,16 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q") ?? "";
 
+  // Query params: q (search), starts_after, starts_before (ISO dates),
+  // firearms (default "hg"), country (ISO 3166-1 alpha-3, e.g. "SWE").
   // Caller may override the date window; fall back to ±3 months from today.
   const now = new Date();
   const defaultAfter = new Date(now);
   defaultAfter.setMonth(defaultAfter.getMonth() - 3);
   const defaultBefore = new Date(now);
   defaultBefore.setMonth(defaultBefore.getMonth() + 3);
+
+  const country = searchParams.get("country");
 
   const variables: Record<string, string> = {
     starts_after:
@@ -51,6 +55,8 @@ export async function GET(req: Request) {
   const events: EventSummary[] = data.events
     // Only include match nodes (ct=22), not series (ct=43)
     .filter((e) => e.get_content_type_key === 22)
+    // Filter by country/region if specified
+    .filter((e) => !country || e.region.toUpperCase() === country.toUpperCase())
     // Sort by start date descending (upcoming/most-recent first)
     .sort((a, b) => new Date(b.starts).getTime() - new Date(a.starts).getTime())
     .map((e) => ({
