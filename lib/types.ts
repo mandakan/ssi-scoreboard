@@ -20,6 +20,10 @@ export interface CompetitorInfo {
   division: string | null;
 }
 
+export interface CacheInfo {
+  cachedAt: string | null; // ISO string of when data was cached; null if just fetched fresh
+}
+
 export interface MatchResponse {
   name: string;
   venue: string | null;
@@ -33,6 +37,7 @@ export interface MatchResponse {
   ssi_url: string | null;
   stages: StageInfo[];
   competitors: CompetitorInfo[];
+  cacheInfo: CacheInfo;
 }
 
 export interface StageResult {
@@ -251,6 +256,7 @@ export interface CompareResponse {
   whatIfStats: Record<number, WhatIfResult | null>;     // keyed by competitor_id; null = not enough stages
   styleFingerprintStats: Record<number, StyleFingerprintStats>; // keyed by competitor_id
   fieldFingerprintPoints: FieldFingerprintPoint[]; // all match competitors (for cohort cloud)
+  cacheInfo: CacheInfo;
 }
 
 export interface EventSummary {

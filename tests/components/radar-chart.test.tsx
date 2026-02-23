@@ -5,6 +5,7 @@ import type { CompareResponse } from "@/lib/types";
 
 const baseData: CompareResponse = {
   match_id: 26547,
+  cacheInfo: { cachedAt: null },
   penaltyStats: {
     1: { totalPenalties: 0, penaltyCostPercent: 0, matchPctActual: 100, matchPctClean: 100, penaltiesPerStage: 0, penaltiesPer100Rounds: 0 },
     2: { totalPenalties: 0, penaltyCostPercent: 0, matchPctActual: 80, matchPctClean: 80, penaltiesPerStage: 0, penaltiesPer100Rounds: 0 },

@@ -3,6 +3,7 @@ import type { MatchResponse, CompareResponse } from "@/lib/types";
 
 const MOCK_MATCH: MatchResponse = {
   name: "Test IPSC Match",
+  cacheInfo: { cachedAt: null },
   venue: "Test Range",
   date: "2026-03-01T09:00:00+00:00",
   level: "l2",
@@ -26,6 +27,7 @@ const MOCK_MATCH: MatchResponse = {
 
 const MOCK_COMPARE: CompareResponse = {
   match_id: 26547,
+  cacheInfo: { cachedAt: null },
   competitors: [
     MOCK_MATCH.competitors[0],
     MOCK_MATCH.competitors[1],

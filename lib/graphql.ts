@@ -1,6 +1,8 @@
 // Server-only — never import from client components or files with "use client".
 // SSI_API_KEY lives here and must never be sent to the browser.
 
+import redis from "@/lib/redis";
+
 const GRAPHQL_ENDPOINT = "https://shootnscoreit.com/graphql/";
 
 interface GraphQLError {
@@ -148,6 +150,60 @@ export const EVENTS_QUERY = `
     }
   }
 `;
+
+// ─── Redis cache helpers ──────────────────────────────────────────────────────
+
+export function gqlCacheKey(
+  operationName: string,
+  variables: Record<string, unknown>,
+): string {
+  return `gql:${operationName}:${JSON.stringify(variables)}`;
+}
+
+interface CacheEntry<T> {
+  data: T;
+  cachedAt: string; // ISO timestamp
+}
+
+/**
+ * Returns cached data + cachedAt timestamp, or fetches fresh and stores it.
+ * ttlSeconds = null → no expiry (permanent cache).
+ * Falls back to a direct fetch on Redis error.
+ *
+ * Return value:
+ *   cachedAt — ISO string when the data was first stored (cache hit)
+ *              null when the data was just fetched (cache miss — not yet stored)
+ */
+export async function cachedExecuteQuery<T>(
+  cacheKey: string,
+  query: string,
+  variables: Record<string, unknown>,
+  ttlSeconds: number | null,
+): Promise<{ data: T; cachedAt: string | null }> {
+  try {
+    const raw = await redis.get(cacheKey);
+    if (raw) {
+      const entry = JSON.parse(raw) as CacheEntry<T>;
+      return { data: entry.data, cachedAt: entry.cachedAt };
+    }
+  } catch { /* fall through to fetch */ }
+
+  const data = await executeQuery<T>(query, variables);
+  const cachedAt = new Date().toISOString();
+
+  try {
+    const entry: CacheEntry<T> = { data, cachedAt };
+    const payload = JSON.stringify(entry);
+    if (ttlSeconds === null) {
+      await redis.set(cacheKey, payload);
+    } else {
+      await redis.set(cacheKey, payload, "EX", ttlSeconds);
+    }
+  } catch { /* best-effort — store failure is non-fatal */ }
+
+  // Return null for cachedAt: freshly fetched, not served from cache
+  return { data, cachedAt: null };
+}
 
 // ─── Query: all stage scorecards for a match ─────────────────────────────────
 // Returns raw scorecard data for every competitor on every stage.

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { executeQuery, SCORECARDS_QUERY, MATCH_QUERY } from "@/lib/graphql";
+import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY, MATCH_QUERY } from "@/lib/graphql";
+import redis from "@/lib/redis";
 import { formatDivisionDisplay } from "@/lib/divisions";
 import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompareResponse, CompetitorInfo } from "@/lib/types";
@@ -61,6 +62,8 @@ interface RawCompetitor {
 
 interface RawMatchData {
   event: {
+    starts?: string | null;
+    scoring_completed?: string | number | null;
     stages?: {
       id: string;
       number: number;
@@ -110,19 +113,54 @@ export async function GET(req: Request) {
     );
   }
 
-  // Fetch match scorecards and competitor metadata in parallel
-  let scorecardsData: RawScorecardsData;
+  // Step 1 — fetch match metadata to determine TTL for scorecards
+  const matchKey = gqlCacheKey("GetMatch", { ct: ctNum, id });
   let matchData: RawMatchData;
-
+  let matchCachedAt: string | null;
   try {
-    [scorecardsData, matchData] = await Promise.all([
-      executeQuery<RawScorecardsData>(SCORECARDS_QUERY, { ct: ctNum, id }, 30),
-      executeQuery<RawMatchData>(MATCH_QUERY, { ct: ctNum, id }, 30),
-    ]);
+    ({ data: matchData, cachedAt: matchCachedAt } =
+      await cachedExecuteQuery<RawMatchData>(matchKey, MATCH_QUERY, { ct: ctNum, id }, 30));
   } catch (err) {
     const message = err instanceof Error ? err.message : "Upstream error";
     return NextResponse.json({ error: message }, { status: 502 });
   }
+
+  // Determine match completion state to set appropriate TTL
+  const scoringPct = Math.round(
+    parseFloat(String(matchData.event?.scoring_completed ?? 0))
+  );
+  const matchDate = matchData.event?.starts ? new Date(matchData.event.starts) : null;
+  const daysSince = matchDate ? (Date.now() - matchDate.getTime()) / 86_400_000 : 0;
+  const isComplete = scoringPct >= 95 || daysSince > 3;
+  const dataTtl: number | null = isComplete ? null : 30;
+
+  // Upgrade match cache entry to permanent if match is now complete
+  if (isComplete) {
+    try {
+      const raw = await redis.get(matchKey);
+      if (raw) await redis.persist(matchKey); // remove TTL → permanent
+    } catch { /* ignore */ }
+  }
+
+  // Step 2 — fetch scorecards with TTL determined by match state
+  const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
+  let scorecardsData: RawScorecardsData;
+  let scorecardsCachedAt: string | null;
+  try {
+    ({ data: scorecardsData, cachedAt: scorecardsCachedAt } =
+      await cachedExecuteQuery<RawScorecardsData>(
+        scorecardsKey,
+        SCORECARDS_QUERY,
+        { ct: ctNum, id },
+        dataTtl,
+      ));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Upstream error";
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
+
+  // Report the older of the two cache timestamps (most stale data wins)
+  const cacheInfo = { cachedAt: matchCachedAt ?? scorecardsCachedAt };
 
   const tFetch = performance.now();
   console.log(`[compare] graphql fetch: ${(tFetch - t0).toFixed(0)}ms`);
@@ -306,6 +344,7 @@ export async function GET(req: Request) {
     whatIfStats,
     styleFingerprintStats,
     fieldFingerprintPoints,
+    cacheInfo,
   };
 
   const serverTiming = [
