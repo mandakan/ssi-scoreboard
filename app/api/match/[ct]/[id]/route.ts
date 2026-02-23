@@ -50,6 +50,7 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ ct: string; id: string }> }
 ) {
+  const t0 = performance.now();
   const { ct, id } = await params;
 
   const ctNum = parseInt(ct, 10);
@@ -64,6 +65,9 @@ export async function GET(
     const message = err instanceof Error ? err.message : "Upstream error";
     return NextResponse.json({ error: message }, { status: 502 });
   }
+
+  const tFetch = performance.now();
+  console.log(`[match] graphql fetch: ${(tFetch - t0).toFixed(0)}ms`);
 
   if (!data.event) {
     return NextResponse.json({ error: "Match not found" }, { status: 404 });
@@ -114,5 +118,15 @@ export async function GET(
     competitors,
   };
 
-  return NextResponse.json(response);
+  const tDone = performance.now();
+  console.log(`[match] total: ${(tDone - t0).toFixed(0)}ms`);
+
+  return NextResponse.json(response, {
+    headers: {
+      "Server-Timing": [
+        `graphql;dur=${(tFetch - t0).toFixed(1)};desc="GraphQL fetch"`,
+        `total;dur=${(tDone - t0).toFixed(1)};desc="Total"`,
+      ].join(", "),
+    },
+  });
 }

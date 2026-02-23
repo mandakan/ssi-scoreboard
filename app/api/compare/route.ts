@@ -79,6 +79,8 @@ interface RawMatchData {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function GET(req: Request) {
+  const t0 = performance.now();
+
   const { searchParams } = new URL(req.url);
   const ct = searchParams.get("ct");
   const id = searchParams.get("id");
@@ -121,6 +123,9 @@ export async function GET(req: Request) {
     const message = err instanceof Error ? err.message : "Upstream error";
     return NextResponse.json({ error: message }, { status: 502 });
   }
+
+  const tFetch = performance.now();
+  console.log(`[compare] graphql fetch: ${(tFetch - t0).toFixed(0)}ms`);
 
   if (!scorecardsData.event || !matchData.event) {
     return NextResponse.json({ error: "Match not found" }, { status: 404 });
@@ -194,6 +199,9 @@ export async function GET(req: Request) {
     }
   }
 
+  const tFlatten = performance.now();
+  console.log(`[compare] scorecard flatten (${rawScorecards.length} records): ${(tFlatten - tFetch).toFixed(0)}ms`);
+
   // Build a map of stage_id → stage metadata from match data
   const stageMetaMap = new Map(
     (matchData.event.stages ?? []).map((s) => [
@@ -212,6 +220,9 @@ export async function GET(req: Request) {
   const stages = computeGroupRankings(rawScorecards, requestedCompetitors).map(
     (s) => ({ ...s, ...stageMetaMap.get(s.stage_id) })
   );
+
+  const tRankings = performance.now();
+  console.log(`[compare] computeGroupRankings: ${(tRankings - tFlatten).toFixed(0)}ms`);
 
   const penaltyStats = Object.fromEntries(
     requestedCompetitors.map((c) => [c.id, computePenaltyStats(stages, c.id)])
@@ -237,6 +248,9 @@ export async function GET(req: Request) {
   );
 
   const whatIfStats = simulateWithoutWorstStage(stages, requestedCompetitors);
+
+  const tPerCompetitor = performance.now();
+  console.log(`[compare] per-competitor stats: ${(tPerCompetitor - tRankings).toFixed(0)}ms`);
 
   // Build division map for the full field (used by the fingerprint cohort cloud)
   const divisionMap = new Map<number, string | null>(
@@ -272,6 +286,10 @@ export async function GET(req: Request) {
     })
   );
 
+  const tFingerprint = performance.now();
+  console.log(`[compare] fingerprint (${fieldFingerprintPoints.length} field pts): ${(tFingerprint - tPerCompetitor).toFixed(0)}ms`);
+  console.log(`[compare] total: ${(tFingerprint - t0).toFixed(0)}ms`);
+
   const response: CompareResponse = {
     match_id: parseInt(id, 10),
     stages,
@@ -285,5 +303,16 @@ export async function GET(req: Request) {
     fieldFingerprintPoints,
   };
 
-  return NextResponse.json(response);
+  const serverTiming = [
+    `graphql;dur=${(tFetch - t0).toFixed(1)};desc="GraphQL fetch"`,
+    `flatten;dur=${(tFlatten - tFetch).toFixed(1)};desc="Scorecard flatten"`,
+    `rankings;dur=${(tRankings - tFlatten).toFixed(1)};desc="Group rankings"`,
+    `per-competitor;dur=${(tPerCompetitor - tRankings).toFixed(1)};desc="Per-competitor stats"`,
+    `fingerprint;dur=${(tFingerprint - tPerCompetitor).toFixed(1)};desc="Fingerprint"`,
+    `total;dur=${(tFingerprint - t0).toFixed(1)};desc="Total"`,
+  ].join(", ");
+
+  return NextResponse.json(response, {
+    headers: { "Server-Timing": serverTiming },
+  });
 }
