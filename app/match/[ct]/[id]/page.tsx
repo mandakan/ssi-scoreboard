@@ -20,7 +20,15 @@ import { StyleFingerprintChart } from "@/components/style-fingerprint-chart";
 import { useMatchQuery, useCompareQuery } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, AlertCircle, ArrowLeft, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, AlertCircle, ArrowLeft, RefreshCw, ChevronDown, ChevronUp, HelpCircle } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverDescription,
+} from "@/components/ui/popover";
 import {
   saveRecentCompetition,
   saveCompetitorSelection,
@@ -237,34 +245,114 @@ export default function MatchPage() {
               </div>
 
               <div className="rounded-lg border p-4 space-y-3">
-                <h2 className="font-semibold">Hit factor by stage</h2>
+                <div className="flex items-center gap-1.5">
+                  <h2 className="font-semibold">Hit factor by stage</h2>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                        aria-label="About this chart"
+                      >
+                        <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80" side="bottom" align="start">
+                      <PopoverHeader>
+                        <PopoverTitle>Hit factor by stage</PopoverTitle>
+                        <PopoverDescription>Bar height = hit factor (points ÷ time) for each stage. Higher is always better.</PopoverDescription>
+                      </PopoverHeader>
+                      <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+                        <p>The dashed line (field leader) and dotted line (field median) benchmark your group against the full match field — toggle them with the buttons above the chart.</p>
+                        <p>DNF and DQ runs appear at HF 0 with reduced opacity.</p>
+                        <p>Click a competitor name in the legend to show or hide their bars.</p>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
                 <ComparisonChart data={compareQuery.data} />
               </div>
 
               <div className="rounded-lg border p-4 space-y-3">
-                <h2 className="font-semibold">HF% vs stage winner</h2>
-                <p className="text-xs text-muted-foreground">
-                  Hit factor as a percentage of the stage winner per stage. Select
-                  a competitor as reference to see gaps relative to them.
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <h2 className="font-semibold">HF% vs stage winner</h2>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                        aria-label="About this chart"
+                      >
+                        <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80" side="bottom" align="start">
+                      <PopoverHeader>
+                        <PopoverTitle>HF% vs stage winner</PopoverTitle>
+                        <PopoverDescription>Your hit factor as a percentage of the reference, per stage. 100% = you matched the winner.</PopoverDescription>
+                      </PopoverHeader>
+                      <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+                        <p>Colour bands: green ≥ 95%, amber 85–95%, red &lt; 85% indicate run quality zones.</p>
+                        <p>Use the reference buttons above the chart to switch from &ldquo;stage winner&rdquo; to any specific competitor to compare gaps directly.</p>
+                        <p>Percentages control for stage difficulty — a short stage and a long stage at 90% represent equal relative performance.</p>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
                 <HfPercentChart data={compareQuery.data} />
               </div>
 
               <div className="rounded-lg border p-4 space-y-3">
-                <h2 className="font-semibold">Speed vs. accuracy</h2>
-                <p className="text-xs text-muted-foreground">
-                  Time vs. points per stage. Diagonal lines show equal hit
-                  factor (HF) — steeper = higher HF.
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <h2 className="font-semibold">Speed vs. accuracy</h2>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                        aria-label="About this chart"
+                      >
+                        <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80" side="bottom" align="start">
+                      <PopoverHeader>
+                        <PopoverTitle>Speed vs. accuracy</PopoverTitle>
+                        <PopoverDescription>Each point is one stage: X-axis = time taken, Y-axis = points scored.</PopoverDescription>
+                      </PopoverHeader>
+                      <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+                        <p>Up and to the left is better — more points, less time.</p>
+                        <p>Diagonal iso-HF lines connect all time/points combinations with the same hit factor. A stage dot above the &ldquo;HF 6&rdquo; line means you achieved better than HF 6 on that stage.</p>
+                        <p>Look for stages where you drifted right (slow) or dropped down (lost points) relative to your usual cluster — those are your biggest improvement opportunities.</p>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
                 <SpeedAccuracyChart data={compareQuery.data} />
               </div>
 
               <div className="rounded-lg border p-4 space-y-3">
-                <h2 className="font-semibold">Stage balance</h2>
-                <p className="text-xs text-muted-foreground">
-                  Group % per stage. A uniform polygon means consistent
-                  performance; spikes show standout stages.
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <h2 className="font-semibold">Stage balance</h2>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                        aria-label="About this chart"
+                      >
+                        <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80" side="bottom" align="start">
+                      <PopoverHeader>
+                        <PopoverTitle>Stage balance</PopoverTitle>
+                        <PopoverDescription>Radar polygon showing your percentage per stage. A uniform shape means consistent performance.</PopoverDescription>
+                      </PopoverHeader>
+                      <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+                        <p>Each spoke is one stage; distance from the centre = your % of the reference.</p>
+                        <p>Inward dips are stages where you under-performed; outward spikes are strong stages.</p>
+                        <p>Switch between Group %, Division %, and Overall % using the toggle inside the chart. Toggle competitors on/off to compare polygon shapes side-by-side.</p>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
                 <StageBalanceChart data={compareQuery.data} />
               </div>
 
@@ -293,11 +381,31 @@ export default function MatchPage() {
                 {showCoachingView && (
                   <div id="coaching-view-panel" className="space-y-6 pt-2">
                     <div className="space-y-2">
-                      <h3 className="text-sm font-semibold">Shooter style fingerprint</h3>
-                      <p className="text-xs text-muted-foreground">
-                        Match-level accuracy vs. speed. Top-right is ideal; dot size
-                        reflects penalty rate — larger means more penalties.
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <h3 className="text-sm font-semibold">Shooter style fingerprint</h3>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button
+                              className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                              aria-label="About this chart"
+                            >
+                              <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-80" side="bottom" align="start">
+                            <PopoverHeader>
+                              <PopoverTitle>Shooter style fingerprint</PopoverTitle>
+                              <PopoverDescription>Match-wide accuracy vs. speed plotted for each competitor.</PopoverDescription>
+                            </PopoverHeader>
+                            <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+                              <p>X-axis = hit quality (A-zone ratio across all stages). Y-axis = scoring speed (points per second).</p>
+                              <p>The dashed crosshair sits at the field median — quadrant labels (Ideal, Fast/Sloppy, Conservative, Struggling) are relative to the actual field, not the visual centre.</p>
+                              <p>The faded background dots are the field cohort cloud. Use the Field overlay toggle to show all competitors, only the same division, or none.</p>
+                              <p>Dot size encodes penalty rate — larger means more misses, no-shoots, and procedurals per round fired.</p>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
                       <StyleFingerprintChart data={compareQuery.data} />
                     </div>
                   </div>
