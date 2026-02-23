@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computePercentileRank, assignArchetype, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompetitorInfo } from "@/lib/types";
 
 const competitors: CompetitorInfo[] = [
@@ -1777,6 +1777,84 @@ describe("simulateWithoutWorstStage", () => {
   });
 });
 
+// ─── computePercentileRank ───────────────────────────────────────────────────
+
+describe("computePercentileRank", () => {
+  it("returns null for empty array", () => {
+    expect(computePercentileRank(5, [])).toBeNull();
+  });
+
+  it("returns 50 for a single-element array (midpoint formula)", () => {
+    expect(computePercentileRank(5, [5])).toBe(50);
+  });
+
+  it("returns 25 for the lower of two values (midpoint formula)", () => {
+    // below=0, equal=1, total=2 → (0 + 0.5) / 2 × 100 = 25
+    expect(computePercentileRank(3, [3, 7])).toBe(25);
+  });
+
+  it("returns 75 for the higher of two values", () => {
+    // below=1, equal=1, total=2 → (1 + 0.5) / 2 × 100 = 75
+    expect(computePercentileRank(7, [3, 7])).toBe(75);
+  });
+
+  it("returns 50 when all values are equal (ties)", () => {
+    // below=0, equal=3, total=3 → (0 + 1.5) / 3 × 100 = 50
+    expect(computePercentileRank(5, [5, 5, 5])).toBeCloseTo(50, 5);
+  });
+
+  it("returns 100 only when value is the sole maximum in a large set", () => {
+    // below=4, equal=1, total=5 → (4 + 0.5) / 5 × 100 = 90
+    expect(computePercentileRank(10, [1, 2, 3, 4, 10])).toBe(90);
+  });
+
+  it("returns 0+ for the minimum value (not exactly 0 — midpoint formula)", () => {
+    // below=0, equal=1, total=5 → 10
+    expect(computePercentileRank(1, [1, 2, 3, 4, 10])).toBe(10);
+  });
+
+  it("handles ties in a larger set correctly", () => {
+    // value=5 in [3, 5, 5, 7]: below=1, equal=2, total=4 → (1 + 1) / 4 × 100 = 50
+    expect(computePercentileRank(5, [3, 5, 5, 7])).toBe(50);
+  });
+});
+
+// ─── assignArchetype ─────────────────────────────────────────────────────────
+
+describe("assignArchetype", () => {
+  it("returns null when accuracyPercentile is null", () => {
+    expect(assignArchetype(null, 60)).toBeNull();
+  });
+
+  it("returns null when speedPercentile is null", () => {
+    expect(assignArchetype(60, null)).toBeNull();
+  });
+
+  it("returns null when both are null", () => {
+    expect(assignArchetype(null, null)).toBeNull();
+  });
+
+  it("Gunslinger: high accuracy (≥50) and high speed (≥50)", () => {
+    expect(assignArchetype(75, 80)).toBe("Gunslinger");
+    expect(assignArchetype(50, 50)).toBe("Gunslinger"); // boundary — both exactly 50
+  });
+
+  it("Surgeon: high accuracy (≥50) and low speed (<50)", () => {
+    expect(assignArchetype(80, 30)).toBe("Surgeon");
+    expect(assignArchetype(50, 49)).toBe("Surgeon");
+  });
+
+  it("Speed Demon: low accuracy (<50) and high speed (≥50)", () => {
+    expect(assignArchetype(20, 90)).toBe("Speed Demon");
+    expect(assignArchetype(49, 50)).toBe("Speed Demon");
+  });
+
+  it("Grinder: low accuracy (<50) and low speed (<50)", () => {
+    expect(assignArchetype(10, 10)).toBe("Grinder");
+    expect(assignArchetype(49, 49)).toBe("Grinder");
+  });
+});
+
 // ─── computeStyleFingerprint ─────────────────────────────────────────────────
 
 describe("computeStyleFingerprint", () => {
@@ -1886,6 +1964,12 @@ describe("computeAllFingerprintPoints", () => {
     expect(p1.pointsPerSecond).toBeCloseTo(40 / 10, 6);
     expect(p1.penaltyRate).toBe(0);
     expect(p1.division).toBe("production");
+    // Percentile ranks: comp1 has higher alphaRatio and higher speed than comp2
+    expect(p1.accuracyPercentile).toBeGreaterThan(50);
+    expect(p1.speedPercentile).toBeGreaterThan(50);
+    const p2 = result.find((p) => p.competitorId === 2)!;
+    expect(p2.accuracyPercentile).toBeLessThan(50);
+    expect(p2.speedPercentile).toBeLessThan(50);
   });
 
   it("attaches division from divisionMap", () => {
@@ -1921,6 +2005,16 @@ describe("computeAllFingerprintPoints", () => {
     ];
     const result = computeAllFingerprintPoints(cards, divMap);
     expect(result).toHaveLength(0);
+  });
+
+  it("single competitor gets percentile rank 50 on both axes", () => {
+    const cards = [
+      makeCard(1, 1, { a_hits: 8, c_hits: 2, d_hits: 0, miss_count: 0, points: 40, time: 10 }),
+    ];
+    const result = computeAllFingerprintPoints(cards, divMap);
+    expect(result).toHaveLength(1);
+    expect(result[0].accuracyPercentile).toBe(50);
+    expect(result[0].speedPercentile).toBe(50);
   });
 
   it("aggregates multiple stages for one competitor", () => {

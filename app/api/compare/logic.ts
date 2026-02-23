@@ -11,6 +11,7 @@ import type {
   LossBreakdownStats,
   StyleFingerprintStats,
   FieldFingerprintPoint,
+  ShooterArchetype,
   StageClassification,
   SimResult,
   WhatIfResult,
@@ -106,6 +107,42 @@ export function computePercentile(rank: number | null, n: number): number | null
   if (rank === null || n === 0) return null;
   if (n === 1) return 1.0;
   return 1 - (rank - 1) / (n - 1);
+}
+
+/**
+ * Compute the percentile rank of `value` within `allValues` on a 0–100 scale.
+ * Uses the midpoint formula: (count below + 0.5 × count equal) / total × 100.
+ * A single-element array returns 50 (the midpoint, not 0 or 100).
+ * Returns null for empty arrays.
+ */
+export function computePercentileRank(value: number, allValues: number[]): number | null {
+  if (allValues.length === 0) return null;
+  const below = allValues.filter((v) => v < value).length;
+  const equal = allValues.filter((v) => v === value).length;
+  return ((below + 0.5 * equal) / allValues.length) * 100;
+}
+
+/**
+ * Assign a shooter archetype based on field percentile ranks (0–100 each).
+ *
+ *   High accuracy (≥ 50) + High speed (≥ 50) → Gunslinger
+ *   High accuracy (≥ 50) + Low  speed (< 50)  → Surgeon
+ *   Low  accuracy (< 50) + High speed (≥ 50)  → Speed Demon
+ *   Low  accuracy (< 50) + Low  speed (< 50)  → Grinder
+ *
+ * Returns null when either percentile is null.
+ */
+export function assignArchetype(
+  accuracyPercentile: number | null,
+  speedPercentile: number | null
+): ShooterArchetype | null {
+  if (accuracyPercentile === null || speedPercentile === null) return null;
+  const highAccuracy = accuracyPercentile >= 50;
+  const highSpeed = speedPercentile >= 50;
+  if (highAccuracy && highSpeed) return "Gunslinger";
+  if (highAccuracy) return "Surgeon";
+  if (highSpeed) return "Speed Demon";
+  return "Grinder";
 }
 
 /**
@@ -960,6 +997,10 @@ export function computeStyleFingerprint(
     totalPenalties,
     totalRounds,
     stagesFired,
+    // Percentile fields are populated in route.ts after fieldFingerprintPoints is available.
+    accuracyPercentile: null,
+    speedPercentile: null,
+    archetype: null,
   };
 }
 
@@ -1029,7 +1070,8 @@ export function computeAllFingerprintPoints(
     byComp.set(sc.competitor_id, entry);
   }
 
-  const points: FieldFingerprintPoint[] = [];
+  // First pass: compute raw metrics for each valid competitor.
+  const rawPoints: Omit<FieldFingerprintPoint, "accuracyPercentile" | "speedPercentile">[] = [];
 
   for (const [competitorId, agg] of byComp) {
     if (!agg.hasZoneData) continue;
@@ -1038,18 +1080,22 @@ export function computeAllFingerprintPoints(
     const zoneTotal = agg.totalA + agg.totalC + agg.totalD;
     if (zoneTotal <= 0) continue;
 
-    const alphaRatio = agg.totalA / zoneTotal;
-    const pointsPerSecond = agg.totalPoints / agg.totalTime;
-    const penaltyRate = agg.totalRounds > 0 ? agg.totalPenalties / agg.totalRounds : 0;
-
-    points.push({
+    rawPoints.push({
       competitorId,
       division: divisionMap.get(competitorId) ?? null,
-      alphaRatio,
-      pointsPerSecond,
-      penaltyRate,
+      alphaRatio: agg.totalA / zoneTotal,
+      pointsPerSecond: agg.totalPoints / agg.totalTime,
+      penaltyRate: agg.totalRounds > 0 ? agg.totalPenalties / agg.totalRounds : 0,
     });
   }
 
-  return points;
+  // Second pass: compute field-wide percentile ranks and attach them.
+  const allAlphaRatios = rawPoints.map((p) => p.alphaRatio);
+  const allSpeeds = rawPoints.map((p) => p.pointsPerSecond);
+
+  return rawPoints.map((p) => ({
+    ...p,
+    accuracyPercentile: computePercentileRank(p.alphaRatio, allAlphaRatios) ?? 50,
+    speedPercentile: computePercentileRank(p.pointsPerSecond, allSpeeds) ?? 50,
+  }));
 }

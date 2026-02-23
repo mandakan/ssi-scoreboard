@@ -19,6 +19,7 @@ import type {
   CompetitorInfo,
   StyleFingerprintStats,
   FieldFingerprintPoint,
+  ShooterArchetype,
 } from "@/lib/types";
 
 // --------------------------------------------------------------------------
@@ -32,12 +33,19 @@ type CohortMode = "all" | "division" | "off";
 // --------------------------------------------------------------------------
 
 interface FingerprintPoint {
+  /** Raw alpha ratio (0–1) — shown in tooltip */
   alphaRatio: number;
+  /** Raw pts/s — shown in tooltip */
   pointsPerSecond: number;
+  /** Field percentile rank 0–100 — used as X axis value */
+  accuracyPercentile: number;
+  /** Field percentile rank 0–100 — used as Y axis value */
+  speedPercentile: number;
   dotRadius: number;
   penaltyRate: number;
   competitorId: number;
   competitorName: string;
+  archetype: ShooterArchetype | null;
   totalPenalties: number;
   totalRounds: number;
   stagesFired: number;
@@ -61,16 +69,26 @@ function buildSelectedPoints(
   const valid = competitors
     .map((c) => {
       const s = stats[c.id];
-      if (!s || s.alphaRatio == null || s.pointsPerSecond == null) return null;
+      if (
+        !s ||
+        s.alphaRatio == null ||
+        s.pointsPerSecond == null ||
+        s.accuracyPercentile == null ||
+        s.speedPercentile == null
+      )
+        return null;
       return {
         competitorId: c.id,
         alphaRatio: s.alphaRatio,
         pointsPerSecond: s.pointsPerSecond,
+        accuracyPercentile: s.accuracyPercentile,
+        speedPercentile: s.speedPercentile,
         penaltyRate: s.penaltyRate ?? 0,
         totalPenalties: s.totalPenalties,
         totalRounds: s.totalRounds,
         stagesFired: s.stagesFired,
         competitorName: c.name,
+        archetype: s.archetype,
         dotRadius: 0,
       };
     })
@@ -118,22 +136,11 @@ function filterFieldPoints(
 
 // --------------------------------------------------------------------------
 // Quadrant label + crosshair overlay
-// (crosshair positioned at field medians when available)
+// Axes are field percentile ranks 0–100, so the crosshair is always at (50, 50)
+// which is the exact field median by definition.
 // --------------------------------------------------------------------------
 
-function median(values: number[]): number | null {
-  if (values.length === 0) return null;
-  const s = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(s.length / 2);
-  return s.length % 2 === 0 ? (s[mid - 1] + s[mid]) / 2 : s[mid];
-}
-
-interface QuadrantLabelsProps {
-  fieldMedianX: number | null;
-  fieldMedianY: number | null;
-}
-
-function QuadrantLabels({ fieldMedianX, fieldMedianY }: QuadrantLabelsProps) {
+function QuadrantLabels() {
   const plotArea = usePlotArea();
   const xDomain = useXAxisDomain();
   const yDomain = useYAxisDomain();
@@ -142,9 +149,9 @@ function QuadrantLabels({ fieldMedianX, fieldMedianY }: QuadrantLabelsProps) {
   if (xDomain.length < 2 || yDomain.length < 2) return null;
 
   const xMin = typeof xDomain[0] === "number" ? xDomain[0] : 0;
-  const xMax = typeof xDomain[1] === "number" ? xDomain[1] : 1;
+  const xMax = typeof xDomain[1] === "number" ? xDomain[1] : 100;
   const yMin = typeof yDomain[0] === "number" ? yDomain[0] : 0;
-  const yMax = typeof yDomain[1] === "number" ? yDomain[1] : 1;
+  const yMax = typeof yDomain[1] === "number" ? yDomain[1] : 100;
 
   if (xMax <= xMin || yMax <= yMin) return null;
 
@@ -153,9 +160,9 @@ function QuadrantLabels({ fieldMedianX, fieldMedianY }: QuadrantLabelsProps) {
   const toPixelY = (v: number) =>
     plotArea.y + ((yMax - v) / (yMax - yMin)) * plotArea.height;
 
-  // Crosshair position: field medians if available, else visual midpoint
-  const crossX = toPixelX(fieldMedianX ?? (xMin + xMax) / 2);
-  const crossY = toPixelY(fieldMedianY ?? (yMin + yMax) / 2);
+  // Crosshair is always at field median = 50th percentile on both axes
+  const crossX = toPixelX(50);
+  const crossY = toPixelY(50);
 
   const labelStyle: React.CSSProperties = {
     fontSize: 10,
@@ -230,6 +237,23 @@ function PenaltyDot({ cx, cy, fill, payload }: DotProps) {
 
 interface TooltipEntry { payload: FingerprintPoint }
 
+const ARCHETYPE_DESCRIPTIONS: Record<string, string> = {
+  Gunslinger: "fast & accurate",
+  Surgeon: "accurate, leaving time on table",
+  "Speed Demon": "fast, bleeding points",
+  Grinder: "room to grow on both axes",
+};
+
+function ordinal(n: number): string {
+  const r = Math.round(n);
+  const suffix = r === 11 || r === 12 || r === 13 ? "th"
+    : r % 10 === 1 ? "st"
+    : r % 10 === 2 ? "nd"
+    : r % 10 === 3 ? "rd"
+    : "th";
+  return `${r}${suffix}`;
+}
+
 function CustomTooltip({ active, payload }: { active?: boolean; payload?: TooltipEntry[] }) {
   if (!active || !payload?.length) return null;
   const pt = payload[0].payload;
@@ -247,14 +271,23 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Toolti
         fontSize: 12,
         lineHeight: 1.6,
         boxShadow: "0 4px 16px rgba(0,0,0,0.14), 0 1px 4px rgba(0,0,0,0.08)",
+        maxWidth: 220,
       }}
     >
-      <p style={{ fontWeight: 600, marginBottom: 4 }}>{pt.competitorName}</p>
+      <p style={{ fontWeight: 600, marginBottom: 2 }}>{pt.competitorName}</p>
+      {pt.archetype && (
+        <p style={{ fontWeight: 700, marginBottom: 6, color: "var(--foreground)" }}>
+          {pt.archetype}
+          <span style={{ fontWeight: 400, color: "var(--muted-foreground)", marginLeft: 6 }}>
+            — {ARCHETYPE_DESCRIPTIONS[pt.archetype]}
+          </span>
+        </p>
+      )}
       <div style={{ display: "grid", gridTemplateColumns: "auto auto", columnGap: 12 }}>
         <span style={{ color: "var(--muted-foreground)" }}>Hit quality (α%)</span>
-        <span>{(pt.alphaRatio * 100).toFixed(1)}%</span>
+        <span>{(pt.alphaRatio * 100).toFixed(1)}% · {ordinal(pt.accuracyPercentile)} %ile</span>
         <span style={{ color: "var(--muted-foreground)" }}>Speed (pts/s)</span>
-        <span>{pt.pointsPerSecond.toFixed(2)}</span>
+        <span>{pt.pointsPerSecond.toFixed(2)} · {ordinal(pt.speedPercentile)} %ile</span>
         <span style={{ color: "var(--muted-foreground)" }}>Penalty rate</span>
         <span>{penaltyPct}% ({pt.totalPenalties}/{pt.totalRounds} rds)</span>
         <span style={{ color: "var(--muted-foreground)" }}>Stages fired</span>
@@ -286,14 +319,14 @@ function FieldDot({ cx, cy }: FieldDotProps) {
 // Competitor legend
 // --------------------------------------------------------------------------
 
-interface LegendItem { id: number; label: string; color: string }
+interface LegendItem { id: number; label: string; color: string; archetype: string | null }
 
 function ToggleLegend({
   items, hiddenIds, onToggle,
 }: { items: LegendItem[]; hiddenIds: Set<number>; onToggle: (id: number) => void }) {
   return (
     <div role="group" aria-label="Toggle competitors" className="flex flex-wrap justify-center gap-2 pt-2">
-      {items.map(({ id, label, color }) => {
+      {items.map(({ id, label, color, archetype }) => {
         const hidden = hiddenIds.has(id);
         return (
           <button
@@ -310,6 +343,14 @@ function ToggleLegend({
           >
             <span className="inline-block h-3 w-3 flex-none rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
             <span className={hidden ? "line-through" : ""}>{label}</span>
+            {archetype && !hidden && (
+              <span
+                className="rounded px-1.5 py-0 text-xs font-semibold"
+                style={{ backgroundColor: color + "28", color }}
+              >
+                {archetype}
+              </span>
+            )}
           </button>
         );
       })}
@@ -387,14 +428,6 @@ export function StyleFingerprintChart({ data }: StyleFingerprintChartProps) {
     selectedIds
   );
 
-  // Field medians for crosshair positioning (computed from the full unfiltered field
-  // so the reference is always the whole match, not just the visible cohort)
-  const allFieldExcludingSelected = fieldFingerprintPoints.filter(
-    (p) => !selectedIds.has(p.competitorId)
-  );
-  const fieldMedianX = median(allFieldExcludingSelected.map((p) => p.alphaRatio));
-  const fieldMedianY = median(allFieldExcludingSelected.map((p) => p.pointsPerSecond));
-
   const formatLabel = (comp: CompetitorInfo) =>
     `#${comp.competitor_number} ${comp.name.split(" ")[0]}`;
 
@@ -411,6 +444,7 @@ export function StyleFingerprintChart({ data }: StyleFingerprintChartProps) {
     id: comp.id,
     label: formatLabel(comp),
     color: colorMap[comp.id],
+    archetype: styleFingerprintStats[comp.id]?.archetype ?? null,
   }));
 
   return (
@@ -424,14 +458,15 @@ export function StyleFingerprintChart({ data }: StyleFingerprintChartProps) {
             <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
             <XAxis
               type="number"
-              dataKey="alphaRatio"
-              name="Hit quality"
-              domain={[0, 1]}
-              tickFormatter={(v: number) => `${(v * 100).toFixed(0)}%`}
+              dataKey="accuracyPercentile"
+              name="Accuracy rank"
+              domain={[0, 100]}
+              ticks={[0, 25, 50, 75, 100]}
+              tickFormatter={(v: number) => `${v}`}
               tick={{ fontSize: 12 }}
               className="fill-muted-foreground"
               label={{
-                value: "Hit quality (α%)",
+                value: "Accuracy rank (%ile)",
                 position: "insideBottom",
                 offset: -16,
                 style: { fontSize: 12, fill: "var(--muted-foreground)" },
@@ -439,13 +474,15 @@ export function StyleFingerprintChart({ data }: StyleFingerprintChartProps) {
             />
             <YAxis
               type="number"
-              dataKey="pointsPerSecond"
-              name="Speed"
-              domain={[0, "auto"]}
+              dataKey="speedPercentile"
+              name="Speed rank"
+              domain={[0, 100]}
+              ticks={[0, 25, 50, 75, 100]}
+              tickFormatter={(v: number) => `${v}`}
               tick={{ fontSize: 12 }}
               className="fill-muted-foreground"
               label={{
-                value: "Speed (pts/s)",
+                value: "Speed rank (%ile)",
                 angle: -90,
                 position: "insideLeft",
                 offset: 10,
@@ -454,8 +491,8 @@ export function StyleFingerprintChart({ data }: StyleFingerprintChartProps) {
             />
             <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: "3 3" }} />
 
-            {/* Quadrant overlay — crosshair at field medians */}
-            <QuadrantLabels fieldMedianX={fieldMedianX} fieldMedianY={fieldMedianY} />
+            {/* Quadrant overlay — crosshair always at field median (50th percentile) */}
+            <QuadrantLabels />
 
             {/* Background cohort cloud */}
             {fieldPoints.length > 0 && (
@@ -499,9 +536,7 @@ export function StyleFingerprintChart({ data }: StyleFingerprintChartProps) {
       </div>
 
       <p className="text-center text-xs" style={{ color: "var(--muted-foreground)" }}>
-        Dot size ∝ penalty rate — larger dot = more penalties
-        {(fieldMedianX != null || fieldMedianY != null) &&
-          " · dashed crosshair = field median"}
+        Axes = field percentile rank (50 = field median) · dot size ∝ penalty rate
       </p>
 
       <ToggleLegend items={legendItems} hiddenIds={hiddenIds} onToggle={toggleSeries} />

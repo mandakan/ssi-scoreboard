@@ -407,10 +407,10 @@ export default function MatchPage() {
                               <PopoverDescription>Match-wide accuracy vs. speed plotted for each competitor.</PopoverDescription>
                             </PopoverHeader>
                             <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                              <p>X-axis = hit quality (A-zone ratio across all stages). Y-axis = scoring speed (points per second).</p>
-                              <p>The dashed crosshair sits at the field median — quadrant labels (Ideal, Fast/Sloppy, Conservative, Struggling) are relative to the actual field, not the visual centre.</p>
-                              <p>The faded background dots are the field cohort cloud. Use the Field overlay toggle to show all competitors, only the same division, or none.</p>
-                              <p>Dot size encodes penalty rate — larger means more misses, no-shoots, and procedurals per round fired.</p>
+                              <p>Both axes are <strong>field percentile ranks</strong> (0–100): X = accuracy rank (A-zone ratio vs. the full field), Y = speed rank (pts/s vs. the full field). A value of 50 means exactly field median.</p>
+                              <p>The dashed crosshair is always at (50, 50) — the field median — so each quadrant contains roughly 25 % of the field. Quadrant labels: <strong>Gunslinger</strong> (fast & accurate), <strong>Surgeon</strong> (accurate, leaving time on table), <strong>Speed Demon</strong> (fast, bleeding points), <strong>Grinder</strong> (room to grow).</p>
+                              <p>Each competitor gets an archetype badge based on their quadrant. Hover a dot or check the legend to see the archetype with raw values (α%, pts/s) and exact percentile.</p>
+                              <p>Faded background dots = field cohort cloud. Use the Field overlay toggle to show all competitors, same division, or none. Dot size ∝ penalty rate.</p>
                             </div>
                           </PopoverContent>
                         </Popover>
