@@ -91,7 +91,10 @@ export function CacheInfoBadge({ ct, id, cachedAt }: CacheInfoBadgeProps) {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 pt-2">
+          <form
+            className="space-y-4 pt-2"
+            onSubmit={(e) => { e.preventDefault(); if (password) handleForceRefresh(); }}
+          >
             <p className="text-sm text-muted-foreground">
               Enter the admin secret to force a cache refresh. The next page load will
               re-fetch from shootnscoreit.com.
@@ -105,7 +108,6 @@ export function CacheInfoBadge({ ct, id, cachedAt }: CacheInfoBadgeProps) {
                 placeholder="CACHE_PURGE_SECRET"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && password) handleForceRefresh(); }}
                 autoComplete="off"
               />
             </div>
@@ -115,7 +117,7 @@ export function CacheInfoBadge({ ct, id, cachedAt }: CacheInfoBadgeProps) {
             )}
 
             <Button
-              onClick={handleForceRefresh}
+              type="submit"
               disabled={!password || status === "loading"}
               className="w-full"
             >
@@ -131,7 +133,7 @@ export function CacheInfoBadge({ ct, id, cachedAt }: CacheInfoBadgeProps) {
                 </>
               )}
             </Button>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
     </>
