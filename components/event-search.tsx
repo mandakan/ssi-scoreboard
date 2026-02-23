@@ -101,6 +101,57 @@ const DATE_PRESETS: { id: string; label: string; preset: DatePreset }[] = [
       },
     },
   },
+  {
+    id: "2years",
+    label: "2 years",
+    preset: {
+      label: "2 years",
+      after: (now) => {
+        const d = new Date(now);
+        d.setFullYear(d.getFullYear() - 2);
+        return d;
+      },
+      before: (now) => {
+        const d = new Date(now);
+        d.setMonth(d.getMonth() + 3);
+        return d;
+      },
+    },
+  },
+  {
+    id: "3years",
+    label: "3 years",
+    preset: {
+      label: "3 years",
+      after: (now) => {
+        const d = new Date(now);
+        d.setFullYear(d.getFullYear() - 3);
+        return d;
+      },
+      before: (now) => {
+        const d = new Date(now);
+        d.setMonth(d.getMonth() + 3);
+        return d;
+      },
+    },
+  },
+  {
+    id: "5years",
+    label: "5 years",
+    preset: {
+      label: "5 years",
+      after: (now) => {
+        const d = new Date(now);
+        d.setFullYear(d.getFullYear() - 5);
+        return d;
+      },
+      before: (now) => {
+        const d = new Date(now);
+        d.setMonth(d.getMonth() + 3);
+        return d;
+      },
+    },
+  },
 ];
 
 const DEFAULT_PRESET_ID = "3months";
@@ -113,6 +164,16 @@ const FIREARMS_OPTIONS = [
 ] as const;
 
 const DEFAULT_FIREARMS = "hg";
+
+const COUNTRY_OPTIONS = [
+  { id: "all", label: "All" },
+  { id: "SWE", label: "Sweden" },
+  { id: "NOR", label: "Norway" },
+  { id: "DNK", label: "Denmark" },
+  { id: "FIN", label: "Finland" },
+] as const;
+
+const DEFAULT_COUNTRY = "SWE";
 
 function toISODate(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -133,6 +194,7 @@ export function EventSearch() {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [presetId, setPresetId] = useState(DEFAULT_PRESET_ID);
   const [firearms, setFirearms] = useState(DEFAULT_FIREARMS);
+  const [country, setCountry] = useState(DEFAULT_COUNTRY);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(inputValue), 300);
@@ -163,6 +225,7 @@ export function EventSearch() {
     starts_after,
     starts_before,
     firearms,
+    country,
   );
 
   function handleSelect(event: EventSummary) {
@@ -223,6 +286,28 @@ export function EventSearch() {
                   type="button"
                   aria-pressed={active}
                   onClick={() => setFirearms(id)}
+                  className={[
+                    "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    active
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80",
+                  ].join(" ")}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <div role="group" aria-label="Country" className="flex gap-1.5 flex-wrap">
+            {COUNTRY_OPTIONS.map(({ id, label }) => {
+              const active = id === country;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setCountry(id)}
                   className={[
                     "rounded-full px-3 py-1 text-xs font-medium transition-colors",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",

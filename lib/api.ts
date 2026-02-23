@@ -22,12 +22,14 @@ export async function fetchEvents(
   starts_after?: string,
   starts_before?: string,
   firearms?: string,
+  country?: string,
 ): Promise<EventSummary[]> {
   const params = new URLSearchParams();
   if (q) params.set("q", q);
   if (starts_after) params.set("starts_after", starts_after);
   if (starts_before) params.set("starts_before", starts_before);
   if (firearms) params.set("firearms", firearms);
+  if (country && country !== "all") params.set("country", country);
   const res = await fetch(`/api/events?${params}`);
   if (!res.ok) {
     const body = await res.text();
