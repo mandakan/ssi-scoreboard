@@ -230,6 +230,8 @@ export interface SimResult {
   matchPct: number;       // simulated avg group % after replacement
   totalPoints: number;    // simulated total match points after replacement
   groupRank: number;      // simulated rank within compared group (1-based)
+  divRank: number | null;     // simulated rank within competitor's division (full field); null if unavailable
+  overallRank: number | null; // simulated rank across all divisions (full field); null if unavailable
 }
 
 // What-if analysis for one competitor.
@@ -241,6 +243,8 @@ export interface WhatIfResult {
   actualMatchPct: number;       // actual avg group % across all valid stages
   actualTotalPoints: number;    // actual total match points
   actualGroupRank: number;      // actual rank within compared group
+  actualDivRank: number | null;     // actual rank within competitor's division (full field); null if unavailable
+  actualOverallRank: number | null; // actual rank across all divisions (full field); null if unavailable
   medianReplacement: SimResult;       // scenario 1: replace worst with competitor's median
   secondWorstReplacement: SimResult;  // scenario 2: replace worst with second-worst (lower bound)
 }

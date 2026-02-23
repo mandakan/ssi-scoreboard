@@ -790,7 +790,8 @@ function rankByMatchPct(pctMap: Map<number, number>): Map<number, number> {
 
 /**
  * Simulate replacing each competitor's worst stage with two alternative
- * performances and recompute match % and rank within the compared group.
+ * performances and recompute match % and rank within the compared group,
+ * each competitor's division, and the full field overall.
  *
  * Scenarios:
  *   1. Median replacement  — replace worst stage with the competitor's own
@@ -798,8 +799,11 @@ function rankByMatchPct(pctMap: Map<number, number>): Map<number, number> {
  *   2. Second-worst replacement — replace worst stage with the competitor's
  *      second-worst stage (conservative lower bound).
  *
- * Ranking is computed by substituting only the one competitor's simulated
- * match % while all other competitors keep their actual match %.
+ * Group ranking is computed by substituting only the one competitor's
+ * simulated match % while all other competitors keep their actual match %.
+ * Division and overall rankings use the full field from rawScorecards.
+ * When rawScorecards is empty (e.g., in unit tests), divRank and overallRank
+ * are null.
  *
  * Returns null for competitors with fewer than 2 valid stages (not enough
  * data to identify a "worst" vs a "rest").
@@ -808,9 +812,106 @@ function rankByMatchPct(pctMap: Map<number, number>): Map<number, number> {
  */
 export function simulateWithoutWorstStage(
   stages: StageComparison[],
-  competitors: CompetitorInfo[]
+  competitors: CompetitorInfo[],
+  rawScorecards: RawScorecard[] = []
 ): Record<number, WhatIfResult | null> {
-  // Precompute each competitor's actual avg match % and total points.
+  // ── Full-field pre-computations (div / overall) ──────────────────────────
+
+  // Per-stage division leader HFs, keyed stage_id → divKey → leaderHF.
+  const stageDivLeaderHF = new Map<number, Map<string, number | null>>();
+  if (rawScorecards.length > 0) {
+    const byStageRaw = new Map<number, RawScorecard[]>();
+    for (const sc of rawScorecards) {
+      const list = byStageRaw.get(sc.stage_id) ?? [];
+      list.push(sc);
+      byStageRaw.set(sc.stage_id, list);
+    }
+    for (const [stageId, stageScs] of byStageRaw) {
+      const byDiv = new Map<string, RawScorecard[]>();
+      for (const sc of stageScs) {
+        const key = sc.competitor_division ?? "__none__";
+        const list = byDiv.get(key) ?? [];
+        list.push(sc);
+        byDiv.set(key, list);
+      }
+      const divLeaders = new Map<string, number | null>();
+      for (const [div, divCards] of byDiv) {
+        const { leaderHF } = rankByHF(divCards);
+        divLeaders.set(div, leaderHF);
+      }
+      stageDivLeaderHF.set(stageId, divLeaders);
+    }
+  }
+
+  // Per-competitor match-level div/overall avg%, computed from the full field.
+  // competitor_id → { pctSum, pctCount, divKey }
+  const allCompDivData = new Map<number, { pctSum: number; pctCount: number; divKey: string }>();
+  const allCompOverallData = new Map<number, { pctSum: number; pctCount: number }>();
+
+  if (rawScorecards.length > 0) {
+    const stageById = new Map(stages.map((s) => [s.stage_id, s]));
+    for (const sc of rawScorecards) {
+      if (sc.dnf || sc.dq || sc.zeroed) continue;
+      const hf = sc.hit_factor;
+      if (hf == null || hf <= 0) continue;
+      const stage = stageById.get(sc.stage_id);
+      if (!stage) continue;
+
+      // Overall %
+      if (stage.overall_leader_hf && stage.overall_leader_hf > 0) {
+        const overallPct = (hf / stage.overall_leader_hf) * 100;
+        const existing = allCompOverallData.get(sc.competitor_id) ?? { pctSum: 0, pctCount: 0 };
+        existing.pctSum += overallPct;
+        existing.pctCount++;
+        allCompOverallData.set(sc.competitor_id, existing);
+      }
+
+      // Div %
+      const divKey = sc.competitor_division ?? "__none__";
+      const divLeaderHF = stageDivLeaderHF.get(sc.stage_id)?.get(divKey) ?? null;
+      if (divLeaderHF && divLeaderHF > 0) {
+        const divPct = (hf / divLeaderHF) * 100;
+        const existing = allCompDivData.get(sc.competitor_id) ?? { pctSum: 0, pctCount: 0, divKey };
+        existing.pctSum += divPct;
+        existing.pctCount++;
+        allCompDivData.set(sc.competitor_id, existing);
+      }
+    }
+  }
+
+  // Aggregate match avg% maps.
+  const allCompDivMatchPcts = new Map<number, number>();
+  const allCompOverallMatchPcts = new Map<number, number>();
+  const compDivKeyMap = new Map<number, string>();
+  for (const [compId, data] of allCompDivData) {
+    if (data.pctCount > 0) {
+      allCompDivMatchPcts.set(compId, data.pctSum / data.pctCount);
+      compDivKeyMap.set(compId, data.divKey);
+    }
+  }
+  for (const [compId, data] of allCompOverallData) {
+    if (data.pctCount > 0) allCompOverallMatchPcts.set(compId, data.pctSum / data.pctCount);
+  }
+
+  // Per-division pct maps for re-ranking: divKey → Map<compId, avgDivPct>.
+  const divGroupPcts = new Map<string, Map<number, number>>();
+  for (const [compId, pct] of allCompDivMatchPcts) {
+    const divKey = compDivKeyMap.get(compId)!;
+    const divMap = divGroupPcts.get(divKey) ?? new Map<number, number>();
+    divMap.set(compId, pct);
+    divGroupPcts.set(divKey, divMap);
+  }
+
+  // Actual div/overall ranks for selected competitors.
+  const allCompDivActualRanks = new Map<number, number>();
+  for (const [, divPcts] of divGroupPcts) {
+    const ranked = rankByMatchPct(divPcts);
+    for (const [compId, rank] of ranked) allCompDivActualRanks.set(compId, rank);
+  }
+  const allCompOverallActualRanks = rankByMatchPct(allCompOverallMatchPcts);
+
+  // ── Existing group-level pre-computations ────────────────────────────────
+
   const actualPcts = new Map<number, number>();
   const actualTotalPoints = new Map<number, number>();
 
@@ -883,6 +984,25 @@ export function simulateWithoutWorstStage(
     const totalPts = actualTotalPoints.get(comp.id) ?? 0;
     const pctSum = actualMatchPct * validStages.length;
 
+    // Pre-fetch worst-stage leader HFs and the competitor's div/overall pcts
+    // for that stage, so the simulate() closure can use them.
+    const worstStageObj = stages.find((s) => s.stage_num === worstStage.stageNum);
+    const worstStageCompSummary = worstStageObj?.competitors[comp.id];
+    const worstStageDivPct = worstStageCompSummary?.div_percent ?? null;
+    const worstStageOverallPct = worstStageCompSummary?.overall_percent ?? null;
+    const worstStageGroupLeaderHF = worstStageObj?.group_leader_hf ?? null;
+    const worstStageOverallLeaderHF = worstStageObj?.overall_leader_hf ?? null;
+    const compDivKey = comp.division ?? "__none__";
+    const worstStageDivLeaderHF =
+      worstStageObj
+        ? (stageDivLeaderHF.get(worstStageObj.stage_id)?.get(compDivKey) ?? null)
+        : null;
+
+    const actualDivMatchPct = allCompDivMatchPcts.get(comp.id) ?? null;
+    const actualDivPctCount = allCompDivData.get(comp.id)?.pctCount ?? null;
+    const actualOverallMatchPct = allCompOverallMatchPcts.get(comp.id) ?? null;
+    const actualOverallPctCount = allCompOverallData.get(comp.id)?.pctCount ?? null;
+
     function simulate(replacementPct: number): SimResult {
       const simMatchPct =
         (pctSum - worstStage.groupPct + replacementPct) / validStages.length;
@@ -900,16 +1020,60 @@ export function simulateWithoutWorstStage(
 
       const simTotalPoints = Math.round(totalPts - worstStage.actualPoints + simWorstPoints);
 
-      // Rank: this competitor uses simulated pct; all others keep actual pct.
+      // Group rank: this competitor uses simulated pct; all others keep actual pct.
       const simPcts = new Map<number, number>(actualPcts);
       simPcts.set(comp.id, simMatchPct);
       const simRankMap = rankByMatchPct(simPcts);
+
+      // ── Division rank simulation ──────────────────────────────────────────
+      let divRank: number | null = null;
+      if (
+        worstStageDivPct != null &&
+        worstStageGroupLeaderHF && worstStageGroupLeaderHF > 0 &&
+        worstStageDivLeaderHF && worstStageDivLeaderHF > 0 &&
+        actualDivMatchPct != null && actualDivPctCount != null && actualDivPctCount > 0
+      ) {
+        // Convert replacement group% → div% via the same HF scalar.
+        const replacementHF = (replacementPct / 100) * worstStageGroupLeaderHF;
+        const simWorstStageDivPct = (replacementHF / worstStageDivLeaderHF) * 100;
+        const simDivMatchPct =
+          (actualDivMatchPct * actualDivPctCount - worstStageDivPct + simWorstStageDivPct) /
+          actualDivPctCount;
+        const divPcts = divGroupPcts.get(compDivKey);
+        if (divPcts) {
+          const simDivPcts = new Map<number, number>(divPcts);
+          simDivPcts.set(comp.id, simDivMatchPct);
+          divRank = rankByMatchPct(simDivPcts).get(comp.id) ?? null;
+        }
+      }
+
+      // ── Overall rank simulation ───────────────────────────────────────────
+      let overallRank: number | null = null;
+      if (
+        worstStageOverallPct != null &&
+        worstStageGroupLeaderHF && worstStageGroupLeaderHF > 0 &&
+        worstStageOverallLeaderHF && worstStageOverallLeaderHF > 0 &&
+        actualOverallMatchPct != null && actualOverallPctCount != null && actualOverallPctCount > 0
+      ) {
+        const replacementHF = (replacementPct / 100) * worstStageGroupLeaderHF;
+        const simWorstStageOverallPct = (replacementHF / worstStageOverallLeaderHF) * 100;
+        const simOverallMatchPct =
+          (actualOverallMatchPct * actualOverallPctCount -
+            worstStageOverallPct +
+            simWorstStageOverallPct) /
+          actualOverallPctCount;
+        const simOverallPcts = new Map<number, number>(allCompOverallMatchPcts);
+        simOverallPcts.set(comp.id, simOverallMatchPct);
+        overallRank = rankByMatchPct(simOverallPcts).get(comp.id) ?? null;
+      }
 
       return {
         replacementPct,
         matchPct: simMatchPct,
         totalPoints: simTotalPoints,
         groupRank: simRankMap.get(comp.id) ?? 1,
+        divRank,
+        overallRank,
       };
     }
 
@@ -920,6 +1084,8 @@ export function simulateWithoutWorstStage(
       actualMatchPct,
       actualTotalPoints: totalPts,
       actualGroupRank: actualRankMap.get(comp.id) ?? 1,
+      actualDivRank: allCompDivActualRanks.get(comp.id) ?? null,
+      actualOverallRank: allCompOverallActualRanks.get(comp.id) ?? null,
       medianReplacement: simulate(medianPct),
       secondWorstReplacement: simulate(secondWorstPct),
     };

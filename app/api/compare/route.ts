@@ -285,7 +285,7 @@ export async function GET(req: Request) {
     requestedCompetitors.map((c) => [c.id, computeLossBreakdown(stages, c.id)])
   );
 
-  const whatIfStats = simulateWithoutWorstStage(stages, requestedCompetitors);
+  const whatIfStats = simulateWithoutWorstStage(stages, requestedCompetitors, rawScorecards);
 
   const tPerCompetitor = performance.now();
   console.log(`[compare] per-competitor stats: ${(tPerCompetitor - tRankings).toFixed(0)}ms`);
