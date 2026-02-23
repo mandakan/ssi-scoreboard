@@ -26,10 +26,10 @@ export const CLASSIFICATION_CONFIG: Record<
   StageClassification,
   { label: string; color: string; Icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }> }
 > = {
-  solid: { label: "Solid", color: "text-emerald-500", Icon: CheckCircle2 },
-  conservative: { label: "Conservative", color: "text-yellow-500", Icon: Shield },
-  "over-push": { label: "Over-push", color: "text-orange-500", Icon: Zap },
-  meltdown: { label: "Meltdown", color: "text-red-500", Icon: Flame },
+  solid: { label: "Solid", color: "text-emerald-600 dark:text-emerald-400", Icon: CheckCircle2 },
+  conservative: { label: "Conservative", color: "text-yellow-600 dark:text-yellow-400", Icon: Shield },
+  "over-push": { label: "Over-push", color: "text-orange-600 dark:text-orange-400", Icon: Zap },
+  meltdown: { label: "Meltdown", color: "text-red-600 dark:text-red-400", Icon: Flame },
 };
 
 export function RankBadge({

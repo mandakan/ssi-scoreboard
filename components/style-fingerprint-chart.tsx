@@ -226,7 +226,7 @@ function PenaltyDot({ cx, cy, fill, payload }: DotProps) {
   return (
     <g>
       <circle cx={cx} cy={cy} r={Math.max(r, 22)} fill="transparent" />
-      <circle cx={cx} cy={cy} r={r} fill={fill} stroke="white" strokeWidth={1.5} opacity={0.88} />
+      <circle cx={cx} cy={cy} r={r} fill={fill} style={{ stroke: "var(--background)" }} strokeWidth={1.5} opacity={0.88} />
     </g>
   );
 }
