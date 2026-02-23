@@ -259,6 +259,17 @@ export interface CompareResponse {
   cacheInfo: CacheInfo;
 }
 
+// A match entry from the popular-matches API endpoint.
+// Sourced from Redis cache — shows matches recently accessed by any user.
+export interface PopularMatch {
+  ct: string;
+  id: string;
+  name: string;
+  venue: string | null;
+  date: string | null;
+  scoring_completed: number;
+}
+
 export interface EventSummary {
   id: number;
   content_type: number;

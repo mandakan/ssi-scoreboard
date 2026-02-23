@@ -1,4 +1,5 @@
 import { RecentCompetitions } from "@/components/recent-competitions";
+import { PopularMatches } from "@/components/popular-matches";
 import { EventSearch } from "@/components/event-search";
 import { Target } from "lucide-react";
 
@@ -30,6 +31,7 @@ export default function HomePage() {
       </div>
 
       <RecentCompetitions />
+      <PopularMatches />
     </main>
   );
 }

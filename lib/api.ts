@@ -1,7 +1,12 @@
 // Client-safe API helpers — these call our own Next.js Route Handlers,
 // NOT the SSI API directly (which has no CORS headers).
 
-import type { MatchResponse, CompareResponse, EventSummary } from "@/lib/types";
+import type {
+  MatchResponse,
+  CompareResponse,
+  EventSummary,
+  PopularMatch,
+} from "@/lib/types";
 
 export async function fetchMatch(ct: string, id: string): Promise<MatchResponse> {
   const res = await fetch(`/api/match/${ct}/${id}`);
@@ -28,6 +33,12 @@ export async function fetchEvents(
     const body = await res.text();
     throw new Error(`Events fetch failed (${res.status}): ${body}`);
   }
+  return res.json();
+}
+
+export async function fetchPopularMatches(): Promise<PopularMatch[]> {
+  const res = await fetch("/api/popular-matches");
+  if (!res.ok) return [];
   return res.json();
 }
 

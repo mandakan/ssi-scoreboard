@@ -11,12 +11,22 @@ import {
   type StoredCompetition,
 } from "@/lib/competition-store";
 
-function CompetitionCard({
+/** Minimum data needed to render a CompetitionCard. */
+export interface CompetitionCardData {
+  ct: string;
+  id: string;
+  name: string;
+  venue: string | null;
+  date: string | null;
+  scoring_completed: number;
+}
+
+export function CompetitionCard({
   comp,
   onRemove,
 }: {
-  comp: StoredCompetition;
-  onRemove: () => void;
+  comp: CompetitionCardData;
+  onRemove?: () => void;
 }) {
   const router = useRouter();
 
@@ -30,16 +40,18 @@ function CompetitionCard({
 
   return (
     <div className="relative rounded-lg border bg-card p-4 hover:bg-muted/30 transition-colors group">
-      <button
-        className="absolute top-2 right-2 p-1 rounded text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
-        aria-label={`Remove ${comp.name} from recent competitions`}
-        onClick={(e) => {
-          e.stopPropagation();
-          onRemove();
-        }}
-      >
-        <X className="w-3.5 h-3.5" aria-hidden="true" />
-      </button>
+      {onRemove && (
+        <button
+          className="absolute top-2 right-2 p-1 rounded text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+          aria-label={`Remove ${comp.name} from recent competitions`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+        >
+          <X className="w-3.5 h-3.5" aria-hidden="true" />
+        </button>
+      )}
 
       <button
         className="w-full text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded"
@@ -100,7 +112,7 @@ export function RecentCompetitions() {
         id="recent-heading"
         className="text-sm font-semibold text-muted-foreground mb-3"
       >
-        Recent competitions
+        My recents
       </h2>
       <div className="grid gap-3 sm:grid-cols-2">
         {competitions.map((comp) => (
