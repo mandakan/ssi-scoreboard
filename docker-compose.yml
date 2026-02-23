@@ -20,8 +20,17 @@ services:
       SSI_API_KEY: ${SSI_API_KEY}
       REDIS_URL: redis://redis:6379
       CACHE_PURGE_SECRET: ${CACHE_PURGE_SECRET}
+      # Soft V8 heap ceiling — Node throws a catchable JS error before the
+      # kernel OOM-kills the container. Set to ~75% of the Docker memory limit.
+      NODE_OPTIONS: "--max-old-space-size=768"
     depends_on: [redis]
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     deploy:
       resources:
         limits:
