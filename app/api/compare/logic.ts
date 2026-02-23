@@ -9,6 +9,7 @@ import type {
   EfficiencyStats,
   ConsistencyStats,
   LossBreakdownStats,
+  StyleFingerprintStats,
   StageClassification,
   SimResult,
   WhatIfResult,
@@ -887,4 +888,76 @@ export function simulateWithoutWorstStage(
   }
 
   return result;
+}
+
+/**
+ * Compute the "shooter style fingerprint" — match-level aggregates that place
+ * a competitor in a 2D accuracy × speed space.
+ *
+ * Metrics:
+ *   alpha_ratio       = total_A / (total_A + total_C + total_D)
+ *   points_per_second = total_points / total_time
+ *   penalty_rate      = total_penalties / total_rounds_fired
+ *
+ * Only non-DNF, non-DQ, non-zeroed stages are included.
+ * Returns null for ratio/rate fields when the denominators are zero.
+ */
+export function computeStyleFingerprint(
+  stages: StageComparison[],
+  competitorId: number
+): StyleFingerprintStats {
+  let totalA = 0;
+  let totalC = 0;
+  let totalD = 0;
+  let totalPoints = 0;
+  let totalTime = 0;
+  let totalPenalties = 0;
+  let totalRounds = 0;
+  let stagesFired = 0;
+  let hasZoneData = false;
+
+  for (const stage of stages) {
+    const sc = stage.competitors[competitorId];
+    if (!sc || sc.dnf || sc.dq || sc.zeroed) continue;
+    stagesFired++;
+
+    const a = sc.a_hits ?? 0;
+    const c = sc.c_hits ?? 0;
+    const d = sc.d_hits ?? 0;
+    const miss = sc.miss_count ?? 0;
+    const ns = sc.no_shoots ?? 0;
+    const proc = sc.procedurals ?? 0;
+
+    if (sc.a_hits != null || sc.c_hits != null || sc.d_hits != null) {
+      hasZoneData = true;
+    }
+
+    totalA += a;
+    totalC += c;
+    totalD += d;
+    totalPoints += sc.points ?? 0;
+    totalTime += sc.time ?? 0;
+    totalPenalties += miss + ns + proc;
+    // rounds_fired: paper hits + misses (excludes no-shoots — passive targets)
+    totalRounds += a + c + d + miss;
+  }
+
+  const zoneTotal = totalA + totalC + totalD;
+  const alphaRatio = hasZoneData && zoneTotal > 0 ? totalA / zoneTotal : null;
+  const pointsPerSecond = totalTime > 0 ? totalPoints / totalTime : null;
+  const penaltyRate = totalRounds > 0 ? totalPenalties / totalRounds : null;
+
+  return {
+    alphaRatio,
+    pointsPerSecond,
+    penaltyRate,
+    totalA,
+    totalC,
+    totalD,
+    totalPoints,
+    totalTime,
+    totalPenalties,
+    totalRounds,
+    stagesFired,
+  };
 }

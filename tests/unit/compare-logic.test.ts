@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompetitorInfo } from "@/lib/types";
 
 const competitors: CompetitorInfo[] = [
@@ -1774,5 +1774,93 @@ describe("simulateWithoutWorstStage", () => {
     const wi = result[1]!;
     expect(wi).not.toBeNull();
     expect(wi.worstStageNum).toBe(1); // stage 2 DNF excluded, stage 1 (80%) is worst valid
+  });
+});
+
+// ─── computeStyleFingerprint ─────────────────────────────────────────────────
+
+describe("computeStyleFingerprint", () => {
+  it("computes alphaRatio, pointsPerSecond, and penaltyRate from valid stages", () => {
+    // Competitor 1: 2 stages, clean shooting
+    // Stage 1: 10A, 2C, 0D, 0 penalties, 60pts, 10s
+    // Stage 2:  8A, 0C, 2D, 0 penalties, 40pts,  8s
+    const scorecards = [
+      makeCard(1, 1, { a_hits: 10, c_hits: 2, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0, points: 60, time: 10 }),
+      makeCard(1, 2, { a_hits:  8, c_hits: 0, d_hits: 2, miss_count: 0, no_shoots: 0, procedurals: 0, points: 40, time:  8 }),
+    ];
+    const twoStageComps = [competitors[0]];
+    const stages = computeGroupRankings(scorecards, twoStageComps);
+    const result = computeStyleFingerprint(stages, 1);
+
+    // alphaRatio = (10+8) / (10+8 + 2+0 + 0+2) = 18 / 22
+    expect(result.alphaRatio).toBeCloseTo(18 / 22, 6);
+    // pointsPerSecond = (60+40) / (10+8) = 100/18
+    expect(result.pointsPerSecond).toBeCloseTo(100 / 18, 6);
+    // penaltyRate = 0 / (10+2+0+0 + 8+0+2+0) = 0
+    expect(result.penaltyRate).toBe(0);
+    expect(result.stagesFired).toBe(2);
+    expect(result.totalPenalties).toBe(0);
+  });
+
+  it("includes penalties in penaltyRate", () => {
+    const scorecards = [
+      makeCard(1, 1, { a_hits: 8, c_hits: 2, d_hits: 0, miss_count: 1, no_shoots: 1, procedurals: 0, points: 50, time: 10 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    const result = computeStyleFingerprint(stages, 1);
+
+    // totalRounds = 8+2+0+1 = 11; totalPenalties = 1+1+0 = 2
+    expect(result.totalPenalties).toBe(2);
+    expect(result.totalRounds).toBe(11);
+    expect(result.penaltyRate).toBeCloseTo(2 / 11, 6);
+  });
+
+  it("returns null alphaRatio when no zone data", () => {
+    const scorecards = [
+      makeCard(1, 1, { a_hits: null, c_hits: null, d_hits: null, miss_count: 0, points: 50, time: 10 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    const result = computeStyleFingerprint(stages, 1);
+
+    expect(result.alphaRatio).toBeNull();
+    // pointsPerSecond should still be computed
+    expect(result.pointsPerSecond).toBeCloseTo(50 / 10, 6);
+  });
+
+  it("returns null pointsPerSecond when total time is 0", () => {
+    // DNF stage → no valid stages → time stays 0
+    const scorecards = [
+      makeCard(1, 1, { dnf: true }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    const result = computeStyleFingerprint(stages, 1);
+
+    expect(result.pointsPerSecond).toBeNull();
+    expect(result.stagesFired).toBe(0);
+  });
+
+  it("excludes DNF, DQ, and zeroed stages", () => {
+    const scorecards = [
+      makeCard(1, 1, { a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0, points: 50, time: 10 }),
+      makeCard(1, 2, { dnf: true }),
+      makeCard(1, 3, { dq: true, points: 0, time: 0 }),
+      makeCard(1, 4, { zeroed: true, points: 0, time: 0 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    const result = computeStyleFingerprint(stages, 1);
+
+    expect(result.stagesFired).toBe(1);
+    expect(result.pointsPerSecond).toBeCloseTo(50 / 10, 6);
+  });
+
+  it("returns null penaltyRate when no rounds fired", () => {
+    // Stage with all null zone data and no misses → totalRounds = 0
+    const scorecards = [
+      makeCard(1, 1, { a_hits: null, c_hits: null, d_hits: null, miss_count: null, points: 50, time: 10 }),
+    ];
+    const stages = computeGroupRankings(scorecards, [competitors[0]]);
+    const result = computeStyleFingerprint(stages, 1);
+
+    expect(result.penaltyRate).toBeNull();
   });
 });

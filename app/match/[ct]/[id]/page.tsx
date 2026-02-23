@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useSyncExternalStore, useEffect, useRef } from "react";
+import { useCallback, useSyncExternalStore, useEffect, useRef, useState } from "react";
 
 // Stable empty array for useSyncExternalStore server snapshot — must be a
 // constant reference so React's referential equality check doesn't loop.
@@ -16,10 +16,11 @@ import { ComparisonChart } from "@/components/comparison-chart";
 import { HfPercentChart } from "@/components/hf-percent-chart";
 import { SpeedAccuracyChart } from "@/components/scatter-chart";
 import { StageBalanceChart } from "@/components/radar-chart";
+import { StyleFingerprintChart } from "@/components/style-fingerprint-chart";
 import { useMatchQuery, useCompareQuery } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, AlertCircle, ArrowLeft, RefreshCw } from "lucide-react";
+import { Loader2, AlertCircle, ArrowLeft, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
 import {
   saveRecentCompetition,
   saveCompetitorSelection,
@@ -28,6 +29,7 @@ import {
 } from "@/lib/competition-store";
 
 export default function MatchPage() {
+  const [showCoachingView, setShowCoachingView] = useState(false);
   const params = useParams<{ ct: string; id: string }>();
   const { ct, id } = params;
   const searchParams = useSearchParams();
@@ -264,6 +266,42 @@ export default function MatchPage() {
                   performance; spikes show standout stages.
                 </p>
                 <StageBalanceChart data={compareQuery.data} />
+              </div>
+
+              {/* Coaching / analysis view — hidden by default (not for courtside use) */}
+              <div className="rounded-lg border p-4 space-y-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCoachingView((v) => !v)}
+                  className="flex w-full items-center justify-between text-left"
+                  aria-expanded={showCoachingView}
+                  aria-controls="coaching-view-panel"
+                >
+                  <div>
+                    <h2 className="font-semibold">Coaching analysis</h2>
+                    <p className="text-xs text-muted-foreground">
+                      Post-match aggregate view — not recommended during active shooting.
+                    </p>
+                  </div>
+                  {showCoachingView ? (
+                    <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                  )}
+                </button>
+
+                {showCoachingView && (
+                  <div id="coaching-view-panel" className="space-y-6 pt-2">
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-semibold">Shooter style fingerprint</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Match-level accuracy vs. speed. Top-right is ideal; dot size
+                        reflects penalty rate — larger means more penalties.
+                      </p>
+                      <StyleFingerprintChart data={compareQuery.data} />
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           )}
