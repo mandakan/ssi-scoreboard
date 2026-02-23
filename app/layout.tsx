@@ -38,7 +38,7 @@ export default function RootLayout({
                 href="https://shootnscoreit.com"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-foreground transition-colors"
+                className="inline-flex items-center hover:text-foreground transition-colors"
                 aria-label="Shoot'n Score It (opens in new tab)"
               >
                 <Crosshair className="w-4 h-4" aria-hidden="true" />
@@ -47,7 +47,7 @@ export default function RootLayout({
                 href="https://github.com/mandakan/ssi-scoreboard"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-foreground transition-colors"
+                className="inline-flex items-center hover:text-foreground transition-colors"
                 aria-label="Source code on GitHub (opens in new tab)"
               >
                 <Github className="w-4 h-4" aria-hidden="true" />
