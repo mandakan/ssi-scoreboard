@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { executeQuery, SCORECARDS_QUERY, MATCH_QUERY } from "@/lib/graphql";
 import { formatDivisionDisplay } from "@/lib/divisions";
-import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompareResponse, CompetitorInfo } from "@/lib/types";
 
 // ─── Raw GraphQL response shapes ─────────────────────────────────────────────
@@ -238,6 +238,10 @@ export async function GET(req: Request) {
 
   const whatIfStats = simulateWithoutWorstStage(stages, requestedCompetitors);
 
+  const styleFingerprintStats = Object.fromEntries(
+    requestedCompetitors.map((c) => [c.id, computeStyleFingerprint(stages, c.id)])
+  );
+
   const response: CompareResponse = {
     match_id: parseInt(id, 10),
     stages,
@@ -247,6 +251,7 @@ export async function GET(req: Request) {
     consistencyStats,
     lossBreakdownStats,
     whatIfStats,
+    styleFingerprintStats,
   };
 
   return NextResponse.json(response);

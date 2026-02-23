@@ -72,6 +72,7 @@ const baseData: CompareResponse = {
   efficiencyStats: {},
   lossBreakdownStats: {},
   whatIfStats: {},
+  styleFingerprintStats: {},
   consistencyStats: {
     1: { coefficientOfVariation: null, label: null, stagesFired: 1 },
     2: { coefficientOfVariation: null, label: null, stagesFired: 1 },

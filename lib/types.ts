@@ -173,6 +173,23 @@ export interface LossBreakdownStats {
   hasHitZoneData: boolean;  // true if at least one stage had zone data (so hit loss is meaningful)
 }
 
+// Match-level aggregate "style fingerprint" for one competitor.
+// Plots where a shooter sits in the accuracy × speed space.
+export interface StyleFingerprintStats {
+  alphaRatio: number | null;        // total_A / (total_A + total_C + total_D); null when no zone data
+  pointsPerSecond: number | null;   // total_points / total_time; null when total_time = 0
+  penaltyRate: number | null;       // total_penalties / total_rounds_fired; null when no rounds fired
+  // Raw totals (exposed for unit tests and tooltip display)
+  totalA: number;
+  totalC: number;
+  totalD: number;
+  totalPoints: number;
+  totalTime: number;
+  totalPenalties: number;
+  totalRounds: number;
+  stagesFired: number;
+}
+
 // Result of one what-if simulation scenario: replace the worst stage with
 // a substitute performance and see what the match outcome would have been.
 export interface SimResult {
@@ -204,6 +221,7 @@ export interface CompareResponse {
   consistencyStats: Record<number, ConsistencyStats>;   // keyed by competitor_id
   lossBreakdownStats: Record<number, LossBreakdownStats>; // keyed by competitor_id
   whatIfStats: Record<number, WhatIfResult | null>;     // keyed by competitor_id; null = not enough stages
+  styleFingerprintStats: Record<number, StyleFingerprintStats>; // keyed by competitor_id
 }
 
 export interface EventSummary {
