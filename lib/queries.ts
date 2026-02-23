@@ -1,8 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { fetchMatch, fetchCompare, fetchEvents } from "@/lib/api";
-import type { MatchResponse, CompareResponse, EventSummary } from "@/lib/types";
+import { fetchMatch, fetchCompare, fetchEvents, fetchPopularMatches } from "@/lib/api";
+import type { MatchResponse, CompareResponse, EventSummary, PopularMatch } from "@/lib/types";
 
 export function useMatchQuery(ct: string, id: string) {
   return useQuery<MatchResponse, Error>({
@@ -23,6 +23,14 @@ export function useEventsQuery(
     queryKey: ["events", q, starts_after, starts_before, firearms],
     queryFn: () => fetchEvents(q, starts_after, starts_before, firearms),
     staleTime: 300_000, // 5 minutes — well inside 1h server cache TTL
+  });
+}
+
+export function usePopularMatchesQuery() {
+  return useQuery<PopularMatch[], Error>({
+    queryKey: ["popular-matches"],
+    queryFn: fetchPopularMatches,
+    staleTime: 300_000, // 5 minutes
   });
 }
 

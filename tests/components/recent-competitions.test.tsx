@@ -94,10 +94,10 @@ describe("RecentCompetitions", () => {
     expect(mockRemove).toHaveBeenCalledWith("22", "26547");
   });
 
-  it("shows 'Recent competitions' heading when items exist", () => {
+  it("shows 'My recents' heading when items exist", () => {
     mockGetSnapshot.mockReturnValue(sampleCompetitions);
     render(<RecentCompetitions />);
-    expect(screen.getByText("Recent competitions")).toBeInTheDocument();
+    expect(screen.getByText("My recents")).toBeInTheDocument();
   });
 
   it("shows venue and date when present", () => {
