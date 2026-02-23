@@ -54,7 +54,7 @@ export default function RootLayout({
               </a>
               <Link
                 href="/legal"
-                className="hover:text-foreground transition-colors"
+                className="inline-flex items-center hover:text-foreground transition-colors"
               >
                 Terms &amp; Privacy
               </Link>
