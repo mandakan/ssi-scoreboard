@@ -167,27 +167,37 @@ function QuadrantLabels({ fieldMedianX, fieldMedianY }: QuadrantLabelsProps) {
     fill: "var(--foreground)",
   };
 
-  const pad = 8;
+  // Centre each label in its quadrant rather than nudging from the crosshair.
+  // This keeps labels readable regardless of where the field-median crosshair falls.
+  const leftEdge  = plotArea.x;
+  const rightEdge = plotArea.x + plotArea.width;
+  const topEdge   = plotArea.y;
+  const botEdge   = plotArea.y + plotArea.height;
+
+  const qTopY = (topEdge  + crossY) / 2;
+  const qBotY = (crossY   + botEdge) / 2;
+  const qLeftX  = (leftEdge  + crossX) / 2;
+  const qRightX = (crossX    + rightEdge) / 2;
 
   return (
     <g aria-hidden="true">
       {/* Crosshair lines */}
       <line
-        x1={crossX} y1={plotArea.y}
-        x2={crossX} y2={plotArea.y + plotArea.height}
+        x1={crossX} y1={topEdge}
+        x2={crossX} y2={botEdge}
         style={{ stroke: "var(--border)", strokeDasharray: "4 3", strokeWidth: 1, opacity: 0.6 }}
       />
       <line
-        x1={plotArea.x} y1={crossY}
-        x2={plotArea.x + plotArea.width} y2={crossY}
+        x1={leftEdge} y1={crossY}
+        x2={rightEdge} y2={crossY}
         style={{ stroke: "var(--border)", strokeDasharray: "4 3", strokeWidth: 1, opacity: 0.6 }}
       />
 
-      {/* Quadrant labels */}
-      <text x={crossX + pad} y={plotArea.y + pad + 11} textAnchor="start" style={labelStyle}>IDEAL</text>
-      <text x={crossX - pad} y={plotArea.y + pad + 11} textAnchor="end" style={labelStyle}>FAST / SLOPPY</text>
-      <text x={crossX + pad} y={plotArea.y + plotArea.height - pad} textAnchor="start" style={labelStyle}>CONSERVATIVE</text>
-      <text x={crossX - pad} y={plotArea.y + plotArea.height - pad} textAnchor="end" style={labelStyle}>STRUGGLING</text>
+      {/* Quadrant labels — centred in each quadrant */}
+      <text x={qRightX} y={qTopY} textAnchor="middle" style={labelStyle}>IDEAL</text>
+      <text x={qLeftX}  y={qTopY} textAnchor="middle" style={labelStyle}>FAST / SLOPPY</text>
+      <text x={qRightX} y={qBotY} textAnchor="middle" style={labelStyle}>CONSERVATIVE</text>
+      <text x={qLeftX}  y={qBotY} textAnchor="middle" style={labelStyle}>STRUGGLING</text>
     </g>
   );
 }

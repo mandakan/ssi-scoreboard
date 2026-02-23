@@ -78,6 +78,18 @@ This app is used courtside during live IPSC competitions — on a phone, outdoor
 - Images and icons must have `alt` text or `aria-hidden="true"` if decorative.
 - Use semantic HTML elements (`<button>`, `<nav>`, `<main>`, `<table>`, `<th scope>`, etc.)
   rather than `<div>` with click handlers.
+- **Accordion / disclosure pattern**: always use `<hN><button aria-expanded aria-controls>…</button></hN>`
+  — never nest a heading element inside a button (invalid HTML). Expanded panels should be
+  `<section role="region" aria-labelledby="button-id">` so screen readers can navigate them.
+- **No duplicate landmark names**: every `role="region"` must have a unique `aria-labelledby`
+  label. Two sections on the same page cannot share the same accessible name.
+
+## Chart info popovers
+Every chart section in `app/match/[ct]/[id]/page.tsx` has a `?` (`HelpCircle`) icon button
+that opens a `<Popover>` explaining the chart. **When adding a new chart section, always add
+a matching info popover.** When modifying what a chart shows, update its popover text to match.
+The popover should include: what the axes/axes represent, how to read the visual, and 1–2
+actionable interpretation tips. Keep language concise — max ~4 short paragraphs.
 
 ## Design System & Tailwind v4
 - Use **Tailwind v4** utility classes everywhere — no inline styles.
