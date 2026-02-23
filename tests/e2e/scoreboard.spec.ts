@@ -136,16 +136,17 @@ test.describe("Scoreboard E2E", () => {
 
   test("home page loads and URL input is visible", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("textbox", { name: /match url/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /load/i })).toBeVisible();
+    await expect(
+      page.getByRole("combobox", { name: /search ipsc competitions/i })
+    ).toBeVisible();
   });
 
-  test("invalid URL shows error message", async ({ page }) => {
+  test("pasting non-SSI URL stays on home page", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("textbox").fill("https://example.com/event/22/26547/");
-    await page.getByRole("button", { name: /load/i }).click();
-    // Scope to the <p> alert to avoid matching the Next.js route announcer
-    await expect(page.locator("p[role='alert']")).toBeVisible();
+    await page.getByRole("combobox", { name: /search ipsc competitions/i }).click();
+    await page.getByPlaceholder(/match url/i).fill("https://example.com/event/22/26547/");
+    // Non-SSI URLs are treated as search text — no navigation
+    await expect(page).toHaveURL("/");
   });
 
   test("valid URL navigates to match page", async ({ page }) => {
@@ -155,8 +156,8 @@ test.describe("Scoreboard E2E", () => {
     );
 
     await page.goto("/");
-    await page.getByRole("textbox").fill("https://shootnscoreit.com/event/22/26547/");
-    await page.getByRole("button", { name: /load/i }).click();
+    await page.getByRole("combobox", { name: /search ipsc competitions/i }).click();
+    await page.getByPlaceholder(/match url/i).fill("https://shootnscoreit.com/event/22/26547/");
 
     await page.waitForURL("/match/22/26547");
     await expect(page.getByText("Test IPSC Match")).toBeVisible();
@@ -308,7 +309,9 @@ test.describe("Mobile 390px viewport", () => {
 
   test("home page has no horizontal overflow at 390px", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("textbox", { name: /match url/i })).toBeVisible();
+    await expect(
+      page.getByRole("combobox", { name: /search ipsc competitions/i })
+    ).toBeVisible();
 
     const hasOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth > window.innerWidth
