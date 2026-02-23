@@ -56,7 +56,7 @@ describe("PopularMatches", () => {
     mockUsePopularMatchesQuery.mockReturnValue({
       data: [],
       isLoading: false,
-    } as ReturnType<typeof usePopularMatchesQuery>);
+    } as unknown as ReturnType<typeof usePopularMatchesQuery>);
 
     const { container } = render(<PopularMatches />);
     expect(container.firstChild).toBeNull();
@@ -66,7 +66,7 @@ describe("PopularMatches", () => {
     mockUsePopularMatchesQuery.mockReturnValue({
       data: undefined,
       isLoading: false,
-    } as ReturnType<typeof usePopularMatchesQuery>);
+    } as unknown as ReturnType<typeof usePopularMatchesQuery>);
 
     const { container } = render(<PopularMatches />);
     expect(container.firstChild).toBeNull();
@@ -76,7 +76,7 @@ describe("PopularMatches", () => {
     mockUsePopularMatchesQuery.mockReturnValue({
       data: undefined,
       isLoading: true,
-    } as ReturnType<typeof usePopularMatchesQuery>);
+    } as unknown as ReturnType<typeof usePopularMatchesQuery>);
 
     render(<PopularMatches />);
     expect(screen.getByText("Popular")).toBeInTheDocument();
@@ -88,7 +88,7 @@ describe("PopularMatches", () => {
     mockUsePopularMatchesQuery.mockReturnValue({
       data: sampleMatches,
       isLoading: false,
-    } as ReturnType<typeof usePopularMatchesQuery>);
+    } as unknown as ReturnType<typeof usePopularMatchesQuery>);
 
     render(<PopularMatches />);
     expect(screen.getByText("Regional Open 2025")).toBeInTheDocument();
@@ -99,7 +99,7 @@ describe("PopularMatches", () => {
     mockUsePopularMatchesQuery.mockReturnValue({
       data: sampleMatches,
       isLoading: false,
-    } as ReturnType<typeof usePopularMatchesQuery>);
+    } as unknown as ReturnType<typeof usePopularMatchesQuery>);
 
     render(<PopularMatches />);
     expect(screen.getByText("Popular")).toBeInTheDocument();
@@ -109,7 +109,7 @@ describe("PopularMatches", () => {
     mockUsePopularMatchesQuery.mockReturnValue({
       data: sampleMatches,
       isLoading: false,
-    } as ReturnType<typeof usePopularMatchesQuery>);
+    } as unknown as ReturnType<typeof usePopularMatchesQuery>);
 
     render(<PopularMatches />);
     expect(screen.getByText("100%")).toBeInTheDocument();
@@ -120,7 +120,7 @@ describe("PopularMatches", () => {
     mockUsePopularMatchesQuery.mockReturnValue({
       data: [sampleMatches[0]],
       isLoading: false,
-    } as ReturnType<typeof usePopularMatchesQuery>);
+    } as unknown as ReturnType<typeof usePopularMatchesQuery>);
 
     render(<PopularMatches />);
     expect(screen.getByText(/Main Range/)).toBeInTheDocument();
@@ -130,7 +130,7 @@ describe("PopularMatches", () => {
     mockUsePopularMatchesQuery.mockReturnValue({
       data: [sampleMatches[0]],
       isLoading: false,
-    } as ReturnType<typeof usePopularMatchesQuery>);
+    } as unknown as ReturnType<typeof usePopularMatchesQuery>);
 
     render(<PopularMatches />);
     const btn = screen.getByRole("button", { name: /open regional open 2025/i });
@@ -142,7 +142,7 @@ describe("PopularMatches", () => {
     mockUsePopularMatchesQuery.mockReturnValue({
       data: sampleMatches,
       isLoading: false,
-    } as ReturnType<typeof usePopularMatchesQuery>);
+    } as unknown as ReturnType<typeof usePopularMatchesQuery>);
 
     render(<PopularMatches />);
     expect(

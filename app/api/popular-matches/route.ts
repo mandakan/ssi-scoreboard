@@ -62,7 +62,7 @@ export async function GET() {
     const idleResults = await Promise.all(
       keys.map(async (key): Promise<KeyWithIdle> => {
         try {
-          const result = await redis.object("idletime", key);
+          const result = await redis.object("IDLETIME", key);
           const idleSeconds = typeof result === "number" ? result : 0;
           return { key, idleSeconds };
         } catch {
