@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronsUpDown, Loader2 } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/popover";
 import { useEventsQuery } from "@/lib/queries";
 import type { EventSummary } from "@/lib/types";
+import { parseMatchUrl } from "@/lib/utils";
 
 const STATUS_LABEL: Record<string, string> = {
   on: "Open",
@@ -138,6 +139,20 @@ export function EventSearch() {
     return () => clearTimeout(timer);
   }, [inputValue]);
 
+  function handleInputChange(value: string) {
+    // Smart URL detection — pasting a match URL navigates directly
+    const trimmed = value.trim();
+    if (trimmed.startsWith("http")) {
+      const parsed = parseMatchUrl(trimmed);
+      if (parsed) {
+        setOpen(false);
+        router.push(`/match/${parsed.ct}/${parsed.id}`);
+        return;
+      }
+    }
+    setInputValue(value);
+  }
+
   const now = new Date();
   const selected = DATE_PRESETS.find((p) => p.id === presetId)!;
   const starts_after = toISODate(selected.preset.after(now));
@@ -162,13 +177,13 @@ export function EventSearch() {
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          aria-label="Browse IPSC competitions"
-          className="w-full justify-between font-normal"
+          aria-label="Search IPSC competitions"
+          className="w-full justify-start font-normal gap-2"
         >
+          <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="text-muted-foreground truncate">
-            Browse competitions…
+            Find your match…
           </span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -225,9 +240,9 @@ export function EventSearch() {
 
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Search by name…"
+            placeholder="Search by name or paste a match URL…"
             value={inputValue}
-            onValueChange={setInputValue}
+            onValueChange={handleInputChange}
           />
           <CommandList>
             {isLoading ? (

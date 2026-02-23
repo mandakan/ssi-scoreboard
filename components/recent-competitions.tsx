@@ -83,7 +83,7 @@ export function RecentCompetitions() {
   if (competitions.length === 0) {
     return (
       <p className="text-sm text-muted-foreground text-center py-4">
-        No recent competitions. Paste a match URL above to get started.
+        Your recently viewed competitions will appear here.
       </p>
     );
   }
