@@ -836,7 +836,7 @@ export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps
                               className="text-xs font-medium border-red-400 text-red-600 dark:text-red-400 cursor-help tabular-nums"
                               aria-label={`Penalty cost: ${penaltyStats[t.id].penaltyCostPercent.toFixed(1)}% match percentage`}
                             >
-                              {`Penalty cost: \u2212${penaltyStats[t.id].penaltyCostPercent.toFixed(1)}% match`}
+                              {`pen \u2212${penaltyStats[t.id].penaltyCostPercent.toFixed(1)}%`}
                             </Badge>
                           </TooltipTrigger>
                           <TooltipContent side="top" className="text-xs space-y-0.5">

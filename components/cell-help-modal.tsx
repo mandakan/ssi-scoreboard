@@ -251,7 +251,7 @@ function SummaryRowDiagram() {
               variant="outline"
               className="text-xs font-medium border-red-400 text-red-600 dark:text-red-400 tabular-nums whitespace-nowrap"
             >
-              {`Penalty cost: \u2212${MOCK_PENALTY_COST.toFixed(1)}% match`}
+              {`pen \u2212${MOCK_PENALTY_COST.toFixed(1)}%`}
             </Badge>
           }
           badge="Ⓔ"
