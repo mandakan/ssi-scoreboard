@@ -53,6 +53,7 @@ const MOCK_COMPARE: CompareResponse = {
     200: { alphaRatio: null, pointsPerSecond: null, penaltyRate: null, totalA: 0, totalC: 0, totalD: 0, totalPoints: 0, totalTime: 0, totalPenalties: 0, totalRounds: 0, stagesFired: 0 },
     300: { alphaRatio: null, pointsPerSecond: null, penaltyRate: null, totalA: 0, totalC: 0, totalD: 0, totalPoints: 0, totalTime: 0, totalPenalties: 0, totalRounds: 0, stagesFired: 0 },
   },
+  fieldFingerprintPoints: [],
   stages: [
     {
       stage_id: 1,

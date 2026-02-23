@@ -10,6 +10,7 @@ import type {
   ConsistencyStats,
   LossBreakdownStats,
   StyleFingerprintStats,
+  FieldFingerprintPoint,
   StageClassification,
   SimResult,
   WhatIfResult,
@@ -960,4 +961,95 @@ export function computeStyleFingerprint(
     totalRounds,
     stagesFired,
   };
+}
+
+/**
+ * Compute the style-fingerprint position for EVERY competitor in the match,
+ * working directly from raw scorecards (not the selected-competitor stage map).
+ *
+ * Used to populate the background cohort cloud on the scatter chart so that
+ * selected competitors can be seen in context of the full field or their division.
+ *
+ * A competitor is included only when they have:
+ *   - at least one non-DNF, non-DQ, non-zeroed stage with time > 0
+ *   - zone data (a/c/d hits) available for the alpha-ratio calculation
+ *
+ * @param allScorecards All raw scorecards for the match (full field, all stages).
+ * @param divisionMap   competitor_id → division string (from match competitor list).
+ */
+export function computeAllFingerprintPoints(
+  allScorecards: RawScorecard[],
+  divisionMap: Map<number, string | null>
+): FieldFingerprintPoint[] {
+  // Aggregate per competitor across all stages
+  const byComp = new Map<
+    number,
+    {
+      totalA: number;
+      totalC: number;
+      totalD: number;
+      totalPoints: number;
+      totalTime: number;
+      totalPenalties: number;
+      totalRounds: number;
+      hasZoneData: boolean;
+    }
+  >();
+
+  for (const sc of allScorecards) {
+    if (sc.dnf || sc.dq || sc.zeroed) continue;
+    if (!sc.time || sc.time <= 0) continue;
+
+    const entry = byComp.get(sc.competitor_id) ?? {
+      totalA: 0, totalC: 0, totalD: 0,
+      totalPoints: 0, totalTime: 0,
+      totalPenalties: 0, totalRounds: 0,
+      hasZoneData: false,
+    };
+
+    const a = sc.a_hits ?? 0;
+    const c = sc.c_hits ?? 0;
+    const d = sc.d_hits ?? 0;
+    const miss = sc.miss_count ?? 0;
+    const ns = sc.no_shoots ?? 0;
+    const proc = sc.procedurals ?? 0;
+
+    if (sc.a_hits != null || sc.c_hits != null || sc.d_hits != null) {
+      entry.hasZoneData = true;
+    }
+
+    entry.totalA += a;
+    entry.totalC += c;
+    entry.totalD += d;
+    entry.totalPoints += sc.points ?? 0;
+    entry.totalTime += sc.time;
+    entry.totalPenalties += miss + ns + proc;
+    entry.totalRounds += a + c + d + miss;
+
+    byComp.set(sc.competitor_id, entry);
+  }
+
+  const points: FieldFingerprintPoint[] = [];
+
+  for (const [competitorId, agg] of byComp) {
+    if (!agg.hasZoneData) continue;
+    if (agg.totalTime <= 0) continue;
+
+    const zoneTotal = agg.totalA + agg.totalC + agg.totalD;
+    if (zoneTotal <= 0) continue;
+
+    const alphaRatio = agg.totalA / zoneTotal;
+    const pointsPerSecond = agg.totalPoints / agg.totalTime;
+    const penaltyRate = agg.totalRounds > 0 ? agg.totalPenalties / agg.totalRounds : 0;
+
+    points.push({
+      competitorId,
+      division: divisionMap.get(competitorId) ?? null,
+      alphaRatio,
+      pointsPerSecond,
+      penaltyRate,
+    });
+  }
+
+  return points;
 }

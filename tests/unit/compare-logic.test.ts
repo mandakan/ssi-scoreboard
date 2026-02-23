@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompetitorInfo } from "@/lib/types";
 
 const competitors: CompetitorInfo[] = [
@@ -1862,5 +1862,80 @@ describe("computeStyleFingerprint", () => {
     const result = computeStyleFingerprint(stages, 1);
 
     expect(result.penaltyRate).toBeNull();
+  });
+});
+
+// ─── computeAllFingerprintPoints ─────────────────────────────────────────────
+
+describe("computeAllFingerprintPoints", () => {
+  const divMap = new Map<number, string | null>([
+    [1, "production"],
+    [2, "open"],
+    [3, "production"],
+  ]);
+
+  it("computes one point per competitor with valid zone data and time", () => {
+    const cards = [
+      makeCard(1, 1, { a_hits: 8, c_hits: 2, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0, points: 40, time: 10 }),
+      makeCard(2, 1, { a_hits: 6, c_hits: 2, d_hits: 2, miss_count: 1, no_shoots: 0, procedurals: 0, points: 35, time: 12 }),
+    ];
+    const result = computeAllFingerprintPoints(cards, divMap);
+    expect(result).toHaveLength(2);
+    const p1 = result.find((p) => p.competitorId === 1)!;
+    expect(p1.alphaRatio).toBeCloseTo(8 / 10, 6);
+    expect(p1.pointsPerSecond).toBeCloseTo(40 / 10, 6);
+    expect(p1.penaltyRate).toBe(0);
+    expect(p1.division).toBe("production");
+  });
+
+  it("attaches division from divisionMap", () => {
+    const cards = [
+      makeCard(2, 1, { a_hits: 6, c_hits: 2, d_hits: 2, miss_count: 0, no_shoots: 0, procedurals: 0, points: 30, time: 8 }),
+    ];
+    const result = computeAllFingerprintPoints(cards, divMap);
+    expect(result[0].division).toBe("open");
+  });
+
+  it("excludes DNF, DQ, and zeroed scorecards", () => {
+    const cards = [
+      makeCard(1, 1, { a_hits: 8, c_hits: 2, d_hits: 0, miss_count: 0, points: 40, time: 10 }),
+      makeCard(2, 1, { dnf: true }),
+      makeCard(3, 1, { dq: true, a_hits: 8, c_hits: 0, d_hits: 0, miss_count: 0, points: 0, time: 0 }),
+    ];
+    const result = computeAllFingerprintPoints(cards, divMap);
+    expect(result).toHaveLength(1);
+    expect(result[0].competitorId).toBe(1);
+  });
+
+  it("excludes competitors with no zone data", () => {
+    const cards = [
+      makeCard(1, 1, { a_hits: null, c_hits: null, d_hits: null, miss_count: null, points: 40, time: 10 }),
+    ];
+    const result = computeAllFingerprintPoints(cards, divMap);
+    expect(result).toHaveLength(0);
+  });
+
+  it("excludes competitors with zero total time", () => {
+    const cards = [
+      makeCard(1, 1, { a_hits: 8, c_hits: 2, d_hits: 0, miss_count: 0, points: 40, time: 0 }),
+    ];
+    const result = computeAllFingerprintPoints(cards, divMap);
+    expect(result).toHaveLength(0);
+  });
+
+  it("aggregates multiple stages for one competitor", () => {
+    const cards = [
+      makeCard(1, 1, { a_hits: 10, c_hits: 0, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0, points: 50, time: 10 }),
+      makeCard(1, 2, { a_hits:  6, c_hits: 4, d_hits: 0, miss_count: 1, no_shoots: 0, procedurals: 0, points: 30, time:  8 }),
+    ];
+    const result = computeAllFingerprintPoints(cards, divMap);
+    expect(result).toHaveLength(1);
+    const p = result[0];
+    // alphaRatio = (10+6) / (10+6 + 0+4 + 0+0) = 16/20
+    expect(p.alphaRatio).toBeCloseTo(16 / 20, 6);
+    // pointsPerSecond = (50+30) / (10+8)
+    expect(p.pointsPerSecond).toBeCloseTo(80 / 18, 6);
+    // penaltyRate = 1 / (10+0+0+0 + 6+4+0+1) = 1/21
+    expect(p.penaltyRate).toBeCloseTo(1 / 21, 6);
   });
 });
