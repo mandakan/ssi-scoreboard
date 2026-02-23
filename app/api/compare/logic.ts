@@ -1001,6 +1001,8 @@ export function computeStyleFingerprint(
     accuracyPercentile: null,
     speedPercentile: null,
     archetype: null,
+    composurePercentile: 50,
+    consistencyPercentile: 50,
   };
 }
 
@@ -1034,6 +1036,7 @@ export function computeAllFingerprintPoints(
       totalPenalties: number;
       totalRounds: number;
       hasZoneData: boolean;
+      hfValues: number[];
     }
   >();
 
@@ -1046,6 +1049,7 @@ export function computeAllFingerprintPoints(
       totalPoints: 0, totalTime: 0,
       totalPenalties: 0, totalRounds: 0,
       hasZoneData: false,
+      hfValues: [],
     };
 
     const a = sc.a_hits ?? 0;
@@ -1066,6 +1070,9 @@ export function computeAllFingerprintPoints(
     entry.totalTime += sc.time;
     entry.totalPenalties += miss + ns + proc;
     entry.totalRounds += a + c + d + miss;
+    if (sc.points != null) {
+      entry.hfValues.push(sc.points / sc.time);
+    }
 
     byComp.set(sc.competitor_id, entry);
   }
@@ -1080,12 +1087,23 @@ export function computeAllFingerprintPoints(
     const zoneTotal = agg.totalA + agg.totalC + agg.totalD;
     if (zoneTotal <= 0) continue;
 
+    // Compute coefficient of variation of per-stage HF
+    let cv: number | null = null;
+    if (agg.hfValues.length >= 2) {
+      const hfMean = agg.hfValues.reduce((a, b) => a + b, 0) / agg.hfValues.length;
+      if (hfMean > 0) {
+        const variance = agg.hfValues.reduce((sum, v) => sum + (v - hfMean) ** 2, 0) / agg.hfValues.length;
+        cv = Math.sqrt(variance) / hfMean;
+      }
+    }
+
     rawPoints.push({
       competitorId,
       division: divisionMap.get(competitorId) ?? null,
       alphaRatio: agg.totalA / zoneTotal,
       pointsPerSecond: agg.totalPoints / agg.totalTime,
       penaltyRate: agg.totalRounds > 0 ? agg.totalPenalties / agg.totalRounds : 0,
+      cv,
     });
   }
 
@@ -1098,4 +1116,32 @@ export function computeAllFingerprintPoints(
     accuracyPercentile: computePercentileRank(p.alphaRatio, allAlphaRatios) ?? 50,
     speedPercentile: computePercentileRank(p.pointsPerSecond, allSpeeds) ?? 50,
   }));
+}
+
+/**
+ * Compute composure and consistency percentile ranks for a competitor vs. the full field.
+ *
+ *   composurePercentile   = 100 − percentile rank of penaltyRate (100 = fewest penalties)
+ *   consistencyPercentile = 100 − percentile rank of CV (100 = most consistent);
+ *                           defaults to 50 when competitorCv is null
+ *
+ * Speed and accuracy percentiles are handled separately in route.ts via computePercentileRank.
+ */
+export function computeStylePercentiles(
+  stats: StyleFingerprintStats,
+  competitorCv: number | null,
+  field: FieldFingerprintPoint[]
+): Pick<StyleFingerprintStats, "composurePercentile" | "consistencyPercentile"> {
+  const allPenaltyRates = field.map((p) => p.penaltyRate);
+  const allCvs = field.map((p) => p.cv).filter((v): v is number => v !== null);
+
+  const composurePercentile =
+    100 - (computePercentileRank(stats.penaltyRate ?? 0, allPenaltyRates) ?? 50);
+
+  const consistencyPercentile =
+    competitorCv !== null
+      ? 100 - (computePercentileRank(competitorCv, allCvs) ?? 50)
+      : 50;
+
+  return { composurePercentile, consistencyPercentile };
 }

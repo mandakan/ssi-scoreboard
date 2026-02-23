@@ -188,6 +188,7 @@ export interface FieldFingerprintPoint {
   accuracyPercentile: number;
   /** Percentile rank within the full field, 0–100 (100 = fastest). */
   speedPercentile: number;
+  cv: number | null;         // coefficient of variation of per-stage HF; null when < 2 stages
 }
 
 // Match-level aggregate "style fingerprint" for one competitor.
@@ -211,6 +212,10 @@ export interface StyleFingerprintStats {
   speedPercentile: number | null;
   /** Archetype derived from quadrant of (accuracyPercentile, speedPercentile). */
   archetype: ShooterArchetype | null;
+  /** 100 − penaltyRate rank; 100 = fewest penalties in field. */
+  composurePercentile: number;
+  /** 100 − CV rank; 100 = most consistent stage-to-stage HF. Defaults to 50 when CV unavailable. */
+  consistencyPercentile: number;
 }
 
 // Result of one what-if simulation scenario: replace the worst stage with
