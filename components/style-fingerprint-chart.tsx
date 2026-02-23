@@ -14,7 +14,18 @@ import {
   useYAxisDomain,
 } from "recharts";
 import { buildColorMap } from "@/lib/colors";
-import type { CompareResponse, CompetitorInfo, StyleFingerprintStats } from "@/lib/types";
+import type {
+  CompareResponse,
+  CompetitorInfo,
+  StyleFingerprintStats,
+  FieldFingerprintPoint,
+} from "@/lib/types";
+
+// --------------------------------------------------------------------------
+// Cohort filter
+// --------------------------------------------------------------------------
+
+type CohortMode = "all" | "division" | "off";
 
 // --------------------------------------------------------------------------
 // Types
@@ -23,7 +34,6 @@ import type { CompareResponse, CompetitorInfo, StyleFingerprintStats } from "@/l
 interface FingerprintPoint {
   alphaRatio: number;
   pointsPerSecond: number;
-  /** Normalised penalty rate mapped to a dot radius (px). */
   dotRadius: number;
   penaltyRate: number;
   competitorId: number;
@@ -37,18 +47,18 @@ interface FingerprintPoint {
 // Helpers
 // --------------------------------------------------------------------------
 
-/** Map penalty rate to a dot radius in the range [8, 22] px. */
+/** Map penalty rate [0, maxRate] to dot radius [8, 22] px. */
 function penaltyToRadius(rate: number, maxRate: number): number {
   if (maxRate <= 0) return 10;
   const norm = Math.min(rate / maxRate, 1);
   return 8 + norm * 14;
 }
 
-function buildFingerprintData(
+function buildSelectedPoints(
   competitors: CompetitorInfo[],
   stats: Record<number, StyleFingerprintStats>
 ): FingerprintPoint[] {
-  const validPoints = competitors
+  const valid = competitors
     .map((c) => {
       const s = stats[c.id];
       if (!s || s.alphaRatio == null || s.pointsPerSecond == null) return null;
@@ -61,23 +71,69 @@ function buildFingerprintData(
         totalRounds: s.totalRounds,
         stagesFired: s.stagesFired,
         competitorName: c.name,
-        dotRadius: 0, // filled below after max is known
+        dotRadius: 0,
       };
     })
     .filter((p): p is FingerprintPoint => p !== null);
 
-  const maxRate = Math.max(...validPoints.map((p) => p.penaltyRate), 0);
-  return validPoints.map((p) => ({
-    ...p,
-    dotRadius: penaltyToRadius(p.penaltyRate, maxRate),
-  }));
+  const maxRate = Math.max(...valid.map((p) => p.penaltyRate), 0);
+  return valid.map((p) => ({ ...p, dotRadius: penaltyToRadius(p.penaltyRate, maxRate) }));
+}
+
+/**
+ * Filter field points to the given cohort mode.
+ * "division" keeps only competitors whose division matches any selected competitor's division.
+ */
+function filterFieldPoints(
+  points: FieldFingerprintPoint[],
+  mode: CohortMode,
+  selectedCompetitors: CompetitorInfo[],
+  styleFingerprintStats: Record<number, StyleFingerprintStats>,
+  selectedIds: Set<number>
+): FieldFingerprintPoint[] {
+  if (mode === "off") return [];
+
+  // Exclude the selected competitors from the background cloud (they get their own dots)
+  const field = points.filter((p) => !selectedIds.has(p.competitorId));
+
+  if (mode === "all") return field;
+
+  // "division": keep only those sharing a division with any selected competitor
+  // Division comes from the styleFingerprintStats data — we get it from the field points
+  // by looking at which divisions the selected competitors belong to.
+  // The selected competitors' division info is on their CompetitorInfo.
+  const selectedDivisions = new Set(
+    selectedCompetitors
+      .map((c) => c.division?.toLowerCase().trim())
+      .filter((d): d is string => d != null && d !== "")
+  );
+
+  if (selectedDivisions.size === 0) return field; // fall back to all when no division info
+
+  return field.filter((p) => {
+    const div = p.division?.toLowerCase().trim();
+    return div != null && selectedDivisions.has(div);
+  });
 }
 
 // --------------------------------------------------------------------------
-// Quadrant label overlay
+// Quadrant label + crosshair overlay
+// (crosshair positioned at field medians when available)
 // --------------------------------------------------------------------------
 
-function QuadrantLabels() {
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const s = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 === 0 ? (s[mid - 1] + s[mid]) / 2 : s[mid];
+}
+
+interface QuadrantLabelsProps {
+  fieldMedianX: number | null;
+  fieldMedianY: number | null;
+}
+
+function QuadrantLabels({ fieldMedianX, fieldMedianY }: QuadrantLabelsProps) {
   const plotArea = usePlotArea();
   const xDomain = useXAxisDomain();
   const yDomain = useYAxisDomain();
@@ -85,84 +141,53 @@ function QuadrantLabels() {
   if (!plotArea || !xDomain || !yDomain) return null;
   if (xDomain.length < 2 || yDomain.length < 2) return null;
 
-  const xMid = plotArea.x + plotArea.width / 2;
-  const yMid = plotArea.y + plotArea.height / 2;
+  const xMin = typeof xDomain[0] === "number" ? xDomain[0] : 0;
+  const xMax = typeof xDomain[1] === "number" ? xDomain[1] : 1;
+  const yMin = typeof yDomain[0] === "number" ? yDomain[0] : 0;
+  const yMax = typeof yDomain[1] === "number" ? yDomain[1] : 1;
+
+  if (xMax <= xMin || yMax <= yMin) return null;
+
+  const toPixelX = (v: number) =>
+    plotArea.x + ((v - xMin) / (xMax - xMin)) * plotArea.width;
+  const toPixelY = (v: number) =>
+    plotArea.y + ((yMax - v) / (yMax - yMin)) * plotArea.height;
+
+  // Crosshair position: field medians if available, else visual midpoint
+  const crossX = toPixelX(fieldMedianX ?? (xMin + xMax) / 2);
+  const crossY = toPixelY(fieldMedianY ?? (yMin + yMax) / 2);
 
   const labelStyle: React.CSSProperties = {
-    fontSize: 11,
-    fontWeight: 600,
-    opacity: 0.18,
+    fontSize: 10,
+    fontWeight: 700,
+    opacity: 0.2,
     pointerEvents: "none" as const,
     userSelect: "none" as const,
-    letterSpacing: 0.3,
+    letterSpacing: 0.4,
+    fill: "var(--foreground)",
   };
 
-  const pad = 10;
+  const pad = 8;
 
   return (
     <g aria-hidden="true">
-      {/* Top-right: Ideal */}
-      <text
-        x={xMid + pad}
-        y={plotArea.y + pad + 12}
-        style={{ ...labelStyle, fill: "var(--foreground)" }}
-        textAnchor="start"
-      >
-        IDEAL
-      </text>
-      {/* Top-left: Fast / sloppy */}
-      <text
-        x={xMid - pad}
-        y={plotArea.y + pad + 12}
-        style={{ ...labelStyle, fill: "var(--foreground)" }}
-        textAnchor="end"
-      >
-        FAST / SLOPPY
-      </text>
-      {/* Bottom-right: Conservative */}
-      <text
-        x={xMid + pad}
-        y={plotArea.y + plotArea.height - pad}
-        style={{ ...labelStyle, fill: "var(--foreground)" }}
-        textAnchor="start"
-      >
-        CONSERVATIVE
-      </text>
-      {/* Bottom-left: Struggling */}
-      <text
-        x={xMid - pad}
-        y={plotArea.y + plotArea.height - pad}
-        style={{ ...labelStyle, fill: "var(--foreground)" }}
-        textAnchor="end"
-      >
-        STRUGGLING
-      </text>
-
       {/* Crosshair lines */}
       <line
-        x1={xMid}
-        y1={plotArea.y}
-        x2={xMid}
-        y2={plotArea.y + plotArea.height}
-        style={{
-          stroke: "var(--border)",
-          strokeDasharray: "4 3",
-          strokeWidth: 1,
-          opacity: 0.5,
-        }}
+        x1={crossX} y1={plotArea.y}
+        x2={crossX} y2={plotArea.y + plotArea.height}
+        style={{ stroke: "var(--border)", strokeDasharray: "4 3", strokeWidth: 1, opacity: 0.6 }}
       />
       <line
-        x1={plotArea.x}
-        y1={yMid}
-        x2={plotArea.x + plotArea.width}
-        y2={yMid}
-        style={{
-          stroke: "var(--border)",
-          strokeDasharray: "4 3",
-          strokeWidth: 1,
-          opacity: 0.5,
-        }}
+        x1={plotArea.x} y1={crossY}
+        x2={plotArea.x + plotArea.width} y2={crossY}
+        style={{ stroke: "var(--border)", strokeDasharray: "4 3", strokeWidth: 1, opacity: 0.6 }}
       />
+
+      {/* Quadrant labels */}
+      <text x={crossX + pad} y={plotArea.y + pad + 11} textAnchor="start" style={labelStyle}>IDEAL</text>
+      <text x={crossX - pad} y={plotArea.y + pad + 11} textAnchor="end" style={labelStyle}>FAST / SLOPPY</text>
+      <text x={crossX + pad} y={plotArea.y + plotArea.height - pad} textAnchor="start" style={labelStyle}>CONSERVATIVE</text>
+      <text x={crossX - pad} y={plotArea.y + plotArea.height - pad} textAnchor="end" style={labelStyle}>STRUGGLING</text>
     </g>
   );
 }
@@ -183,17 +208,8 @@ function PenaltyDot({ cx, cy, fill, payload }: DotProps) {
   const r = payload.dotRadius;
   return (
     <g>
-      {/* Enlarged transparent touch hit area */}
       <circle cx={cx} cy={cy} r={Math.max(r, 22)} fill="transparent" />
-      <circle
-        cx={cx}
-        cy={cy}
-        r={r}
-        fill={fill}
-        stroke="white"
-        strokeWidth={1.5}
-        opacity={0.88}
-      />
+      <circle cx={cx} cy={cy} r={r} fill={fill} stroke="white" strokeWidth={1.5} opacity={0.88} />
     </g>
   );
 }
@@ -202,24 +218,13 @@ function PenaltyDot({ cx, cy, fill, payload }: DotProps) {
 // Custom tooltip
 // --------------------------------------------------------------------------
 
-interface TooltipEntry {
-  payload: FingerprintPoint;
-}
+interface TooltipEntry { payload: FingerprintPoint }
 
-function CustomTooltip({
-  active,
-  payload,
-}: {
-  active?: boolean;
-  payload?: TooltipEntry[];
-}) {
+function CustomTooltip({ active, payload }: { active?: boolean; payload?: TooltipEntry[] }) {
   if (!active || !payload?.length) return null;
   const pt = payload[0].payload;
-
   const penaltyPct =
-    pt.totalRounds > 0
-      ? ((pt.totalPenalties / pt.totalRounds) * 100).toFixed(1)
-      : "0.0";
+    pt.totalRounds > 0 ? ((pt.totalPenalties / pt.totalRounds) * 100).toFixed(1) : "0.0";
 
   return (
     <div
@@ -235,21 +240,13 @@ function CustomTooltip({
       }}
     >
       <p style={{ fontWeight: 600, marginBottom: 4 }}>{pt.competitorName}</p>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "auto auto",
-          columnGap: 12,
-        }}
-      >
+      <div style={{ display: "grid", gridTemplateColumns: "auto auto", columnGap: 12 }}>
         <span style={{ color: "var(--muted-foreground)" }}>Hit quality (α%)</span>
         <span>{(pt.alphaRatio * 100).toFixed(1)}%</span>
         <span style={{ color: "var(--muted-foreground)" }}>Speed (pts/s)</span>
         <span>{pt.pointsPerSecond.toFixed(2)}</span>
         <span style={{ color: "var(--muted-foreground)" }}>Penalty rate</span>
-        <span>
-          {penaltyPct}% ({pt.totalPenalties}/{pt.totalRounds} rds)
-        </span>
+        <span>{penaltyPct}% ({pt.totalPenalties}/{pt.totalRounds} rds)</span>
         <span style={{ color: "var(--muted-foreground)" }}>Stages fired</span>
         <span>{pt.stagesFired}</span>
       </div>
@@ -258,30 +255,34 @@ function CustomTooltip({
 }
 
 // --------------------------------------------------------------------------
-// Legend
+// Field dot (background cohort cloud) — tiny, no tooltip needed
 // --------------------------------------------------------------------------
 
-interface LegendItem {
-  id: number;
-  label: string;
-  color: string;
+interface FieldDotProps { cx?: number; cy?: number }
+
+function FieldDot({ cx, cy }: FieldDotProps) {
+  if (cx === undefined || cy === undefined) return null;
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={4}
+      style={{ fill: "var(--muted-foreground)", opacity: 0.22 }}
+    />
+  );
 }
 
+// --------------------------------------------------------------------------
+// Competitor legend
+// --------------------------------------------------------------------------
+
+interface LegendItem { id: number; label: string; color: string }
+
 function ToggleLegend({
-  items,
-  hiddenIds,
-  onToggle,
-}: {
-  items: LegendItem[];
-  hiddenIds: Set<number>;
-  onToggle: (id: number) => void;
-}) {
+  items, hiddenIds, onToggle,
+}: { items: LegendItem[]; hiddenIds: Set<number>; onToggle: (id: number) => void }) {
   return (
-    <div
-      role="group"
-      aria-label="Toggle competitors"
-      className="flex flex-wrap justify-center gap-2 pt-2"
-    >
+    <div role="group" aria-label="Toggle competitors" className="flex flex-wrap justify-center gap-2 pt-2">
       {items.map(({ id, label, color }) => {
         const hidden = hiddenIds.has(id);
         return (
@@ -297,11 +298,7 @@ function ToggleLegend({
               opacity: hidden ? 0.4 : undefined,
             }}
           >
-            <span
-              className="inline-block h-3 w-3 flex-none rounded-full"
-              style={{ backgroundColor: color }}
-              aria-hidden="true"
-            />
+            <span className="inline-block h-3 w-3 flex-none rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
             <span className={hidden ? "line-through" : ""}>{label}</span>
           </button>
         );
@@ -311,14 +308,38 @@ function ToggleLegend({
 }
 
 // --------------------------------------------------------------------------
-// Penalty size legend
+// Cohort toggle
 // --------------------------------------------------------------------------
 
-function PenaltySizeLegend() {
+const COHORT_OPTIONS: { value: CohortMode; label: string }[] = [
+  { value: "all", label: "All competitors" },
+  { value: "division", label: "Same division" },
+  { value: "off", label: "Off" },
+];
+
+function CohortToggle({ mode, onChange }: { mode: CohortMode; onChange: (m: CohortMode) => void }) {
   return (
-    <p className="text-center text-xs" style={{ color: "var(--muted-foreground)" }}>
-      Dot size ∝ penalty rate — larger dot = more penalties
-    </p>
+    <div role="group" aria-label="Field overlay cohort" className="flex gap-1 flex-wrap">
+      <span className="text-xs self-center pr-1" style={{ color: "var(--muted-foreground)" }}>
+        Field overlay:
+      </span>
+      {COHORT_OPTIONS.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onChange(opt.value)}
+          aria-pressed={mode === opt.value}
+          className="rounded-full border px-3 py-0.5 text-xs transition-colors"
+          style={{
+            backgroundColor: mode === opt.value ? "var(--foreground)" : undefined,
+            color: mode === opt.value ? "var(--background)" : "var(--muted-foreground)",
+            borderColor: mode === opt.value ? "var(--foreground)" : "var(--border)",
+          }}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -331,13 +352,15 @@ interface StyleFingerprintChartProps {
 }
 
 export function StyleFingerprintChart({ data }: StyleFingerprintChartProps) {
-  const { competitors, styleFingerprintStats } = data;
+  const { competitors, styleFingerprintStats, fieldFingerprintPoints } = data;
   const colorMap = buildColorMap(competitors.map((c) => c.id));
   const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
+  const [cohortMode, setCohortMode] = useState<CohortMode>("all");
 
-  const allPoints = buildFingerprintData(competitors, styleFingerprintStats);
-  const hasData = allPoints.length > 0;
+  const selectedPoints = buildSelectedPoints(competitors, styleFingerprintStats);
+  const selectedIds = new Set(competitors.map((c) => c.id));
 
+  const hasData = selectedPoints.length > 0;
   if (!hasData) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -345,6 +368,22 @@ export function StyleFingerprintChart({ data }: StyleFingerprintChartProps) {
       </p>
     );
   }
+
+  const fieldPoints = filterFieldPoints(
+    fieldFingerprintPoints,
+    cohortMode,
+    competitors,
+    styleFingerprintStats,
+    selectedIds
+  );
+
+  // Field medians for crosshair positioning (computed from the full unfiltered field
+  // so the reference is always the whole match, not just the visible cohort)
+  const allFieldExcludingSelected = fieldFingerprintPoints.filter(
+    (p) => !selectedIds.has(p.competitorId)
+  );
+  const fieldMedianX = median(allFieldExcludingSelected.map((p) => p.alphaRatio));
+  const fieldMedianY = median(allFieldExcludingSelected.map((p) => p.pointsPerSecond));
 
   const formatLabel = (comp: CompetitorInfo) =>
     `#${comp.competitor_number} ${comp.name.split(" ")[0]}`;
@@ -365,8 +404,10 @@ export function StyleFingerprintChart({ data }: StyleFingerprintChartProps) {
   }));
 
   return (
-    <div>
-      {/* Square chart that fills full width on mobile */}
+    <div className="space-y-3">
+      <CohortToggle mode={cohortMode} onChange={setCohortMode} />
+
+      {/* Square chart filling full width on mobile */}
       <div className="w-full" style={{ aspectRatio: "1 / 1", maxHeight: 400 }}>
         <ResponsiveContainer width="100%" height="100%">
           <ScatterChart margin={{ top: 20, right: 20, left: 0, bottom: 32 }}>
@@ -401,15 +442,30 @@ export function StyleFingerprintChart({ data }: StyleFingerprintChartProps) {
                 style: { fontSize: 12, fill: "var(--muted-foreground)" },
               }}
             />
-            <Tooltip
-              content={<CustomTooltip />}
-              cursor={{ strokeDasharray: "3 3" }}
-            />
-            {/* Quadrant labels and crosshair lines */}
-            <QuadrantLabels />
+            <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: "3 3" }} />
+
+            {/* Quadrant overlay — crosshair at field medians */}
+            <QuadrantLabels fieldMedianX={fieldMedianX} fieldMedianY={fieldMedianY} />
+
+            {/* Background cohort cloud */}
+            {fieldPoints.length > 0 && (
+              <Scatter
+                name="Field"
+                data={fieldPoints}
+                shape={(props) => (
+                  <FieldDot
+                    cx={(props as FieldDotProps).cx}
+                    cy={(props as FieldDotProps).cy}
+                  />
+                )}
+                isAnimationActive={false}
+              />
+            )}
+
+            {/* Selected competitors */}
             {competitors.map((comp) => {
               if (hiddenIds.has(comp.id)) return null;
-              const pts = allPoints.filter((p) => p.competitorId === comp.id);
+              const pts = selectedPoints.filter((p) => p.competitorId === comp.id);
               if (pts.length === 0) return null;
               return (
                 <Scatter
@@ -431,12 +487,14 @@ export function StyleFingerprintChart({ data }: StyleFingerprintChartProps) {
           </ScatterChart>
         </ResponsiveContainer>
       </div>
-      <PenaltySizeLegend />
-      <ToggleLegend
-        items={legendItems}
-        hiddenIds={hiddenIds}
-        onToggle={toggleSeries}
-      />
+
+      <p className="text-center text-xs" style={{ color: "var(--muted-foreground)" }}>
+        Dot size ∝ penalty rate — larger dot = more penalties
+        {(fieldMedianX != null || fieldMedianY != null) &&
+          " · dashed crosshair = field median"}
+      </p>
+
+      <ToggleLegend items={legendItems} hiddenIds={hiddenIds} onToggle={toggleSeries} />
     </div>
   );
 }

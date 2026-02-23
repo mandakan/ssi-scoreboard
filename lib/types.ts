@@ -173,6 +173,17 @@ export interface LossBreakdownStats {
   hasHitZoneData: boolean;  // true if at least one stage had zone data (so hit loss is meaningful)
 }
 
+// A single competitor's position in the style-fingerprint space, computed
+// from raw scorecards across the full field (not only selected competitors).
+// Used to render the background cohort cloud on the scatter chart.
+export interface FieldFingerprintPoint {
+  competitorId: number;
+  division: string | null;   // handgun division string (e.g. "production") for cohort filtering
+  alphaRatio: number;        // total_A / (total_A + total_C + total_D)
+  pointsPerSecond: number;   // total_points / total_time
+  penaltyRate: number;       // total_penalties / total_rounds_fired
+}
+
 // Match-level aggregate "style fingerprint" for one competitor.
 // Plots where a shooter sits in the accuracy × speed space.
 export interface StyleFingerprintStats {
@@ -222,6 +233,7 @@ export interface CompareResponse {
   lossBreakdownStats: Record<number, LossBreakdownStats>; // keyed by competitor_id
   whatIfStats: Record<number, WhatIfResult | null>;     // keyed by competitor_id; null = not enough stages
   styleFingerprintStats: Record<number, StyleFingerprintStats>; // keyed by competitor_id
+  fieldFingerprintPoints: FieldFingerprintPoint[]; // all match competitors (for cohort cloud)
 }
 
 export interface EventSummary {

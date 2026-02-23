@@ -22,6 +22,7 @@ const baseData: CompareResponse = {
   lossBreakdownStats: {},
   whatIfStats: {},
   styleFingerprintStats: {},
+  fieldFingerprintPoints: [],
   consistencyStats: {
     1: { coefficientOfVariation: null, label: null, stagesFired: 1 },
     2: { coefficientOfVariation: null, label: null, stagesFired: 1 },
