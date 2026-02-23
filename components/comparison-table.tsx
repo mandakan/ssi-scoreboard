@@ -124,7 +124,7 @@ function StageDifficultyIcon({
               key={bar}
               aria-hidden="true"
               className={cn(
-                "inline-block w-1 rounded-sm",
+                "inline-block w-1 rounded-sm bg-current",
                 bar <= level ? "opacity-100" : "opacity-20"
               )}
               style={{ height: `${bar * 3 + 3}px` }}
