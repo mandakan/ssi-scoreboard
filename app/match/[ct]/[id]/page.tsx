@@ -20,6 +20,7 @@ import { StyleFingerprintChart } from "@/components/style-fingerprint-chart";
 import { ShooterStyleRadarChart } from "@/components/shooter-style-radar-chart";
 import { useMatchQuery, useCompareQuery } from "@/lib/queries";
 import { CacheInfoBadge } from "@/components/cache-info-badge";
+import { LoadingBar } from "@/components/loading-bar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Loader2, AlertCircle, ArrowLeft, RefreshCw, ChevronDown, ChevronUp, HelpCircle } from "lucide-react";
@@ -107,6 +108,8 @@ export default function MatchPage() {
 
   if (matchQuery.isLoading) {
     return (
+      <>
+      <LoadingBar matchLoaded={false} compareLoaded={false} hasCompetitors={selectedIds.length > 0} />
       <div className="min-h-screen p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
         {/* nav row */}
         <div className="flex items-center justify-between">
@@ -139,6 +142,7 @@ export default function MatchPage() {
           <Skeleton className="h-10 w-full rounded-md" />
         </div>
       </div>
+      </>
     );
   }
 
@@ -174,6 +178,11 @@ export default function MatchPage() {
 
   return (
     <div className="min-h-screen p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
+      <LoadingBar
+        matchLoaded={true}
+        compareLoaded={!!compareQuery.data}
+        hasCompetitors={selectedIds.length > 0}
+      />
       {/* Back link + share */}
       <div className="flex items-center justify-between">
         <Link
