@@ -124,6 +124,13 @@ const MOCK_COMPARE_2: CompareResponse = {
 };
 
 test.describe("Scoreboard E2E", () => {
+  test.beforeEach(async ({ page }) => {
+    // Suppress the first-visit help modal so it doesn't intercept clicks in tests.
+    await page.addInitScript(() => {
+      localStorage.setItem("ssi-cell-help-seen", "1");
+    });
+  });
+
   test("home page loads and URL input is visible", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("textbox", { name: /match url/i })).toBeVisible();
@@ -269,6 +276,13 @@ test.describe("Scoreboard E2E", () => {
 
 test.describe("Mobile 390px viewport", () => {
   test.use({ viewport: { width: 390, height: 844 } });
+
+  test.beforeEach(async ({ page }) => {
+    // Suppress the first-visit help modal so it doesn't intercept clicks in tests.
+    await page.addInitScript(() => {
+      localStorage.setItem("ssi-cell-help-seen", "1");
+    });
+  });
 
   test("comparison page has no horizontal overflow with 2 competitors", async ({ page }) => {
     await page.route("/api/match/22/26547", (route) =>
