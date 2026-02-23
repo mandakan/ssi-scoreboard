@@ -93,7 +93,7 @@ function StageNumberDot({ cx, cy, fill, payload }: DotProps) {
         cy={cy}
         r={9}
         fill={fill}
-        stroke="white"
+        style={{ stroke: "var(--background)" }}
         strokeWidth={1.5}
         opacity={0.9}
       />
@@ -102,7 +102,7 @@ function StageNumberDot({ cx, cy, fill, payload }: DotProps) {
         y={cy + 3.5}
         textAnchor="middle"
         fontSize={8}
-        fill="white"
+        style={{ fill: "var(--background)" }}
         fontWeight="bold"
         className="pointer-events-none select-none"
       >

@@ -103,9 +103,9 @@ export function HfPercentChart({ data }: HfPercentChartProps) {
           margin={{ top: 8, right: 16, left: 0, bottom: 0 }}
         >
           {/* Colored performance bands — rendered first to sit below grid and lines */}
-          <ReferenceArea y1={0} y2={85} fill="#ef4444" fillOpacity={0.07} />
-          <ReferenceArea y1={85} y2={95} fill="#f59e0b" fillOpacity={0.07} />
-          <ReferenceArea y1={95} y2={300} fill="#22c55e" fillOpacity={0.07} />
+          <ReferenceArea y1={0} y2={85} style={{ fill: "var(--perf-red)" }} fillOpacity={0.07} />
+          <ReferenceArea y1={85} y2={95} style={{ fill: "var(--perf-amber)" }} fillOpacity={0.07} />
+          <ReferenceArea y1={95} y2={300} style={{ fill: "var(--perf-green)" }} fillOpacity={0.07} />
 
           <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
           <XAxis
@@ -181,13 +181,13 @@ export function HfPercentChart({ data }: HfPercentChartProps) {
         className="flex flex-wrap justify-center gap-x-4 gap-y-1 pt-1 text-xs"
         aria-label="Performance bands"
       >
-        <span style={{ color: "#22c55e" }}>
+        <span className="text-green-600 dark:text-green-400">
           <span aria-hidden="true">■</span> &gt;95% solid
         </span>
-        <span style={{ color: "#f59e0b" }}>
+        <span className="text-amber-600 dark:text-amber-400">
           <span aria-hidden="true">■</span> 85–95% mediocre
         </span>
-        <span style={{ color: "#ef4444" }}>
+        <span className="text-red-600 dark:text-red-400">
           <span aria-hidden="true">■</span> &lt;85% leak
         </span>
       </div>
