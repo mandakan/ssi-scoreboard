@@ -1,5 +1,9 @@
 # SSI Scoreboard
 
+[![CI](https://github.com/mandakan/ssi-scoreboard/actions/workflows/ci.yml/badge.svg)](https://github.com/mandakan/ssi-scoreboard/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/thias)
+
 Live stage-by-stage comparison tool for IPSC competitions on [shootnscoreit.com](https://shootnscoreit.com).
 
 The official site only lets you view one competitor at a time. This app lets you select
@@ -169,6 +173,12 @@ This project targets **WCAG 2.1 AA** compliance:
 - Error states use `role="alert"` for screen reader announcements
 - Color is never the only means of conveying information
 - Semantic HTML throughout (`<button>`, `<table>`, `<th scope>`, etc.)
+
+## Support
+
+If this tool saves you time at the range, consider buying me a coffee:
+
+[![Buy Me a Coffee](https://www.buymeacoffee.com/assets/img/custom_images/yellow_img.png)](https://buymeacoffee.com/thias)
 
 ## Other deployment targets
 
