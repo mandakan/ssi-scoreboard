@@ -3,7 +3,7 @@ import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY, MATCH_QUERY } from "
 import redis from "@/lib/redis";
 import { formatDivisionDisplay } from "@/lib/divisions";
 import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, type RawScorecard } from "@/app/api/compare/logic";
-import type { CompareResponse, CompetitorInfo } from "@/lib/types";
+import type { CompareResponse, CompetitorInfo, StageComparison } from "@/lib/types";
 
 // ─── Raw GraphQL response shapes ─────────────────────────────────────────────
 
@@ -255,9 +255,34 @@ export async function GET(req: Request) {
     ])
   );
 
-  const stages = computeGroupRankings(rawScorecards, requestedCompetitors).map(
+  let stages: StageComparison[] = computeGroupRankings(rawScorecards, requestedCompetitors).map(
     (s) => ({ ...s, ...stageMetaMap.get(s.stage_id) })
   );
+
+  // Fallback for future matches: if no scorecards exist yet but stage metadata is
+  // available from the match query, build placeholder rows so the comparison table
+  // shows stage names and metadata. Competitor cells render "—" for undefined entries.
+  if (stages.length === 0 && stageMetaMap.size > 0) {
+    stages = (matchData.event.stages ?? []).map((s) => {
+      const stageId = parseInt(s.id, 10);
+      const meta = stageMetaMap.get(stageId);
+      return {
+        stage_id: stageId,
+        stage_name: s.name,
+        stage_num: s.number,
+        max_points: s.max_points ?? 0,
+        group_leader_hf: null,
+        group_leader_points: null,
+        overall_leader_hf: null,
+        field_median_hf: null,
+        field_competitor_count: 0,
+        stageDifficultyLevel: 3 as const,
+        stageDifficultyLabel: "—",
+        competitors: {},
+        ...(meta ?? {}),
+      } satisfies StageComparison;
+    });
+  }
 
   const tRankings = performance.now();
   console.log(`[compare] computeGroupRankings: ${(tRankings - tFlatten).toFixed(0)}ms`);
