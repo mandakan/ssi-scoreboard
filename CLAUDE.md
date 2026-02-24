@@ -115,6 +115,18 @@ actionable interpretation tips. Keep language concise — max ~4 short paragraph
 - `group_leader_points` on `StageComparison` is reserved for the future benchmark overlay feature — do not remove
 - shadcn components live in `components/ui/` — do not modify generated files directly
 
+## Cache Schema Versioning
+`CACHE_SCHEMA_VERSION` in `lib/constants.ts` is embedded in every Redis cache entry as `v`.
+Whenever the **shape** of a cached GraphQL response changes (new fields, removed fields,
+renamed fields), bump `CACHE_SCHEMA_VERSION` by 1 and add a one-line history comment.
+
+Entries missing `v` or carrying an older version are treated as cache misses and re-fetched
+automatically — no manual `CACHE_PURGE_SECRET` flush is needed. The new entry is written
+with the current version on the first request, so the cache self-heals within one TTL cycle.
+
+**Rule of thumb:** bump whenever you add or remove a field on `MatchResponse`, `CompareResponse`,
+or any other type that is serialised into Redis via `cachedExecuteQuery`.
+
 ## Environment Variables
 | Variable | Where used | Target | Notes |
 |---|---|---|---|

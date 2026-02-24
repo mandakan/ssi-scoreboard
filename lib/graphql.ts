@@ -2,6 +2,7 @@
 // SSI_API_KEY lives here and must never be sent to the browser.
 
 import cache from "@/lib/cache-impl";
+import { CACHE_SCHEMA_VERSION } from "@/lib/constants";
 
 const GRAPHQL_ENDPOINT = "https://shootnscoreit.com/graphql/";
 
@@ -176,6 +177,7 @@ export function gqlCacheKey(
 interface CacheEntry<T> {
   data: T;
   cachedAt: string; // ISO timestamp
+  v?: number;       // CACHE_SCHEMA_VERSION — absent on legacy entries (treated as v1)
 }
 
 /**
@@ -197,7 +199,11 @@ export async function cachedExecuteQuery<T>(
     const raw = await cache.get(cacheKey);
     if (raw) {
       const entry = JSON.parse(raw) as CacheEntry<T>;
-      return { data: entry.data, cachedAt: entry.cachedAt };
+      // Schema version gate: entries without a version or with an older version
+      // are treated as misses. They will be overwritten on the next fetch.
+      if (entry.v === CACHE_SCHEMA_VERSION) {
+        return { data: entry.data, cachedAt: entry.cachedAt };
+      }
     }
   } catch { /* fall through to fetch */ }
 
@@ -205,7 +211,7 @@ export async function cachedExecuteQuery<T>(
   const cachedAt = new Date().toISOString();
 
   try {
-    const entry: CacheEntry<T> = { data, cachedAt };
+    const entry: CacheEntry<T> = { data, cachedAt, v: CACHE_SCHEMA_VERSION };
     const payload = JSON.stringify(entry);
     await cache.set(cacheKey, payload, ttlSeconds);
   } catch { /* best-effort — store failure is non-fatal */ }
