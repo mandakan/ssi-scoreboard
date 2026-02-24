@@ -65,6 +65,9 @@
     "onlyBuiltDependencies": [
       "esbuild",
       "msw"
-    ]
+    ],
+    "overrides": {
+      "minimatch": "^10.2.2"
+    }
   }
 }
