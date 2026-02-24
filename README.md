@@ -38,6 +38,7 @@ so a missing Redis at startup is non-fatal — requests fall back to direct Grap
 | `SSI_API_KEY` | ShootNScoreIt API key — server-side only, never exposed to browser |
 | `REDIS_URL` | Redis connection string (`redis://localhost:6379` locally, `rediss://…` for cloud) |
 | `CACHE_PURGE_SECRET` | Secret for the admin cache-purge endpoint — any strong random string |
+| `NEXT_PUBLIC_BUILD_ID` | Git SHA baked into the bundle at build time for version detection (auto-injected by `pnpm docker:build`) |
 
 ## Usage
 1. Browse upcoming or recent competitions via the built-in event search, or paste a match URL
@@ -91,6 +92,7 @@ so a missing Redis at startup is non-fatal — requests fall back to direct Grap
 - **Country filter** — filter event search by country (ISO 3166-1 alpha-3), defaults to Sweden (SWE)
 - **Extended date range** — event search window up to 5 years back (Upcoming / 3 mo / 6 mo / 1 yr / 2 yr / 3 yr / 5 yr)
 - **Redis cache** — server-side GraphQL caching with smart TTL and admin purge endpoint
+- **New-version banner** — polls `/api/version` every 60 s; shows a non-blocking refresh prompt when a new deployment is detected
 - **Mobile-first** — designed for one-handed use at 390px; no unintentional horizontal overflow
 
 ## Development Commands

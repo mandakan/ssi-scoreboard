@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Crosshair, Github } from "lucide-react";
 import { Providers } from "@/components/providers";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { UpdateBanner } from "@/components/update-banner";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -30,6 +31,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}>
         <Providers>
+          <UpdateBanner />
           {children}
           <footer className="w-full flex flex-col items-center gap-2 p-4 text-xs text-muted-foreground border-t border-border mt-auto">
             <div className="flex items-center gap-4">
