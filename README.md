@@ -37,57 +37,19 @@ so a missing Redis at startup is non-fatal — requests fall back to direct Grap
 ### Cloudflare Pages
 
 The app has first-class Cloudflare Pages support. The build target is selected at build time
-via `DEPLOY_TARGET=cloudflare` — no source changes needed.
+via `DEPLOY_TARGET=cloudflare` — no source changes needed. Cloudflare Workers cannot open
+TCP connections, so the Docker/Node.js `ioredis` adapter is replaced at build time with an
+HTTP-based `@upstash/redis` adapter — you will need an [Upstash](https://upstash.com)
+Redis database.
 
 ```bash
 pnpm cf:build    # DEPLOY_TARGET=cloudflare + @opennextjs/cloudflare build
 pnpm cf:deploy   # build + wrangler deploy
 ```
 
-#### Setting up Upstash Redis for Cloudflare
-
-Cloudflare Workers cannot open TCP connections, so the Docker/Node.js `ioredis` adapter is
-replaced at build time with an HTTP-based `@upstash/redis` adapter pointing at Upstash.
-
-**1. Create an Upstash database**
-
-1. Sign up or log in at [console.upstash.com](https://console.upstash.com)
-2. Click **Create Database** → choose **Redis**
-3. Select **Global** (replicated, lowest latency worldwide) or a regional instance
-   closest to your Cloudflare datacenter
-4. Give it a name (e.g. `ssi-scoreboard`) and click **Create**
-
-**2. Copy the REST credentials**
-
-On your database page, scroll to the **REST API** section.
-Copy the two values shown:
-- `UPSTASH_REDIS_REST_URL` — e.g. `https://eu1-abc-12345.upstash.io`
-- `UPSTASH_REDIS_REST_TOKEN` — long opaque token
-
-**3. Local Cloudflare dev**
-
-Add both to your `.env.local`:
-```
-UPSTASH_REDIS_REST_URL=https://eu1-abc-12345.upstash.io
-UPSTASH_REDIS_REST_TOKEN=your_token_here
-```
-Then run `pnpm cf:build` to verify the build completes.
-
-**4. Production secrets**
-
-Set secrets in Cloudflare Pages via the wrangler CLI (recommended) or the dashboard:
-```bash
-wrangler secret put SSI_API_KEY
-wrangler secret put CACHE_PURGE_SECRET
-wrangler secret put UPSTASH_REDIS_REST_URL
-wrangler secret put UPSTASH_REDIS_REST_TOKEN
-```
-Or go to **Cloudflare Pages → your project → Settings → Environment variables** and add
-them there.
-
-> **Note:** The `popular-matches` feature (recently viewed matches on the home page) is not
-> available on Cloudflare Pages — Upstash's HTTP API does not expose `OBJECT IDLETIME`, so
-> the endpoint returns `[]`. All other features work identically.
+For a full step-by-step walkthrough — including wrangler login, setting secrets, adding a
+custom subdomain, verifying the deployment, and troubleshooting — see
+**[docs/deploy-cloudflare.md](docs/deploy-cloudflare.md)**.
 
 ## Environment Variables
 
