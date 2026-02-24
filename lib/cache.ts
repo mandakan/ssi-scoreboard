@@ -13,12 +13,24 @@ export interface CacheAdapter {
   persist(key: string): Promise<void>;
   del(...keys: string[]): Promise<void>;
   /**
-   * Scan for keys with the given prefix, filtered to those accessed within
-   * maxIdleSeconds, sorted by most-recently-accessed first.
-   * Returns [] on adapters that don't support idle-time inspection (edge).
+   * Record that a match cache key was accessed.
+   *
+   * Updates two sorted sets:
+   *   popular:matches:seen  — score = current Unix timestamp (last-seen)
+   *   popular:matches:hits  — score incremented by 1 on every access (hit count)
+   *
+   * Implementations should be fire-and-forget safe (errors silently ignored).
    */
-  scanRecentKeys(
-    prefix: string,
-    maxIdleSeconds: number,
-  ): Promise<{ key: string; idleSeconds: number }[]>;
+  recordMatchAccess(key: string): Promise<void>;
+  /**
+   * Return the most-accessed match cache keys that have been seen within
+   * the last maxAgeSeconds, sorted by hit count descending.
+   *
+   * Prunes the seen set on each call to prevent unbounded growth.
+   * Returns [] on any error.
+   */
+  getPopularKeys(
+    maxAgeSeconds: number,
+    limit: number,
+  ): Promise<{ key: string; hits: number }[]>;
 }

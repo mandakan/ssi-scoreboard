@@ -28,6 +28,57 @@ function getRedis(): Redis {
   return _redis;
 }
 
+// Extracted as module-level functions so tsc can resolve the return type unambiguously.
+
+async function recordMatchAccess(key: string): Promise<void> {
+  const now = Math.floor(Date.now() / 1000);
+  await Promise.all([
+    getRedis().zadd("popular:matches:seen", { score: now, member: key }),
+    getRedis().zincrby("popular:matches:hits", 1, key),
+  ]);
+}
+
+async function getPopularKeys(
+  maxAgeSeconds: number,
+  limit: number,
+): Promise<{ key: string; hits: number }[]> {
+  const now = Math.floor(Date.now() / 1000);
+  const cutoff = now - maxAgeSeconds;
+
+  // Prune entries that haven't been seen within the window.
+  await getRedis().zremrangebyscore("popular:matches:seen", "-inf", cutoff - 1);
+
+  // Fetch all keys that were seen within the window.
+  // zrange with byScore: true is equivalent to ZRANGEBYSCORE.
+  // Use now + 86400 as upper bound (well beyond any valid timestamp).
+  const recentKeys = (await getRedis().zrange(
+    "popular:matches:seen",
+    cutoff,
+    now + 86400,
+    { byScore: true },
+  )) as string[];
+
+  if (recentKeys.length === 0) return [];
+
+  // Look up hit counts for each recent key in parallel.
+  // zscore always returns number | null (scores are numeric in Redis).
+  const hitScores = await Promise.all(
+    recentKeys.map((k: string) => getRedis().zscore("popular:matches:hits", k)),
+  );
+
+  const results = recentKeys.map((k: string, i: number) => ({
+    key: k,
+    hits: Math.round(hitScores[i] ?? 0),
+  }));
+
+  return results
+    .sort(
+      (a: { key: string; hits: number }, b: { key: string; hits: number }) =>
+        b.hits - a.hits,
+    )
+    .slice(0, limit);
+}
+
 const adapter: CacheAdapter = {
   async get(key) {
     return getRedis().get<string>(key);
@@ -49,11 +100,8 @@ const adapter: CacheAdapter = {
     if (keys.length > 0) await getRedis().del(...keys);
   },
 
-  // OBJECT IDLETIME is not available via the Upstash HTTP API.
-  // The popular-matches feature degrades gracefully to [] on edge.
-  async scanRecentKeys() {
-    return [];
-  },
+  recordMatchAccess,
+  getPopularKeys,
 };
 
 export default adapter;
