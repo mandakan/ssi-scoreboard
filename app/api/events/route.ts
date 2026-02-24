@@ -19,12 +19,21 @@ interface RawEventsData {
   events: RawEvent[];
 }
 
+// Which level strings to exclude for each minLevel value.
+// Unknown level strings pass through (safe default).
+const EXCLUDED_LEVELS: Record<string, Set<string>> = {
+  l2plus: new Set(["Level I"]),
+  l3plus: new Set(["Level I", "Level II"]),
+  l4plus: new Set(["Level I", "Level II", "Level III"]),
+};
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q") ?? "";
 
   // Query params: q (search), starts_after, starts_before (ISO dates),
-  // firearms (default "hg"), country (ISO 3166-1 alpha-3, e.g. "SWE").
+  // firearms (default "hg"), country (ISO 3166-1 alpha-3, e.g. "SWE"),
+  // minLevel (default "l2plus" — hides Level I club matches).
   // Caller may override the date window; fall back to ±3 months from today.
   const now = new Date();
   const defaultAfter = new Date(now);
@@ -33,6 +42,7 @@ export async function GET(req: Request) {
   defaultBefore.setMonth(defaultBefore.getMonth() + 3);
 
   const country = searchParams.get("country");
+  const minLevel = searchParams.get("minLevel") ?? "l2plus";
 
   const variables: Record<string, string> = {
     starts_after:
@@ -58,6 +68,11 @@ export async function GET(req: Request) {
     .filter((e) => e.get_content_type_key === 22)
     // Filter by country/region if specified
     .filter((e) => !country || e.region.toUpperCase() === country.toUpperCase())
+    // Filter by minimum level (e.g. l2plus excludes Level I)
+    .filter((e) => {
+      const excluded = EXCLUDED_LEVELS[minLevel];
+      return !excluded || !excluded.has(e.get_full_level_display);
+    })
     // Sort by start date descending (upcoming/most-recent first)
     .sort((a, b) => new Date(b.starts).getTime() - new Date(a.starts).getTime())
     .map((e) => ({

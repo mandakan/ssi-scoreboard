@@ -175,6 +175,15 @@ const COUNTRY_OPTIONS = [
 
 const DEFAULT_COUNTRY = "SWE";
 
+const LEVEL_OPTIONS = [
+  { id: "all",    label: "All"  },
+  { id: "l2plus", label: "L2+" },
+  { id: "l3plus", label: "L3+" },
+  { id: "l4plus", label: "L4+" },
+] as const;
+
+const DEFAULT_LEVEL = "l2plus";
+
 function toISODate(d: Date) {
   return d.toISOString().slice(0, 10);
 }
@@ -195,6 +204,7 @@ export function EventSearch() {
   const [presetId, setPresetId] = useState(DEFAULT_PRESET_ID);
   const [firearms, setFirearms] = useState(DEFAULT_FIREARMS);
   const [country, setCountry] = useState(DEFAULT_COUNTRY);
+  const [level, setLevel] = useState(DEFAULT_LEVEL);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(inputValue), 300);
@@ -226,6 +236,7 @@ export function EventSearch() {
     starts_before,
     firearms,
     country,
+    level,
   );
 
   function handleSelect(event: EventSummary) {
@@ -255,7 +266,8 @@ export function EventSearch() {
       >
         {/* Filters */}
         <div className="px-3 py-2 border-b space-y-2">
-          <div role="group" aria-label="Date range" className="flex gap-1.5 flex-wrap">
+          <div role="group" aria-label="Date range" className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs text-muted-foreground font-medium w-16 shrink-0">Date range</span>
             {DATE_PRESETS.map(({ id, label }) => {
               const active = id === presetId;
               return (
@@ -277,7 +289,8 @@ export function EventSearch() {
               );
             })}
           </div>
-          <div role="group" aria-label="Firearms" className="flex gap-1.5 flex-wrap">
+          <div role="group" aria-label="Discipline" className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs text-muted-foreground font-medium w-16 shrink-0">Discipline</span>
             {FIREARMS_OPTIONS.map(({ id, label }) => {
               const active = id === firearms;
               return (
@@ -299,7 +312,8 @@ export function EventSearch() {
               );
             })}
           </div>
-          <div role="group" aria-label="Country" className="flex gap-1.5 flex-wrap">
+          <div role="group" aria-label="Country" className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs text-muted-foreground font-medium w-16 shrink-0">Country</span>
             {COUNTRY_OPTIONS.map(({ id, label }) => {
               const active = id === country;
               return (
@@ -321,10 +335,34 @@ export function EventSearch() {
               );
             })}
           </div>
+          <div role="group" aria-label="Level" className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs text-muted-foreground font-medium w-16 shrink-0">Level</span>
+            {LEVEL_OPTIONS.map(({ id, label }) => {
+              const active = id === level;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setLevel(id)}
+                  className={[
+                    "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    active
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80",
+                  ].join(" ")}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <Command shouldFilter={false}>
           <CommandInput
+            autoFocus
             placeholder="Search by name or paste a match URL…"
             value={inputValue}
             onValueChange={handleInputChange}
