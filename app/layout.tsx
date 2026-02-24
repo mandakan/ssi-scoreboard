@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
-import { Crosshair, Github } from "lucide-react";
+import { Coffee, Crosshair, Github } from "lucide-react";
 import { Providers } from "@/components/providers";
 import { ThemeToggle } from "@/components/theme-toggle";
 import "./globals.css";
@@ -32,6 +32,17 @@ export default function RootLayout({
         <Providers>
           {children}
           <footer className="w-full flex flex-col items-center gap-2 p-4 text-xs text-muted-foreground border-t border-border mt-auto">
+            {/* Buy me a coffee button – visible on sm+ screens */}
+            <a
+              href="https://www.buymeacoffee.com/thias"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#FFDD00] text-black font-medium text-sm hover:opacity-90 transition-opacity"
+              aria-label="Buy me a coffee on Buy Me a Coffee (opens in new tab)"
+            >
+              <Coffee className="w-4 h-4" aria-hidden="true" />
+              Buy me a coffee
+            </a>
             <div className="flex items-center gap-4">
               <ThemeToggle />
               <a
@@ -52,6 +63,22 @@ export default function RootLayout({
               >
                 <Github className="w-4 h-4" aria-hidden="true" />
               </a>
+              {/* Coffee icon link – mobile only (hidden on sm+) */}
+              <a
+                href="https://www.buymeacoffee.com/thias"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="sm:hidden inline-flex items-center hover:text-foreground transition-colors"
+                aria-label="Buy me a coffee on Buy Me a Coffee (opens in new tab)"
+              >
+                <Coffee className="w-4 h-4" aria-hidden="true" />
+              </a>
+              <Link
+                href="/about"
+                className="inline-flex items-center hover:text-foreground transition-colors"
+              >
+                About
+              </Link>
               <Link
                 href="/legal"
                 className="inline-flex items-center hover:text-foreground transition-colors"
