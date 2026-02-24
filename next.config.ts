@@ -8,12 +8,22 @@ const nextConfig: NextConfig = {
   // Cloudflare Pages uses @cloudflare/next-on-pages and needs no output mode set.
   output: isCF ? undefined : "standalone",
 
+  // Turbopack alias (Next.js 16+ default build pipeline).
+  // An empty object for non-CF builds satisfies Next.js's requirement that a
+  // turbopack config be present whenever a webpack config is also defined.
+  turbopack: isCF
+    ? {
+        resolveAlias: {
+          // Replace the default Node.js cache adapter with the Upstash HTTP
+          // adapter so that ioredis is never bundled into the Cloudflare Worker.
+          "@/lib/cache-impl": "@/lib/cache-edge",
+        },
+      }
+    : {},
+
+  // Webpack alias (fallback for build pipelines that use webpack mode).
   webpack(config) {
     if (isCF) {
-      // Replace the default Node.js cache adapter with the edge (Upstash) adapter
-      // so that ioredis is never bundled into the Cloudflare Worker.
-      // The more-specific alias is placed first so it takes precedence over the
-      // existing "@" path alias that Next.js registers.
       const edgeImpl = path.resolve(process.cwd(), "lib/cache-edge");
       config.resolve = {
         ...config.resolve,
