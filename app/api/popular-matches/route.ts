@@ -2,15 +2,11 @@ import { NextResponse } from "next/server";
 import cache from "@/lib/cache-impl";
 import type { PopularMatch } from "@/lib/types";
 
-
-/** Maximum time (seconds) since last access to qualify as "popular". */
-const MAX_IDLE_SECONDS = 14 * 24 * 60 * 60; // 14 days
+/** Maximum age (seconds) a match access must be within to qualify. */
+const MAX_AGE_SECONDS = 14 * 24 * 60 * 60; // 14 days
 
 /** Maximum number of results to return. */
 const MAX_RESULTS = 8;
-
-/** Key prefix used by cachedExecuteQuery for GetMatch calls. */
-const KEY_PREFIX = "gql:GetMatch:";
 
 interface RawMatchEvent {
   name: string;
@@ -27,23 +23,27 @@ interface MatchCacheEntry {
 /**
  * GET /api/popular-matches
  *
- * Scans the cache for recently-accessed match keys (gql:GetMatch:*) and
- * returns up to 8 matches accessed within the last 14 days, sorted by
- * most-recently-accessed first.
+ * Returns up to 8 matches that have been accessed within the last 14 days,
+ * sorted by access frequency (most-accessed first).
  *
- * Returns [] when the cache adapter doesn't support idle-time scanning
- * (e.g. Cloudflare edge deployment) or on any cache error.
+ * Popularity is tracked via two Redis sorted sets written by cachedExecuteQuery
+ * on every GetMatch cache hit or fresh fetch:
+ *   popular:matches:seen  — score = Unix timestamp of last access
+ *   popular:matches:hits  — score = cumulative access count
+ *
+ * Works on both the ioredis (Docker/Node) and @upstash/redis (Cloudflare)
+ * cache adapters. Returns [] on any cache error.
  */
 export async function GET() {
   try {
-    const recentKeys = await cache.scanRecentKeys(KEY_PREFIX, MAX_IDLE_SECONDS);
+    const popular = await cache.getPopularKeys(MAX_AGE_SECONDS, MAX_RESULTS);
 
-    if (recentKeys.length === 0) {
+    if (popular.length === 0) {
       return NextResponse.json([] as PopularMatch[]);
     }
 
     const results: PopularMatch[] = [];
-    for (const { key } of recentKeys) {
+    for (const { key } of popular) {
       if (results.length >= MAX_RESULTS) break;
       try {
         const raw = await cache.get(key);
@@ -53,7 +53,7 @@ export async function GET() {
         if (!entry.data?.event) continue;
 
         // Key format: gql:GetMatch:{"ct":22,"id":"26547"}
-        const vars = JSON.parse(key.slice(KEY_PREFIX.length)) as {
+        const vars = JSON.parse(key.slice("gql:GetMatch:".length)) as {
           ct: number;
           id: string;
         };

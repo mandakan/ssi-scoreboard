@@ -202,6 +202,9 @@ export async function cachedExecuteQuery<T>(
       // Schema version gate: entries without a version or with an older version
       // are treated as misses. They will be overwritten on the next fetch.
       if (entry.v === CACHE_SCHEMA_VERSION) {
+        if (cacheKey.startsWith("gql:GetMatch:")) {
+          void cache.recordMatchAccess(cacheKey).catch(() => {});
+        }
         return { data: entry.data, cachedAt: entry.cachedAt };
       }
     }
@@ -218,6 +221,11 @@ export async function cachedExecuteQuery<T>(
     await cache.set(cacheKey, payload, ttlSeconds);
   } catch (err) {
     console.error(`[cache] write error for key "${cacheKey}":`, err);
+  }
+
+  // Record access for popularity tracking (fire-and-forget, non-fatal).
+  if (cacheKey.startsWith("gql:GetMatch:")) {
+    void cache.recordMatchAccess(cacheKey).catch(() => {});
   }
 
   // Return null for cachedAt: freshly fetched, not served from cache

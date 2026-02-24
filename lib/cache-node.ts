@@ -32,38 +32,43 @@ const adapter: CacheAdapter = {
     if (keys.length > 0) await redis.del(...keys);
   },
 
-  async scanRecentKeys(prefix, maxIdleSeconds) {
-    const keys: string[] = [];
-    let cursor = "0";
-    do {
-      const [nextCursor, batch] = await redis.scan(
-        cursor,
-        "MATCH",
-        `${prefix}*`,
-        "COUNT",
-        100,
-      );
-      cursor = nextCursor;
-      keys.push(...batch);
-    } while (cursor !== "0");
+  async recordMatchAccess(key) {
+    const now = Math.floor(Date.now() / 1000);
+    const pipeline = redis.pipeline();
+    pipeline.zadd("popular:matches:seen", now, key);
+    pipeline.zincrby("popular:matches:hits", 1, key);
+    await pipeline.exec();
+  },
 
-    const results = await Promise.all(
-      keys.map(async (key): Promise<{ key: string; idleSeconds: number }> => {
-        try {
-          const result = await redis.object("IDLETIME", key);
-          const idleSeconds = typeof result === "number" ? result : 0;
-          return { key, idleSeconds };
-        } catch {
-          // OBJECT IDLETIME unsupported on some managed Redis configs —
-          // treat as idle=0 so the entry is included.
-          return { key, idleSeconds: 0 };
-        }
-      }),
+  async getPopularKeys(maxAgeSeconds, limit) {
+    const cutoff = Math.floor(Date.now() / 1000) - maxAgeSeconds;
+
+    // Prune entries that haven't been seen within the window.
+    await redis.zremrangebyscore("popular:matches:seen", "-inf", cutoff);
+
+    // Fetch all keys that were seen within the window.
+    const recentKeys = await redis.zrangebyscore(
+      "popular:matches:seen",
+      cutoff,
+      "+inf",
     );
 
-    return results
-      .filter(({ idleSeconds }) => idleSeconds <= maxIdleSeconds)
-      .sort((a, b) => a.idleSeconds - b.idleSeconds);
+    if (recentKeys.length === 0) return [];
+
+    // Look up hit counts for each recent key.
+    const pipeline = redis.pipeline();
+    for (const key of recentKeys) {
+      pipeline.zscore("popular:matches:hits", key);
+    }
+    const scores = await pipeline.exec();
+
+    const results = recentKeys.map((key, i) => {
+      const raw = scores?.[i]?.[1];
+      const hits = typeof raw === "string" ? parseFloat(raw) : (raw as number | null) ?? 0;
+      return { key, hits: isNaN(hits) ? 0 : Math.round(hits) };
+    });
+
+    return results.sort((a, b) => b.hits - a.hits).slice(0, limit);
   },
 };
 
