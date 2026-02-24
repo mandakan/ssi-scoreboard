@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import cache from "@/lib/cache-impl";
 import { gqlCacheKey } from "@/lib/graphql";
 
-export const runtime = "edge";
 
 // DELETE /api/admin/cache/purge?ct=22&id=<match-id>
 // Requires Authorization: Bearer <CACHE_PURGE_SECRET>

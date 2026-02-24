@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import cache from "@/lib/cache-impl";
 import type { PopularMatch } from "@/lib/types";
 
-export const runtime = "edge";
 
 /** Maximum time (seconds) since last access to qualify as "popular". */
 const MAX_IDLE_SECONDS = 14 * 24 * 60 * 60; // 14 days

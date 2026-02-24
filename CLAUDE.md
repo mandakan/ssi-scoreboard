@@ -154,12 +154,13 @@ requests will fall back to direct GraphQL fetches until Redis is reachable.
 
 ### Cloudflare Pages
 ```bash
-pnpm cf:build    # DEPLOY_TARGET=cloudflare next build + @cloudflare/next-on-pages
+pnpm cf:build    # DEPLOY_TARGET=cloudflare @opennextjs/cloudflare build (runs next build internally)
 pnpm cf:deploy   # cf:build + wrangler pages deploy
 ```
-`DEPLOY_TARGET=cloudflare` triggers a webpack alias that swaps `lib/cache-impl.ts` for
-the Upstash HTTP adapter (`lib/cache-edge.ts`) so `ioredis` is never bundled into the Worker.
-All route handlers declare `export const runtime = "edge"` — compatible with both targets.
+`DEPLOY_TARGET=cloudflare` triggers a webpack/Turbopack alias that swaps `lib/cache-impl.ts`
+for the Upstash HTTP adapter (`lib/cache-edge.ts`) so `ioredis` is never bundled into the
+Worker. Route handlers use the default Node.js runtime — `@opennextjs/cloudflare` handles
+the Workers bundling without requiring `export const runtime = "edge"` on each route.
 The `popular-matches` endpoint returns `[]` on CF (OBJECT IDLETIME not available via HTTP).
 
 **Cache adapter:** the CF build uses `@upstash/redis` (HTTP-based) instead of ioredis.

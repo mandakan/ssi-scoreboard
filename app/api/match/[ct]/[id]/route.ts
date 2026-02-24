@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
 import cache from "@/lib/cache-impl";
 
-export const runtime = "edge";
 import { formatDivisionDisplay } from "@/lib/divisions";
 import type { MatchResponse, StageInfo, CompetitorInfo } from "@/lib/types";
 

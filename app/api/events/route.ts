@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { executeQuery, EVENTS_QUERY } from "@/lib/graphql";
 
-export const runtime = "edge";
 import type { EventSummary } from "@/lib/types";
 
 interface RawEvent {

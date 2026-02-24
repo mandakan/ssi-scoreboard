@@ -21,8 +21,8 @@
     "docker:build": "BUILD_ID=$(git rev-parse --short HEAD 2>/dev/null || echo '') docker compose build",
     "docker:up": "docker compose --env-file .env.local up",
     "docker:down": "docker compose down",
-    "cf:build": "DEPLOY_TARGET=cloudflare next build && npx @cloudflare/next-on-pages@1.13.16",
-    "cf:deploy": "pnpm cf:build && wrangler pages deploy .vercel/output/static",
+    "cf:build": "DEPLOY_TARGET=cloudflare npx @opennextjs/cloudflare@1.17.0 build",
+    "cf:deploy": "pnpm cf:build && wrangler deploy",
     "setup": "cp -n .env.local.example .env.local || true"
   },
   "dependencies": {

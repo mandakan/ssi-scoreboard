@@ -40,8 +40,8 @@ The app has first-class Cloudflare Pages support. The build target is selected a
 via `DEPLOY_TARGET=cloudflare` — no source changes needed.
 
 ```bash
-pnpm cf:build    # build for Cloudflare Pages
-pnpm cf:deploy   # build + deploy via wrangler
+pnpm cf:build    # DEPLOY_TARGET=cloudflare + @opennextjs/cloudflare build
+pnpm cf:deploy   # build + wrangler deploy
 ```
 
 #### Setting up Upstash Redis for Cloudflare

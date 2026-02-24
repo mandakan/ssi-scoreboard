@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY, MATCH_QUERY } from "@/lib/graphql";
 import cache from "@/lib/cache-impl";
 
-export const runtime = "edge";
 import { formatDivisionDisplay } from "@/lib/divisions";
 import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompareResponse, CompetitorInfo, StageComparison } from "@/lib/types";
