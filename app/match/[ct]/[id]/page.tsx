@@ -8,9 +8,9 @@ const EMPTY_IDS: number[] = [];
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { MatchHeader } from "@/components/match-header";
-import { StageList } from "@/components/stage-list";
 import { ShareButton } from "@/components/share-button";
 import { CompetitorPicker } from "@/components/competitor-picker";
+import { SquadPicker } from "@/components/squad-picker";
 import { ComparisonTable } from "@/components/comparison-table";
 import { ComparisonChart } from "@/components/comparison-chart";
 import { HfPercentChart } from "@/components/hf-percent-chart";
@@ -201,17 +201,23 @@ export default function MatchPage() {
       {/* Match header */}
       <MatchHeader match={match} />
 
-      {/* Stage list */}
-      <StageList stages={match.stages} />
-
       {/* Competitor picker */}
       <div className="space-y-1">
         <p className="text-sm font-medium">Compare competitors</p>
-        <CompetitorPicker
-          competitors={match.competitors}
-          selectedIds={selectedIds}
-          onSelectionChange={handleSelectionChange}
-        />
+        <div className="flex items-start gap-2 flex-wrap">
+          <CompetitorPicker
+            competitors={match.competitors}
+            selectedIds={selectedIds}
+            onSelectionChange={handleSelectionChange}
+          />
+          {match.squads.length > 0 && (
+            <SquadPicker
+              squads={match.squads}
+              selectedIds={selectedIds}
+              onSelectionChange={handleSelectionChange}
+            />
+          )}
+        </div>
       </div>
 
       {/* Comparison views */}
@@ -266,7 +272,11 @@ export default function MatchPage() {
                     </span>
                   )}
                 </div>
-                <ComparisonTable data={compareQuery.data} scoringCompleted={match.scoring_completed} />
+                <ComparisonTable
+                  data={compareQuery.data}
+                  scoringCompleted={match.scoring_completed}
+                  onRemove={(id) => handleSelectionChange(selectedIds.filter((s) => s !== id))}
+                />
               </div>
 
               <div className="rounded-lg border p-4 space-y-3">

@@ -125,6 +125,16 @@ export const MATCH_QUERY = `
             shoots_handgun_major
           }
         }
+        squads {
+          id
+          ... on IpscSquadNode {
+            number
+            get_squad_display
+            competitors {
+              id
+            }
+          }
+        }
       }
     }
   }
