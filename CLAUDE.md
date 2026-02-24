@@ -40,6 +40,7 @@ Key directories:
 - `lib/types.ts` — single source of truth for all TypeScript interfaces
 - `lib/queries.ts` — TanStack Query v5 hooks used by client components
 - `components/` — all UI; no direct API calls, all data via hooks from `lib/queries.ts`
+- `app/api/events/route.ts` — event search; defaults to `minLevel=l2plus` (hides Level I club matches); users can switch to "All", "L3+", or "L4+" in the filter panel
 
 ## GraphQL Patterns
 The SSI API uses Django content-type discrimination. Match URLs encode this:

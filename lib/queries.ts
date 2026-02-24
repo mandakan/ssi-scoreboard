@@ -19,10 +19,11 @@ export function useEventsQuery(
   starts_before?: string,
   firearms?: string,
   country?: string,
+  minLevel?: string,
 ) {
   return useQuery<EventSummary[], Error>({
-    queryKey: ["events", q, starts_after, starts_before, firearms, country],
-    queryFn: () => fetchEvents(q, starts_after, starts_before, firearms, country),
+    queryKey: ["events", q, starts_after, starts_before, firearms, country, minLevel],
+    queryFn: () => fetchEvents(q, starts_after, starts_before, firearms, country, minLevel),
     staleTime: 300_000, // 5 minutes — well inside 1h server cache TTL
   });
 }

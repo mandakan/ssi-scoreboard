@@ -23,6 +23,7 @@ export async function fetchEvents(
   starts_before?: string,
   firearms?: string,
   country?: string,
+  minLevel?: string,
 ): Promise<EventSummary[]> {
   const params = new URLSearchParams();
   if (q) params.set("q", q);
@@ -30,6 +31,7 @@ export async function fetchEvents(
   if (starts_before) params.set("starts_before", starts_before);
   if (firearms) params.set("firearms", firearms);
   if (country && country !== "all") params.set("country", country);
+  if (minLevel && minLevel !== "all") params.set("minLevel", minLevel);
   const res = await fetch(`/api/events?${params}`);
   if (!res.ok) {
     const body = await res.text();
