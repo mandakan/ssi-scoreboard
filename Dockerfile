@@ -18,6 +18,11 @@ COPY . .
 # Ensure public/ exists so the runner COPY never fails on an empty/absent dir
 RUN mkdir -p /app/public
 
+# Optional: git commit SHA passed by the build script for client-side version
+# detection. Baked into the JS bundle as process.env.NEXT_PUBLIC_BUILD_ID.
+ARG BUILD_ID
+ENV NEXT_PUBLIC_BUILD_ID=${BUILD_ID}
+
 RUN pnpm build
 
 # ─── Runner ──────────────────────────────────────────────────────────────────
@@ -26,6 +31,10 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3000
+
+# Carry the build ID into the runtime image so /api/version can return it.
+ARG BUILD_ID
+ENV NEXT_PUBLIC_BUILD_ID=${BUILD_ID}
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
