@@ -33,6 +33,10 @@ Key directories:
 - `app/api/compare/route.ts` — fans out competitor scorecard queries, calls logic.ts
 - `app/api/compare/logic.ts` — **pure function** `computeGroupRankings()`, no I/O, fully unit-tested
 - `lib/graphql.ts` — GQL query strings + `executeQuery()`, server-only (no NEXT_PUBLIC_ prefix)
+- `lib/cache.ts` — `CacheAdapter` interface (get/set/persist/del/scanRecentKeys)
+- `lib/cache-node.ts` — ioredis implementation (Docker / Node.js target)
+- `lib/cache-edge.ts` — @upstash/redis HTTP implementation (Cloudflare Pages target)
+- `lib/cache-impl.ts` — re-exports node adapter by default; CF builds override via webpack alias
 - `lib/types.ts` — single source of truth for all TypeScript interfaces
 - `lib/queries.ts` — TanStack Query v5 hooks used by client components
 - `components/` — all UI; no direct API calls, all data via hooks from `lib/queries.ts`
@@ -112,18 +116,24 @@ actionable interpretation tips. Keep language concise — max ~4 short paragraph
 - shadcn components live in `components/ui/` — do not modify generated files directly
 
 ## Environment Variables
-| Variable | Where used | Notes |
-|---|---|---|
-| `SSI_API_KEY` | `lib/graphql.ts` (server-only) | Never use `NEXT_PUBLIC_` prefix |
-| `REDIS_URL` | `lib/redis.ts` | `redis://localhost:6379` locally, `rediss://...` for Upstash etc. |
-| `CACHE_PURGE_SECRET` | `app/api/admin/cache/purge/route.ts` | Any strong random string; never `NEXT_PUBLIC_` |
-| `NEXT_PUBLIC_BUILD_ID` | `components/update-banner.tsx`, `app/api/version/route.ts` | Git SHA baked into the client bundle at Docker build time; powers new-version detection. Auto-injected by `pnpm docker:build`. Unset in `pnpm dev` — version check is skipped. |
+| Variable | Where used | Target | Notes |
+|---|---|---|---|
+| `SSI_API_KEY` | `lib/graphql.ts` (server-only) | Both | Never use `NEXT_PUBLIC_` prefix |
+| `CACHE_PURGE_SECRET` | `app/api/admin/cache/purge/route.ts` | Both | Any strong random string; never `NEXT_PUBLIC_` |
+| `NEXT_PUBLIC_BUILD_ID` | `components/update-banner.tsx`, `app/api/version/route.ts` | Both | Git SHA baked into the client bundle at Docker build time; powers new-version detection. Auto-injected by `pnpm docker:build`. Unset in `pnpm dev` — version check is skipped. |
+| `REDIS_URL` | `lib/cache-node.ts` | Docker only | `redis://localhost:6379` locally, `rediss://...` for managed Redis. Not needed for CF builds. |
+| `UPSTASH_REDIS_REST_URL` | `lib/cache-edge.ts` | Cloudflare only | REST URL from Upstash console. Set via `wrangler secret put` in production. |
+| `UPSTASH_REDIS_REST_TOKEN` | `lib/cache-edge.ts` | Cloudflare only | REST token from Upstash console. Set via `wrangler secret put` in production. |
 
 ## Package Manager
 This project uses **pnpm@10.30.1**. Do not use npm or yarn. Use `pnpm add` / `pnpm add -D`.
 When adding new packages, always specify the exact latest stable version (check with `npm show <pkg> version`).
 
-## Docker / Docker Compose
+## Deployment targets
+
+The app supports two build targets selected by the `DEPLOY_TARGET` env var at build time.
+
+### Docker / Docker Compose (default)
 ```bash
 cp .env.local.example .env.local   # fill in SSI_API_KEY, CACHE_PURGE_SECRET
 pnpm docker:build                  # builds image (passes --env-file .env.local)
@@ -132,14 +142,34 @@ pnpm docker:up                     # starts redis + app on port 3000
 `docker:up` passes `--env-file .env.local` so `${SSI_API_KEY}`, `${CACHE_PURGE_SECRET}` are
 available at runtime. `REDIS_URL` is set automatically via the compose service name
 (`redis://redis:6379`) — no manual entry needed.
-The build step does not need the API key — it has no `NEXT_PUBLIC_` prefix so Next.js
-never bakes it into the bundle.
 The Dockerfile uses multi-stage builds (deps → builder → runner) with a non-root user.
-`output: "standalone"` in `next.config.ts` is required for the Docker image to work.
+`output: "standalone"` in `next.config.ts` is set automatically when `DEPLOY_TARGET` is unset.
 The `redis_data` volume persists the cache across container restarts.
 
-### Deploying without Docker Compose (e.g. bare server, Kubernetes, Fly.io)
+#### Deploying without Docker Compose (bare server, Kubernetes, Fly.io)
 Run a Redis instance (managed or self-hosted) and set `REDIS_URL` to its connection string.
 Use `rediss://` (TLS) for cloud-managed providers such as Upstash or Redis Cloud.
 The app connects with `lazyConnect: true`, so a missing Redis at startup is non-fatal —
 requests will fall back to direct GraphQL fetches until Redis is reachable.
+
+### Cloudflare Pages
+```bash
+pnpm cf:build    # DEPLOY_TARGET=cloudflare next build + @cloudflare/next-on-pages
+pnpm cf:deploy   # cf:build + wrangler pages deploy
+```
+`DEPLOY_TARGET=cloudflare` triggers a webpack alias that swaps `lib/cache-impl.ts` for
+the Upstash HTTP adapter (`lib/cache-edge.ts`) so `ioredis` is never bundled into the Worker.
+All route handlers declare `export const runtime = "edge"` — compatible with both targets.
+The `popular-matches` endpoint returns `[]` on CF (OBJECT IDLETIME not available via HTTP).
+
+**Cache adapter:** the CF build uses `@upstash/redis` (HTTP-based) instead of ioredis.
+`automaticDeserialization: false` is set on the Upstash client so values are returned as raw
+strings, consistent with the ioredis adapter — callers always do their own `JSON.parse`.
+
+Set secrets in production via `wrangler secret put` or the Cloudflare Pages dashboard:
+```bash
+wrangler secret put SSI_API_KEY
+wrangler secret put CACHE_PURGE_SECRET
+wrangler secret put UPSTASH_REDIS_REST_URL
+wrangler secret put UPSTASH_REDIS_REST_TOKEN
+```
