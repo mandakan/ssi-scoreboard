@@ -12,7 +12,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Crosshair, ExternalLink, Flame, Gauge, HelpCircle, Info, Shield, Target, TrendingUp, X, Zap } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronUp, Crosshair, ExternalLink, Flame, Gauge, HelpCircle, Info, Shield, Target, TrendingUp, X, Zap } from "lucide-react";
 import { cn, formatHF, formatTime, formatPct, computePointsDelta, formatDelta } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
 import { HitZoneBar } from "@/components/hit-zone-bar";
@@ -1211,9 +1211,9 @@ function WhatIfCompetitorPanel({
         <span className="font-medium">{ordinal(actualRank)}</span>
         {" "}
         <span className={medianChange < 0 ? "text-emerald-600 dark:text-emerald-400 font-medium" : medianChange > 0 ? "text-red-600 dark:text-red-400 font-medium" : "text-muted-foreground"}>
-          →{" "}{ordinal(medianSimRank)}
-          {medianChange < 0 && " ↑"}
-          {medianChange > 0 && " ↓"}
+          <ArrowRight className="w-3 h-3 inline-block align-middle mx-0.5" aria-hidden="true" />{ordinal(medianSimRank)}
+          {medianChange < 0 && <ArrowUp className="w-3 h-3 inline-block align-middle" aria-hidden="true" />}
+          {medianChange > 0 && <ArrowDown className="w-3 h-3 inline-block align-middle" aria-hidden="true" />}
         </span>
         {" "}{rankLabel}.
       </p>
@@ -1230,8 +1230,8 @@ function WhatIfCompetitorPanel({
         )}>
           {ordinal(secondWorstSimRank)}
         </span>
-        {secondWorstChange < 0 && " ↑"}
-        {secondWorstChange > 0 && " ↓"}
+        {secondWorstChange < 0 && <ArrowUp className="w-3 h-3 inline-block align-middle" aria-hidden="true" />}
+        {secondWorstChange > 0 && <ArrowDown className="w-3 h-3 inline-block align-middle" aria-hidden="true" />}
         {" "}{rankLabel}.
       </p>
     </div>

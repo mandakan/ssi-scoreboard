@@ -21,6 +21,14 @@ import { CheckCircle2, Flame, Shield, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { StageClassification } from "@/lib/types";
 
+// --- Mock data for StageColumnDiagram ---
+const MOCK_STAGE_NUM = 3;
+const MOCK_STAGE_NAME = "Accelerator";
+const MOCK_STAGE_ROUNDS = 18;
+const MOCK_STAGE_PAPER = 6;
+const MOCK_STAGE_STEEL = 2;
+const MOCK_STAGE_MEDIAN_HF = 4.21;
+
 // --- Mock data for StageCellDiagram ---
 const MOCK_ORDER = 3;
 const MOCK_RANK = 2;
@@ -60,11 +68,11 @@ function DiagramRow({
   return (
     <div
       className={cn(
-        "grid grid-cols-[5rem_1fr] gap-3 py-3",
+        "grid grid-cols-[7rem_1fr] gap-3 py-3",
         !last && "border-b border-dashed border-border/40"
       )}
     >
-      <div className="flex items-center justify-center min-w-[5rem]">
+      <div className="flex items-center justify-center w-full overflow-hidden">
         {visual}
       </div>
       <div className="flex flex-col gap-0.5">
@@ -85,6 +93,64 @@ function DiagramRow({
   );
 }
 
+function StageColumnDiagram() {
+  return (
+    <section>
+      <h3 className="text-sm font-semibold mb-1">Stage column header</h3>
+      <p className="text-xs text-muted-foreground mb-3">
+        The leftmost column identifies each stage and provides key context.
+      </p>
+      <div>
+        <DiagramRow
+          visual={
+            <span className="text-sm font-bold tabular-nums">
+              S{MOCK_STAGE_NUM}
+            </span>
+          }
+          badge="1"
+          title="Stage label"
+          description={`Stage number. Desktop also shows the full stage name (e.g. "${MOCK_STAGE_NAME}") with a link to the SSI result page.`}
+        />
+        <DiagramRow
+          visual={
+            <div className="flex items-end gap-px" aria-hidden="true">
+              <div className="w-1 h-1 rounded-sm bg-emerald-500" />
+              <div className="w-1 h-2 rounded-sm bg-lime-500" />
+              <div className="w-1 h-3 rounded-sm bg-yellow-500" />
+              <div className="w-1 h-4 rounded-sm bg-muted-foreground/25" />
+              <div className="w-1 h-5 rounded-sm bg-muted-foreground/25" />
+            </div>
+          }
+          badge="2"
+          title="Difficulty"
+          description="1–5 bar difficulty rating from SSI. More bars = harder stage. Helps contextualize a lower hit factor or percentage."
+        />
+        <DiagramRow
+          visual={
+            <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+              {MOCK_STAGE_ROUNDS}r · {MOCK_STAGE_PAPER}P · {MOCK_STAGE_STEEL}S
+            </span>
+          }
+          badge="3"
+          title="Rounds & targets"
+          description="Minimum round count, paper targets (P), and steel targets (S). Indicates stage type — high round count suggests a long course."
+        />
+        <DiagramRow
+          last
+          visual={
+            <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+              med: {MOCK_STAGE_MEDIAN_HF.toFixed(2)}
+            </span>
+          }
+          badge="4"
+          title="Field median HF"
+          description="Median hit factor of all competitors on this stage. A useful baseline — compare it with the hit factors in the cells above."
+        />
+      </div>
+    </section>
+  );
+}
+
 function StageCellDiagram() {
   const totalHits = MOCK_A + MOCK_C + MOCK_D + MOCK_M;
   const aPct = totalHits > 0 ? (MOCK_A / totalHits) * 100 : null;
@@ -98,7 +164,7 @@ function StageCellDiagram() {
       <div>
         <DiagramRow
           visual={<ShootingOrderBadge order={MOCK_ORDER} />}
-          badge="①"
+          badge="1"
           title="Shooting order"
           description="The order this competitor shot this stage (from scorecard timestamps). Useful for spotting late-draw conditions."
         />
@@ -111,9 +177,9 @@ function StageCellDiagram() {
               </span>
             </div>
           }
-          badge="②"
+          badge="2"
           title="Rank & hit factor"
-          description="Colored badge shows placement in your comparison group. Gold=1st, silver=2nd, bronze=3rd. Hit factor = points ÷ time — the primary IPSC scoring metric."
+          description="Colored badge shows placement in your comparison group. Gold=1st, silver=2nd, bronze=3rd. Hit factor = points / time — the primary IPSC scoring metric."
         />
         <DiagramRow
           visual={
@@ -121,7 +187,7 @@ function StageCellDiagram() {
               {MOCK_POINTS}/{MOCK_MAX} · {MOCK_TIME.toFixed(2)}s
             </span>
           }
-          badge="③"
+          badge="3"
           title="Points & time"
           description="Raw points scored over stage maximum, and the time taken."
         />
@@ -131,7 +197,7 @@ function StageCellDiagram() {
               {MOCK_GROUP_PCT.toFixed(1)}%
             </span>
           }
-          badge="④"
+          badge="4"
           title="Group percentage"
           description="This competitor's hit factor as a percentage of the group leader on this stage. 100% = best in group. Use the Group / Division / Overall toggle to change the reference."
         />
@@ -141,7 +207,7 @@ function StageCellDiagram() {
               P{Math.round(MOCK_PERCENTILE * 100)}
             </span>
           }
-          badge="⑤"
+          badge="5"
           title="Field percentile"
           description="Top X% of all competitors in the full field on this stage. P75 = top 75%, i.e. beat 75% of the field."
         />
@@ -156,9 +222,9 @@ function StageCellDiagram() {
               procedurals={null}
             />
           }
-          badge="⑥"
+          badge="6"
           title="Hit zone bar"
-          description="Proportional breakdown of A (green) / C (yellow) / D (orange) / M (red) hits. Wider = more hits in that zone. A-zone = full points; C = ¾; D = ½; M = 0. Tap to see exact counts."
+          description="Proportional breakdown of A (green) / C (yellow) / D (orange) / M (red) hits. Wider = more hits in that zone. A-zone = full points; C = 3/4; D = 1/2; M = 0. Tap to see exact counts."
         />
         <DiagramRow
           visual={
@@ -168,7 +234,7 @@ function StageCellDiagram() {
               procedurals={MOCK_P}
             />
           }
-          badge="⑦"
+          badge="7"
           title="Penalties"
           description="Total points lost to misses, no-shoots, and procedurals (−10 pts each). Tap for breakdown."
         />
@@ -184,7 +250,7 @@ function StageCellDiagram() {
               procedurals={MOCK_P}
             />
           }
-          badge="⑧"
+          badge="8"
           title="Run classification"
           description={<>
             <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="w-3 h-3" aria-hidden="true" /> Solid</span>
@@ -216,7 +282,7 @@ function SummaryRowDiagram() {
               {MOCK_TOTAL_PTS}
             </span>
           }
-          badge="Ⓐ"
+          badge="A"
           title="Total points"
           description="Sum of raw points across all fired stages."
         />
@@ -226,7 +292,7 @@ function SummaryRowDiagram() {
               {MOCK_AVG_PCT.toFixed(1)}%
             </span>
           }
-          badge="Ⓑ"
+          badge="B"
           title="Average percentage"
           description="Average of this competitor's stage percentages — an overall match quality number. The label above the table changes with Group / Division / Overall mode."
         />
@@ -241,7 +307,7 @@ function SummaryRowDiagram() {
               procedurals={MOCK_TP}
             />
           }
-          badge="Ⓒ"
+          badge="C"
           title="Aggregated hit zones"
           description="All hits across every stage combined. A quick picture of overall accuracy."
         />
@@ -251,7 +317,7 @@ function SummaryRowDiagram() {
               {`\u2212${MOCK_TOTAL_PENALTY_PTS}pts`}
             </span>
           }
-          badge="Ⓓ"
+          badge="D"
           title="Total match penalties"
           description="Total points lost to all misses, no-shoots, and procedurals across the match."
         />
@@ -264,7 +330,7 @@ function SummaryRowDiagram() {
               {`pen \u2212${MOCK_PENALTY_COST.toFixed(1)}%`}
             </Badge>
           }
-          badge="Ⓔ"
+          badge="E"
           title="Penalty cost"
           description="How much match percentage was lost to penalties. Tooltip shows rate per stage and per 100 rounds, plus clean vs actual match %."
         />
@@ -290,20 +356,20 @@ function SummaryRowDiagram() {
               </div>
             </div>
           }
-          badge="Ⓕ"
+          badge="F"
           title="Points per shot"
           description="Average points per round fired. The strip shows where this competitor sits vs the full field — dot = their value, tick = field median."
         />
         <DiagramRow
           visual={
-            <Badge
-              variant="outline"
-              className="text-xs font-medium tabular-nums whitespace-nowrap"
-            >
-              {`CI ${MOCK_CI.toFixed(2)} · consistent`}
-            </Badge>
+            <div className="flex flex-col items-center gap-0 text-center">
+              <span className="text-xs font-medium tabular-nums border rounded px-1.5 py-0.5 border-border">
+                {`CI ${MOCK_CI.toFixed(2)}`}
+              </span>
+              <span className="text-[10px] text-muted-foreground mt-0.5">consistent</span>
+            </div>
           }
-          badge="Ⓖ"
+          badge="G"
           title="Consistency index"
           description="Coefficient of variation of HF% across stages. Lower = more consistent. Ranges: < 0.05 very consistent · 0.05–0.10 consistent · 0.10–0.15 moderate · 0.15–0.20 variable · > 0.20 streaky. Grayed out when fewer than 4 stages."
         />
@@ -313,21 +379,23 @@ function SummaryRowDiagram() {
             <span
               className={cn(
                 "inline-flex items-center gap-1 rounded border px-1.5 py-0.5",
-                "text-xs font-medium tabular-nums whitespace-nowrap",
+                "text-[10px] font-medium tabular-nums whitespace-nowrap",
                 "border-amber-400 text-amber-700 dark:text-amber-400"
               )}
             >
               −95 pts on table
             </span>
           }
-          badge="Ⓗ"
+          badge="H"
           title="Points on the table"
           description="Total points left on the table from hit-quality loss (C/D/miss vs A) and penalties combined. Tap to open the coaching analysis panel for a per-stage breakdown."
         />
       </div>
       <p className="text-xs text-muted-foreground/70 mt-3">
         Note: if a competitor has zero penalties across all stages, a{" "}
-        <span className="text-green-600 dark:text-green-400 font-medium">✓ Clean</span>{" "}
+        <span className="inline-flex items-center gap-0.5 text-green-600 dark:text-green-400 font-medium">
+          <CheckCircle2 className="w-3 h-3 inline-block align-middle" aria-hidden="true" /> Clean
+        </span>{" "}
         badge appears instead of penalty rows.
       </p>
     </section>
@@ -356,7 +424,7 @@ export function CellHelpModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md sm:max-w-xl max-h-[90svh] overflow-y-auto p-0">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b">
+        <DialogHeader className="px-6 pt-6 pb-4 pr-12 border-b">
           <DialogTitle>How to read the comparison table</DialogTitle>
           <DialogDescription>
             An annotated guide to the data shown in each cell and the summary
@@ -365,6 +433,7 @@ export function CellHelpModal({
         </DialogHeader>
         <TooltipProvider>
           <div className="px-6 pb-6 space-y-8 pt-4">
+            <StageColumnDiagram />
             <StageCellDiagram />
             <SummaryRowDiagram />
             <ViewModeNote />
