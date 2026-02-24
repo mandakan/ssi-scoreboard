@@ -84,7 +84,6 @@ export async function GET(
   }
 
   const tFetch = performance.now();
-  console.log(`[match] graphql fetch: ${(tFetch - t0).toFixed(0)}ms`);
 
   if (!data.event) {
     return NextResponse.json({ error: "Match not found" }, { status: 404 });
@@ -166,7 +165,18 @@ export async function GET(
   };
 
   const tDone = performance.now();
-  console.log(`[match] total: ${(tDone - t0).toFixed(0)}ms`);
+  console.log(JSON.stringify({
+    route: "match",
+    ct: ctNum,
+    match_id: id,
+    cache_hit: cachedAt !== null,
+    competitors_count: response.competitors_count,
+    stages_count: response.stages_count,
+    scoring_completed: response.scoring_completed,
+    is_complete: isComplete,
+    ms_graphql: Math.round(tFetch - t0),
+    ms_total: Math.round(tDone - t0),
+  }));
 
   return NextResponse.json(response, {
     headers: {
