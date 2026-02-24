@@ -16,3 +16,6 @@ preview_urls = false
 
 [assets]
 directory = ".open-next/assets"
+
+[observability]
+enabled = true
