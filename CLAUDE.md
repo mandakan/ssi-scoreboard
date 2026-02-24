@@ -41,6 +41,7 @@ Key directories:
 - `lib/queries.ts` — TanStack Query v5 hooks used by client components
 - `components/` — all UI; no direct API calls, all data via hooks from `lib/queries.ts`
 - `app/api/events/route.ts` — event search; defaults to `minLevel=l2plus` (hides Level I club matches); users can switch to "All", "L3+", or "L4+" in the filter panel
+- `app/api/admin/cache/health/route.ts` — protected diagnostic endpoint (`Authorization: Bearer <CACHE_PURGE_SECRET>`); reports env var presence and runs a live write→read→delete round-trip against the cache adapter with latency
 
 ## GraphQL Patterns
 The SSI API uses Django content-type discrimination. Match URLs encode this:
@@ -132,7 +133,7 @@ or any other type that is serialised into Redis via `cachedExecuteQuery`.
 | Variable | Where used | Target | Notes |
 |---|---|---|---|
 | `SSI_API_KEY` | `lib/graphql.ts` (server-only) | Both | Never use `NEXT_PUBLIC_` prefix |
-| `CACHE_PURGE_SECRET` | `app/api/admin/cache/purge/route.ts` | Both | Any strong random string; never `NEXT_PUBLIC_` |
+| `CACHE_PURGE_SECRET` | `app/api/admin/cache/purge/route.ts`, `app/api/admin/cache/health/route.ts` | Both | Any strong random string; never `NEXT_PUBLIC_` |
 | `NEXT_PUBLIC_BUILD_ID` | `components/update-banner.tsx`, `app/api/version/route.ts` | Both | Git SHA baked into the client bundle at Docker build time; powers new-version detection. Auto-injected by `pnpm docker:build`. Unset in `pnpm dev` — version check is skipped. |
 | `REDIS_URL` | `lib/cache-node.ts` | Docker only | `redis://localhost:6379` locally, `rediss://...` for managed Redis. Not needed for CF builds. |
 | `UPSTASH_REDIS_REST_URL` | `lib/cache-edge.ts` | Cloudflare only | REST URL from Upstash console. Set via `wrangler secret put` in production. |

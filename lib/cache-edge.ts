@@ -15,11 +15,15 @@ let _redis: Redis | null = null;
 // can JSON.parse themselves — consistent with the ioredis adapter.
 function getRedis(): Redis {
   if (!_redis) {
-    _redis = new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL ?? "",
-      token: process.env.UPSTASH_REDIS_REST_TOKEN ?? "",
-      automaticDeserialization: false,
-    });
+    const url = process.env.UPSTASH_REDIS_REST_URL ?? "";
+    const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? "";
+    if (!url || !token) {
+      console.error(
+        "[cache-edge] UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN is not set — " +
+        "cache will not work. Check that secrets are configured in the Worker deployment.",
+      );
+    }
+    _redis = new Redis({ url, token, automaticDeserialization: false });
   }
   return _redis;
 }

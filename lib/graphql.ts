@@ -205,7 +205,9 @@ export async function cachedExecuteQuery<T>(
         return { data: entry.data, cachedAt: entry.cachedAt };
       }
     }
-  } catch { /* fall through to fetch */ }
+  } catch (err) {
+    console.error(`[cache] read error for key "${cacheKey}":`, err);
+  }
 
   const data = await executeQuery<T>(query, variables);
   const cachedAt = new Date().toISOString();
@@ -214,7 +216,9 @@ export async function cachedExecuteQuery<T>(
     const entry: CacheEntry<T> = { data, cachedAt, v: CACHE_SCHEMA_VERSION };
     const payload = JSON.stringify(entry);
     await cache.set(cacheKey, payload, ttlSeconds);
-  } catch { /* best-effort — store failure is non-fatal */ }
+  } catch (err) {
+    console.error(`[cache] write error for key "${cacheKey}":`, err);
+  }
 
   // Return null for cachedAt: freshly fetched, not served from cache
   return { data, cachedAt: null };
