@@ -55,6 +55,7 @@ function buildSubWindows(
 }
 
 export async function GET(req: Request) {
+  const t0 = performance.now();
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q") ?? "";
 
@@ -135,5 +136,14 @@ export async function GET(req: Request) {
       level: e.get_full_level_display,
     }));
 
+  console.log(JSON.stringify({
+    route: "events",
+    has_query: q.length > 0,
+    country: country ?? null,
+    min_level: minLevel,
+    firearms,
+    result_count: events.length,
+    ms_total: Math.round(performance.now() - t0),
+  }));
   return NextResponse.json(events);
 }

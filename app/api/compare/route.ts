@@ -165,7 +165,6 @@ export async function GET(req: Request) {
   const cacheInfo = { cachedAt: matchCachedAt ?? scorecardsCachedAt };
 
   const tFetch = performance.now();
-  console.log(`[compare] graphql fetch: ${(tFetch - t0).toFixed(0)}ms`);
 
   if (!scorecardsData.event || !matchData.event) {
     return NextResponse.json({ error: "Match not found" }, { status: 404 });
@@ -240,7 +239,6 @@ export async function GET(req: Request) {
   }
 
   const tFlatten = performance.now();
-  console.log(`[compare] scorecard flatten (${rawScorecards.length} records): ${(tFlatten - tFetch).toFixed(0)}ms`);
 
   // Build a map of stage_id → stage metadata from match data
   const stageMetaMap = new Map(
@@ -287,7 +285,6 @@ export async function GET(req: Request) {
   }
 
   const tRankings = performance.now();
-  console.log(`[compare] computeGroupRankings: ${(tRankings - tFlatten).toFixed(0)}ms`);
 
   const penaltyStats = Object.fromEntries(
     requestedCompetitors.map((c) => [c.id, computePenaltyStats(stages, c.id)])
@@ -315,7 +312,6 @@ export async function GET(req: Request) {
   const whatIfStats = simulateWithoutWorstStage(stages, requestedCompetitors, rawScorecards);
 
   const tPerCompetitor = performance.now();
-  console.log(`[compare] per-competitor stats: ${(tPerCompetitor - tRankings).toFixed(0)}ms`);
 
   // Build division map for the full field (used by the fingerprint cohort cloud)
   const divisionMap = new Map<number, string | null>(
@@ -357,8 +353,19 @@ export async function GET(req: Request) {
   );
 
   const tFingerprint = performance.now();
-  console.log(`[compare] fingerprint (${fieldFingerprintPoints.length} field pts): ${(tFingerprint - tPerCompetitor).toFixed(0)}ms`);
-  console.log(`[compare] total: ${(tFingerprint - t0).toFixed(0)}ms`);
+  console.log(JSON.stringify({
+    route: "compare",
+    ct: ctNum,
+    match_id: id,
+    competitor_ids: competitorIds,
+    competitor_count: competitorIds.length,
+    match_cache_hit: matchCachedAt !== null,
+    scorecards_cache_hit: scorecardsCachedAt !== null,
+    scorecard_count: rawScorecards.length,
+    is_complete: isComplete,
+    ms_graphql: Math.round(tFetch - t0),
+    ms_total: Math.round(tFingerprint - t0),
+  }));
 
   const response: CompareResponse = {
     match_id: parseInt(id, 10),
