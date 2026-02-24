@@ -209,7 +209,7 @@ export async function cachedExecuteQuery<T>(
       }
     }
   } catch (err) {
-    console.error(`[cache] read error for key "${cacheKey}":`, err);
+    console.error("[cache] read error for key:", cacheKey, err);
   }
 
   const data = await executeQuery<T>(query, variables);
@@ -220,7 +220,7 @@ export async function cachedExecuteQuery<T>(
     const payload = JSON.stringify(entry);
     await cache.set(cacheKey, payload, ttlSeconds);
   } catch (err) {
-    console.error(`[cache] write error for key "${cacheKey}":`, err);
+    console.error("[cache] write error for key:", cacheKey, err);
   }
 
   // Record access for popularity tracking (fire-and-forget, non-fatal).
