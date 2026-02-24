@@ -10,6 +10,8 @@ The official site only lets you view one competitor at a time. This app lets you
 any group of competitors and compare their results across every stage side-by-side —
 including during an active match before official results are published.
 
+**Live instance:** [scoreboard.urdr.dev](https://scoreboard.urdr.dev) — not affiliated with or endorsed by ShootNScoreIt.
+
 ## Prerequisites
 - Node.js 20+
 - pnpm 10+ (`corepack enable && corepack prepare pnpm@10.30.1 --activate`)
