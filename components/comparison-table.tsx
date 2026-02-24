@@ -12,7 +12,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Crosshair, ExternalLink, Flame, Gauge, HelpCircle, Info, Shield, Target, TrendingUp, Zap } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Crosshair, ExternalLink, Flame, Gauge, HelpCircle, Info, Shield, Target, TrendingUp, X, Zap } from "lucide-react";
 import { cn, formatHF, formatTime, formatPct, computePointsDelta, formatDelta } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
 import { HitZoneBar } from "@/components/hit-zone-bar";
@@ -23,6 +23,7 @@ import type { CompareResponse, CompetitorInfo, CompetitorSummary, LossBreakdownS
 interface ComparisonTableProps {
   data: CompareResponse;
   scoringCompleted: number;
+  onRemove?: (id: number) => void;
 }
 
 /**
@@ -322,7 +323,7 @@ function CompetitorLossPanel({
 
 const MODE_LABELS: Record<PctMode, string> = {
   group: "Group",
-  division: "Division",
+  division: "Div",
   overall: "Overall",
 };
 
@@ -474,7 +475,7 @@ function ArchetypePill({ archetype, color }: { archetype: ShooterArchetype; colo
   );
 }
 
-export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps) {
+export function ComparisonTable({ data, scoringCompleted, onRemove }: ComparisonTableProps) {
   const { stages, competitors, penaltyStats, efficiencyStats, consistencyStats, lossBreakdownStats, whatIfStats, styleFingerprintStats } = data;
   const [mode, setMode] = useState<PctMode>("group");
   const [viewMode, setViewMode] = useState<ViewMode>("absolute");
@@ -595,24 +596,18 @@ export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps
         </div>
       ))}
 
-      {/* View mode toggle (Absolute / Delta) */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
-          {viewMode === "absolute" && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">% relative to:</span>
-              <ModeToggle mode={mode} onChange={setMode} />
-            </div>
-          )}
-        </div>
+      {/* View mode toggle (Absolute / Delta) + percentage context + help */}
+      <div className="flex items-center gap-2">
+        <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
+        {viewMode === "absolute" && (
+          <ModeToggle mode={mode} onChange={setMode} />
+        )}
         <button
           onClick={() => setHelpOpen(true)}
-          className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground rounded px-1.5 py-1 hover:bg-muted transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+          className="ml-auto shrink-0 inline-flex items-center justify-center text-muted-foreground hover:text-foreground rounded p-1.5 hover:bg-muted transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
           aria-label="How to read this table"
         >
-          <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-          <span>Help</span>
+          <HelpCircle className="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
 
@@ -636,9 +631,18 @@ export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps
                 return (
                   <th
                     key={comp.id}
-                    className="py-2 px-3 text-center font-medium min-w-[5.5rem] sm:min-w-32"
+                    className="relative py-2 px-3 text-center font-medium min-w-[5.5rem] sm:min-w-32"
                     style={{ borderBottom: `3px solid ${colorMap[comp.id]}` }}
                   >
+                    {onRemove && (
+                      <button
+                        onClick={() => onRemove(comp.id)}
+                        className="absolute top-0 right-0 p-2 rounded-bl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                        aria-label={`Remove ${comp.name}`}
+                      >
+                        <X className="w-3 h-3" aria-hidden="true" />
+                      </button>
+                    )}
                     <div className="flex flex-col items-center gap-0.5">
                       <span className="font-mono text-xs text-muted-foreground">
                         #{comp.competitor_number}
@@ -1108,6 +1112,10 @@ export function ComparisonTable({ data, scoringCompleted }: ComparisonTableProps
               aria-labelledby="whatif-heading"
               className="px-4 pb-4 space-y-4 border-t border-sky-200 dark:border-sky-900/50 pt-4"
             >
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Rank context:</span>
+                <ModeToggle mode={mode} onChange={setMode} />
+              </div>
               <div className="space-y-5">
                 {competitors.map((comp) => {
                   const wi = whatIfStats[comp.id];

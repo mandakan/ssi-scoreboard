@@ -20,6 +20,13 @@ export interface CompetitorInfo {
   division: string | null;
 }
 
+export interface SquadInfo {
+  id: number;
+  number: number;
+  name: string;           // e.g. "Squad 1"
+  competitorIds: number[]; // approved, non-DNF competitor IDs in this squad
+}
+
 export interface CacheInfo {
   cachedAt: string | null; // ISO string of when data was cached; null if just fetched fresh
 }
@@ -37,6 +44,7 @@ export interface MatchResponse {
   ssi_url: string | null;
   stages: StageInfo[];
   competitors: CompetitorInfo[];
+  squads: SquadInfo[];
   cacheInfo: CacheInfo;
 }
 

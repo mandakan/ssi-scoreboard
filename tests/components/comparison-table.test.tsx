@@ -236,7 +236,7 @@ describe("ComparisonTable", () => {
   it("renders mode toggle buttons", () => {
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     expect(screen.getByText("Group")).toBeInTheDocument();
-    expect(screen.getByText("Division")).toBeInTheDocument();
+    expect(screen.getByText("Div")).toBeInTheDocument();
     expect(screen.getByText("Overall")).toBeInTheDocument();
   });
 
@@ -508,10 +508,10 @@ describe("ComparisonTable — delta view mode", () => {
   it("hides % reference toggle in delta mode", () => {
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     // % toggle visible in absolute mode
-    expect(screen.getByText("% relative to:")).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Percentage reference" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Delta" }));
     // % toggle hidden in delta mode
-    expect(screen.queryByText("% relative to:")).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Percentage reference" })).not.toBeInTheDocument();
   });
 
   it("tie case: two competitors with equal points both show ±0.0 pts in delta mode", () => {

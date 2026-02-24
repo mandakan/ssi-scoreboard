@@ -23,6 +23,10 @@ const MOCK_MATCH: MatchResponse = {
     { id: 200, name: "Bob Shooter", competitor_number: "50", club: "Test Club", division: "Standard" },
     { id: 300, name: "Charlie Marksman", competitor_number: "116", club: null, division: null },
   ],
+  squads: [
+    { id: 1, number: 1, name: "Squad 1", competitorIds: [100, 200] },
+    { id: 2, number: 2, name: "Squad 2", competitorIds: [300] },
+  ],
 };
 
 const MOCK_COMPARE: CompareResponse = {
@@ -161,8 +165,8 @@ test.describe("Scoreboard E2E", () => {
 
     await page.waitForURL("/match/22/26547");
     await expect(page.getByText("Test IPSC Match")).toBeVisible();
-    // StageList should be present (collapsed by default)
-    await expect(page.getByRole("button", { name: /stages \(3\)/i })).toBeVisible();
+    // Competitor picker should be present
+    await expect(page.getByRole("button", { name: /add competitor/i })).toBeVisible();
   });
 
   test("selecting 3 competitors shows comparison table with 3 columns", async ({ page }) => {
@@ -275,6 +279,29 @@ test.describe("Scoreboard E2E", () => {
     // Deselect Charlie by clicking the X badge
     await page.getByRole("button", { name: /remove charlie/i }).click();
     await expect(page.getByRole("table").getByText("#116")).not.toBeVisible();
+  });
+
+  test("squad picker adds all squad members", async ({ page }) => {
+    await page.route("/api/match/22/26547", (route) =>
+      route.fulfill({ json: MOCK_MATCH })
+    );
+    await page.route(/\/api\/compare/, (route) =>
+      route.fulfill({ json: MOCK_COMPARE_2 })
+    );
+
+    await page.goto("/match/22/26547");
+    await expect(page.getByText("Test IPSC Match")).toBeVisible();
+
+    // Open the squad picker popover
+    await page.getByRole("button", { name: /add squad/i }).click();
+    await expect(page.getByRole("button", { name: /add squad 1/i })).toBeVisible();
+
+    // Add Squad 1 (Alice + Bob)
+    await page.getByRole("button", { name: /add squad 1/i }).click();
+
+    // Both competitor badges should now be visible
+    await expect(page.getByRole("button", { name: /remove alice/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /remove bob/i })).toBeVisible();
   });
 });
 

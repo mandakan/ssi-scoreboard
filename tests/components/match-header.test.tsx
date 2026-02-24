@@ -17,6 +17,7 @@ const baseMatch: MatchResponse = {
   ssi_url: "https://shootnscoreit.com/event/22/123/",
   stages: [],
   competitors: [],
+  squads: [],
 };
 
 describe("MatchHeader", () => {

@@ -11,6 +11,8 @@ const PALETTE = [
   "#f97316", // orange-500
   "#6366f1", // indigo-500
   "#84cc16", // lime-500
+  "#06b6d4", // cyan-500
+  "#f43f5e", // rose-500
 ];
 
 /**

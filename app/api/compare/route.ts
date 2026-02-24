@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { MAX_COMPETITORS } from "@/lib/constants";
 import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY, MATCH_QUERY } from "@/lib/graphql";
 import cache from "@/lib/cache-impl";
 
@@ -107,9 +108,9 @@ export async function GET(req: Request) {
     .map((s) => parseInt(s.trim(), 10))
     .filter((n) => !isNaN(n));
 
-  if (competitorIds.length === 0 || competitorIds.length > 10) {
+  if (competitorIds.length === 0 || competitorIds.length > MAX_COMPETITORS) {
     return NextResponse.json(
-      { error: "Between 1 and 10 competitor_ids required" },
+      { error: `Between 1 and ${MAX_COMPETITORS} competitor_ids required` },
       { status: 400 }
     );
   }

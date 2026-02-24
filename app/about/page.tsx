@@ -65,7 +65,11 @@ export default function AboutPage() {
           </h2>
           <ul className="text-sm leading-relaxed text-muted-foreground space-y-2 list-disc list-inside">
             <li>Search competitions by name, country, or date range</li>
-            <li>Compare up to 10 competitors side-by-side across all stages</li>
+            <li>Compare up to 12 competitors side-by-side across all stages</li>
+            <li>
+              Add an entire IPSC squad in one tap with the squad picker — no
+              need to select members one by one
+            </li>
             <li>Stage-by-stage scoring breakdown with hit factor and points</li>
             <li>
               What-if analysis — see how rankings would change by group, division,

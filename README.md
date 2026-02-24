@@ -65,7 +65,8 @@ custom subdomain, verifying the deployment, and troubleshooting — see
 ## Usage
 1. Browse upcoming or recent competitions via the built-in event search, or paste a match URL
    (e.g. `https://shootnscoreit.com/event/22/26547/`) directly into the input field
-2. Search for and select up to 10 competitors by name, number, or club
+2. Select competitors individually by name, number, or club — or tap **Add squad** to load an
+   entire IPSC squad at once (up to 12 competitors total)
 3. Multiple analysis views update immediately:
    - **Stage table** — hit factors, raw points, time, A/C/D/M hit zone breakdown, rank, percentile
      placement, shooting order, stage difficulty, and run classification per stage; switch to
@@ -84,6 +85,7 @@ custom subdomain, verifying the deployment, and troubleshooting — see
 
 ## Features
 - **Live data** — works during active matches before official results are published
+- **Squad picker** — add all members of an IPSC squad in one tap; up to 12 competitors total
 - **Dark mode** — toggle between light and dark themes
 - **Group / Division / Overall rankings** — toggle the ranking context in the stage table
 - **Delta heatmap** — colour-coded table view showing each cell relative to the group leader

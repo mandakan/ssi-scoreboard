@@ -3,7 +3,7 @@ import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
 import cache from "@/lib/cache-impl";
 
 import { formatDivisionDisplay } from "@/lib/divisions";
-import type { MatchResponse, StageInfo, CompetitorInfo } from "@/lib/types";
+import type { MatchResponse, StageInfo, CompetitorInfo, SquadInfo } from "@/lib/types";
 
 interface RawStage {
   id: string;
@@ -29,6 +29,13 @@ interface RawCompetitor {
   shoots_handgun_major?: boolean | null;
 }
 
+interface RawSquad {
+  id: string;
+  number?: number;
+  get_squad_display?: string;
+  competitors?: Array<{ id: string }>;
+}
+
 interface RawMatchData {
   event: {
     id: string;
@@ -45,6 +52,7 @@ interface RawMatchData {
     competitors_count?: number;
     stages?: RawStage[];
     competitors_approved_w_wo_results_not_dnf?: RawCompetitor[];
+    squads?: RawSquad[];
   } | null;
 }
 
@@ -121,6 +129,22 @@ export async function GET(
     division: formatDivisionDisplay(c.get_handgun_div_display ?? c.handgun_div, c.shoots_handgun_major),
   }));
 
+  const approvedIds = new Set(competitors.map((c) => c.id));
+  const squads: SquadInfo[] = (ev.squads ?? [])
+    .map((s) => {
+      const competitorIds = (s.competitors ?? [])
+        .map((c) => parseInt(c.id, 10))
+        .filter((cid) => approvedIds.has(cid))
+        .sort((a, b) => a - b);
+      return {
+        id: parseInt(s.id, 10),
+        number: s.number ?? 0,
+        name: s.get_squad_display ?? `Squad ${s.number ?? "?"}`,
+        competitorIds,
+      };
+    })
+    .filter((s) => s.competitorIds.length > 0);
+
   const response: MatchResponse = {
     name: ev.name,
     venue: ev.venue ?? null,
@@ -137,6 +161,7 @@ export async function GET(
     ssi_url: `https://shootnscoreit.com/event/${ct}/${id}/`,
     stages,
     competitors,
+    squads,
     cacheInfo: { cachedAt },
   };
 
