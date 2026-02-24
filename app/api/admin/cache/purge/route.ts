@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import redis from "@/lib/redis";
+import cache from "@/lib/cache-impl";
 import { gqlCacheKey } from "@/lib/graphql";
+
+export const runtime = "edge";
 
 // DELETE /api/admin/cache/purge?ct=22&id=<match-id>
 // Requires Authorization: Bearer <CACHE_PURGE_SECRET>
@@ -26,7 +28,7 @@ export async function DELETE(req: Request) {
   const matchKey = gqlCacheKey("GetMatch", { ct: ctNum, id });
   const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
 
-  await redis.del(matchKey, scorecardsKey);
+  await cache.del(matchKey, scorecardsKey);
 
   return NextResponse.json({ purged: [matchKey, scorecardsKey] });
 }

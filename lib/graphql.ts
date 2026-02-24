@@ -1,7 +1,7 @@
 // Server-only — never import from client components or files with "use client".
 // SSI_API_KEY lives here and must never be sent to the browser.
 
-import redis from "@/lib/redis";
+import cache from "@/lib/cache-impl";
 
 const GRAPHQL_ENDPOINT = "https://shootnscoreit.com/graphql/";
 
@@ -184,7 +184,7 @@ export async function cachedExecuteQuery<T>(
   ttlSeconds: number | null,
 ): Promise<{ data: T; cachedAt: string | null }> {
   try {
-    const raw = await redis.get(cacheKey);
+    const raw = await cache.get(cacheKey);
     if (raw) {
       const entry = JSON.parse(raw) as CacheEntry<T>;
       return { data: entry.data, cachedAt: entry.cachedAt };
@@ -197,11 +197,7 @@ export async function cachedExecuteQuery<T>(
   try {
     const entry: CacheEntry<T> = { data, cachedAt };
     const payload = JSON.stringify(entry);
-    if (ttlSeconds === null) {
-      await redis.set(cacheKey, payload);
-    } else {
-      await redis.set(cacheKey, payload, "EX", ttlSeconds);
-    }
+    await cache.set(cacheKey, payload, ttlSeconds);
   } catch { /* best-effort — store failure is non-fatal */ }
 
   // Return null for cachedAt: freshly fetched, not served from cache

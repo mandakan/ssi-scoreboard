@@ -21,10 +21,13 @@
     "docker:build": "BUILD_ID=$(git rev-parse --short HEAD 2>/dev/null || echo '') docker compose build",
     "docker:up": "docker compose --env-file .env.local up",
     "docker:down": "docker compose down",
+    "cf:build": "DEPLOY_TARGET=cloudflare next build && npx @cloudflare/next-on-pages@1.13.16",
+    "cf:deploy": "pnpm cf:build && wrangler pages deploy .vercel/output/static",
     "setup": "cp -n .env.local.example .env.local || true"
   },
   "dependencies": {
     "@tanstack/react-query": "5.90.21",
+    "@upstash/redis": "1.36.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

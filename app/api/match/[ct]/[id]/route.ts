@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
-import redis from "@/lib/redis";
+import cache from "@/lib/cache-impl";
+
+export const runtime = "edge";
 import { formatDivisionDisplay } from "@/lib/divisions";
 import type { MatchResponse, StageInfo, CompetitorInfo } from "@/lib/types";
 
@@ -90,8 +92,8 @@ export async function GET(
   const isComplete = scoringPct >= 95 || daysSince > 3;
   if (isComplete) {
     try {
-      const raw = await redis.get(matchKey);
-      if (raw) await redis.persist(matchKey); // remove TTL → permanent
+      const raw = await cache.get(matchKey);
+      if (raw) await cache.persist(matchKey); // remove TTL → permanent
     } catch { /* ignore */ }
   }
 
