@@ -18,7 +18,9 @@ cp .env.local.example .env.local   # then fill in SSI_API_KEY
 pnpm dev                            # http://localhost:3000
 ```
 
-## Docker / Docker Compose
+## Deployment
+
+### Docker / Docker Compose
 ```bash
 cp .env.local.example .env.local   # fill in SSI_API_KEY, CACHE_PURGE_SECRET
 pnpm docker:build                   # builds image
@@ -32,13 +34,71 @@ A `redis_data` volume persists the cache across container restarts.
 `REDIS_URL` to its connection string (`rediss://` for TLS). The app uses `lazyConnect: true`
 so a missing Redis at startup is non-fatal — requests fall back to direct GraphQL fetches.
 
+### Cloudflare Pages
+
+The app has first-class Cloudflare Pages support. The build target is selected at build time
+via `DEPLOY_TARGET=cloudflare` — no source changes needed.
+
+```bash
+pnpm cf:build    # DEPLOY_TARGET=cloudflare + @opennextjs/cloudflare build
+pnpm cf:deploy   # build + wrangler deploy
+```
+
+#### Setting up Upstash Redis for Cloudflare
+
+Cloudflare Workers cannot open TCP connections, so the Docker/Node.js `ioredis` adapter is
+replaced at build time with an HTTP-based `@upstash/redis` adapter pointing at Upstash.
+
+**1. Create an Upstash database**
+
+1. Sign up or log in at [console.upstash.com](https://console.upstash.com)
+2. Click **Create Database** → choose **Redis**
+3. Select **Global** (replicated, lowest latency worldwide) or a regional instance
+   closest to your Cloudflare datacenter
+4. Give it a name (e.g. `ssi-scoreboard`) and click **Create**
+
+**2. Copy the REST credentials**
+
+On your database page, scroll to the **REST API** section.
+Copy the two values shown:
+- `UPSTASH_REDIS_REST_URL` — e.g. `https://eu1-abc-12345.upstash.io`
+- `UPSTASH_REDIS_REST_TOKEN` — long opaque token
+
+**3. Local Cloudflare dev**
+
+Add both to your `.env.local`:
+```
+UPSTASH_REDIS_REST_URL=https://eu1-abc-12345.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your_token_here
+```
+Then run `pnpm cf:build` to verify the build completes.
+
+**4. Production secrets**
+
+Set secrets in Cloudflare Pages via the wrangler CLI (recommended) or the dashboard:
+```bash
+wrangler secret put SSI_API_KEY
+wrangler secret put CACHE_PURGE_SECRET
+wrangler secret put UPSTASH_REDIS_REST_URL
+wrangler secret put UPSTASH_REDIS_REST_TOKEN
+```
+Or go to **Cloudflare Pages → your project → Settings → Environment variables** and add
+them there.
+
+> **Note:** The `popular-matches` feature (recently viewed matches on the home page) is not
+> available on Cloudflare Pages — Upstash's HTTP API does not expose `OBJECT IDLETIME`, so
+> the endpoint returns `[]`. All other features work identically.
+
 ## Environment Variables
-| Variable | Description |
-|---|---|
-| `SSI_API_KEY` | ShootNScoreIt API key — server-side only, never exposed to browser |
-| `REDIS_URL` | Redis connection string (`redis://localhost:6379` locally, `rediss://…` for cloud) |
-| `CACHE_PURGE_SECRET` | Secret for the admin cache-purge endpoint — any strong random string |
-| `NEXT_PUBLIC_BUILD_ID` | Git SHA baked into the bundle at build time for version detection (auto-injected by `pnpm docker:build`) |
+
+| Variable | Target | Description |
+|---|---|---|
+| `SSI_API_KEY` | Both | ShootNScoreIt API key — server-side only, never exposed to browser |
+| `CACHE_PURGE_SECRET` | Both | Secret for the admin cache-purge endpoint — any strong random string |
+| `NEXT_PUBLIC_BUILD_ID` | Both | Git SHA baked into the bundle at build time for version detection (auto-injected by `pnpm docker:build`) |
+| `REDIS_URL` | Docker | Redis connection string (`redis://localhost:6379` locally, `rediss://…` for cloud). Not needed for CF builds. |
+| `UPSTASH_REDIS_REST_URL` | Cloudflare | REST URL from the Upstash console (see setup above) |
+| `UPSTASH_REDIS_REST_TOKEN` | Cloudflare | REST token from the Upstash console (see setup above) |
 
 ## Usage
 1. Browse upcoming or recent competitions via the built-in event search, or paste a match URL
@@ -91,7 +151,7 @@ so a missing Redis at startup is non-fatal — requests fall back to direct Grap
 - **Firearms filter** — filter event search by Handgun+PCC, PCC only, Rifle, or Shotgun
 - **Country filter** — filter event search by country (ISO 3166-1 alpha-3), defaults to Sweden (SWE)
 - **Extended date range** — event search window up to 5 years back (Upcoming / 3 mo / 6 mo / 1 yr / 2 yr / 3 yr / 5 yr)
-- **Redis cache** — server-side GraphQL caching with smart TTL and admin purge endpoint
+- **Server-side cache** — GraphQL response caching with smart TTL and admin purge endpoint; ioredis on Docker, @upstash/redis on Cloudflare Pages
 - **New-version banner** — polls `/api/version` every 60 s; shows a non-blocking refresh prompt when a new deployment is detected
 - **Mobile-first** — designed for one-handed use at 390px; no unintentional horizontal overflow
 
@@ -121,7 +181,7 @@ Browser → Next.js Route Handlers → shootnscoreit.com/graphql/
 - **`app/api/admin/cache/purge/`** — authenticated endpoint to flush the Redis cache
 - **`app/api/compare/logic.ts`** — pure `computeGroupRankings()` function, no I/O, fully unit-tested
 - **`lib/graphql.ts`** — GraphQL query strings and `executeQuery()` helper (server-only)
-- **`lib/redis.ts`** — Redis client used for server-side GraphQL response caching
+- **`lib/cache.ts`** — `CacheAdapter` interface; `lib/cache-node.ts` (ioredis) and `lib/cache-edge.ts` (@upstash/redis) are the two implementations; `lib/cache-impl.ts` selects between them at build time
 - **`lib/types.ts`** — single source of truth for all TypeScript interfaces
 - **`lib/queries.ts`** — TanStack Query v5 hooks used by client components
 - **`components/`** — all UI; no direct API calls, all data via hooks from `lib/queries.ts`
@@ -146,9 +206,11 @@ This project targets **WCAG 2.1 AA** compliance:
 - Color is never the only means of conveying information
 - Semantic HTML throughout (`<button>`, `<table>`, `<th scope>`, etc.)
 
-## Deployment
+## Other deployment targets
+
 **Vercel:** Connect the repo, add `SSI_API_KEY`, `REDIS_URL`, and `CACHE_PURGE_SECRET` as
 environment variables. pnpm is auto-detected from `packageManager` in `package.json`.
+Use `rediss://` for a managed Redis (e.g. Upstash) — Vercel's environment does not include
+a Redis instance by default.
 
-**Docker:** See Docker section above. The multi-stage Dockerfile produces a minimal
-production image using `output: "standalone"` in `next.config.ts`.
+**Cloudflare Pages / Docker:** see the [Deployment](#deployment) section above.

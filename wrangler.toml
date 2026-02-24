@@ -1,0 +1,16 @@
+# Cloudflare Pages deployment configuration.
+# Used by: pnpm cf:deploy  (runs next build + @opennextjs/cloudflare + wrangler pages deploy)
+#
+# Secrets must be set via Cloudflare dashboard or wrangler CLI, NOT committed here:
+#   wrangler secret put SSI_API_KEY
+#   wrangler secret put UPSTASH_REDIS_REST_URL
+#   wrangler secret put UPSTASH_REDIS_REST_TOKEN
+#   wrangler secret put CACHE_PURGE_SECRET
+
+name = "ssi-scoreboard"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+main = ".open-next/worker.js"
+
+[assets]
+directory = ".open-next/assets"

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY, MATCH_QUERY } from "@/lib/graphql";
-import redis from "@/lib/redis";
+import cache from "@/lib/cache-impl";
+
 import { formatDivisionDisplay } from "@/lib/divisions";
 import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompareResponse, CompetitorInfo, StageComparison } from "@/lib/types";
@@ -137,8 +138,8 @@ export async function GET(req: Request) {
   // Upgrade match cache entry to permanent if match is now complete
   if (isComplete) {
     try {
-      const raw = await redis.get(matchKey);
-      if (raw) await redis.persist(matchKey); // remove TTL → permanent
+      const raw = await cache.get(matchKey);
+      if (raw) await cache.persist(matchKey); // remove TTL → permanent
     } catch { /* ignore */ }
   }
 
