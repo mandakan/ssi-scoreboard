@@ -1,27 +1,28 @@
-import Image from "next/image";
-
 interface AppLogoProps {
   size?: number;
   className?: string;
 }
 
 export function AppLogo({ size = 28, className }: AppLogoProps) {
+  const base = `block${className ? ` ${className}` : ""}`;
   return (
     <>
-      <Image
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
         src="/logo-dark.svg"
         alt=""
         width={size}
         height={size}
-        className={`hidden dark:block${className ? ` ${className}` : ""}`}
+        className={`hidden dark:block ${base}`}
         aria-hidden="true"
       />
-      <Image
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
         src="/logo-light.svg"
         alt=""
         width={size}
         height={size}
-        className={`block dark:hidden${className ? ` ${className}` : ""}`}
+        className={`dark:hidden ${base}`}
         aria-hidden="true"
       />
     </>
