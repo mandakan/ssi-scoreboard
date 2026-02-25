@@ -25,6 +25,9 @@ Thumbs.db
 /playwright-report/
 /playwright/.cache/
 
+# Generated assets
+/social-preview.png
+
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
