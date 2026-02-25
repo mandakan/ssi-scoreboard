@@ -194,7 +194,7 @@ export default function MatchPage() {
         </Link>
         <div className="flex items-center gap-3">
           <CacheInfoBadge ct={ct} id={id} cachedAt={stalestCachedAt} />
-          <ShareButton title={match.name} />
+          <ShareButton title={match.name} competitorCount={selectedIds.length} />
         </div>
       </div>
 

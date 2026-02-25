@@ -77,6 +77,10 @@ export default function AboutPage() {
               or overall
             </li>
             <li>Great for post-match review, squad comparisons, and coaching</li>
+            <li>
+              Share your comparison in one tap — the link encodes your competitor
+              selection so the recipient sees the same view immediately
+            </li>
             <li>No login required — paste a match URL and go</li>
           </ul>
         </section>

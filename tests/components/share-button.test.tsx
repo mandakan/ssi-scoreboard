@@ -19,7 +19,7 @@ describe("ShareButton", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders with Share label and correct aria-label", () => {
+  it("renders with Share label and correct aria-label (no competitors)", () => {
     Object.defineProperty(navigator, "share", {
       value: undefined,
       configurable: true,
@@ -31,7 +31,26 @@ describe("ShareButton", () => {
 
     render(<ShareButton title="Test Match" />);
 
-    const btn = screen.getByRole("button", { name: "Share comparison link" });
+    const btn = screen.getByRole("button", { name: "Share match link" });
+    expect(btn).toBeInTheDocument();
+    expect(btn).toHaveTextContent("Share");
+  });
+
+  it("renders with competitor-aware aria-label when competitorCount is provided", () => {
+    Object.defineProperty(navigator, "share", {
+      value: undefined,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+      configurable: true,
+    });
+
+    render(<ShareButton title="Test Match" competitorCount={2} />);
+
+    const btn = screen.getByRole("button", {
+      name: "Share comparison link with 2 competitors",
+    });
     expect(btn).toBeInTheDocument();
     expect(btn).toHaveTextContent("Share");
   });
@@ -51,7 +70,7 @@ describe("ShareButton", () => {
     render(<ShareButton title="Test Match" />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Share comparison link" }));
+      fireEvent.click(screen.getByRole("button", { name: "Share match link" }));
     });
 
     expect(writeText).toHaveBeenCalledWith(
@@ -60,6 +79,35 @@ describe("ShareButton", () => {
 
     expect(screen.getByRole("button", { name: "Link copied" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Link copied" })).toHaveTextContent("Copied");
+  });
+
+  it("shows competitor count in copied confirmation", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "share", {
+      value: undefined,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    fakeTimers();
+
+    render(<ShareButton title="Test Match" competitorCount={3} />);
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: "Share comparison link with 3 competitors",
+        })
+      );
+    });
+
+    const btn = screen.getByRole("button", {
+      name: "Link copied with 3 competitors",
+    });
+    expect(btn).toBeInTheDocument();
+    expect(btn).toHaveTextContent("Copied · 3 competitors");
   });
 
   it("resets to Share after 2 seconds", async () => {
@@ -77,7 +125,7 @@ describe("ShareButton", () => {
     render(<ShareButton />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Share comparison link" }));
+      fireEvent.click(screen.getByRole("button", { name: "Share match link" }));
     });
 
     expect(screen.getByRole("button", { name: "Link copied" })).toBeInTheDocument();
@@ -87,10 +135,10 @@ describe("ShareButton", () => {
     });
 
     expect(
-      screen.getByRole("button", { name: "Share comparison link" })
+      screen.getByRole("button", { name: "Share match link" })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Share comparison link" })
+      screen.getByRole("button", { name: "Share match link" })
     ).toHaveTextContent("Share");
   });
 
@@ -105,12 +153,37 @@ describe("ShareButton", () => {
     render(<ShareButton title="Test Match" />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Share comparison link" }));
+      fireEvent.click(screen.getByRole("button", { name: "Share match link" }));
     });
 
     expect(share).toHaveBeenCalledWith({
       url: "https://example.com/match/22/42?competitors=1,2",
       title: "Test Match",
+    });
+  });
+
+  it("passes competitor text to navigator.share when competitorCount is set", async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "share", {
+      value: share,
+      configurable: true,
+    });
+    fakeTimers();
+
+    render(<ShareButton title="Test Match" competitorCount={2} />);
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: "Share comparison link with 2 competitors",
+        })
+      );
+    });
+
+    expect(share).toHaveBeenCalledWith({
+      url: "https://example.com/match/22/42?competitors=1,2",
+      title: "Test Match",
+      text: "2 competitors selected",
     });
   });
 
@@ -126,7 +199,7 @@ describe("ShareButton", () => {
     render(<ShareButton title="Test Match" />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Share comparison link" }));
+      fireEvent.click(screen.getByRole("button", { name: "Share match link" }));
     });
 
     expect(share).toHaveBeenCalled();
@@ -154,7 +227,7 @@ describe("ShareButton", () => {
     render(<ShareButton title="Test Match" />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Share comparison link" }));
+      fireEvent.click(screen.getByRole("button", { name: "Share match link" }));
     });
 
     expect(writeText).toHaveBeenCalledWith(

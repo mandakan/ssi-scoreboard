@@ -99,7 +99,9 @@ custom subdomain, verifying the deployment, and troubleshooting — see
    - **Shooter style fingerprint** — alpha ratio vs. points-per-second scatter with field cohort
      overlay and archetype labels
    - **Shooter style radar** — composure, consistency, and full style profile as a polar chart
-4. Share the comparison via the share button — the `?competitors=` URL encodes the selection
+4. Use the **Share** button to copy or send the link — when competitors are selected, the icon
+   shows a badge with the count so you know what's included before you send it. Recipients
+   open the same match with the same competitors pre-selected, no extra steps needed.
 
 ## Features
 - **Live data** — works during active matches before official results are published
@@ -128,7 +130,8 @@ custom subdomain, verifying the deployment, and troubleshooting — see
 - **DQ detection** — banner alert when a competitor is match-disqualified
 - **Clean match indicator** — badge in the totals row when all fired stages are penalty-free
 - **Stage metadata** — round count, paper targets, steel targets, links to SSI stage pages
-- **Shareable URLs** — `?competitors=` query param persists and shares selections
+- **Shareable URLs** — share button badge shows the competitor count at a glance; `?competitors=`
+  query param encodes the full selection so recipients land on the exact same view
 - **Recent matches** — localStorage-backed list of recently viewed competitions
 - **Firearms filter** — filter event search by Handgun+PCC, PCC only, Rifle, or Shotgun
 - **Country filter** — filter event search by country (ISO 3166-1 alpha-3), defaults to Sweden (SWE)
