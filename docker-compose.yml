@@ -16,6 +16,7 @@ services:
       context: .
       args:
         BUILD_ID: ${BUILD_ID:-}
+        BUILD_DATE: ${BUILD_DATE:-}
     ports:
       - "${PORT:-3666}:3000"
     environment:
