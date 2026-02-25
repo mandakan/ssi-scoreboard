@@ -4,18 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Dev Commands
 ```bash
-pnpm dev          # start Next.js dev server (port 3000)
-pnpm build        # production build
-pnpm lint         # ESLint (eslint .) — zero warnings required
-pnpm typecheck    # tsc --noEmit — zero errors required
-pnpm test         # vitest run (unit + component)
-pnpm test:watch   # vitest watch mode
-pnpm test:e2e     # playwright test (mocked API, no live key needed)
-pnpm test:e2e:ui  # playwright --ui
+pnpm dev              # start Next.js dev server (port 3000)
+pnpm build            # production build
+pnpm -w run lint      # ESLint (eslint .) — zero warnings required
+pnpm -w run typecheck # tsc --noEmit — zero errors required
+pnpm -w test          # vitest run (unit + component)
+pnpm test:watch       # vitest watch mode
+pnpm test:e2e         # playwright test (mocked API, no live key needed)
+pnpm test:e2e:ui      # playwright --ui
+cd mcp && pnpm run typecheck  # typecheck the MCP stdio server
 ```
 
-**All checks must pass cleanly:** `pnpm typecheck && pnpm test` must produce zero errors
-and zero warnings before committing. `pnpm lint` must also produce zero warnings.
+**All checks must pass cleanly:** `pnpm -w run typecheck && pnpm -w test` must produce zero
+errors and zero warnings before committing. `pnpm -w run lint` must also produce zero warnings.
+
+Note: use `pnpm -w` to target the workspace root (required since `mcp/` is a workspace package
+and doesn't define its own `lint`/`typecheck`/`test` scripts that match the root ones).
 
 ## Architecture
 
@@ -32,16 +36,20 @@ Key directories:
 - `app/api/match/[ct]/[id]/route.ts` — proxies match overview query
 - `app/api/compare/route.ts` — fans out competitor scorecard queries, calls logic.ts
 - `app/api/compare/logic.ts` — **pure function** `computeGroupRankings()`, no I/O, fully unit-tested
+- `app/api/mcp/route.ts` — MCP HTTP endpoint (JSON-RPC, single-shot transport); optional `MCP_SECRET` bearer auth
 - `lib/graphql.ts` — GQL query strings + `executeQuery()`, server-only (no NEXT_PUBLIC_ prefix)
-- `lib/cache.ts` — `CacheAdapter` interface (get/set/persist/del/scanRecentKeys)
+- `lib/cache.ts` — `CacheAdapter` interface (get/set/persist/del/expire/scanRecentKeys)
 - `lib/cache-node.ts` — ioredis implementation (Docker / Node.js target)
 - `lib/cache-edge.ts` — @upstash/redis HTTP implementation (Cloudflare Pages target)
 - `lib/cache-impl.ts` — re-exports node adapter by default; CF builds override via webpack alias
+- `lib/match-ttl.ts` — pure `computeMatchTtl()` — smart TTL tiers for pre/active/complete matches
+- `lib/mcp-tools.ts` — shared MCP tool registration (server-only, used by HTTP route + stdio server)
 - `lib/types.ts` — single source of truth for all TypeScript interfaces
 - `lib/queries.ts` — TanStack Query v5 hooks used by client components
 - `components/` — all UI; no direct API calls, all data via hooks from `lib/queries.ts`
 - `app/api/events/route.ts` — event search; defaults to `minLevel=l2plus` (hides Level I club matches); users can switch to "All", "L3+", or "L4+" in the filter panel
 - `app/api/admin/cache/health/route.ts` — protected diagnostic endpoint (`Authorization: Bearer <CACHE_PURGE_SECRET>`); reports env var presence and runs a live write→read→delete round-trip against the cache adapter with latency
+- `mcp/` — pnpm workspace package; stdio MCP server (`mcp/src/index.ts`) using `tsx` from root `node_modules`
 
 ## GraphQL Patterns
 The SSI API uses Django content-type discrimination. Match URLs encode this:
@@ -53,7 +61,7 @@ The SSI API uses Django content-type discrimination. Match URLs encode this:
 - Scorecard data is available via `event -> stages -> scorecards` path
 
 ## Testing Approach
-- **Unit tests** (`tests/unit/`): pure functions only — `parseMatchUrl`, `buildColorMap`, `computeGroupRankings`
+- **Unit tests** (`tests/unit/`): pure functions only — `parseMatchUrl`, `buildColorMap`, `computeGroupRankings`, `computeMatchTtl`
 - **Component tests** (`tests/components/`): React Testing Library, focus on conditional cell rendering
 - **E2E tests** (`tests/e2e/`): Playwright with `route.fulfill()` to mock `/api/*` — no live API key needed in CI
 - Extract I/O-free logic into separate files to keep unit tests fast and reliable
@@ -138,6 +146,7 @@ or any other type that is serialised into Redis via `cachedExecuteQuery`.
 | `REDIS_URL` | `lib/cache-node.ts` | Docker only | `redis://localhost:6379` locally, `rediss://...` for managed Redis. Not needed for CF builds. |
 | `UPSTASH_REDIS_REST_URL` | `lib/cache-edge.ts` | Cloudflare only | REST URL from Upstash console. Set via `wrangler secret put` in production. |
 | `UPSTASH_REDIS_REST_TOKEN` | `lib/cache-edge.ts` | Cloudflare only | REST token from Upstash console. Set via `wrangler secret put` in production. |
+| `MCP_SECRET` | `app/api/mcp/route.ts` | Both | Optional. If set, `POST /api/mcp` requires `Authorization: Bearer <MCP_SECRET>`. Omit for public access. |
 
 ## Package Manager
 This project uses **pnpm@10.30.1**. Do not use npm or yarn. Use `pnpm add` / `pnpm add -D`.

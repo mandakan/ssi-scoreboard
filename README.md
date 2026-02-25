@@ -76,6 +76,7 @@ custom subdomain, verifying the deployment, and troubleshooting — see
 | `REDIS_URL` | Docker | Redis connection string (`redis://localhost:6379` locally, `rediss://…` for cloud). Not needed for CF builds. |
 | `UPSTASH_REDIS_REST_URL` | Cloudflare | REST URL from the Upstash console (see setup above) |
 | `UPSTASH_REDIS_REST_TOKEN` | Cloudflare | REST token from the Upstash console (see setup above) |
+| `MCP_SECRET` | Both | Optional. If set, `POST /api/mcp` requires `Authorization: Bearer <MCP_SECRET>`. Omit for public access. |
 
 ## Usage
 1. Browse competitions month by month using the month navigator on the landing page — tap the
@@ -136,7 +137,8 @@ custom subdomain, verifying the deployment, and troubleshooting — see
 - **Firearms filter** — filter event search by Handgun+PCC, PCC only, Rifle, or Shotgun
 - **Country filter** — filter event search by country (ISO 3166-1 alpha-3), defaults to Sweden (SWE)
 - **Month browser** — navigate competitions month by month from the landing page; typing a query switches to full-history search mode automatically
-- **Server-side cache** — GraphQL response caching with smart TTL and admin purge endpoint; ioredis on Docker, @upstash/redis on Cloudflare Pages
+- **Server-side cache** — GraphQL response caching with smart TTL tiers (future/pre-match/active/complete) and admin purge endpoint; ioredis on Docker, @upstash/redis on Cloudflare Pages
+- **MCP server** — AI assistant integration via `POST /api/mcp` (HTTP) or stdio subprocess; exposes search, match, compare, and popular-matches tools
 - **New-version banner** — polls `/api/version` every 60 s; shows a non-blocking refresh prompt when a new deployment is detected
 - **PWA installable** — add to home screen on Android, iOS, and desktop; runs fullscreen without browser chrome
 - **Mobile-first** — designed for one-handed use at 390px; no unintentional horizontal overflow
@@ -156,21 +158,50 @@ pnpm test:e2e:ui  # Playwright with interactive UI
 **Quality bar:** `pnpm lint`, `pnpm typecheck`, and `pnpm test` must all pass with **zero
 errors and zero warnings** before merging. CI enforces this.
 
+## MCP Server
+
+SSI Scoreboard exposes an [MCP](https://modelcontextprotocol.io) server so Claude and other
+AI assistants can query competition data directly.
+
+**HTTP transport** (public, no local setup needed):
+```
+POST https://scoreboard.urdr.dev/api/mcp
+```
+Point any MCP-compatible client at this URL. The endpoint exposes four tools:
+`search_events`, `get_match`, `compare_competitors`, `get_popular_matches`.
+
+**stdio transport** (local subprocess, calls either the live URL or `localhost:3000`):
+```bash
+pnpm install                          # installs mcp/ workspace deps from root
+# ssi-scoreboard and ssi-scoreboard-local are pre-configured in .mcp.json
+```
+The `.mcp.json` at repo root registers two stdio servers:
+- **`ssi-scoreboard`** — calls the live production instance (no local server needed)
+- **`ssi-scoreboard-local`** — calls `localhost:3000` (requires `pnpm dev` running)
+
+Claude Code picks up `.mcp.json` automatically when you open the repo.
+
 ## Architecture
 ```
 Browser → Next.js Route Handlers → shootnscoreit.com/graphql/
+         ↑
+    POST /api/mcp (MCP clients / Claude)
 ```
 
 - **`app/api/match/[ct]/[id]/`** — match metadata: stages, competitors, scoring progress
 - **`app/api/compare/`** — fans out scorecard queries, merges ranking data
 - **`app/api/events/`** — event search with date range, firearms, and country filters
+- **`app/api/mcp/`** — MCP HTTP endpoint (JSON-RPC, single-shot transport)
 - **`app/api/admin/cache/purge/`** — authenticated endpoint to flush the Redis cache
 - **`app/api/compare/logic.ts`** — pure `computeGroupRankings()` function, no I/O, fully unit-tested
 - **`lib/graphql.ts`** — GraphQL query strings and `executeQuery()` helper (server-only)
+- **`lib/mcp-tools.ts`** — shared MCP tool registration (used by HTTP route and stdio server)
+- **`lib/match-ttl.ts`** — pure `computeMatchTtl()` helper for smart cache TTL tiers
 - **`lib/cache.ts`** — `CacheAdapter` interface; `lib/cache-node.ts` (ioredis) and `lib/cache-edge.ts` (@upstash/redis) are the two implementations; `lib/cache-impl.ts` selects between them at build time
 - **`lib/types.ts`** — single source of truth for all TypeScript interfaces
 - **`lib/queries.ts`** — TanStack Query v5 hooks used by client components
 - **`components/`** — all UI; no direct API calls, all data via hooks from `lib/queries.ts`
+- **`mcp/`** — standalone stdio MCP server (pnpm workspace package, uses root `node_modules`)
 
 The `SSI_API_KEY` lives server-side only and is never sent to the browser.
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { MAX_COMPETITORS } from "@/lib/constants";
 import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY, MATCH_QUERY } from "@/lib/graphql";
 import cache from "@/lib/cache-impl";
+import { computeMatchTtl } from "@/lib/match-ttl";
 
 import { formatDivisionDisplay } from "@/lib/divisions";
 import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, type RawScorecard } from "@/app/api/compare/logic";
@@ -127,22 +128,25 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: message }, { status: 502 });
   }
 
-  // Determine match completion state to set appropriate TTL
+  // Determine match state and compute TTL
   const scoringPct = Math.round(
     parseFloat(String(matchData.event?.scoring_completed ?? 0))
   );
   const matchDate = matchData.event?.starts ? new Date(matchData.event.starts) : null;
   const daysSince = matchDate ? (Date.now() - matchDate.getTime()) / 86_400_000 : 0;
   const isComplete = scoringPct >= 95 || daysSince > 3;
-  const dataTtl: number | null = isComplete ? null : 30;
+  const dataTtl = computeMatchTtl(scoringPct, daysSince, matchData.event?.starts ?? null);
 
-  // Upgrade match cache entry to permanent if match is now complete
-  if (isComplete) {
-    try {
+  // Upgrade match cache entry TTL based on match state
+  try {
+    if (dataTtl === null) {
       const raw = await cache.get(matchKey);
       if (raw) await cache.persist(matchKey); // remove TTL → permanent
-    } catch { /* ignore */ }
-  }
+    } else if (!matchCachedAt) {
+      // Cache miss: correct the initial 30s write TTL
+      await cache.expire(matchKey, dataTtl);
+    }
+  } catch { /* ignore */ }
 
   // Step 2 — fetch scorecards with TTL determined by match state
   const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
@@ -160,6 +164,16 @@ export async function GET(req: Request) {
     const message = err instanceof Error ? err.message : "Upstream error";
     return NextResponse.json({ error: message }, { status: 502 });
   }
+
+  // Upgrade scorecards cache entry TTL based on match state
+  try {
+    if (dataTtl === null) {
+      const raw = await cache.get(scorecardsKey);
+      if (raw) await cache.persist(scorecardsKey);
+    } else if (!scorecardsCachedAt) {
+      await cache.expire(scorecardsKey, dataTtl);
+    }
+  } catch { /* ignore */ }
 
   // Report the older of the two cache timestamps (most stale data wins)
   const cacheInfo = { cachedAt: matchCachedAt ?? scorecardsCachedAt };

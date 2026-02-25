@@ -43,6 +43,10 @@ const adapter: CacheAdapter = {
     if (keys.length > 0) await redis.del(...keys.map(pk));
   },
 
+  async expire(key, ttlSeconds) {
+    await redis.expire(pk(key), ttlSeconds);
+  },
+
   async recordMatchAccess(key) {
     const now = Math.floor(Date.now() / 1000);
     const pipeline = redis.pipeline();
