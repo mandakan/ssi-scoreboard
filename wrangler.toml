@@ -1,11 +1,17 @@
-# Cloudflare Pages deployment configuration.
-# Used by: pnpm cf:deploy  (runs next build + @opennextjs/cloudflare + wrangler pages deploy)
+# Cloudflare Workers deployment configuration.
+# Used by: pnpm cf:deploy          → production worker (ssi-scoreboard)
+#          pnpm cf:deploy:staging   → staging worker  (ssi-scoreboard-staging)
 #
-# Secrets must be set via Cloudflare dashboard or wrangler CLI, NOT committed here:
-#   wrangler secret put SSI_API_KEY
-#   wrangler secret put UPSTASH_REDIS_REST_URL
-#   wrangler secret put UPSTASH_REDIS_REST_TOKEN
-#   wrangler secret put CACHE_PURGE_SECRET
+# Secrets must be set via wrangler CLI, NOT committed here:
+#   Production:  wrangler secret put SSI_API_KEY
+#                wrangler secret put UPSTASH_REDIS_REST_URL
+#                wrangler secret put UPSTASH_REDIS_REST_TOKEN
+#                wrangler secret put CACHE_PURGE_SECRET
+#   Staging:     wrangler secret put SSI_API_KEY --env staging
+#                wrangler secret put UPSTASH_REDIS_REST_URL --env staging
+#                wrangler secret put UPSTASH_REDIS_REST_TOKEN --env staging
+#                wrangler secret put CACHE_PURGE_SECRET --env staging
+#                wrangler secret put CACHE_KEY_PREFIX --env staging   # value: "staging:"
 
 name = "ssi-scoreboard"
 compatibility_date = "2024-09-23"
@@ -19,3 +25,8 @@ directory = ".open-next/assets"
 
 [observability]
 enabled = true
+
+# Staging environment — separate worker, inherits all top-level settings except name.
+# Secrets set independently via: wrangler secret put <NAME> --env staging
+[env.staging]
+name = "ssi-scoreboard-staging"
