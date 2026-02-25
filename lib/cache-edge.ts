@@ -107,6 +107,10 @@ const adapter: CacheAdapter = {
     if (keys.length > 0) await getRedis().del(...keys.map(pk));
   },
 
+  async expire(key, ttlSeconds) {
+    await getRedis().expire(pk(key), ttlSeconds);
+  },
+
   recordMatchAccess,
   getPopularKeys,
 };

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
 import cache from "@/lib/cache-impl";
+import { computeMatchTtl } from "@/lib/match-ttl";
 
 import { formatDivisionDisplay } from "@/lib/divisions";
 import type { MatchResponse, StageInfo, CompetitorInfo, SquadInfo } from "@/lib/types";
@@ -91,17 +92,21 @@ export async function GET(
 
   const ev = data.event;
 
-  // Determine if match is complete — upgrade to permanent cache if so
+  // Determine match state and update TTL accordingly
   const scoringPct = Math.round(parseFloat(String(ev.scoring_completed ?? 0)));
   const matchDate = ev.starts ? new Date(ev.starts) : null;
   const daysSince = matchDate ? (Date.now() - matchDate.getTime()) / 86_400_000 : 0;
   const isComplete = scoringPct >= 95 || daysSince > 3;
-  if (isComplete) {
-    try {
+  const ttl = computeMatchTtl(scoringPct, daysSince, ev.starts ?? null);
+  try {
+    if (ttl === null) {
       const raw = await cache.get(matchKey);
       if (raw) await cache.persist(matchKey); // remove TTL → permanent
-    } catch { /* ignore */ }
-  }
+    } else if (!cachedAt) {
+      // Cache miss: set correct TTL (initial write used 30s default)
+      await cache.expire(matchKey, ttl);
+    }
+  } catch { /* ignore */ }
 
   const stages: StageInfo[] = (ev.stages ?? []).map((s) => ({
     id: parseInt(s.id, 10),

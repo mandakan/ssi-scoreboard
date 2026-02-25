@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Github, Crosshair, Coffee } from "lucide-react";
+import { Github, Crosshair, Coffee, Bot } from "lucide-react";
 import { InstallInstructions } from "@/components/install-instructions";
 
 export const metadata: Metadata = {
@@ -83,6 +83,48 @@ export default function AboutPage() {
             </li>
             <li>No login required — paste a match URL and go</li>
           </ul>
+        </section>
+
+        <section aria-labelledby="about-ai-heading" className="space-y-4">
+          <h2
+            id="about-ai-heading"
+            className="text-xl font-semibold border-b border-border pb-2"
+          >
+            Use with AI assistants
+          </h2>
+          <div className="text-sm leading-relaxed text-muted-foreground space-y-3">
+            <p>
+              SSI Scoreboard exposes an{" "}
+              <a
+                href="https://modelcontextprotocol.io"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-4 hover:text-foreground"
+                aria-label="Model Context Protocol (opens in new tab)"
+              >
+                MCP
+              </a>{" "}
+              server so you can query competition data directly inside Claude or
+              any other MCP-compatible AI assistant. Ask it to find upcoming
+              matches, compare competitors, or summarise stage-by-stage
+              performance — all in natural language.
+            </p>
+            <p>
+              Point your AI client at the HTTP endpoint and it will have access
+              to four tools: <strong>search_events</strong>,{" "}
+              <strong>get_match</strong>,{" "}
+              <strong>compare_competitors</strong>, and{" "}
+              <strong>get_popular_matches</strong>.
+            </p>
+          </div>
+          <a
+            href="https://scoreboard.urdr.dev/api/mcp"
+            className="flex items-center gap-3 p-4 rounded-lg border border-border hover:bg-accent hover:text-accent-foreground transition-colors font-mono text-xs break-all"
+            aria-label="MCP HTTP endpoint"
+          >
+            <Bot className="w-5 h-5 shrink-0 font-sans" aria-hidden="true" />
+            <span>https://scoreboard.urdr.dev/api/mcp</span>
+          </a>
         </section>
 
         <section aria-labelledby="about-links-heading" className="space-y-4">

@@ -12,6 +12,8 @@ export interface CacheAdapter {
   /** Remove TTL from an existing key, making it permanent. */
   persist(key: string): Promise<void>;
   del(...keys: string[]): Promise<void>;
+  /** Set a TTL on an existing key (seconds). No-op if the key does not exist. */
+  expire(key: string, ttlSeconds: number): Promise<void>;
   /**
    * Record that a match cache key was accessed.
    *

@@ -29,6 +29,9 @@ Thumbs.db
 # Generated assets
 /social-preview.png
 
+# MCP server build artifacts
+mcp/dist/
+
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
