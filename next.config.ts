@@ -21,6 +21,24 @@ const nextConfig: NextConfig = {
       }
     : {},
 
+  // Security headers applied to all responses.
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=()",
+          },
+        ],
+      },
+    ];
+  },
+
   // Webpack alias (fallback for build pipelines that use webpack mode).
   webpack(config) {
     if (isCF) {
