@@ -23,6 +23,7 @@
     "docker:down": "docker compose down",
     "cf:build": "DEPLOY_TARGET=cloudflare npx @opennextjs/cloudflare@1.17.0 build",
     "cf:deploy": "pnpm cf:build && wrangler deploy",
+    "cf:deploy:staging": "pnpm cf:build && wrangler deploy --env staging",
     "setup": "cp -n .env.local.example .env.local || true"
   },
   "dependencies": {

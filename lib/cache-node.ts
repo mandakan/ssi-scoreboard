@@ -11,32 +11,39 @@ const redis = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
 
 redis.on("error", (err: Error) => console.error("[redis]", err.message));
 
+// Prefix all Redis key names with CACHE_KEY_PREFIX (e.g. "staging:") so that
+// multiple environments can safely share a single Redis instance.
+// Members stored inside sorted sets are bare cache keys, not Redis key names,
+// so they are not prefixed — callers receive them as-is.
+const PREFIX = process.env.CACHE_KEY_PREFIX ?? "";
+const pk = (key: string) => `${PREFIX}${key}`;
+
 const adapter: CacheAdapter = {
   async get(key) {
-    return redis.get(key);
+    return redis.get(pk(key));
   },
 
   async set(key, value, ttlSeconds) {
     if (ttlSeconds == null) {
-      await redis.set(key, value);
+      await redis.set(pk(key), value);
     } else {
-      await redis.set(key, value, "EX", ttlSeconds);
+      await redis.set(pk(key), value, "EX", ttlSeconds);
     }
   },
 
   async persist(key) {
-    await redis.persist(key);
+    await redis.persist(pk(key));
   },
 
   async del(...keys) {
-    if (keys.length > 0) await redis.del(...keys);
+    if (keys.length > 0) await redis.del(...keys.map(pk));
   },
 
   async recordMatchAccess(key) {
     const now = Math.floor(Date.now() / 1000);
     const pipeline = redis.pipeline();
-    pipeline.zadd("popular:matches:seen", now, key);
-    pipeline.zincrby("popular:matches:hits", 1, key);
+    pipeline.zadd(pk("popular:matches:seen"), now, key);
+    pipeline.zincrby(pk("popular:matches:hits"), 1, key);
     await pipeline.exec();
   },
 
@@ -44,11 +51,11 @@ const adapter: CacheAdapter = {
     const cutoff = Math.floor(Date.now() / 1000) - maxAgeSeconds;
 
     // Prune entries that haven't been seen within the window.
-    await redis.zremrangebyscore("popular:matches:seen", "-inf", cutoff);
+    await redis.zremrangebyscore(pk("popular:matches:seen"), "-inf", cutoff);
 
     // Fetch all keys that were seen within the window.
     const recentKeys = await redis.zrangebyscore(
-      "popular:matches:seen",
+      pk("popular:matches:seen"),
       cutoff,
       "+inf",
     );
@@ -58,7 +65,7 @@ const adapter: CacheAdapter = {
     // Look up hit counts for each recent key.
     const pipeline = redis.pipeline();
     for (const key of recentKeys) {
-      pipeline.zscore("popular:matches:hits", key);
+      pipeline.zscore(pk("popular:matches:hits"), key);
     }
     const scores = await pipeline.exec();
 

@@ -28,13 +28,20 @@ function getRedis(): Redis {
   return _redis;
 }
 
+// Prefix all Redis key names with CACHE_KEY_PREFIX (e.g. "staging:") so that
+// multiple environments can safely share a single Upstash instance.
+// Members stored inside sorted sets are bare cache keys, not Redis key names,
+// so they are not prefixed — callers receive them as-is.
+const PREFIX = process.env.CACHE_KEY_PREFIX ?? "";
+const pk = (key: string) => `${PREFIX}${key}`;
+
 // Extracted as module-level functions so tsc can resolve the return type unambiguously.
 
 async function recordMatchAccess(key: string): Promise<void> {
   const now = Math.floor(Date.now() / 1000);
   await Promise.all([
-    getRedis().zadd("popular:matches:seen", { score: now, member: key }),
-    getRedis().zincrby("popular:matches:hits", 1, key),
+    getRedis().zadd(pk("popular:matches:seen"), { score: now, member: key }),
+    getRedis().zincrby(pk("popular:matches:hits"), 1, key),
   ]);
 }
 
@@ -46,13 +53,13 @@ async function getPopularKeys(
   const cutoff = now - maxAgeSeconds;
 
   // Prune entries that haven't been seen within the window.
-  await getRedis().zremrangebyscore("popular:matches:seen", "-inf", cutoff - 1);
+  await getRedis().zremrangebyscore(pk("popular:matches:seen"), "-inf", cutoff - 1);
 
   // Fetch all keys that were seen within the window.
   // zrange with byScore: true is equivalent to ZRANGEBYSCORE.
   // Use now + 86400 as upper bound (well beyond any valid timestamp).
   const recentKeys = (await getRedis().zrange(
-    "popular:matches:seen",
+    pk("popular:matches:seen"),
     cutoff,
     now + 86400,
     { byScore: true },
@@ -63,7 +70,7 @@ async function getPopularKeys(
   // Look up hit counts for each recent key in parallel.
   // zscore always returns number | null (scores are numeric in Redis).
   const hitScores = await Promise.all(
-    recentKeys.map((k: string) => getRedis().zscore("popular:matches:hits", k)),
+    recentKeys.map((k: string) => getRedis().zscore(pk("popular:matches:hits"), k)),
   );
 
   const results = recentKeys.map((k: string, i: number) => ({
@@ -81,23 +88,23 @@ async function getPopularKeys(
 
 const adapter: CacheAdapter = {
   async get(key) {
-    return getRedis().get<string>(key);
+    return getRedis().get<string>(pk(key));
   },
 
   async set(key, value, ttlSeconds) {
     if (ttlSeconds == null) {
-      await getRedis().set(key, value);
+      await getRedis().set(pk(key), value);
     } else {
-      await getRedis().set(key, value, { ex: ttlSeconds });
+      await getRedis().set(pk(key), value, { ex: ttlSeconds });
     }
   },
 
   async persist(key) {
-    await getRedis().persist(key);
+    await getRedis().persist(pk(key));
   },
 
   async del(...keys) {
-    if (keys.length > 0) await getRedis().del(...keys);
+    if (keys.length > 0) await getRedis().del(...keys.map(pk));
   },
 
   recordMatchAccess,
