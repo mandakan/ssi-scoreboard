@@ -1,6 +1,6 @@
 {
   "name": "SSI Scoreboard",
-  "short_name": "SSI",
+  "short_name": "Scoreboard",
   "description": "Live stage-by-stage IPSC competitor comparison",
   "start_url": "/",
   "display": "standalone",
