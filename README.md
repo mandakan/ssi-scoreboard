@@ -69,8 +69,11 @@ custom subdomain, verifying the deployment, and troubleshooting — see
 | `UPSTASH_REDIS_REST_TOKEN` | Cloudflare | REST token from the Upstash console (see setup above) |
 
 ## Usage
-1. Browse upcoming or recent competitions via the built-in event search, or paste a match URL
-   (e.g. `https://shootnscoreit.com/event/22/26547/`) directly into the input field
+1. Browse competitions month by month using the month navigator on the landing page — tap the
+   arrows to move between months. Start typing to switch to search mode (the month filter is
+   automatically paused while you search). You can also paste a match URL directly
+   (e.g. `https://shootnscoreit.com/event/22/26547/`) to navigate straight to that match.
+   Use the collapsible **Filters** panel to narrow results by discipline, country, and level.
 2. Select competitors individually by name, number, or club — or tap **Add squad** to load an
    entire IPSC squad at once (up to 12 competitors total)
 3. Multiple analysis views update immediately:
@@ -120,7 +123,7 @@ custom subdomain, verifying the deployment, and troubleshooting — see
 - **Recent matches** — localStorage-backed list of recently viewed competitions
 - **Firearms filter** — filter event search by Handgun+PCC, PCC only, Rifle, or Shotgun
 - **Country filter** — filter event search by country (ISO 3166-1 alpha-3), defaults to Sweden (SWE)
-- **Extended date range** — event search window up to 5 years back (Upcoming / 3 mo / 6 mo / 1 yr / 2 yr / 3 yr / 5 yr)
+- **Month browser** — navigate competitions month by month from the landing page; typing a query switches to full-history search mode automatically
 - **Server-side cache** — GraphQL response caching with smart TTL and admin purge endpoint; ioredis on Docker, @upstash/redis on Cloudflare Pages
 - **New-version banner** — polls `/api/version` every 60 s; shows a non-blocking refresh prompt when a new deployment is detected
 - **Mobile-first** — designed for one-handed use at 390px; no unintentional horizontal overflow
