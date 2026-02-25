@@ -9,7 +9,11 @@ const redis = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
   lazyConnect: true,
 });
 
-redis.on("error", (err: Error) => console.error("[redis]", err.message));
+redis.on("error", (err: Error) => {
+  // ioredis emits error events with an empty message during connection-retry
+  // back-off cycles; suppress those to avoid log spam in environments without Redis.
+  if (err.message) console.error("[redis]", err.message);
+});
 
 // Prefix all Redis key names with CACHE_KEY_PREFIX (e.g. "staging:") so that
 // multiple environments can safely share a single Redis instance.

@@ -141,13 +141,13 @@ test.describe("Scoreboard E2E", () => {
   test("home page loads and URL input is visible", async ({ page }) => {
     await page.goto("/");
     await expect(
-      page.getByRole("combobox", { name: /search ipsc competitions/i })
+      page.getByPlaceholder(/search by name or paste a match url/i)
     ).toBeVisible();
   });
 
   test("pasting non-SSI URL stays on home page", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("combobox", { name: /search ipsc competitions/i }).click();
+    // Input is always visible — no click needed to reveal it
     await page.getByPlaceholder(/match url/i).fill("https://example.com/event/22/26547/");
     // Non-SSI URLs are treated as search text — no navigation
     await expect(page).toHaveURL("/");
@@ -160,7 +160,7 @@ test.describe("Scoreboard E2E", () => {
     );
 
     await page.goto("/");
-    await page.getByRole("combobox", { name: /search ipsc competitions/i }).click();
+    // Input is always visible — no click needed to reveal it
     await page.getByPlaceholder(/match url/i).fill("https://shootnscoreit.com/event/22/26547/");
 
     await page.waitForURL("/match/22/26547");
@@ -337,7 +337,7 @@ test.describe("Mobile 390px viewport", () => {
   test("home page has no horizontal overflow at 390px", async ({ page }) => {
     await page.goto("/");
     await expect(
-      page.getByRole("combobox", { name: /search ipsc competitions/i })
+      page.getByPlaceholder(/search by name or paste a match url/i)
     ).toBeVisible();
 
     const hasOverflow = await page.evaluate(

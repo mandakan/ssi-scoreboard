@@ -23,11 +23,8 @@ export default function HomePage() {
         </p>
       </div>
 
-      <div className="w-full max-w-2xl flex flex-col gap-2">
+      <div className="w-full max-w-2xl">
         <EventSearch />
-        <p className="text-xs text-muted-foreground text-center">
-          Search by name, or paste a shootnscoreit.com match URL
-        </p>
       </div>
 
       <RecentCompetitions />

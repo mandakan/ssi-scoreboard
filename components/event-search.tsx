@@ -2,8 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import {
+  Search,
+  Loader2,
+  CalendarDays,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import {
   Command,
   CommandEmpty,
@@ -12,14 +18,9 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { useEventsQuery } from "@/lib/queries";
 import type { EventSummary } from "@/lib/types";
-import { parseMatchUrl } from "@/lib/utils";
+import { parseMatchUrl, cn } from "@/lib/utils";
 
 const STATUS_LABEL: Record<string, string> = {
   on: "Open",
@@ -29,132 +30,6 @@ const STATUS_LABEL: Record<string, string> = {
   pr: "Upcoming",
   ol: "Online",
 };
-
-type DatePreset = {
-  label: string;
-  after: (now: Date) => Date;
-  before: (now: Date) => Date;
-};
-
-const DATE_PRESETS: { id: string; label: string; preset: DatePreset }[] = [
-  {
-    id: "upcoming",
-    label: "Upcoming",
-    preset: {
-      label: "Upcoming",
-      after: (now) => now,
-      before: (now) => {
-        const d = new Date(now);
-        d.setMonth(d.getMonth() + 6);
-        return d;
-      },
-    },
-  },
-  {
-    id: "3months",
-    label: "3 months",
-    preset: {
-      label: "3 months",
-      after: (now) => {
-        const d = new Date(now);
-        d.setMonth(d.getMonth() - 3);
-        return d;
-      },
-      before: (now) => {
-        const d = new Date(now);
-        d.setMonth(d.getMonth() + 3);
-        return d;
-      },
-    },
-  },
-  {
-    id: "6months",
-    label: "6 months",
-    preset: {
-      label: "6 months",
-      after: (now) => {
-        const d = new Date(now);
-        d.setMonth(d.getMonth() - 6);
-        return d;
-      },
-      before: (now) => {
-        const d = new Date(now);
-        d.setMonth(d.getMonth() + 3);
-        return d;
-      },
-    },
-  },
-  {
-    id: "1year",
-    label: "1 year",
-    preset: {
-      label: "1 year",
-      after: (now) => {
-        const d = new Date(now);
-        d.setFullYear(d.getFullYear() - 1);
-        return d;
-      },
-      before: (now) => {
-        const d = new Date(now);
-        d.setMonth(d.getMonth() + 3);
-        return d;
-      },
-    },
-  },
-  {
-    id: "2years",
-    label: "2 years",
-    preset: {
-      label: "2 years",
-      after: (now) => {
-        const d = new Date(now);
-        d.setFullYear(d.getFullYear() - 2);
-        return d;
-      },
-      before: (now) => {
-        const d = new Date(now);
-        d.setMonth(d.getMonth() + 3);
-        return d;
-      },
-    },
-  },
-  {
-    id: "3years",
-    label: "3 years",
-    preset: {
-      label: "3 years",
-      after: (now) => {
-        const d = new Date(now);
-        d.setFullYear(d.getFullYear() - 3);
-        return d;
-      },
-      before: (now) => {
-        const d = new Date(now);
-        d.setMonth(d.getMonth() + 3);
-        return d;
-      },
-    },
-  },
-  {
-    id: "5years",
-    label: "5 years",
-    preset: {
-      label: "5 years",
-      after: (now) => {
-        const d = new Date(now);
-        d.setFullYear(d.getFullYear() - 5);
-        return d;
-      },
-      before: (now) => {
-        const d = new Date(now);
-        d.setMonth(d.getMonth() + 3);
-        return d;
-      },
-    },
-  },
-];
-
-const DEFAULT_PRESET_ID = "3months";
 
 const FIREARMS_OPTIONS = [
   { id: "hg", label: "Handgun & PCC" },
@@ -184,6 +59,26 @@ const LEVEL_OPTIONS = [
 
 const DEFAULT_LEVEL = "l2plus";
 
+// ── Pure date helpers ────────────────────────────────────────────────────────
+
+function startOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+function endOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
+}
+
+function addMonths(d: Date, n: number): Date {
+  const r = new Date(d);
+  r.setMonth(r.getMonth() + n);
+  return r;
+}
+
+function formatMonthYear(d: Date): string {
+  return d.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+}
+
 function toISODate(d: Date) {
   return d.toISOString().slice(0, 10);
 }
@@ -196,12 +91,31 @@ function formatEventDate(iso: string): string {
   });
 }
 
+// ── Chip button shared style ─────────────────────────────────────────────────
+
+function chipClass(active: boolean) {
+  return cn(
+    "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+    active
+      ? "bg-primary text-primary-foreground"
+      : "bg-muted text-muted-foreground hover:bg-muted/80",
+  );
+}
+
+// ── Wide date range used in search mode ─────────────────────────────────────
+
+const WIDE_AFTER = "2010-01-01";
+const WIDE_BEFORE = toISODate(addMonths(new Date(), 60));
+
+// ── Component ────────────────────────────────────────────────────────────────
+
 export function EventSearch() {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [presetId, setPresetId] = useState(DEFAULT_PRESET_ID);
+  const [browseMonth, setBrowseMonth] = useState<Date>(() => startOfMonth(new Date()));
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [firearms, setFirearms] = useState(DEFAULT_FIREARMS);
   const [country, setCountry] = useState(DEFAULT_COUNTRY);
   const [level, setLevel] = useState(DEFAULT_LEVEL);
@@ -212,12 +126,10 @@ export function EventSearch() {
   }, [inputValue]);
 
   function handleInputChange(value: string) {
-    // Smart URL detection — pasting a match URL navigates directly
     const trimmed = value.trim();
     if (trimmed.startsWith("http")) {
       const parsed = parseMatchUrl(trimmed);
       if (parsed) {
-        setOpen(false);
         router.push(`/match/${parsed.ct}/${parsed.id}`);
         return;
       }
@@ -225,10 +137,10 @@ export function EventSearch() {
     setInputValue(value);
   }
 
-  const now = new Date();
-  const selected = DATE_PRESETS.find((p) => p.id === presetId)!;
-  const starts_after = toISODate(selected.preset.after(now));
-  const starts_before = toISODate(selected.preset.before(now));
+  const isBrowseMode = debouncedQuery.trim() === "";
+
+  const starts_after  = isBrowseMode ? toISODate(startOfMonth(browseMonth)) : WIDE_AFTER;
+  const starts_before = isBrowseMode ? toISODate(endOfMonth(browseMonth))   : WIDE_BEFORE;
 
   const { data: events = [], isLoading } = useEventsQuery(
     debouncedQuery,
@@ -240,172 +152,226 @@ export function EventSearch() {
   );
 
   function handleSelect(event: EventSummary) {
-    setOpen(false);
     router.push(`/match/${event.content_type}/${event.id}`);
   }
 
+  // Active filter summary shown in collapsed filter button
+  const activeFilterSummary = [
+    COUNTRY_OPTIONS.find((o) => o.id === country)?.label,
+    LEVEL_OPTIONS.find((o) => o.id === level)?.label,
+    FIREARMS_OPTIONS.find((o) => o.id === firearms)?.label,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const prevMonth = addMonths(browseMonth, -1);
+  const nextMonth = addMonths(browseMonth, 1);
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          aria-label="Search IPSC competitions"
-          className="w-full justify-start font-normal gap-2"
-        >
-          <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <span className="text-muted-foreground truncate">
-            Find your match…
-          </span>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-[var(--radix-popover-trigger-width)] p-0"
-        align="start"
-      >
-        {/* Filters */}
-        <div className="px-3 py-2 border-b space-y-2">
-          <div role="group" aria-label="Date range" className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs text-muted-foreground font-medium w-16 shrink-0">Date range</span>
-            {DATE_PRESETS.map(({ id, label }) => {
-              const active = id === presetId;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setPresetId(id)}
-                  className={[
-                    "rounded-full px-3 py-1 text-xs font-medium transition-colors",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    active
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80",
-                  ].join(" ")}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-          <div role="group" aria-label="Discipline" className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs text-muted-foreground font-medium w-16 shrink-0">Discipline</span>
-            {FIREARMS_OPTIONS.map(({ id, label }) => {
-              const active = id === firearms;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setFirearms(id)}
-                  className={[
-                    "rounded-full px-3 py-1 text-xs font-medium transition-colors",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    active
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80",
-                  ].join(" ")}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-          <div role="group" aria-label="Country" className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs text-muted-foreground font-medium w-16 shrink-0">Country</span>
-            {COUNTRY_OPTIONS.map(({ id, label }) => {
-              const active = id === country;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setCountry(id)}
-                  className={[
-                    "rounded-full px-3 py-1 text-xs font-medium transition-colors",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    active
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80",
-                  ].join(" ")}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-          <div role="group" aria-label="Level" className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs text-muted-foreground font-medium w-16 shrink-0">Level</span>
-            {LEVEL_OPTIONS.map(({ id, label }) => {
-              const active = id === level;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setLevel(id)}
-                  className={[
-                    "rounded-full px-3 py-1 text-xs font-medium transition-colors",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    active
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80",
-                  ].join(" ")}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
+    <section aria-label="Find competitions">
+      <Command shouldFilter={false} className="rounded-lg border shadow-sm">
+        <CommandInput
+          placeholder="Search by name or paste a match URL…"
+          value={inputValue}
+          onValueChange={handleInputChange}
+        />
+
+        {/* ── Collapsible filter panel ── */}
+        <div className="border-t px-3 py-2">
+          <button
+            type="button"
+            aria-expanded={filtersOpen}
+            aria-controls="event-search-filter-panel"
+            onClick={() => setFiltersOpen((v) => !v)}
+            className={cn(
+              "flex w-full items-center gap-1.5 text-xs text-muted-foreground",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded",
+            )}
+          >
+            <span className="font-medium">Filters</span>
+            {activeFilterSummary && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="truncate">{activeFilterSummary}</span>
+              </>
+            )}
+            <ChevronDown
+              className={cn(
+                "ml-auto h-3.5 w-3.5 shrink-0 transition-transform",
+                filtersOpen && "rotate-180",
+              )}
+              aria-hidden="true"
+            />
+          </button>
+
+          {filtersOpen && (
+            <div
+              id="event-search-filter-panel"
+              role="region"
+              aria-label="Filters"
+              className="mt-2 space-y-2"
+            >
+              <div role="group" aria-label="Discipline" className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs text-muted-foreground font-medium w-16 shrink-0">Discipline</span>
+                {FIREARMS_OPTIONS.map(({ id, label }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={id === firearms}
+                    onClick={() => setFirearms(id)}
+                    className={chipClass(id === firearms)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div role="group" aria-label="Country" className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs text-muted-foreground font-medium w-16 shrink-0">Country</span>
+                {COUNTRY_OPTIONS.map(({ id, label }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={id === country}
+                    onClick={() => setCountry(id)}
+                    className={chipClass(id === country)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div role="group" aria-label="Level" className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs text-muted-foreground font-medium w-16 shrink-0">Level</span>
+                {LEVEL_OPTIONS.map(({ id, label }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={id === level}
+                    onClick={() => setLevel(id)}
+                    className={chipClass(id === level)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        <Command shouldFilter={false}>
-          <CommandInput
-            autoFocus
-            placeholder="Search by name or paste a match URL…"
-            value={inputValue}
-            onValueChange={handleInputChange}
-          />
-          <CommandList>
-            {isLoading ? (
-              <div
-                className="flex items-center justify-center py-6"
-                aria-live="polite"
-                aria-label="Loading competitions"
-              >
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        {/* ── Mode callout ── */}
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className={cn(
+            "flex flex-col gap-0.5 border-t px-3 py-2 text-sm",
+            isBrowseMode ? "bg-muted/50" : "bg-primary/5",
+          )}
+        >
+          {isBrowseMode ? (
+            <>
+              <div className="flex items-center gap-1.5">
+                <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span>
+                  Browsing <strong>{formatMonthYear(browseMonth)}</strong>
+                </span>
               </div>
-            ) : events.length === 0 ? (
-              <CommandEmpty>No competitions found.</CommandEmpty>
-            ) : (
-              <CommandGroup>
-                {events.map((event) => (
-                  <CommandItem
-                    key={event.id}
-                    value={String(event.id)}
-                    onSelect={() => handleSelect(event)}
-                    className="flex flex-col items-start gap-0.5 py-2.5"
-                  >
-                    <span className="font-medium leading-snug">{event.name}</span>
-                    <span className="text-xs text-muted-foreground leading-snug">
-                      {formatEventDate(event.date)}
-                      {" · "}
-                      {event.discipline}
-                      {" · "}
-                      {event.level}
-                      {" · "}
-                      {event.region}
-                      {" · "}
-                      {STATUS_LABEL[event.status] ?? event.status}
-                    </span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            )}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+              <p className="text-xs text-muted-foreground pl-5">
+                Showing matches in this month · use the arrows to navigate
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-1.5">
+                <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span>
+                  Searching <strong>all dates</strong>
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground pl-5">
+                Month filter paused ·{" "}
+                <button
+                  type="button"
+                  onClick={() => setInputValue("")}
+                  className="underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                >
+                  Clear search to browse
+                </button>
+              </p>
+            </>
+          )}
+        </div>
+
+        {/* ── Month navigator ── */}
+        <div
+          aria-label="Browse by month"
+          aria-disabled={!isBrowseMode}
+          className={cn(
+            "flex items-center justify-between border-t px-4 py-2",
+            !isBrowseMode && "pointer-events-none opacity-40",
+          )}
+        >
+          <button
+            type="button"
+            aria-label={`Previous month: ${formatMonthYear(prevMonth)}`}
+            tabIndex={isBrowseMode ? 0 : -1}
+            onClick={() => setBrowseMonth((m) => startOfMonth(addMonths(m, -1)))}
+            className="rounded p-1 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          </button>
+          <span className="text-sm font-medium">{formatMonthYear(browseMonth)}</span>
+          <button
+            type="button"
+            aria-label={`Next month: ${formatMonthYear(nextMonth)}`}
+            tabIndex={isBrowseMode ? 0 : -1}
+            onClick={() => setBrowseMonth((m) => startOfMonth(addMonths(m, 1)))}
+            className="rounded p-1 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+
+        {/* ── Results ── */}
+        <CommandList className="max-h-[50vh]">
+          {isLoading ? (
+            <div
+              className="flex items-center justify-center py-6"
+              aria-live="polite"
+              aria-label="Loading competitions"
+            >
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : events.length === 0 ? (
+            <CommandEmpty>No competitions found.</CommandEmpty>
+          ) : (
+            <CommandGroup>
+              {events.map((event) => (
+                <CommandItem
+                  key={event.id}
+                  value={String(event.id)}
+                  onSelect={() => handleSelect(event)}
+                  className="flex flex-col items-start gap-0.5 py-2.5"
+                >
+                  <span className="font-medium leading-snug">{event.name}</span>
+                  <span className="text-xs text-muted-foreground leading-snug">
+                    {formatEventDate(event.date)}
+                    {" · "}
+                    {event.discipline}
+                    {" · "}
+                    {event.level}
+                    {" · "}
+                    {event.region}
+                    {" · "}
+                    {STATUS_LABEL[event.status] ?? event.status}
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+        </CommandList>
+      </Command>
+    </section>
   );
 }
