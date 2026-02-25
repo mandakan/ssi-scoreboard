@@ -1,7 +1,16 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="public/logo-dark.svg">
+  <img src="public/logo-light.svg" alt="SSI Scoreboard" height="60">
+</picture>
+
 # SSI Scoreboard
 
 [![CI](https://github.com/mandakan/ssi-scoreboard/actions/workflows/ci.yml/badge.svg)](https://github.com/mandakan/ssi-scoreboard/actions/workflows/ci.yml)
+[![Live](https://img.shields.io/badge/Live-scoreboard.urdr.dev-4f46e5?logo=vercel&logoColor=white)](https://scoreboard.urdr.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js&logoColor=white)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-06b6d4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/thias)
 
 Live stage-by-stage comparison tool for IPSC competitions on [shootnscoreit.com](https://shootnscoreit.com).
