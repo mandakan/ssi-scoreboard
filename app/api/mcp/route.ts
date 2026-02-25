@@ -48,7 +48,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const baseUrl = new URL(request.url).origin;
+  // Use an explicit env var rather than request.url to avoid SSRF — the Host
+  // header can be spoofed, which would taint request.url. The MCP tools only
+  // ever call this app's own API endpoints, so localhost is always correct for
+  // same-server deployments. Set NEXT_PUBLIC_APP_URL to override (e.g. for CF
+  // Pages where localhost calls are not available).
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
 
   const transport = new SingleShotTransport();
   const server = new McpServer({ name: "ssi-scoreboard", version: "0.1.0" });

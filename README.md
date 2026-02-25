@@ -77,6 +77,7 @@ custom subdomain, verifying the deployment, and troubleshooting — see
 | `UPSTASH_REDIS_REST_URL` | Cloudflare | REST URL from the Upstash console (see setup above) |
 | `UPSTASH_REDIS_REST_TOKEN` | Cloudflare | REST token from the Upstash console (see setup above) |
 | `MCP_SECRET` | Both | Optional. If set, `POST /api/mcp` requires `Authorization: Bearer <MCP_SECRET>`. Omit for public access. |
+| `NEXT_PUBLIC_APP_URL` | Both | Base URL for MCP tool internal API calls. Defaults to `http://localhost:PORT`. Required for Cloudflare Pages (set to e.g. `https://scoreboard.urdr.dev`). |
 
 ## Usage
 1. Browse competitions month by month using the month navigator on the landing page — tap the
