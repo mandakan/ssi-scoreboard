@@ -93,6 +93,22 @@ export default function RootLayout({
               this app. SSI is not responsible for the privacy, security, or
               integrity of data shown here.
             </p>
+            {process.env.NEXT_PUBLIC_BUILD_ID && (
+              <p className="text-[11px] text-muted-foreground/50">
+                {process.env.NEXT_PUBLIC_BUILD_DATE && (
+                  <span>{process.env.NEXT_PUBLIC_BUILD_DATE} · </span>
+                )}
+                <a
+                  href={`https://github.com/mandakan/ssi-scoreboard/commit/${process.env.NEXT_PUBLIC_BUILD_ID}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono hover:text-muted-foreground transition-colors"
+                  aria-label={`View source at commit ${process.env.NEXT_PUBLIC_BUILD_ID} on GitHub (opens in new tab)`}
+                >
+                  {process.env.NEXT_PUBLIC_BUILD_ID}
+                </a>
+              </p>
+            )}
           </footer>
         </Providers>
       </body>

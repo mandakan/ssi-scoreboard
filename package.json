@@ -18,7 +18,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
-    "docker:build": "BUILD_ID=$(git rev-parse --short HEAD 2>/dev/null || echo '') docker compose build",
+    "docker:build": "BUILD_ID=$(git rev-parse --short HEAD 2>/dev/null || echo '') BUILD_DATE=$(date +%Y.%m.%d) docker compose build",
     "docker:up": "docker compose --env-file .env.local up",
     "docker:down": "docker compose down",
     "cf:build": "DEPLOY_TARGET=cloudflare npx @opennextjs/cloudflare@1.17.0 build",

@@ -43,8 +43,15 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Set build vars
+        run: |
+          echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "BUILD_DATE=$(date -u +%Y.%m.%d)" >> $GITHUB_ENV
+
       - run: pnpm cf:deploy:staging
         env:
           SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          NEXT_PUBLIC_BUILD_ID: ${{ env.SHORT_SHA }}
+          NEXT_PUBLIC_BUILD_DATE: ${{ env.BUILD_DATE }}
