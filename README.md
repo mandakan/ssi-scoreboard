@@ -126,6 +126,7 @@ custom subdomain, verifying the deployment, and troubleshooting — see
 - **Month browser** — navigate competitions month by month from the landing page; typing a query switches to full-history search mode automatically
 - **Server-side cache** — GraphQL response caching with smart TTL and admin purge endpoint; ioredis on Docker, @upstash/redis on Cloudflare Pages
 - **New-version banner** — polls `/api/version` every 60 s; shows a non-blocking refresh prompt when a new deployment is detected
+- **PWA installable** — add to home screen on Android, iOS, and desktop; runs fullscreen without browser chrome
 - **Mobile-first** — designed for one-handed use at 390px; no unintentional horizontal overflow
 
 ## Development Commands

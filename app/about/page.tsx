@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Github, Crosshair, Coffee } from "lucide-react";
+import { InstallInstructions } from "@/components/install-instructions";
 
 export const metadata: Metadata = {
   title: "About – SSI Scoreboard",
@@ -134,6 +135,21 @@ export default function AboutPage() {
               </div>
             </a>
           </div>
+        </section>
+
+        <section id="install" aria-labelledby="about-install-heading" className="space-y-4">
+          <h2
+            id="about-install-heading"
+            className="text-xl font-semibold border-b border-border pb-2"
+          >
+            Install as an app
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            SSI Scoreboard is a Progressive Web App — you can add it to your
+            home screen for instant courtside access, fullscreen view, and a
+            native-app feel. No app store required.
+          </p>
+          <InstallInstructions />
         </section>
 
         <section aria-labelledby="about-built-heading" className="space-y-4">

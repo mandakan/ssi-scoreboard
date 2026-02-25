@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Coffee, Crosshair, Github } from "lucide-react";
 import { Providers } from "@/components/providers";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { InstallBanner } from "@/components/install-banner";
 import { UpdateBanner } from "@/components/update-banner";
 import "./globals.css";
 
@@ -47,6 +48,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}>
         <Providers>
+          <InstallBanner />
           <UpdateBanner />
           {children}
           <footer className="w-full flex flex-col items-center gap-2 p-4 text-xs text-muted-foreground border-t border-border mt-auto">
@@ -91,6 +93,12 @@ export default function RootLayout({
               >
                 <Coffee className="w-4 h-4" aria-hidden="true" />
               </a>
+              <Link
+                href="/about#install"
+                className="inline-flex items-center hover:text-foreground transition-colors"
+              >
+                Install app
+              </Link>
               <Link
                 href="/about"
                 className="inline-flex items-center hover:text-foreground transition-colors"
