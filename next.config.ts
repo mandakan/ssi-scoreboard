@@ -4,6 +4,12 @@ import path from "path";
 const isCF = process.env.DEPLOY_TARGET === "cloudflare";
 
 const nextConfig: NextConfig = {
+  images: {
+    dangerouslyAllowSVG: true,
+    contentDispositionType: "attachment",
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+  },
+
   // "standalone" is required for Docker multi-stage builds.
   // Cloudflare Pages uses @cloudflare/next-on-pages and needs no output mode set.
   output: isCF ? undefined : "standalone",

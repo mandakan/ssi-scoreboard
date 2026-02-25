@@ -1,14 +1,14 @@
 import { RecentCompetitions } from "@/components/recent-competitions";
 import { PopularMatches } from "@/components/popular-matches";
 import { EventSearch } from "@/components/event-search";
-import { Target } from "lucide-react";
+import { AppLogo } from "@/components/app-logo";
 
 export default function HomePage() {
   return (
     <main className="min-h-screen flex flex-col items-center p-4 pt-8 sm:p-6 sm:pt-16 gap-8">
       <div className="flex flex-col items-center gap-3 text-center">
         <div className="flex items-center gap-2">
-          <Target className="w-5 h-5 text-primary" aria-hidden="true" />
+          <AppLogo size={32} />
           <span className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
             SSI Scoreboard
           </span>

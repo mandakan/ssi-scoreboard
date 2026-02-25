@@ -24,7 +24,8 @@
     "cf:build": "DEPLOY_TARGET=cloudflare npx @opennextjs/cloudflare@1.17.0 build",
     "cf:deploy": "pnpm cf:build && wrangler deploy",
     "cf:deploy:staging": "pnpm cf:build && wrangler deploy --env staging",
-    "setup": "cp -n .env.local.example .env.local || true"
+    "setup": "cp -n .env.local.example .env.local || true",
+    "icons": "bash scripts/generate-icons.sh"
   },
   "dependencies": {
     "@tanstack/react-query": "5.90.21",
