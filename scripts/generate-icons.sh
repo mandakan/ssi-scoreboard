@@ -128,13 +128,22 @@ inkscape \
 # ── 6. theme-adaptive logos for the app header ───────────────────────────────
 echo "[6/6] Generating public/logo-dark.svg and public/logo-light.svg…"
 
-python3 - "$SRC" "$PUB" << 'PYEOF'
+# First export a clean plain SVG (strips all Inkscape metadata, namedview,
+# sodipodi elements, and converts width/height to unitless viewBox values).
+# Python then applies the background-removal and light-mode adjustments on
+# this clean baseline, ensuring no Inkscape artefacts affect browser rendering.
+inkscape \
+  --export-type=svg \
+  --export-area-drawing \
+  --export-plain-svg \
+  --export-filename="$TMP/logo-plain.svg" \
+  "$SRC" 2>/dev/null
+
+python3 - "$TMP/logo-plain.svg" "$PUB" << 'PYEOF'
 import sys, xml.etree.ElementTree as ET
 
 ET.register_namespace('', 'http://www.w3.org/2000/svg')
 ET.register_namespace('xlink', 'http://www.w3.org/1999/xlink')
-ET.register_namespace('inkscape', 'http://www.inkscape.org/namespaces/inkscape')
-ET.register_namespace('sodipodi', 'http://sodipodi.sourceforge.net/DTD/sodipodi-0.0')
 
 src, pub = sys.argv[1], sys.argv[2]
 
@@ -160,6 +169,20 @@ def adjust_for_light(root):
         if 'fill:#f3f4f6' in style:
             el.set('style', style.replace('fill:#f3f4f6', 'fill:#dde1e7'))
 
+def normalise_root(root):
+    """
+    Replace absolute-unit width/height (e.g. "210mm") with unitless integers
+    so browsers compute the intrinsic size purely from viewBox. Unitless values
+    prevent next/image and browsers from computing a 793px intrinsic height from
+    "210mm", which would misalign the rendered image in flex layouts.
+    """
+    vb = root.get('viewBox', '')
+    if vb:
+        parts = vb.split()
+        if len(parts) == 4:
+            root.set('width',  parts[2])
+            root.set('height', parts[3])
+
 def write(tree, path):
     tree.write(path, xml_declaration=True, encoding='UTF-8')
     with open(path) as f:
@@ -172,11 +195,13 @@ def write(tree, path):
 # Dark variant — transparent background, original element colours
 t = load()
 remove_background(t.getroot())
+normalise_root(t.getroot())
 write(t, f'{pub}/logo-dark.svg')
 
 # Light variant — transparent background, target circle darkened for contrast
 t = load()
 remove_background(t.getroot())
+normalise_root(t.getroot())
 adjust_for_light(t.getroot())
 write(t, f'{pub}/logo-light.svg')
 PYEOF
