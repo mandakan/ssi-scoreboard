@@ -27,7 +27,7 @@ PUB_ICONS="$REPO_ROOT/public/icons"
 APP="$REPO_ROOT/app"
 PUB="$REPO_ROOT/public"
 
-# Background colour used when padding icons to a square canvas
+# Background colour for the favicon canvas
 DARK_BG="#09090b"
 
 # Rounded-corner radii (~22% of icon size, close to iOS squircle)
