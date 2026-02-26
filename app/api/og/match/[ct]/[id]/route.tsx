@@ -421,8 +421,8 @@ function matchOverviewImage(match: OgMatchData, logoUrl: string) {
           position: "absolute",
           left: 0,
           top: 0,
-          width: "100%",
-          height: "100%",
+          width: OG_W,
+          height: OG_H,
           display: "flex",
           flexDirection: "column",
         }}
@@ -521,40 +521,56 @@ function singleCompetitorImage(
   return singleCompetitorNoStats(match, competitor, matchInfo, details, logoUrl);
 }
 
+// OG canvas dimensions (must match ImageResponse width/height).
+// Used for explicit pixel heights on absolutely-positioned layers so Satori
+// doesn't have to resolve "100%" through a chain of percentage containers.
+const OG_W = 1200;
+const OG_H = 630;
+
 /**
- * Absolutely-positioned background layers: the match image fills the right
+ * Absolutely-positioned background layers: the match image occupies the right
  * ~33% of the canvas and a gradient fades it into the dark background.
  * Rendered BEFORE the content layer so it sits beneath the text.
+ *
+ * Uses explicit pixel heights (OG_H) because Satori does not reliably resolve
+ * height:"100%" on absolutely-positioned children.
  */
 function matchImageBgLayers(imageUrl: string) {
+  const imgW = 400; // ~33% of OG_W
   return (
     <>
-      {/* Image: right 400px, full height */}
+      {/* Image: right imgW px, full canvas height, objectFit:contain so any
+          aspect ratio (portrait OR wide landscape banner) is fully visible */}
       <div
         style={{
           position: "absolute",
           right: 0,
           top: 0,
-          width: 400,
-          height: "100%",
+          width: imgW,
+          height: OG_H,
           display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: C.bg,
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={imageUrl}
           alt=""
-          style={{ width: "100%", height: "100%", objectFit: "cover", display: "flex" }}
+          width={imgW}
+          height={OG_H}
+          style={{ objectFit: "contain", display: "flex" }}
         />
       </div>
-      {/* Gradient: slightly wider than the image so the fade starts before the image edge */}
+      {/* Gradient: wider than image, fades from bg (left) to transparent (right) */}
       <div
         style={{
           position: "absolute",
           right: 0,
           top: 0,
-          width: 500,
-          height: "100%",
+          width: imgW + 100,
+          height: OG_H,
           backgroundImage: `linear-gradient(to right, ${C.bg} 0%, transparent 65%)`,
           display: "flex",
         }}
@@ -602,8 +618,8 @@ function singleCompetitorWithStats(
           position: "absolute",
           left: 0,
           top: 0,
-          width: "100%",
-          height: "100%",
+          width: OG_W,
+          height: OG_H,
           display: "flex",
           flexDirection: "column",
         }}
@@ -754,8 +770,8 @@ function singleCompetitorNoStats(
           position: "absolute",
           left: 0,
           top: 0,
-          width: "100%",
-          height: "100%",
+          width: OG_W,
+          height: OG_H,
           display: "flex",
           flexDirection: "column",
         }}
@@ -955,8 +971,8 @@ function multiCompetitorWithStats(
           position: "absolute",
           left: 0,
           top: 0,
-          width: "100%",
-          height: "100%",
+          width: OG_W,
+          height: OG_H,
           display: "flex",
           flexDirection: "column",
         }}
@@ -1097,8 +1113,8 @@ function multiCompetitorNoStats(
           position: "absolute",
           left: 0,
           top: 0,
-          width: "100%",
-          height: "100%",
+          width: OG_W,
+          height: OG_H,
           display: "flex",
           flexDirection: "column",
         }}
