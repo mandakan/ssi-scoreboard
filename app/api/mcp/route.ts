@@ -154,10 +154,11 @@ export async function POST(request: Request) {
   // ever call this app's own API endpoints, so localhost is always correct for
   // same-server deployments. Set NEXT_PUBLIC_APP_URL to override (e.g. for CF
   // Pages where localhost calls are not available).
-  // .trim() guards against Cloudflare env vars with stray newlines/spaces, which
-  // would produce an "Invalid URL" error inside apiFetch.
+  // Strip all whitespace — Cloudflare env vars can arrive with embedded newlines
+  // or carriage returns (e.g. copy-paste artifact), which make the URL invalid.
+  // .trim() alone isn't sufficient when the stray character is mid-string.
   const baseUrl = (
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ?? `http://localhost:${process.env.PORT ?? 3000}`
+    process.env.NEXT_PUBLIC_APP_URL?.replace(/\s+/g, "") ?? `http://localhost:${process.env.PORT ?? 3000}`
   );
 
   const transport = new SingleShotTransport();
