@@ -56,6 +56,8 @@ export async function GET(
     });
   }
 
+  console.log("[og] match.imageUrl:", match.imageUrl);
+
   // Resolve selected competitors from the match data
   const selectedCompetitors = competitorsParam
     ? competitorsParam
@@ -528,27 +530,50 @@ const OG_W = 1200;
 const OG_H = 630;
 
 /**
- * Absolutely-positioned background layers: the match image occupies the right
- * ~33% of the canvas and a gradient fades it into the dark background.
- * Rendered BEFORE the content layer so it sits beneath the text.
+ * Background layer for the match image: occupies the right ~33% of the canvas
+ * with a gradient fade on the left edge.
  *
- * Uses explicit pixel heights (OG_H) because Satori does not reliably resolve
- * height:"100%" on absolutely-positioned children.
+ * Returns a SINGLE <div> (not a Fragment) so Satori receives a proper element.
+ * Uses an explicit-pixel absolute wrapper (left:0 top:0 OG_W×OG_H) with a
+ * flex-row layout inside — no nested position:absolute — which is more
+ * reliable across Satori versions.
+ *
+ * Layout: [flex:1 spacer] [150px gradient] [imgW image column]
+ * The spacer is transparent (root bg shows through); the gradient fades
+ * from bg→transparent so the image emerges smoothly.
  */
 function matchImageBgLayers(imageUrl: string) {
   const imgW = 400; // ~33% of OG_W
   return (
-    <>
-      {/* Image: right imgW px, full canvas height, objectFit:contain so any
-          aspect ratio (portrait OR wide landscape banner) is fully visible */}
+    <div
+      style={{
+        position: "absolute",
+        left: 0,
+        top: 0,
+        width: OG_W,
+        height: OG_H,
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "stretch",
+      }}
+    >
+      {/* Spacer: fills the content area, transparent (root bg shows) */}
+      <div style={{ display: "flex", flex: 1 }} />
+
+      {/* Gradient strip: 150px, bg → transparent, fades into the image */}
       <div
         style={{
-          position: "absolute",
-          right: 0,
-          top: 0,
-          width: imgW,
-          height: OG_H,
           display: "flex",
+          width: 150,
+          backgroundImage: `linear-gradient(to right, ${C.bg}, transparent)`,
+        }}
+      />
+
+      {/* Image column: right 400px of canvas */}
+      <div
+        style={{
+          display: "flex",
+          width: imgW,
           alignItems: "center",
           justifyContent: "center",
           backgroundColor: C.bg,
@@ -563,19 +588,7 @@ function matchImageBgLayers(imageUrl: string) {
           style={{ objectFit: "contain", display: "flex" }}
         />
       </div>
-      {/* Gradient: wider than image, fades from bg (left) to transparent (right) */}
-      <div
-        style={{
-          position: "absolute",
-          right: 0,
-          top: 0,
-          width: imgW + 100,
-          height: OG_H,
-          backgroundImage: `linear-gradient(to right, ${C.bg} 0%, transparent 65%)`,
-          display: "flex",
-        }}
-      />
-    </>
+    </div>
   );
 }
 
