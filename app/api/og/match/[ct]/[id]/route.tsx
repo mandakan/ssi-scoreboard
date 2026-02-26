@@ -404,44 +404,44 @@ function matchOverviewImage(match: OgMatchData, logoUrl: string) {
   return (
     <div
       style={{
+        position: "relative",
         display: "flex",
-        flexDirection: "column",
         width: "100%",
         height: "100%",
         backgroundColor: C.bg,
         color: C.text,
       }}
     >
-      {topAccent()}
+      {/* Background image layers (below content) */}
+      {match.imageUrl ? matchImageBgLayers(match.imageUrl) : null}
 
+      {/* Content layer (above background) */}
       <div
         style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          width: "100%",
+          height: "100%",
           display: "flex",
-          flexDirection: "row",
-          flex: 1,
-          padding: "40px 56px 36px",
-          gap: "40px",
+          flexDirection: "column",
         }}
       >
-        {/* Left column: all text content */}
+        {topAccent()}
+
         <div
           style={{
             display: "flex",
             flexDirection: "column",
             flex: 1,
+            padding: "40px 56px 36px",
             justifyContent: "space-between",
           }}
         >
           {brandHeader(logoUrl)}
 
           {/* Main content — match name and subtitle */}
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "8px",
-            }}
-          >
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <div
               style={{
                 fontSize: "52px",
@@ -473,9 +473,7 @@ function matchOverviewImage(match: OgMatchData, logoUrl: string) {
               {statBadge(String(match.stagesCount), "stages")}
               {statBadge(String(match.competitorsCount), "competitors")}
               {statBadge(`${String(match.scoringCompleted)}%`, "scored")}
-              {match.region
-                ? statBadge(match.region, "region")
-                : null}
+              {match.region ? statBadge(match.region, "region") : null}
             </div>
             <div
               style={{
@@ -494,30 +492,6 @@ function matchOverviewImage(match: OgMatchData, logoUrl: string) {
             </div>
           </div>
         </div>
-
-        {/* Right column: match image (only when available) */}
-        {match.imageUrl ? (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={match.imageUrl}
-              width={200}
-              height={240}
-              alt={match.name}
-              style={{
-                borderRadius: "12px",
-                objectFit: "cover",
-              }}
-            />
-          </div>
-        ) : null}
       </div>
     </div>
   );
@@ -547,16 +521,45 @@ function singleCompetitorImage(
   return singleCompetitorNoStats(match, competitor, matchInfo, details, logoUrl);
 }
 
-function matchImageThumb(imageUrl: string, alt: string) {
+/**
+ * Absolutely-positioned background layers: the match image fills the right
+ * ~33% of the canvas and a gradient fades it into the dark background.
+ * Rendered BEFORE the content layer so it sits beneath the text.
+ */
+function matchImageBgLayers(imageUrl: string) {
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={imageUrl}
-      width={56}
-      height={68}
-      alt={alt}
-      style={{ borderRadius: "8px", objectFit: "cover", flexShrink: 0 }}
-    />
+    <>
+      {/* Image: right 400px, full height */}
+      <div
+        style={{
+          position: "absolute",
+          right: 0,
+          top: 0,
+          width: 400,
+          height: "100%",
+          display: "flex",
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageUrl}
+          alt=""
+          style={{ width: "100%", height: "100%", objectFit: "cover", display: "flex" }}
+        />
+      </div>
+      {/* Gradient: slightly wider than the image so the fade starts before the image edge */}
+      <div
+        style={{
+          position: "absolute",
+          right: 0,
+          top: 0,
+          width: 500,
+          height: "100%",
+          backgroundImage: `linear-gradient(to right, ${C.bg} 0%, transparent 65%)`,
+          display: "flex",
+        }}
+      />
+    </>
   );
 }
 
@@ -582,47 +585,58 @@ function singleCompetitorWithStats(
   return (
     <div
       style={{
+        position: "relative",
         display: "flex",
-        flexDirection: "column",
         width: "100%",
         height: "100%",
         backgroundColor: C.bg,
         color: C.text,
       }}
     >
-      {topAccent()}
+      {/* Background image layers (below content) */}
+      {match.imageUrl ? matchImageBgLayers(match.imageUrl) : null}
 
+      {/* Content layer (above background) */}
       <div
         style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          width: "100%",
+          height: "100%",
           display: "flex",
           flexDirection: "column",
-          flex: 1,
-          padding: "36px 56px 32px",
-          gap: "24px",
         }}
       >
-        {brandHeader(logoUrl, matchInfo)}
+        {topAccent()}
 
-        {/* Content card: name + performance together */}
         <div
           style={{
             display: "flex",
             flexDirection: "column",
             flex: 1,
-            justifyContent: "center",
+            padding: "36px 56px 32px",
             gap: "24px",
-            width: "100%",
-            padding: "28px 36px",
-            backgroundColor: C.cardBg,
-            borderRadius: "16px",
-            border: `1px solid ${C.border}`,
           }}
         >
-          {/* Name + details row, with optional match image thumbnail */}
+          {brandHeader(logoUrl, matchInfo)}
+
+          {/* Content card: name + performance together */}
           <div
-            style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: "20px" }}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              flex: 1,
+              justifyContent: "center",
+              gap: "24px",
+              width: "100%",
+              padding: "28px 36px",
+              backgroundColor: C.cardBg,
+              borderRadius: "16px",
+              border: `1px solid ${C.border}`,
+            }}
           >
-            {match.imageUrl ? matchImageThumb(match.imageUrl, match.name) : null}
+            {/* Name + details */}
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
               <div
                 style={{
@@ -635,14 +649,11 @@ function singleCompetitorWithStats(
                 {competitor.name}
               </div>
               {details !== "" ? (
-                <div
-                  style={{ display: "flex", fontSize: "24px", color: C.muted }}
-                >
+                <div style={{ display: "flex", fontSize: "24px", color: C.muted }}>
                   {details}
                 </div>
               ) : null}
             </div>
-          </div>
 
           {/* Match % + bar */}
           <div
@@ -711,6 +722,7 @@ function singleCompetitorWithStats(
           </div>
         </div>
       </div>
+      </div>
     </div>
   );
 }
@@ -727,30 +739,41 @@ function singleCompetitorNoStats(
   return (
     <div
       style={{
+        position: "relative",
         display: "flex",
-        flexDirection: "column",
         width: "100%",
         height: "100%",
         backgroundColor: C.bg,
         color: C.text,
       }}
     >
-      {topAccent()}
+      {match.imageUrl ? matchImageBgLayers(match.imageUrl) : null}
 
       <div
         style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          width: "100%",
+          height: "100%",
           display: "flex",
           flexDirection: "column",
-          flex: 1,
-          padding: "40px 56px 36px",
-          justifyContent: "space-between",
         }}
       >
-        {brandHeader(logoUrl, matchInfo)}
+        {topAccent()}
 
-        {/* Name + details, with optional match image thumbnail */}
-        <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: "20px" }}>
-          {match.imageUrl ? matchImageThumb(match.imageUrl, match.name) : null}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            padding: "40px 56px 36px",
+            justifyContent: "space-between",
+          }}
+        >
+          {brandHeader(logoUrl, matchInfo)}
+
+          {/* Name + details */}
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <div
               style={{
@@ -768,38 +791,38 @@ function singleCompetitorNoStats(
               </div>
             ) : null}
           </div>
-        </div>
 
-        {/* Stats row */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "row",
-            alignItems: "flex-end",
-            justifyContent: "space-between",
-            width: "100%",
-          }}
-        >
-          <div style={{ display: "flex", gap: "20px" }}>
-            {statBadge(String(match.stagesCount), "stages")}
-            {statBadge(String(match.competitorsCount), "competitors")}
-            {statBadge(`${String(match.scoringCompleted)}%`, "scored")}
-          </div>
+          {/* Stats row */}
           <div
             style={{
               display: "flex",
-              flexDirection: "column",
+              flexDirection: "row",
               alignItems: "flex-end",
-              gap: "6px",
+              justifyContent: "space-between",
+              width: "100%",
             }}
           >
-            {ctx !== "" ? (
-              <div style={{ display: "flex", fontSize: "20px", color: C.dim }}>
-                {ctx}
+            <div style={{ display: "flex", gap: "20px" }}>
+              {statBadge(String(match.stagesCount), "stages")}
+              {statBadge(String(match.competitorsCount), "competitors")}
+              {statBadge(`${String(match.scoringCompleted)}%`, "scored")}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-end",
+                gap: "6px",
+              }}
+            >
+              {ctx !== "" ? (
+                <div style={{ display: "flex", fontSize: "20px", color: C.dim }}>
+                  {ctx}
+                </div>
+              ) : null}
+              <div style={{ fontSize: "22px", color: C.dim }}>
+                scoreboard.urdr.dev
               </div>
-            ) : null}
-            <div style={{ fontSize: "22px", color: C.dim }}>
-              scoreboard.urdr.dev
             </div>
           </div>
         </div>
@@ -917,28 +940,41 @@ function multiCompetitorWithStats(
   return (
     <div
       style={{
+        position: "relative",
         display: "flex",
-        flexDirection: "column",
         width: "100%",
         height: "100%",
         backgroundColor: C.bg,
         color: C.text,
       }}
     >
-      {topAccent()}
+      {match.imageUrl ? matchImageBgLayers(match.imageUrl) : null}
 
       <div
         style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          width: "100%",
+          height: "100%",
           display: "flex",
           flexDirection: "column",
-          flex: 1,
-          padding: "36px 56px 32px",
-          gap: "24px",
         }}
       >
-        {brandHeader(logoUrl, matchInfo)}
+        {topAccent()}
 
-        {/* Leaderboard card — wrapper centers the card vertically */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            padding: "36px 56px 32px",
+            gap: "24px",
+          }}
+        >
+          {brandHeader(logoUrl, matchInfo)}
+
+          {/* Leaderboard card — wrapper centers the card vertically */}
         <div
           style={{
             display: "flex",
@@ -990,6 +1026,7 @@ function multiCompetitorWithStats(
           <div style={{ fontSize: "22px", color: C.dim }}>
             scoreboard.urdr.dev
           </div>
+        </div>
         </div>
       </div>
     </div>
@@ -1045,78 +1082,92 @@ function multiCompetitorNoStats(
   return (
     <div
       style={{
+        position: "relative",
         display: "flex",
-        flexDirection: "column",
         width: "100%",
         height: "100%",
         backgroundColor: C.bg,
         color: C.text,
       }}
     >
-      {topAccent()}
+      {match.imageUrl ? matchImageBgLayers(match.imageUrl) : null}
 
       <div
         style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          width: "100%",
+          height: "100%",
           display: "flex",
           flexDirection: "column",
-          flex: 1,
-          padding: "36px 56px 32px",
-          justifyContent: "space-between",
         }}
       >
-        {brandHeader(logoUrl, matchInfo)}
+        {topAccent()}
 
-        {/* Competitor list */}
         <div
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: "16px",
-            width: "100%",
+            flex: 1,
+            padding: "36px 56px 32px",
+            justifyContent: "space-between",
           }}
         >
+          {brandHeader(logoUrl, matchInfo)}
+
+          {/* Competitor list */}
           <div
             style={{
               display: "flex",
-              fontSize: "24px",
-              fontWeight: 600,
-              color: C.muted,
+              flexDirection: "column",
+              gap: "16px",
+              width: "100%",
             }}
           >
-            {`Comparing ${String(competitors.length)} competitors`}
-          </div>
-          {rows}
-          {remaining > 0 ? (
             <div
               style={{
                 display: "flex",
-                fontSize: "20px",
-                color: C.dim,
-                paddingLeft: "18px",
+                fontSize: "24px",
+                fontWeight: 600,
+                color: C.muted,
               }}
             >
-              {`+${String(remaining)} more`}
+              {`Comparing ${String(competitors.length)} competitors`}
             </div>
-          ) : null}
-        </div>
-
-        {/* Footer with stats */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "flex-end",
-            width: "100%",
-          }}
-        >
-          <div style={{ display: "flex", gap: "20px" }}>
-            {statBadge(String(match.stagesCount), "stages")}
-            {statBadge(String(match.competitorsCount), "competitors")}
-            {statBadge(`${String(match.scoringCompleted)}%`, "scored")}
+            {rows}
+            {remaining > 0 ? (
+              <div
+                style={{
+                  display: "flex",
+                  fontSize: "20px",
+                  color: C.dim,
+                  paddingLeft: "18px",
+                }}
+              >
+                {`+${String(remaining)} more`}
+              </div>
+            ) : null}
           </div>
-          <div style={{ fontSize: "22px", color: C.dim }}>
-            scoreboard.urdr.dev
+
+          {/* Footer with stats */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "flex-end",
+              width: "100%",
+            }}
+          >
+            <div style={{ display: "flex", gap: "20px" }}>
+              {statBadge(String(match.stagesCount), "stages")}
+              {statBadge(String(match.competitorsCount), "competitors")}
+              {statBadge(`${String(match.scoringCompleted)}%`, "scored")}
+            </div>
+            <div style={{ fontSize: "22px", color: C.dim }}>
+              scoreboard.urdr.dev
+            </div>
           </div>
         </div>
       </div>
