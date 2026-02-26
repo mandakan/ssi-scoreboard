@@ -30,6 +30,17 @@ export const metadata: Metadata = {
   icons: {
     apple: "/icons/apple-touch-icon.png",
   },
+  openGraph: {
+    title: "SSI Scoreboard",
+    description: "Live stage-by-stage IPSC competitor comparison",
+    type: "website",
+    siteName: "SSI Scoreboard",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "SSI Scoreboard",
+    description: "Live stage-by-stage IPSC competitor comparison",
+  },
 };
 
 export const viewport: Viewport = {

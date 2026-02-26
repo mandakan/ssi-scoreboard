@@ -48,7 +48,11 @@ Key directories:
 - `lib/queries.ts` — TanStack Query v5 hooks used by client components
 - `components/` — all UI; no direct API calls, all data via hooks from `lib/queries.ts`
 - `app/api/events/route.ts` — event search; defaults to `minLevel=l2plus` (hides Level I club matches); users can switch to "All", "L3+", or "L4+" in the filter panel
+- `app/api/og/match/[ct]/[id]/route.tsx` — dynamic OG image generation (match overview, single competitor, multi-competitor variants); uses `next/og` (Satori)
 - `app/api/admin/cache/health/route.ts` — protected diagnostic endpoint (`Authorization: Bearer <CACHE_PURGE_SECRET>`); reports env var presence and runs a live write→read→delete round-trip against the cache adapter with latency
+- `app/match/[ct]/[id]/layout.tsx` — match layout with `generateMetadata()` for dynamic page titles + OG meta tags
+- `app/match/[ct]/[id]/match-page-client.tsx` — `"use client"` match page component (extracted from page.tsx to allow server-side metadata generation)
+- `lib/og-data.ts` — server-only helper that fetches match data for OG images and page metadata (1500ms timeout via `Promise.race`)
 - `mcp/` — pnpm workspace package; stdio MCP server (`mcp/src/index.ts`) using `tsx` from root `node_modules`
 
 ## GraphQL Patterns
@@ -99,7 +103,7 @@ This app is used courtside during live IPSC competitions — on a phone, outdoor
   label. Two sections on the same page cannot share the same accessible name.
 
 ## Chart info popovers
-Every chart section in `app/match/[ct]/[id]/page.tsx` has a `?` (`HelpCircle`) icon button
+Every chart section in `app/match/[ct]/[id]/match-page-client.tsx` has a `?` (`HelpCircle`) icon button
 that opens a `<Popover>` explaining the chart. **When adding a new chart section, always add
 a matching info popover.** When modifying what a chart shows, update its popover text to match.
 The popover should include: what the axes/axes represent, how to read the visual, and 1–2
@@ -147,8 +151,40 @@ or any other type that is serialised into Redis via `cachedExecuteQuery`.
 | `UPSTASH_REDIS_REST_URL` | `lib/cache-edge.ts` | Cloudflare only | REST URL from Upstash console. Set via `wrangler secret put` in production. |
 | `UPSTASH_REDIS_REST_TOKEN` | `lib/cache-edge.ts` | Cloudflare only | REST token from Upstash console. Set via `wrangler secret put` in production. |
 | `MCP_SECRET` | `app/api/mcp/route.ts` | Both | Optional. If set, `POST /api/mcp` requires `Authorization: Bearer <MCP_SECRET>`. Omit for public access. |
-| `NEXT_PUBLIC_APP_URL` | `app/api/mcp/route.ts` | Both | Base URL used by MCP tools for internal API calls. Defaults to `http://localhost:PORT`. Required for Cloudflare Pages (set to the external URL, e.g. `https://scoreboard.urdr.dev`). |
+| `NEXT_PUBLIC_APP_URL` | `app/api/mcp/route.ts`, `app/match/[ct]/[id]/layout.tsx` | Both | Base URL used by MCP tools and OG image meta tags. Defaults to `http://localhost:PORT`. Required for Cloudflare Pages (set to the external URL, e.g. `https://scoreboard.urdr.dev`). |
 | `SMITHERY_API_KEY` | `.github/workflows/smithery-publish.yml` | CI only | Smithery registry API key. Store as a GitHub `production` environment secret. Obtain from https://smithery.ai/account/api-keys. Never `NEXT_PUBLIC_`. |
+
+## OG Images
+
+Dynamic Open Graph images are generated on-the-fly for match pages using `next/og` (Satori).
+The OG image endpoint at `app/api/og/match/[ct]/[id]/route.tsx` renders three variants:
+
+- **Match overview** — match name, venue/date/level, stat badges (stages, competitors, % scored)
+- **Single competitor** — competitor name, division/club, match context
+- **Multi-competitor** — "Comparing N competitors" with colored bullets (uses PALETTE from `lib/colors.ts`)
+
+Page metadata in `app/match/[ct]/[id]/layout.tsx` sets `<meta property="og:image">` pointing at
+the OG endpoint. The OG URL intentionally omits `?competitors=` to avoid `searchParams` dependency
+(which would block client-side soft navigation). The endpoint accepts an optional `?competitors=`
+param for direct use.
+
+`lib/og-data.ts` fetches match data using the same cached GraphQL path as the match API route
+(usually a Redis cache hit). A 1500ms timeout via `Promise.race` prevents slow upstreams from
+blocking `generateMetadata()` during client-side `router.replace()` soft navigations.
+
+Cache-Control headers are set based on match completion: active matches get short TTLs (1min/5min),
+completed matches get long TTLs (1day/7days).
+
+**Local testing:**
+```bash
+pnpm dev
+# Open directly in browser — returns a PNG:
+open http://localhost:3000/api/og/match/22/{match_id}
+# With competitors:
+open http://localhost:3000/api/og/match/22/{match_id}?competitors=123,456
+# Inspect the meta tags in page source:
+curl -s http://localhost:3000/match/22/{match_id} | grep 'og:image'
+```
 
 ## MCP Server
 
