@@ -35,8 +35,9 @@ export async function GET(
   { params }: { params: Promise<{ ct: string; id: string }> },
 ) {
   const { ct, id } = await params;
-  const { searchParams } = new URL(req.url);
+  const { origin, searchParams } = new URL(req.url);
   const competitorsParam = searchParams.get("competitors");
+  const logoUrl = `${origin}/icons/icon-192.png`;
 
   // Social-media crawlers are patient — allow up to 15s for a cold-cache fetch.
   const match = await fetchOgMatchData(ct, id, 15_000);
@@ -48,7 +49,7 @@ export async function GET(
     : "public, max-age=60, s-maxage=300";
 
   if (!match) {
-    return new ImageResponse(fallbackImage(), {
+    return new ImageResponse(fallbackImage(logoUrl), {
       width: 1200,
       height: 630,
       headers: { "Cache-Control": "public, max-age=3600" },
@@ -78,10 +79,10 @@ export async function GET(
 
   const element =
     selectedCompetitors.length === 1
-      ? singleCompetitorImage(match, selectedCompetitors[0], statsMap)
+      ? singleCompetitorImage(match, selectedCompetitors[0], statsMap, logoUrl)
       : selectedCompetitors.length > 1
-        ? multiCompetitorImage(match, selectedCompetitors, statsMap)
-        : matchOverviewImage(match);
+        ? multiCompetitorImage(match, selectedCompetitors, statsMap, logoUrl)
+        : matchOverviewImage(match, logoUrl);
 
   try {
     return new ImageResponse(element, {
@@ -91,7 +92,7 @@ export async function GET(
     });
   } catch (err) {
     console.error("[og] ImageResponse failed:", err);
-    return new ImageResponse(fallbackImage(), {
+    return new ImageResponse(fallbackImage(logoUrl), {
       width: 1200,
       height: 630,
       headers: { "Cache-Control": "public, max-age=60" },
@@ -184,31 +185,74 @@ function formatPct(pct: number): string {
   return pct >= 100 ? "100" : pct.toFixed(1);
 }
 
+/**
+ * Inline SVG icon for each archetype — same icons as lucide-react uses in
+ * the comparison table (Target, Crosshair, Gauge, TrendingUp).
+ * Satori can render inline <svg> elements but not React components from
+ * lucide-react, so we embed the raw SVG paths here.
+ */
+function archetypeIcon(archetype: string, size: number, color: string) {
+  const props = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: color,
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+
+  switch (archetype) {
+    case "Gunslinger": // Target
+      return (
+        <svg {...props}>
+          <circle cx="12" cy="12" r="10" />
+          <circle cx="12" cy="12" r="6" />
+          <circle cx="12" cy="12" r="2" />
+        </svg>
+      );
+    case "Surgeon": // Crosshair
+      return (
+        <svg {...props}>
+          <circle cx="12" cy="12" r="10" />
+          <line x1="22" x2="18" y1="12" y2="12" />
+          <line x1="6" x2="2" y1="12" y2="12" />
+          <line x1="12" x2="12" y1="6" y2="2" />
+          <line x1="12" x2="12" y1="22" y2="18" />
+        </svg>
+      );
+    case "Speed Demon": // Gauge
+      return (
+        <svg {...props}>
+          <path d="m12 14 4-4" />
+          <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+        </svg>
+      );
+    case "Grinder": // TrendingUp
+      return (
+        <svg {...props}>
+          <path d="M16 7h6v6" />
+          <path d="m22 7-8.5 8.5-5-5L2 17" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
 // ── Shared layout pieces ────────────────────────────────────────────────
 
-function brandIcon() {
+function brandIcon(logoUrl: string) {
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: "32px",
-        height: "32px",
-        borderRadius: "50%",
-        border: `2.5px solid ${C.accent}`,
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          width: "8px",
-          height: "8px",
-          borderRadius: "50%",
-          backgroundColor: C.accent,
-        }}
-      />
-    </div>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={logoUrl}
+      width={48}
+      height={48}
+      alt="SSI Scoreboard"
+      style={{ borderRadius: "10px" }}
+    />
   );
 }
 
@@ -225,7 +269,7 @@ function topAccent() {
   );
 }
 
-function brandHeader(rightText?: string) {
+function brandHeader(logoUrl: string, rightText?: string) {
   return (
     <div
       style={{
@@ -237,14 +281,14 @@ function brandHeader(rightText?: string) {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-        {brandIcon()}
-        <div style={{ fontSize: "20px", fontWeight: 600 }}>SSI Scoreboard</div>
+        {brandIcon(logoUrl)}
+        <div style={{ fontSize: "24px", fontWeight: 600 }}>SSI Scoreboard</div>
       </div>
       {rightText !== undefined && rightText !== "" ? (
         <div
           style={{
             display: "flex",
-            fontSize: "18px",
+            fontSize: "22px",
             color: C.muted,
             maxWidth: "600px",
           }}
@@ -269,27 +313,30 @@ function statBadge(value: string, label: string) {
         border: `1px solid ${C.border}`,
       }}
     >
-      <div style={{ fontSize: "32px", fontWeight: 700 }}>{value}</div>
-      <div style={{ fontSize: "14px", color: C.muted, marginTop: "2px" }}>
+      <div style={{ fontSize: "36px", fontWeight: 700 }}>{value}</div>
+      <div style={{ fontSize: "18px", color: C.muted, marginTop: "2px" }}>
         {label}
       </div>
     </div>
   );
 }
 
-function pill(label: string, color: string) {
+function pill(label: string, color: string, icon?: React.ReactNode) {
   return (
     <div
       style={{
         display: "flex",
-        padding: "6px 16px",
+        alignItems: "center",
+        gap: "8px",
+        padding: "8px 18px",
         borderRadius: "20px",
         backgroundColor: C.cardBg,
         border: `1px solid ${C.border}`,
-        fontSize: "16px",
+        fontSize: "20px",
         color,
       }}
     >
+      {icon ?? null}
       {label}
     </div>
   );
@@ -344,7 +391,7 @@ function matchContext(match: OgMatchData): string {
 // ── Image variants ──────────────────────────────────────────────────────
 
 /** Match overview — no competitors selected. Shows match metadata + stats. */
-function matchOverviewImage(match: OgMatchData) {
+function matchOverviewImage(match: OgMatchData, logoUrl: string) {
   const subtitle = matchSubtitle(match);
   const scored = match.scoringCompleted;
   const statusText =
@@ -376,7 +423,7 @@ function matchOverviewImage(match: OgMatchData) {
           justifyContent: "space-between",
         }}
       >
-        {brandHeader()}
+        {brandHeader(logoUrl)}
 
         {/* Main content — match name and subtitle */}
         <div
@@ -397,7 +444,7 @@ function matchOverviewImage(match: OgMatchData) {
             {match.name}
           </div>
           {subtitle !== "" ? (
-            <div style={{ display: "flex", fontSize: "24px", color: C.muted }}>
+            <div style={{ display: "flex", fontSize: "28px", color: C.muted }}>
               {subtitle}
             </div>
           ) : null}
@@ -429,10 +476,10 @@ function matchOverviewImage(match: OgMatchData) {
               gap: "6px",
             }}
           >
-            <div style={{ display: "flex", fontSize: "16px", color: C.accent }}>
+            <div style={{ display: "flex", fontSize: "20px", color: C.accent }}>
               {statusText}
             </div>
-            <div style={{ fontSize: "18px", color: C.dim }}>
+            <div style={{ fontSize: "22px", color: C.dim }}>
               scoreboard.urdr.dev
             </div>
           </div>
@@ -447,6 +494,7 @@ function singleCompetitorImage(
   match: OgMatchData,
   competitor: CompetitorInfo,
   statsMap: Map<number, OgCompetitorStats> | null,
+  logoUrl: string,
 ) {
   const matchInfo = [match.name, match.date ? formatDate(match.date) : null]
     .filter(Boolean)
@@ -458,11 +506,11 @@ function singleCompetitorImage(
 
   // If we have results data, show the rich card
   if (stats && stats.stagesFired > 0) {
-    return singleCompetitorWithStats(match, competitor, stats, matchInfo, details);
+    return singleCompetitorWithStats(match, competitor, stats, matchInfo, details, logoUrl);
   }
 
   // No results — show metadata card with match stats
-  return singleCompetitorNoStats(match, competitor, matchInfo, details);
+  return singleCompetitorNoStats(match, competitor, matchInfo, details, logoUrl);
 }
 
 function singleCompetitorWithStats(
@@ -471,16 +519,18 @@ function singleCompetitorWithStats(
   stats: OgCompetitorStats,
   matchInfo: string,
   details: string,
+  logoUrl: string,
 ) {
-  const pills = [
-    stats.archetype,
-    stats.consistency,
-    stats.pointsPerShot != null
-      ? `${stats.pointsPerShot.toFixed(1)} pts/shot`
-      : null,
-  ].filter((s): s is string => s != null);
-
-  const pillElements = pills.map((label) => pill(label, C.muted));
+  const pillElements: React.ReactNode[] = [];
+  if (stats.archetype) {
+    pillElements.push(pill(stats.archetype, C.muted, archetypeIcon(stats.archetype, 20, C.muted)));
+  }
+  if (stats.consistency) {
+    pillElements.push(pill(stats.consistency, C.muted));
+  }
+  if (stats.pointsPerShot != null) {
+    pillElements.push(pill(`${stats.pointsPerShot.toFixed(1)} pts/shot`, C.muted));
+  }
 
   return (
     <div
@@ -504,7 +554,7 @@ function singleCompetitorWithStats(
           gap: "24px",
         }}
       >
-        {brandHeader(matchInfo)}
+        {brandHeader(logoUrl, matchInfo)}
 
         {/* Content card: name + performance together */}
         <div
@@ -537,7 +587,7 @@ function singleCompetitorWithStats(
             </div>
             {details !== "" ? (
               <div
-                style={{ display: "flex", fontSize: "22px", color: C.muted }}
+                style={{ display: "flex", fontSize: "24px", color: C.muted }}
               >
                 {details}
               </div>
@@ -555,7 +605,7 @@ function singleCompetitorWithStats(
             }}
           >
             <div style={{ display: "flex", flexDirection: "column" }}>
-              <div style={{ display: "flex", fontSize: "13px", color: C.dim }}>
+              <div style={{ display: "flex", fontSize: "18px", color: C.dim }}>
                 division performance
               </div>
               <div
@@ -587,8 +637,8 @@ function singleCompetitorWithStats(
                 paddingBottom: "8px",
               }}
             >
-              {pctBar(stats.divPct, C.accent, "18px")}
-              <div style={{ display: "flex", fontSize: "14px", color: C.dim }}>
+              {pctBar(stats.divPct, C.accent, "20px")}
+              <div style={{ display: "flex", fontSize: "18px", color: C.dim }}>
                 {`${String(stats.stagesFired)} of ${String(match.stagesCount)} stages  \u00b7  ${String(match.competitorsCount)} competitors`}
               </div>
             </div>
@@ -606,7 +656,7 @@ function singleCompetitorWithStats(
             width: "100%",
           }}
         >
-          <div style={{ fontSize: "18px", color: C.dim }}>
+          <div style={{ fontSize: "22px", color: C.dim }}>
             scoreboard.urdr.dev
           </div>
         </div>
@@ -620,6 +670,7 @@ function singleCompetitorNoStats(
   competitor: CompetitorInfo,
   matchInfo: string,
   details: string,
+  logoUrl: string,
 ) {
   const ctx = matchContext(match);
 
@@ -645,7 +696,7 @@ function singleCompetitorNoStats(
           justifyContent: "space-between",
         }}
       >
-        {brandHeader(matchInfo)}
+        {brandHeader(logoUrl, matchInfo)}
 
         {/* Name + details */}
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -690,11 +741,11 @@ function singleCompetitorNoStats(
             }}
           >
             {ctx !== "" ? (
-              <div style={{ display: "flex", fontSize: "16px", color: C.dim }}>
+              <div style={{ display: "flex", fontSize: "20px", color: C.dim }}>
                 {ctx}
               </div>
             ) : null}
-            <div style={{ fontSize: "18px", color: C.dim }}>
+            <div style={{ fontSize: "22px", color: C.dim }}>
               scoreboard.urdr.dev
             </div>
           </div>
@@ -709,6 +760,7 @@ function multiCompetitorImage(
   match: OgMatchData,
   competitors: CompetitorInfo[],
   statsMap: Map<number, OgCompetitorStats> | null,
+  logoUrl: string,
 ) {
   const matchInfo = [match.name, match.date ? formatDate(match.date) : null]
     .filter(Boolean)
@@ -716,10 +768,10 @@ function multiCompetitorImage(
   const hasStats = statsMap != null && statsMap.size > 0;
 
   if (hasStats) {
-    return multiCompetitorWithStats(match, competitors, statsMap, matchInfo);
+    return multiCompetitorWithStats(match, competitors, statsMap, matchInfo, logoUrl);
   }
 
-  return multiCompetitorNoStats(match, competitors, matchInfo);
+  return multiCompetitorNoStats(match, competitors, matchInfo, logoUrl);
 }
 
 function multiCompetitorWithStats(
@@ -727,6 +779,7 @@ function multiCompetitorWithStats(
   competitors: CompetitorInfo[],
   statsMap: Map<number, OgCompetitorStats>,
   matchInfo: string,
+  logoUrl: string,
 ) {
   const maxShown = 5;
   const shown = competitors.slice(0, maxShown);
@@ -744,6 +797,7 @@ function multiCompetitorWithStats(
     const pct = stats?.matchPct ?? 0;
     const color = PALETTE[competitors.indexOf(c) % PALETTE.length];
     const archetype = stats?.archetype ?? "";
+    const icon = archetype !== "" ? archetypeIcon(archetype, 20, C.dim) : null;
     const divClub = [c.division, c.club].filter(Boolean).join("  \u00b7  ");
     const subtitle = archetype !== "" ? archetype : divClub;
 
@@ -761,7 +815,7 @@ function multiCompetitorWithStats(
           style={{
             display: "flex",
             flexDirection: "row",
-            alignItems: "baseline",
+            alignItems: "center",
             justifyContent: "space-between",
             width: "100%",
           }}
@@ -777,7 +831,7 @@ function multiCompetitorWithStats(
             <div
               style={{
                 display: "flex",
-                fontSize: "28px",
+                fontSize: "30px",
                 fontWeight: 700,
                 color: i === 0 ? C.text : C.muted,
               }}
@@ -785,7 +839,8 @@ function multiCompetitorWithStats(
               {c.name}
             </div>
             {subtitle !== "" ? (
-              <div style={{ display: "flex", fontSize: "17px", color: C.dim }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "20px", color: C.dim }}>
+                {icon}
                 {subtitle}
               </div>
             ) : null}
@@ -793,7 +848,7 @@ function multiCompetitorWithStats(
           <div
             style={{
               display: "flex",
-              fontSize: "28px",
+              fontSize: "30px",
               fontWeight: 700,
               color,
             }}
@@ -801,7 +856,7 @@ function multiCompetitorWithStats(
             {`${formatPct(pct)}%`}
           </div>
         </div>
-        {pctBar(pct, color, "18px")}
+        {pctBar(pct, color, "20px")}
       </div>
     );
   });
@@ -828,7 +883,7 @@ function multiCompetitorWithStats(
           gap: "24px",
         }}
       >
-        {brandHeader(matchInfo)}
+        {brandHeader(logoUrl, matchInfo)}
 
         {/* Leaderboard card — wrapper centers the card vertically */}
         <div
@@ -856,7 +911,7 @@ function multiCompetitorWithStats(
               <div
                 style={{
                   display: "flex",
-                  fontSize: "18px",
+                  fontSize: "20px",
                   color: C.dim,
                 }}
               >
@@ -876,10 +931,10 @@ function multiCompetitorWithStats(
             width: "100%",
           }}
         >
-          <div style={{ display: "flex", fontSize: "16px", color: C.dim }}>
+          <div style={{ display: "flex", fontSize: "20px", color: C.dim }}>
             {`${String(match.stagesCount)} stages  \u00b7  ${String(match.competitorsCount)} competitors  \u00b7  ${String(match.scoringCompleted)}% scored`}
           </div>
-          <div style={{ fontSize: "18px", color: C.dim }}>
+          <div style={{ fontSize: "22px", color: C.dim }}>
             scoreboard.urdr.dev
           </div>
         </div>
@@ -892,6 +947,7 @@ function multiCompetitorNoStats(
   match: OgMatchData,
   competitors: CompetitorInfo[],
   matchInfo: string,
+  logoUrl: string,
 ) {
   const maxShown = 5;
   const shown = competitors.slice(0, maxShown);
@@ -921,11 +977,11 @@ function multiCompetitorNoStats(
             backgroundColor: color,
           }}
         />
-        <div style={{ display: "flex", fontSize: "26px", fontWeight: 600 }}>
+        <div style={{ display: "flex", fontSize: "28px", fontWeight: 600 }}>
           {c.name}
         </div>
         {info !== "" ? (
-          <div style={{ display: "flex", fontSize: "18px", color: C.muted }}>
+          <div style={{ display: "flex", fontSize: "20px", color: C.muted }}>
             {info}
           </div>
         ) : null}
@@ -955,7 +1011,7 @@ function multiCompetitorNoStats(
           justifyContent: "space-between",
         }}
       >
-        {brandHeader(matchInfo)}
+        {brandHeader(logoUrl, matchInfo)}
 
         {/* Competitor list */}
         <div
@@ -969,7 +1025,7 @@ function multiCompetitorNoStats(
           <div
             style={{
               display: "flex",
-              fontSize: "22px",
+              fontSize: "24px",
               fontWeight: 600,
               color: C.muted,
             }}
@@ -981,7 +1037,7 @@ function multiCompetitorNoStats(
             <div
               style={{
                 display: "flex",
-                fontSize: "18px",
+                fontSize: "20px",
                 color: C.dim,
                 paddingLeft: "18px",
               }}
@@ -1006,7 +1062,7 @@ function multiCompetitorNoStats(
             {statBadge(String(match.competitorsCount), "competitors")}
             {statBadge(`${String(match.scoringCompleted)}%`, "scored")}
           </div>
-          <div style={{ fontSize: "18px", color: C.dim }}>
+          <div style={{ fontSize: "22px", color: C.dim }}>
             scoreboard.urdr.dev
           </div>
         </div>
@@ -1016,7 +1072,7 @@ function multiCompetitorNoStats(
 }
 
 /** Fallback — shown when the match cannot be loaded. */
-function fallbackImage() {
+function fallbackImage(logoUrl: string) {
   return (
     <div
       style={{
@@ -1037,30 +1093,17 @@ function fallbackImage() {
           flex: 1,
           alignItems: "center",
           justifyContent: "center",
-          gap: "16px",
+          gap: "20px",
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "56px",
-            height: "56px",
-            borderRadius: "50%",
-            border: `3px solid ${C.accent}`,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              width: "12px",
-              height: "12px",
-              borderRadius: "50%",
-              backgroundColor: C.accent,
-            }}
-          />
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={logoUrl}
+          width={80}
+          height={80}
+          alt="SSI Scoreboard"
+          style={{ borderRadius: "16px" }}
+        />
         <div style={{ fontSize: "40px", fontWeight: 700 }}>SSI Scoreboard</div>
         <div style={{ fontSize: "22px", color: C.muted }}>
           Live IPSC competitor comparison
