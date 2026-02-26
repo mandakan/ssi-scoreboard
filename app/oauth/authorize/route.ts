@@ -14,14 +14,21 @@ export async function GET(request: Request) {
     return new Response("Missing redirect_uri", { status: 400 });
   }
 
-  // Basic open-redirect mitigation: only allow HTTPS callbacks.
-  // No user secrets are at stake (public server), but good practice.
+  // Open-redirect mitigation: allow HTTPS callbacks for web clients, and
+  // http://localhost / http://127.0.0.1 for native/CLI MCP clients that spin
+  // up a local callback server (RFC 8252 §7.3). Block all other HTTP URLs.
   let callbackUrl: URL;
   try {
     callbackUrl = new URL(redirectUri);
-    if (callbackUrl.protocol !== "https:") throw new Error("HTTPS only");
+    const isHttps = callbackUrl.protocol === "https:";
+    const isLocalhost =
+      callbackUrl.protocol === "http:" &&
+      (callbackUrl.hostname === "localhost" || callbackUrl.hostname === "127.0.0.1");
+    if (!isHttps && !isLocalhost) throw new Error("HTTPS or localhost only");
   } catch {
-    return new Response("Invalid redirect_uri — must be an HTTPS URL", { status: 400 });
+    return new Response("Invalid redirect_uri — must be HTTPS or http://localhost", {
+      status: 400,
+    });
   }
 
   // Auto-approve: generate a one-time code and redirect immediately.
