@@ -7,6 +7,7 @@
 
 [![CI](https://github.com/mandakan/ssi-scoreboard/actions/workflows/ci.yml/badge.svg)](https://github.com/mandakan/ssi-scoreboard/actions/workflows/ci.yml)
 [![Live](https://img.shields.io/badge/Live-scoreboard.urdr.dev-4f46e5?logo=vercel&logoColor=white)](https://scoreboard.urdr.dev)
+[![smithery badge](https://smithery.ai/badge/mandakan/ssi-scoreboard)](https://smithery.ai/servers/mandakan/ssi-scoreboard)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js&logoColor=white)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
@@ -181,6 +182,9 @@ The `.mcp.json` at repo root registers two stdio servers:
 - **`ssi-scoreboard-local`** — calls `localhost:3000` (requires `pnpm dev` running)
 
 Claude Code picks up `.mcp.json` automatically when you open the repo.
+
+For client-specific setup (Claude Desktop, generic HTTP clients), example prompts, and
+troubleshooting, see **[docs/mcp.md](docs/mcp.md)**.
 
 ## Architecture
 ```
