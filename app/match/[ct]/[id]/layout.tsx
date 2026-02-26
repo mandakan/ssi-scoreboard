@@ -31,9 +31,11 @@ export async function generateMetadata({
 
   const title = match.name;
 
-  // Build a human-readable description from available metadata
+  // Build a human-readable description from available metadata.
+  // Skip venue if it looks like raw GPS coordinates (e.g. "59.589885,17.840675").
+  const isGps = match.venue ? /^-?\d+\.\d+\s*,\s*-?\d+\.\d+$/.test(match.venue.trim()) : false;
   const descParts = [
-    match.venue,
+    !isGps ? match.venue : null,
     match.date ? formatDate(match.date) : null,
     match.level,
   ].filter(Boolean);

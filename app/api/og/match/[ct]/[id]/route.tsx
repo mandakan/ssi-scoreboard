@@ -35,9 +35,8 @@ export async function GET(
   { params }: { params: Promise<{ ct: string; id: string }> },
 ) {
   const { ct, id } = await params;
-  const { origin, searchParams } = new URL(req.url);
+  const { searchParams } = new URL(req.url);
   const competitorsParam = searchParams.get("competitors");
-  const logoUrl = `${origin}/icons/icon-192.png`;
 
   // Parse competitor IDs from the URL up front so we can start the compare
   // fetch in parallel with the match-data fetch. On cold cache the compare
@@ -59,19 +58,15 @@ export async function GET(
       : Promise.resolve(null),
   ]);
 
-  // Determine cache duration based on match completion status
-  const isComplete = match ? match.scoringCompleted >= 95 : false;
-  const cacheControl = isComplete
-    ? "public, max-age=86400, s-maxage=604800"
-    : "public, max-age=60, s-maxage=300";
-
   if (!match) {
-    return new ImageResponse(fallbackImage(logoUrl), {
+    return new ImageResponse(fallbackImage(), {
       width: 1200,
       height: 630,
       headers: { "Cache-Control": "public, max-age=3600" },
     });
   }
+
+  const isComplete = match.scoringCompleted >= 95;
 
   // Resolve which of the requested IDs actually exist in the match.
   const selectedCompetitors = rawCompetitorIds
@@ -81,12 +76,25 @@ export async function GET(
   // Use the prefetched stats if we have valid competitors, otherwise null.
   const statsMap = selectedCompetitors.length > 0 ? prefetchedStats : null;
 
+  // Determine cache duration based on match completion and stats availability.
+  // When a competitor OG is served without stats (compare data not yet warm),
+  // use a short s-maxage so CF re-fetches rather than caching the no-stats
+  // version for the full 7-day TTL of a completed match.
+  let cacheControl: string;
+  if (selectedCompetitors.length > 0 && (statsMap == null || statsMap.size === 0)) {
+    cacheControl = "public, max-age=30, s-maxage=120";
+  } else if (isComplete) {
+    cacheControl = "public, max-age=86400, s-maxage=604800";
+  } else {
+    cacheControl = "public, max-age=60, s-maxage=300";
+  }
+
   const element =
     selectedCompetitors.length === 1
-      ? singleCompetitorImage(match, selectedCompetitors[0], statsMap, logoUrl)
+      ? singleCompetitorImage(match, selectedCompetitors[0], statsMap)
       : selectedCompetitors.length > 1
-        ? multiCompetitorImage(match, selectedCompetitors, statsMap, logoUrl)
-        : matchOverviewImage(match, logoUrl);
+        ? multiCompetitorImage(match, selectedCompetitors, statsMap)
+        : matchOverviewImage(match);
 
   try {
     return new ImageResponse(element, {
@@ -96,7 +104,7 @@ export async function GET(
     });
   } catch (err) {
     console.error("[og] ImageResponse failed:", err);
-    return new ImageResponse(fallbackImage(logoUrl), {
+    return new ImageResponse(fallbackImage(), {
       width: 1200,
       height: 630,
       headers: { "Cache-Control": "public, max-age=60" },
@@ -248,16 +256,30 @@ function archetypeIcon(archetype: string, size: number, color: string) {
 
 // ── Shared layout pieces ────────────────────────────────────────────────
 
-function brandIcon(logoUrl: string) {
+/**
+ * Brand icon as a styled div — avoids PNG fetch subrequests on CF Workers.
+ * Fetching external images inside Satori on CF Workers can fail with
+ * "Unsupported image type: unknown" and contribute to CPU time overruns.
+ */
+function brandIcon() {
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={logoUrl}
-      width={48}
-      height={48}
-      alt="SSI Scoreboard"
-      style={{ borderRadius: "10px" }}
-    />
+    <div
+      style={{
+        display: "flex",
+        width: 48,
+        height: 48,
+        borderRadius: "10px",
+        backgroundColor: C.accent,
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "18px",
+        fontWeight: 700,
+        color: C.bg,
+        letterSpacing: "-0.03em",
+      }}
+    >
+      SSI
+    </div>
   );
 }
 
@@ -274,7 +296,7 @@ function topAccent() {
   );
 }
 
-function brandHeader(logoUrl: string, rightText?: string) {
+function brandHeader(rightText?: string) {
   return (
     <div
       style={{
@@ -286,7 +308,7 @@ function brandHeader(logoUrl: string, rightText?: string) {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-        {brandIcon(logoUrl)}
+        {brandIcon()}
         <div style={{ fontSize: "24px", fontWeight: 600 }}>SSI Scoreboard</div>
       </div>
       {rightText !== undefined && rightText !== "" ? (
@@ -396,7 +418,7 @@ function matchContext(match: OgMatchData): string {
 // ── Image variants ──────────────────────────────────────────────────────
 
 /** Match overview — no competitors selected. Shows match metadata + stats. */
-function matchOverviewImage(match: OgMatchData, logoUrl: string) {
+function matchOverviewImage(match: OgMatchData) {
   const subtitle = matchSubtitle(match);
   const scored = match.scoringCompleted;
   const statusText =
@@ -443,7 +465,7 @@ function matchOverviewImage(match: OgMatchData, logoUrl: string) {
             justifyContent: "space-between",
           }}
         >
-          {brandHeader(logoUrl)}
+          {brandHeader()}
 
           {/* Main content — match name and subtitle */}
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -507,7 +529,6 @@ function singleCompetitorImage(
   match: OgMatchData,
   competitor: CompetitorInfo,
   statsMap: Map<number, OgCompetitorStats> | null,
-  logoUrl: string,
 ) {
   const matchInfo = [match.name, match.date ? formatDate(match.date) : null]
     .filter(Boolean)
@@ -519,11 +540,11 @@ function singleCompetitorImage(
 
   // If we have results data, show the rich card
   if (stats && stats.stagesFired > 0) {
-    return singleCompetitorWithStats(match, competitor, stats, matchInfo, details, logoUrl);
+    return singleCompetitorWithStats(match, competitor, stats, matchInfo, details);
   }
 
   // No results — show metadata card with match stats
-  return singleCompetitorNoStats(match, competitor, matchInfo, details, logoUrl);
+  return singleCompetitorNoStats(match, competitor, matchInfo, details);
 }
 
 // OG canvas dimensions (must match ImageResponse width/height).
@@ -610,7 +631,6 @@ function singleCompetitorWithStats(
   stats: OgCompetitorStats,
   matchInfo: string,
   details: string,
-  logoUrl: string,
 ) {
   const pillElements: React.ReactNode[] = [];
   if (stats.archetype) {
@@ -660,7 +680,7 @@ function singleCompetitorWithStats(
             gap: "24px",
           }}
         >
-          {brandHeader(logoUrl, matchInfo)}
+          {brandHeader(matchInfo)}
 
           {/* Content card: name + performance together.
               maxWidth keeps the card out of the image area (gradient starts
@@ -777,7 +797,6 @@ function singleCompetitorNoStats(
   competitor: CompetitorInfo,
   matchInfo: string,
   details: string,
-  logoUrl: string,
 ) {
   const ctx = matchContext(match);
 
@@ -816,7 +835,7 @@ function singleCompetitorNoStats(
             justifyContent: "space-between",
           }}
         >
-          {brandHeader(logoUrl, matchInfo)}
+          {brandHeader(matchInfo)}
 
           {/* Name + details */}
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -881,7 +900,6 @@ function multiCompetitorImage(
   match: OgMatchData,
   competitors: CompetitorInfo[],
   statsMap: Map<number, OgCompetitorStats> | null,
-  logoUrl: string,
 ) {
   const matchInfo = [match.name, match.date ? formatDate(match.date) : null]
     .filter(Boolean)
@@ -889,10 +907,10 @@ function multiCompetitorImage(
   const hasStats = statsMap != null && statsMap.size > 0;
 
   if (hasStats) {
-    return multiCompetitorWithStats(match, competitors, statsMap, matchInfo, logoUrl);
+    return multiCompetitorWithStats(match, competitors, statsMap, matchInfo);
   }
 
-  return multiCompetitorNoStats(match, competitors, matchInfo, logoUrl);
+  return multiCompetitorNoStats(match, competitors, matchInfo);
 }
 
 function multiCompetitorWithStats(
@@ -900,7 +918,6 @@ function multiCompetitorWithStats(
   competitors: CompetitorInfo[],
   statsMap: Map<number, OgCompetitorStats>,
   matchInfo: string,
-  logoUrl: string,
 ) {
   const maxShown = 5;
   const shown = competitors.slice(0, maxShown);
@@ -1017,7 +1034,7 @@ function multiCompetitorWithStats(
             gap: "24px",
           }}
         >
-          {brandHeader(logoUrl, matchInfo)}
+          {brandHeader(matchInfo)}
 
           {/* Leaderboard card — wrapper centers the card vertically */}
         <div
@@ -1083,7 +1100,6 @@ function multiCompetitorNoStats(
   match: OgMatchData,
   competitors: CompetitorInfo[],
   matchInfo: string,
-  logoUrl: string,
 ) {
   const maxShown = 5;
   const shown = competitors.slice(0, maxShown);
@@ -1160,7 +1176,7 @@ function multiCompetitorNoStats(
             justifyContent: "space-between",
           }}
         >
-          {brandHeader(logoUrl, matchInfo)}
+          {brandHeader(matchInfo)}
 
           {/* Competitor list */}
           <div
@@ -1222,7 +1238,7 @@ function multiCompetitorNoStats(
 }
 
 /** Fallback — shown when the match cannot be loaded. */
-function fallbackImage(logoUrl: string) {
+function fallbackImage() {
   return (
     <div
       style={{
@@ -1246,14 +1262,7 @@ function fallbackImage(logoUrl: string) {
           gap: "20px",
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={logoUrl}
-          width={80}
-          height={80}
-          alt="SSI Scoreboard"
-          style={{ borderRadius: "16px" }}
-        />
+        {brandIcon()}
         <div style={{ fontSize: "40px", fontWeight: 700 }}>SSI Scoreboard</div>
         <div style={{ fontSize: "22px", color: C.muted }}>
           Live IPSC competitor comparison
