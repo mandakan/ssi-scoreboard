@@ -40,8 +40,12 @@ export function registerMcpTools(server: McpServer, baseUrl: string): void {
 
   server.tool(
     "get_match",
-    "Fetch full details for a specific IPSC match: name, venue, date, stages, divisions, and the complete competitor list with numeric IDs and names. " +
-    "Always call this before compare_competitors — you need the numeric competitor IDs to look up competitors by name. " +
+    "Fetch full details for a specific IPSC match. " +
+    "Returns the complete competitor list — each entry has a numeric `id`, `name`, `club`, and `division`. " +
+    "Also returns a `squads` list where each squad has a `name` (e.g. 'Squad 3') and a `competitorIds` array of every competitor in that squad. " +
+    "Use this to resolve any user reference to a competitor ID before calling compare_competitors: " +
+    "match by `name` for named individuals, filter by `club` for club members, or use `squads[n].competitorIds` for an entire squad. " +
+    "Always call this before compare_competitors. " +
     "`ct` and `id` come from a search_events result (the `content_type` and `id` fields of the event).",
     {
       ct: z.string().describe("content_type value from a search_events result (typically '22' for IPSC matches)"),
