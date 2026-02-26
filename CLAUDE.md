@@ -181,6 +181,7 @@ pointing at `https://scoreboard.urdr.dev/api/mcp`.
 To update it after a schema change, republish via the CLI:
 ```bash
 npx @smithery/cli@latest mcp publish "https://scoreboard.urdr.dev/api/mcp" \
+  -n mandakan/ssi-scoreboard \
   --config-schema '{"type":"object","properties":{"baseUrl":{"type":"string","format":"uri","description":"Base URL of the SSI Scoreboard instance. Defaults to https://scoreboard.urdr.dev"}}}'
 ```
 The `configSchema` block in `smithery.yaml` covers the hosted TypeScript runtime path only.
