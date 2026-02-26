@@ -144,6 +144,37 @@ Grinder      Steady, consistent performer near field median
 `;
 
 // ---------------------------------------------------------------------------
+// Server instructions — injected into the MCP initialize result so that
+// Claude Desktop / claude.ai use it as a system prompt without the model
+// needing to explicitly read the "guide" resource first.
+// Keep it compact: authoritative workflow + the rules that models most often
+// get wrong (ID resolution, min_level defaults).
+// ---------------------------------------------------------------------------
+
+export const SERVER_INSTRUCTIONS = `\
+You have access to IPSC competition data via the SSI Scoreboard tools.
+
+WORKFLOW — always follow these steps in order:
+1. search_events(query="<match name>")      → find the match; note id + content_type
+2. get_match(ct, id)                        → load competitors; resolve names to numeric IDs
+3. compare_competitors(ct, id, [ids])       → deep stage-by-stage analysis
+
+RULES:
+• competitor_ids are INTEGERS from get_match — never guess or invent them.
+• min_level: omit (defaults to l2plus = Regional+). Use "all" ONLY when the user
+  explicitly asks about club matches or Level I events.
+• get_popular_matches: call first when the user has NOT named a specific match.
+• When the user names a person and a match, go directly to search_events → get_match
+  → compare_competitors. Do not ask for clarification unless results are ambiguous.
+
+DATA NOTES:
+• scoring_completed (0–100 %) on get_match shows how much of the match is scored.
+• dnf=true / dq=true competitors should be flagged in your summary.
+• All percentages in compare_competitors are relative to the group leader unless
+  the field has a "div_" or "overall_" prefix.
+`;
+
+// ---------------------------------------------------------------------------
 // Tool, resource, and prompt registration
 // ---------------------------------------------------------------------------
 

@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import { NextResponse } from "next/server";
-import { registerMcpTools } from "@/lib/mcp-tools";
+import { registerMcpTools, SERVER_INSTRUCTIONS } from "@/lib/mcp-tools";
 
 /**
  * Promise-based single-request/response transport for Next.js App Router.
@@ -154,11 +154,14 @@ export async function POST(request: Request) {
   // ever call this app's own API endpoints, so localhost is always correct for
   // same-server deployments. Set NEXT_PUBLIC_APP_URL to override (e.g. for CF
   // Pages where localhost calls are not available).
-  const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
+  // .trim() guards against Cloudflare env vars with stray newlines/spaces, which
+  // would produce an "Invalid URL" error inside apiFetch.
+  const baseUrl = (
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ?? `http://localhost:${process.env.PORT ?? 3000}`
+  );
 
   const transport = new SingleShotTransport();
-  const server = new McpServer({ name: "ssi-scoreboard", version: "0.1.0" });
+  const server = new McpServer({ name: "ssi-scoreboard", version: "0.1.0" }, { instructions: SERVER_INSTRUCTIONS });
   registerMcpTools(server, baseUrl);
   await server.connect(transport);
 

@@ -2,7 +2,7 @@ import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { registerMcpTools } from "../../lib/mcp-tools.ts";
+import { registerMcpTools, SERVER_INSTRUCTIONS } from "../../lib/mcp-tools.ts";
 
 const PROD_URL = "https://scoreboard.urdr.dev";
 
@@ -26,7 +26,7 @@ export const configSchema = z.object({
  * Called by Smithery's HTTP runtime on each request.
  */
 export default function createServer({ config }: { config: z.infer<typeof configSchema> }) {
-  const server = new McpServer({ name: "ssi-scoreboard", version: "0.1.0" });
+  const server = new McpServer({ name: "ssi-scoreboard", version: "0.1.0" }, { instructions: SERVER_INSTRUCTIONS });
   registerMcpTools(server, config.baseUrl ?? PROD_URL);
   return server.server;
 }
@@ -38,7 +38,7 @@ export default function createServer({ config }: { config: z.infer<typeof config
 // ---------------------------------------------------------------------------
 async function main() {
   const baseUrl = process.env.SSI_SCOREBOARD_BASE_URL ?? PROD_URL;
-  const server = new McpServer({ name: "ssi-scoreboard", version: "0.1.0" });
+  const server = new McpServer({ name: "ssi-scoreboard", version: "0.1.0" }, { instructions: SERVER_INSTRUCTIONS });
   registerMcpTools(server, baseUrl);
   await server.connect(new StdioServerTransport());
 }
