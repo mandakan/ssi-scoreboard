@@ -105,23 +105,51 @@ cs    Cancelled or suspended
 pr    Pre-match (registration open, not yet running)
 ol    Offline
 
-SCORING ZONES
--------------
-A   5 points   (Alpha — centre zone; hardest to hit)
-C   3 points   (Charlie — outer scoring zone; B-zone combined here)
-D   1 point    (Delta — edge of cardboard target)
-M  −10 points  Miss (no valid zone hit on a required target)
-NS −10 points  No-Shoot (hit on a non-threat / hostage target)
-PE −10 points  Procedural error (per infraction)
+COMSTOCK SCORING (the standard IPSC method)
+-------------------------------------------
+Each stage is scored by Hit Factor (HF):
 
-HIT FACTOR FORMULA
-------------------
-  HF = total_points / total_time_in_seconds
+  HF = (scored_points − penalties) / time_in_seconds
 
-Stage score % = (competitor_HF / stage_winner_HF) × 100
+Penalties are subtracted from points BEFORE dividing by time.
+Time starts on the start signal and stops on the last shot.
 
-Match result = average stage % across all stages (equally weighted).
-A 100 % on every stage is a perfect match.
+The competitor with the highest HF on a stage earns 100 % of the stage
+points available; every other competitor is scaled proportionally:
+
+  Stage score % = (competitor_HF / stage_winner_HF) × 100
+
+Match total = sum of stage points (each stage equally weighted).
+A 100 % on every stage = a perfect match.
+
+SCORING ZONES — paper targets (best stipulated hits, usually 2 per target)
+---------------------------------------------------------------------------
+Zone  Major PF  Minor PF  Notes
+A         5         5     Centre — hardest to hit
+C         4         3     Outer scoring zone (B-zone combined into C in SSI data)
+D         2         1     Edge of cardboard
+M       −10       −10     Miss / Fail to Engage — per required scoring hit
+                          (−20 total for a 2-hit paper target with both misses)
+NS      −10       −10     No-Shoot (hostage / non-threat) — per hit, max −20 per target
+PE      −10       −10     Procedural error (e.g. foot fault) — per occurrence
+
+Metal targets (poppers, plates): full value (typically 5 pts) if activated;
+no deduction if missed (unlike paper, which penalises misses).
+
+Power Factor (Major / Minor) is fixed per shooter and division before the match.
+Major PF divisions: Open, Standard (often). Minor PF: Production, Production Optics,
+PCC Optics/Iron, Revolver (typically). Classic can be either; check sub_rule.
+A Major shooter scores more on C/D hits — this directly affects cross-division
+point totals and is why raw points CANNOT be used to compare across divisions.
+
+CROSS-DIVISION RANKING
+----------------------
+Raw points cannot be used to compare competitors across divisions or stages:
+• Different divisions use different power factors (Major vs Minor C/D scores differ).
+• Different stages have different max_points and round counts.
+ALWAYS use match % (average per-stage HF%) to rank performance.
+overall_rank = the competitor's final rank across ALL competitors in the match.
+A competitor with fewer total points can rank HIGHER if their HF% is better.
 
 ACCURACY vs. SPEED TRADE-OFF
 -----------------------------
@@ -166,6 +194,23 @@ RULES:
 • get_popular_matches: call first when the user has NOT named a specific match.
 • When the user names a person and a match, go directly to search_events → get_match
   → compare_competitors. Do not ask for clarification unless results are ambiguous.
+
+PERFORMANCE RANKING — READ THIS CAREFULLY:
+• NEVER rank or compare competitors by raw points. Points are meaningless across
+  stages (each stage has different max_points) and across divisions (Classic Minor,
+  Production, Standard Minor, Open etc. score differently). A high point total does
+  NOT mean a better result.
+• CORRECT metric: hit-factor percentage vs stage winner, averaged across all stages.
+  - penaltyStats[id].matchPctActual  →  competitor's average GROUP % (relative to
+    the best competitor in YOUR selected group). Use this for intra-group ranking.
+  - Per-stage overall_percent (in stage.competitors[id])  →  HF% vs the OVERALL
+    stage winner across all 158+ competitors. Average these for cross-field ranking.
+  - overall_rank  →  final rank across ALL competitors regardless of division.
+    Use this — not points — to answer "who performed best?" across divisions.
+  - div_rank  →  rank within the competitor's own division. Use for same-division Qs.
+• Example: if Anton has 501 pts (rank 108/158) and Martin has 428 pts (rank 96/158),
+  Martin performed BETTER overall even though Anton had more points. Always check
+  overall_rank and overall_percent, not the raw points field.
 
 DATA NOTES:
 • scoring_completed (0–100 %) on get_match shows how much of the match is scored.
@@ -282,6 +327,11 @@ export function registerMcpTools(server: McpServer, arg: string | DataProviders)
     "Pass a single competitor ID to analyse one shooter in isolation. " +
     "Pass multiple IDs to compare them head-to-head across every stage. " +
     "`competitor_ids` are numeric IDs from get_match's competitor list — always resolve names to IDs via get_match first. " +
+    "IMPORTANT — ranking across competitors: NEVER rank by raw points. " +
+    "Points are not comparable across divisions (Production vs Classic Minor vs Standard Minor etc.) or across stages (each stage has different max_points). " +
+    "Use `overall_rank` (rank across all competitors regardless of division) and the average of per-stage `overall_percent` to rank cross-division. " +
+    "Use `div_rank` for within-division ranking. " +
+    "Use `penaltyStats[id].matchPctActual` for group-relative average match %. " +
     "Results are suitable for natural-language coaching feedback, identifying where points were lost, and ranking analysis.",
     {
       ct: z.string().describe("content_type value from the search_events result for this match"),
