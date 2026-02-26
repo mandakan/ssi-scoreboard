@@ -171,6 +171,7 @@ export function registerMcpTools(server: McpServer, baseUrl: string): void {
       starts_after: z.string().optional().describe("Only return events starting on or after this date. ISO format: YYYY-MM-DD"),
       starts_before: z.string().optional().describe("Only return events starting on or before this date. ISO format: YYYY-MM-DD"),
     },
+    { readOnlyHint: true, openWorldHint: true },
     async (input) => {
       const p = new URLSearchParams();
       if (input.query) p.set("q", input.query);
@@ -196,6 +197,7 @@ export function registerMcpTools(server: McpServer, baseUrl: string): void {
       ct: z.string().describe("content_type value from a search_events result (typically '22' for IPSC matches)"),
       id: z.string().describe("id value from a search_events result"),
     },
+    { readOnlyHint: true, openWorldHint: true },
     async ({ ct, id }) => {
       const data = await apiFetch<MatchResponse>(baseUrl, `/api/match/${ct}/${id}`);
       return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
@@ -216,6 +218,7 @@ export function registerMcpTools(server: McpServer, baseUrl: string): void {
       competitor_ids: z.array(z.number().int().positive()).min(1).max(12)
         .describe("Numeric competitor IDs from get_match. Up to 12. Resolve names to IDs with get_match before calling this."),
     },
+    { readOnlyHint: true, openWorldHint: true },
     async ({ ct, id, competitor_ids }) => {
       const data = await apiFetch<CompareResponse>(
         baseUrl,
@@ -232,6 +235,7 @@ export function registerMcpTools(server: McpServer, baseUrl: string): void {
     "If the user asks a vague question like 'how did I do?' or 'what matches are on?', start here. " +
     "Returns [] when the cache is cold (no recent visitors); fall back to search_events in that case.",
     {},
+    { readOnlyHint: true, openWorldHint: true },
     async () => {
       const data = await apiFetch<PopularMatch[]>(baseUrl, "/api/popular-matches");
       return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
