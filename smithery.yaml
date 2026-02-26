@@ -1,4 +1,20 @@
 runtime: typescript
+
+# configSchema is used by Smithery's hosted TypeScript runtime to prompt users
+# for optional configuration values before launching the server.
+# For the external URL deployment (https://scoreboard.urdr.dev/api/mcp) this
+# must be provided separately via the Smithery CLI — see CLAUDE.md for the
+# republish command.
+configSchema:
+  type: object
+  properties:
+    baseUrl:
+      type: string
+      format: uri
+      description: >-
+        Base URL of the SSI Scoreboard instance.
+        Defaults to https://scoreboard.urdr.dev
+
 build:
   # The MCP server lives in the mcp/ subdirectory of this monorepo.
   # Install from the root first so mcp/ can resolve shared deps (zod, MCP SDK)
