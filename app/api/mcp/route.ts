@@ -57,36 +57,59 @@ export async function OPTIONS() {
 }
 
 /**
- * GET — server discovery or SSE listening mode.
+ * GET — SSE listening stream or discovery response.
  *
- * Clients that send Accept: text/event-stream are expecting either the old
- * SSE transport or Streamable HTTP server-push mode — neither is possible on
- * stateless Cloudflare Workers. Per the Streamable HTTP spec, returning 405
- * tells well-behaved clients (including the MCP SDK) to fall back to
- * POST-only request/response mode.
+ * Streamable HTTP clients (claude.ai, Claude Desktop) open a GET connection
+ * to receive server-initiated events. For this stateless server there are no
+ * server-initiated messages, but we must return 200 + text/event-stream so
+ * the client considers the connection established. Cloudflare Workers cannot
+ * maintain indefinite streams, so we send periodic keep-alive pings and let
+ * the stream time out. Clients reconnect automatically per the SSE spec.
  *
- * Plain GET requests (browsers, curl) get a JSON discovery response.
+ * Plain GET requests (browsers, curl without text/event-stream) return a
+ * JSON discovery document.
  */
 export async function GET(request: Request) {
-  if (request.headers.get("accept")?.includes("text/event-stream")) {
-    return new Response("SSE transport not supported — use POST", {
-      status: 405,
-      headers: { ...CORS, Allow: "POST" },
-    });
+  if (!request.headers.get("accept")?.includes("text/event-stream")) {
+    return NextResponse.json(
+      {
+        name: "ssi-scoreboard",
+        version: "0.1.0",
+        description:
+          "MCP server for SSI Scoreboard — query IPSC competition data via Claude or any MCP-compatible client.",
+        transport: "streamable-http",
+        endpoint: "/api/mcp",
+        tools: ["search_events", "get_match", "compare_competitors", "get_popular_matches"],
+      },
+      { headers: CORS },
+    );
   }
 
-  return NextResponse.json(
-    {
-      name: "ssi-scoreboard",
-      version: "0.1.0",
-      description:
-        "MCP server for SSI Scoreboard — query IPSC competition data via Claude or any MCP-compatible client.",
-      transport: "streamable-http",
-      endpoint: "/api/mcp",
-      tools: ["search_events", "get_match", "compare_competitors", "get_popular_matches"],
+  // SSE stream — no server-initiated messages, but returning 200 prevents
+  // clients from showing a "connection error". Send a ping immediately then
+  // close after ~25s; the SSE auto-reconnect mechanism keeps the client live.
+  const encoder = new TextEncoder();
+  let timer: ReturnType<typeof setTimeout>;
+
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(": ping\n\n"));
+      // Close before CF's response timeout so the stream ends cleanly.
+      timer = setTimeout(() => controller.close(), 25_000);
     },
-    { headers: CORS },
-  );
+    cancel() {
+      clearTimeout(timer);
+    },
+  });
+
+  return new Response(body, {
+    status: 200,
+    headers: {
+      ...CORS,
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+    },
+  });
 }
 
 export async function POST(request: Request) {
