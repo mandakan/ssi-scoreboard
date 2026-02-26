@@ -338,38 +338,49 @@ const MODE_TOOLTIPS: Record<PctMode, string> = {
 function ModeToggle({
   mode,
   onChange,
+  competitorCount,
 }: {
   mode: PctMode;
   onChange: (m: PctMode) => void;
+  competitorCount: number;
 }) {
+  const groupDisabled = competitorCount < 2;
   return (
     <div
       role="group"
       aria-label="Percentage reference"
       className="inline-flex rounded-md border text-xs"
     >
-      {(["group", "division", "overall"] as PctMode[]).map((m) => (
-        <Tooltip key={m}>
-          <TooltipTrigger asChild>
-            <button
-              onClick={() => onChange(m)}
-              aria-pressed={mode === m}
-              className={cn(
-                "px-2.5 py-1 first:rounded-l-md last:rounded-r-md transition-colors",
-                "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
-                mode === m
-                  ? "bg-foreground text-background font-medium"
-                  : "text-muted-foreground hover:bg-muted"
-              )}
-            >
-              {MODE_LABELS[m]}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="max-w-56 text-center text-xs">
-            {MODE_TOOLTIPS[m]}
-          </TooltipContent>
-        </Tooltip>
-      ))}
+      {(["group", "division", "overall"] as PctMode[]).map((m) => {
+        const disabled = m === "group" && groupDisabled;
+        return (
+          <Tooltip key={m}>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => { if (!disabled) onChange(m); }}
+                aria-pressed={mode === m}
+                aria-disabled={disabled || undefined}
+                className={cn(
+                  "px-2.5 py-1 first:rounded-l-md last:rounded-r-md transition-colors",
+                  "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+                  disabled
+                    ? "opacity-40 cursor-default text-muted-foreground"
+                    : mode === m
+                      ? "bg-foreground text-background font-medium"
+                      : "text-muted-foreground hover:bg-muted"
+                )}
+              >
+                {MODE_LABELS[m]}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-56 text-center text-xs">
+              {disabled
+                ? "Select 2+ competitors to compare within the group"
+                : MODE_TOOLTIPS[m]}
+            </TooltipContent>
+          </Tooltip>
+        );
+      })}
     </div>
   );
 }
@@ -477,11 +488,22 @@ function ArchetypePill({ archetype, color }: { archetype: ShooterArchetype; colo
 
 export function ComparisonTable({ data, scoringCompleted, onRemove }: ComparisonTableProps) {
   const { stages, competitors, penaltyStats, efficiencyStats, consistencyStats, lossBreakdownStats, whatIfStats, styleFingerprintStats } = data;
-  const [mode, setMode] = useState<PctMode>("group");
+  const [mode, setMode] = useState<PctMode>(
+    competitors.length < 2 ? "division" : "group"
+  );
   const [viewMode, setViewMode] = useState<ViewMode>("absolute");
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [showWhatIf, setShowWhatIf] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+
+  useEffect(() => {
+    if (competitors.length < 2 && mode === "group") {
+      setMode("division");
+    } else if (competitors.length >= 2 && mode === "division") {
+      setMode("group");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to count changes
+  }, [competitors.length]);
 
   useEffect(() => {
     if (!localStorage.getItem("ssi-cell-help-seen")) {
@@ -600,7 +622,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove }: Comparison
       <div className="flex items-center gap-2">
         <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
         {viewMode === "absolute" && (
-          <ModeToggle mode={mode} onChange={setMode} />
+          <ModeToggle mode={mode} onChange={setMode} competitorCount={competitors.length} />
         )}
         <button
           onClick={() => setHelpOpen(true)}
@@ -1114,7 +1136,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove }: Comparison
             >
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">Rank context:</span>
-                <ModeToggle mode={mode} onChange={setMode} />
+                <ModeToggle mode={mode} onChange={setMode} competitorCount={competitors.length} />
               </div>
               <div className="space-y-5">
                 {competitors.map((comp) => {
