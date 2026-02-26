@@ -2,9 +2,9 @@
  * OAuth 2.0 Dynamic Client Registration (RFC 7591).
  *
  * MCP clients (Claude Desktop, ChatGPT) register themselves here before
- * starting the authorization flow. We accept all registrations and return
- * a stable client_id — no real credentials are issued since the MCP server
- * is fully public.
+ * starting the authorization flow. We accept all registrations and issue a
+ * unique client_id per registration — no real credentials are issued since
+ * the MCP server is fully public.
  */
 const CORS: HeadersInit = {
   "Access-Control-Allow-Origin": "*",
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
   return Response.json(
     {
-      client_id: "public-mcp-client",
+      client_id: crypto.randomUUID(),
       client_id_issued_at: Math.floor(Date.now() / 1000),
       client_name: body.client_name ?? "MCP Client",
       redirect_uris: body.redirect_uris ?? [],
