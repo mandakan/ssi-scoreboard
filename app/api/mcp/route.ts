@@ -32,6 +32,21 @@ class SingleShotTransport implements Transport {
   }
 }
 
+/**
+ * GET — server discovery / human-readable landing page.
+ * MCP clients probe with GET before issuing POST calls; browsers also hit GET.
+ */
+export async function GET() {
+  return NextResponse.json({
+    name: "ssi-scoreboard",
+    version: "0.1.0",
+    description: "MCP server for SSI Scoreboard — query IPSC competition data via Claude or any MCP-compatible client.",
+    transport: "streamable-http",
+    endpoint: "/api/mcp",
+    tools: ["search_events", "get_match", "compare_competitors", "get_popular_matches"],
+  });
+}
+
 export async function POST(request: Request) {
   const secret = process.env.MCP_SECRET;
   if (secret) {
