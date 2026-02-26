@@ -80,7 +80,6 @@ export async function GET(
 
   // Use the prefetched stats if we have valid competitors, otherwise null.
   const statsMap = selectedCompetitors.length > 0 ? prefetchedStats : null;
-  console.log("[og] selectedCompetitors=", selectedCompetitors.length, "prefetchedStats=", prefetchedStats == null ? "null" : `Map(${prefetchedStats.size})`, "statsMap=", statsMap == null ? "null" : `Map(${statsMap.size})`);
 
   // Determine cache duration based on match completion and stats availability.
   // When a competitor OG is served without stats (compare data not yet warm),
@@ -177,15 +176,12 @@ async function fetchOgCompareStatsImpl(
 
   try {
     const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
-    console.log("[og-stats] fetching scorecards key:", scorecardsKey, "selectedIds:", selectedIds);
     const { data, cachedAt } = await cachedExecuteQuery<RawOgScorecardsData>(
       scorecardsKey,
       SCORECARDS_QUERY,
       { ct: ctNum, id },
       3600, // fallback TTL on cache miss; compare route will correct it later
     );
-
-    console.log("[og-stats] scorecards result: event=", !!data.event, "cachedAt=", cachedAt, "stages=", data.event?.stages?.length ?? 0);
 
     if (!data.event) return null;
 
@@ -268,7 +264,6 @@ async function fetchOgCompareStatsImpl(
       });
     }
 
-    console.log("[og-stats] computed stats for", map.size, "competitors:", [...map.entries()].map(([id, s]) => `${id}:stages=${s.stagesFired},matchPct=${s.matchPct.toFixed(1)}`));
     return map;
   } catch (err) {
     console.error("[og-stats] ERROR in fetchOgCompareStatsImpl:", err);
@@ -1041,15 +1036,16 @@ function multiCompetitorWithStats(
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: "8px",
+          gap: "6px",
           width: "100%",
         }}
       >
+        {/* Name row — name left, percentage right, never compete for space */}
         <div
           style={{
             display: "flex",
             flexDirection: "row",
-            alignItems: "center",
+            alignItems: "baseline",
             justifyContent: "space-between",
             width: "100%",
           }}
@@ -1057,40 +1053,33 @@ function multiCompetitorWithStats(
           <div
             style={{
               display: "flex",
-              flexDirection: "row",
-              alignItems: "center",
-              gap: "12px",
+              fontSize: "28px",
+              fontWeight: 700,
+              color: i === 0 ? C.text : C.muted,
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                fontSize: "30px",
-                fontWeight: 700,
-                color: i === 0 ? C.text : C.muted,
-              }}
-            >
-              {c.name}
-            </div>
-            {subtitle !== "" ? (
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "20px", color: C.dim }}>
-                {icon}
-                {subtitle}
-              </div>
-            ) : null}
+            {c.name}
           </div>
           <div
             style={{
               display: "flex",
-              fontSize: "30px",
+              fontSize: "28px",
               fontWeight: 700,
               color,
+              paddingLeft: "16px",
             }}
           >
             {`${formatPct(pct)}%`}
           </div>
         </div>
-        {pctBar(pct, color, "20px")}
+        {/* Subtitle row — division/archetype, never overlaps with percentage */}
+        {subtitle !== "" ? (
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "18px", color: C.dim }}>
+            {icon}
+            {subtitle}
+          </div>
+        ) : null}
+        {pctBar(pct, color, "16px")}
       </div>
     );
   });
@@ -1145,10 +1134,10 @@ function multiCompetitorWithStats(
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: "24px",
+              gap: "16px",
               width: "100%",
               maxWidth: 650,
-              padding: "28px 36px",
+              padding: "24px 32px",
               backgroundColor: C.cardBg,
               borderRadius: "16px",
               border: `1px solid ${C.border}`,
