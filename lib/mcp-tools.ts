@@ -175,8 +175,33 @@ DATA NOTES:
 `;
 
 // ---------------------------------------------------------------------------
-// Tool, resource, and prompt registration
+// Data providers
+//
+// The tool handlers are agnostic about how data is fetched.  Callers supply a
+// DataProviders object with typed async functions:
+//
+//   • HTTP mode  (stdio server / Smithery): createHttpProviders(baseUrl) wraps
+//     each function in a fetch() call so the stdio process stays stateless and
+//     points at any live server instance.
+//
+//   • Direct mode (Cloudflare HTTP MCP endpoint): app/api/mcp/route.ts imports
+//     lib/api-data.ts and passes its functions directly — no HTTP round-trip.
+//     This avoids the Cloudflare 522 "Connection Timed Out" that occurs when a
+//     Worker tries to subrequest its own Cloudflare Pages custom domain.
 // ---------------------------------------------------------------------------
+
+export interface DataProviders {
+  searchEvents: (params: {
+    query?: string;
+    min_level?: "all" | "l2plus" | "l3plus" | "l4plus";
+    country?: string;
+    starts_after?: string;
+    starts_before?: string;
+  }) => Promise<EventSummary[]>;
+  getMatch: (ct: string, id: string) => Promise<MatchResponse>;
+  compareCompetitors: (ct: string, id: string, ids: number[]) => Promise<CompareResponse>;
+  getPopularMatches: () => Promise<PopularMatch[]>;
+}
 
 async function apiFetch<T>(baseUrl: string, path: string): Promise<T> {
   const res = await fetch(`${baseUrl}${path}`);
@@ -184,7 +209,28 @@ async function apiFetch<T>(baseUrl: string, path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export function registerMcpTools(server: McpServer, baseUrl: string): void {
+function createHttpProviders(baseUrl: string): DataProviders {
+  return {
+    searchEvents: async (params) => {
+      const p = new URLSearchParams();
+      if (params.query) p.set("q", params.query);
+      if (params.min_level) p.set("minLevel", params.min_level);
+      if (params.country) p.set("country", params.country);
+      if (params.starts_after) p.set("starts_after", params.starts_after);
+      if (params.starts_before) p.set("starts_before", params.starts_before);
+      return apiFetch<EventSummary[]>(baseUrl, `/api/events?${p}`);
+    },
+    getMatch: (ct, id) => apiFetch<MatchResponse>(baseUrl, `/api/match/${ct}/${id}`),
+    compareCompetitors: (ct, id, ids) => {
+      const p = new URLSearchParams({ ct, id, competitor_ids: ids.join(",") });
+      return apiFetch<CompareResponse>(baseUrl, `/api/compare?${p}`);
+    },
+    getPopularMatches: () => apiFetch<PopularMatch[]>(baseUrl, "/api/popular-matches"),
+  };
+}
+
+export function registerMcpTools(server: McpServer, arg: string | DataProviders): void {
+  const providers: DataProviders = typeof arg === "string" ? createHttpProviders(arg) : arg;
   server.tool(
     "search_events",
     "Search for IPSC competitions by name, country, date range, or level. " +
@@ -204,13 +250,7 @@ export function registerMcpTools(server: McpServer, baseUrl: string): void {
     },
     { readOnlyHint: true, openWorldHint: true },
     async (input) => {
-      const p = new URLSearchParams();
-      if (input.query) p.set("q", input.query);
-      if (input.min_level) p.set("minLevel", input.min_level);
-      if (input.country) p.set("country", input.country);
-      if (input.starts_after) p.set("starts_after", input.starts_after);
-      if (input.starts_before) p.set("starts_before", input.starts_before);
-      const data = await apiFetch<EventSummary[]>(baseUrl, `/api/events?${p}`);
+      const data = await providers.searchEvents(input);
       return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
     },
   );
@@ -230,7 +270,7 @@ export function registerMcpTools(server: McpServer, baseUrl: string): void {
     },
     { readOnlyHint: true, openWorldHint: true },
     async ({ ct, id }) => {
-      const data = await apiFetch<MatchResponse>(baseUrl, `/api/match/${ct}/${id}`);
+      const data = await providers.getMatch(ct, id);
       return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
     },
   );
@@ -251,10 +291,7 @@ export function registerMcpTools(server: McpServer, baseUrl: string): void {
     },
     { readOnlyHint: true, openWorldHint: true },
     async ({ ct, id, competitor_ids }) => {
-      const data = await apiFetch<CompareResponse>(
-        baseUrl,
-        `/api/compare?ct=${ct}&id=${id}&competitor_ids=${competitor_ids.join(",")}`,
-      );
+      const data = await providers.compareCompetitors(ct, id, competitor_ids);
       return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
     },
   );
@@ -268,7 +305,7 @@ export function registerMcpTools(server: McpServer, baseUrl: string): void {
     {},
     { readOnlyHint: true, openWorldHint: true },
     async () => {
-      const data = await apiFetch<PopularMatch[]>(baseUrl, "/api/popular-matches");
+      const data = await providers.getPopularMatches();
       return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
     },
   );

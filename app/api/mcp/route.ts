@@ -3,6 +3,7 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import { NextResponse } from "next/server";
 import { registerMcpTools, SERVER_INSTRUCTIONS } from "@/lib/mcp-tools";
+import * as directProviders from "@/lib/api-data";
 
 /**
  * Promise-based single-request/response transport for Next.js App Router.
@@ -149,21 +150,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400, headers: CORS });
   }
 
-  // Use an explicit env var rather than request.url to avoid SSRF — the Host
-  // header can be spoofed, which would taint request.url. The MCP tools only
-  // ever call this app's own API endpoints, so localhost is always correct for
-  // same-server deployments. Set NEXT_PUBLIC_APP_URL to override (e.g. for CF
-  // Pages where localhost calls are not available).
-  // Strip all whitespace — Cloudflare env vars can arrive with embedded newlines
-  // or carriage returns (e.g. copy-paste artifact), which make the URL invalid.
-  // .trim() alone isn't sufficient when the stray character is mid-string.
-  const baseUrl = (
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\s+/g, "") ?? `http://localhost:${process.env.PORT ?? 3000}`
-  );
-
   const transport = new SingleShotTransport();
   const server = new McpServer({ name: "ssi-scoreboard", version: "0.1.0" }, { instructions: SERVER_INSTRUCTIONS });
-  registerMcpTools(server, baseUrl);
+  // Pass direct data-provider functions instead of a baseUrl.  On Cloudflare,
+  // a Worker cannot subrequest its own custom-domain Pages deployment (returns
+  // 522).  Calling the route handlers in-process bypasses HTTP entirely.
+  registerMcpTools(server, directProviders);
   await server.connect(transport);
 
   // JSON-RPC notifications have no `id` field (e.g. notifications/initialized).
