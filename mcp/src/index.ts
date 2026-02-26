@@ -7,18 +7,27 @@ import { registerMcpTools } from "../../lib/mcp-tools.ts";
 const PROD_URL = "https://scoreboard.urdr.dev";
 
 /**
- * Smithery configSchema — no user configuration needed.
- * The server connects directly to the public scoreboard API.
+ * Smithery configSchema.
+ * All fields are optional — the server connects to the public scoreboard API by
+ * default, but operators running a self-hosted instance can override the URL.
  */
-export const configSchema = z.object({});
+export const configSchema = z.object({
+  baseUrl: z
+    .string()
+    .url()
+    .optional()
+    .describe(
+      "Base URL of the SSI Scoreboard instance. Defaults to https://scoreboard.urdr.dev",
+    ),
+});
 
 /**
  * Smithery entry point (runtime: typescript).
  * Called by Smithery's HTTP runtime on each request.
  */
-export default function createServer(_: { config: z.infer<typeof configSchema> }) {
+export default function createServer({ config }: { config: z.infer<typeof configSchema> }) {
   const server = new McpServer({ name: "ssi-scoreboard", version: "0.1.0" });
-  registerMcpTools(server, PROD_URL);
+  registerMcpTools(server, config.baseUrl ?? PROD_URL);
   return server.server;
 }
 
