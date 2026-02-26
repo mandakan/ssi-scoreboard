@@ -72,10 +72,20 @@ export async function GET(req: Request) {
   const country = searchParams.get("country");
   const minLevel = searchParams.get("minLevel") ?? "l2plus";
 
-  const startsAfter =
-    searchParams.get("starts_after") ?? defaultAfter.toISOString().slice(0, 10);
-  const startsBefore =
-    searchParams.get("starts_before") ?? defaultBefore.toISOString().slice(0, 10);
+  // When a text query is present the caller is searching for a specific event
+  // and we should not silently clip results to a narrow date window — use a
+  // wide fallback (5 years back / 2 years forward) so past matches are found.
+  // The narrow ±3-month default applies only to browse mode (no q) where we
+  // need the sub-window strategy to work around the SSI API result cap.
+  const wideAfter = new Date(now);
+  wideAfter.setFullYear(wideAfter.getFullYear() - 5);
+  const wideBefore = new Date(now);
+  wideBefore.setFullYear(wideBefore.getFullYear() + 2);
+
+  const startsAfter = searchParams.get("starts_after") ??
+    (q ? wideAfter.toISOString().slice(0, 10) : defaultAfter.toISOString().slice(0, 10));
+  const startsBefore = searchParams.get("starts_before") ??
+    (q ? wideBefore.toISOString().slice(0, 10) : defaultBefore.toISOString().slice(0, 10));
   const firearms = searchParams.get("firearms") ?? "hg";
 
   let rawEvents: RawEvent[];
