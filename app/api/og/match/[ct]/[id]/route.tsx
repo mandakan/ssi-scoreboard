@@ -533,20 +533,23 @@ const OG_W = 1200;
 const OG_H = 630;
 
 /**
- * Background layer for the match image: occupies the right ~33% of the canvas
- * with a gradient fade on the left edge.
+ * Background layer: the match image covers the full OG height, starting at
+ * 1/3 from the left (x=400). Uses objectFit:"cover" so the image fills the
+ * 800×630 area regardless of aspect ratio — landscape banners are zoomed and
+ * cropped, portrait images are also cropped to fill.
  *
- * Returns a SINGLE <div> (not a Fragment) so Satori receives a proper element.
- * Uses an explicit-pixel absolute wrapper (left:0 top:0 OG_W×OG_H) with a
- * flex-row layout inside — no nested position:absolute — which is more
- * reliable across Satori versions.
+ * A 300px gradient (bg→transparent) is placed ON TOP of the image's left edge
+ * using position:absolute within the image container (which has explicit px
+ * dimensions — reliable in Satori). The gradient creates the dark-to-image
+ * fade effect.
  *
- * Layout: [flex:1 spacer] [150px gradient] [imgW image column]
- * The spacer is transparent (root bg shows through); the gradient fades
- * from bg→transparent so the image emerges smoothly.
+ * Returns a SINGLE <div> (not a Fragment) — required for Satori.
  */
 function matchImageBgLayers(imageUrl: string) {
-  const imgW = 400; // ~33% of OG_W
+  const imgStartX = Math.round(OG_W / 3); // 400 — image starts at 1/3 from left
+  const imgW = OG_W - imgStartX;           // 800 — image covers right 2/3
+  const gradW = 300;                       // gradient fades across 300px
+
   return (
     <div
       style={{
@@ -560,26 +563,16 @@ function matchImageBgLayers(imageUrl: string) {
         alignItems: "stretch",
       }}
     >
-      {/* Spacer: fills the content area, transparent (root bg shows) */}
-      <div style={{ display: "flex", flex: 1 }} />
+      {/* Spacer: left 1/3, transparent so root bg shows */}
+      <div style={{ display: "flex", width: imgStartX }} />
 
-      {/* Gradient strip: 200px, bg → transparent, fades into the image */}
+      {/* Image container: right 2/3, explicit px so position:absolute inside works */}
       <div
         style={{
-          display: "flex",
-          width: 200,
-          backgroundImage: `linear-gradient(to right, ${C.bg}, transparent)`,
-        }}
-      />
-
-      {/* Image column: right 400px of canvas */}
-      <div
-        style={{
+          position: "relative",
           display: "flex",
           width: imgW,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: C.bg,
+          height: OG_H,
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -588,7 +581,19 @@ function matchImageBgLayers(imageUrl: string) {
           alt=""
           width={imgW}
           height={OG_H}
-          style={{ objectFit: "contain", display: "flex" }}
+          style={{ objectFit: "cover", display: "flex" }}
+        />
+        {/* Gradient overlay: sits on top of image, fades bg→transparent */}
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            width: gradW,
+            height: OG_H,
+            backgroundImage: `linear-gradient(to right, ${C.bg}, transparent)`,
+            display: "flex",
+          }}
         />
       </div>
     </div>
@@ -664,7 +669,7 @@ function singleCompetitorWithStats(
               justifyContent: "center",
               gap: "24px",
               width: "100%",
-              maxWidth: 640,
+              maxWidth: 650,
               padding: "28px 36px",
               backgroundColor: C.cardBg,
               borderRadius: "16px",
@@ -750,7 +755,7 @@ function singleCompetitorWithStats(
             display: "flex",
             justifyContent: "flex-end",
             width: "100%",
-            maxWidth: 640,
+            maxWidth: 650,
           }}
         >
           <div style={{ fontSize: "22px", color: C.dim }}>
@@ -1025,6 +1030,7 @@ function multiCompetitorWithStats(
               flexDirection: "column",
               gap: "24px",
               width: "100%",
+              maxWidth: 650,
               padding: "28px 36px",
               backgroundColor: C.cardBg,
               borderRadius: "16px",
