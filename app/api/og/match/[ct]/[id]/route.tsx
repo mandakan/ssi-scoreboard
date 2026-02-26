@@ -39,8 +39,25 @@ export async function GET(
   const competitorsParam = searchParams.get("competitors");
   const logoUrl = `${origin}/icons/icon-192.png`;
 
-  // Social-media crawlers are patient — allow up to 15s for a cold-cache fetch.
-  const match = await fetchOgMatchData(ct, id, 15_000);
+  // Parse competitor IDs from the URL up front so we can start the compare
+  // fetch in parallel with the match-data fetch. On cold cache the compare
+  // endpoint (which fetches all scorecards) can take several seconds, so
+  // running it concurrently cuts total latency roughly in half.
+  const rawCompetitorIds = competitorsParam
+    ? competitorsParam
+        .split(",")
+        .map(Number)
+        .filter((n) => Number.isFinite(n) && n > 0)
+    : [];
+
+  // Run match-data and compare-data fetches in parallel.
+  // Social-media crawlers are patient — allow up to 15s for cold-cache.
+  const [match, prefetchedStats] = await Promise.all([
+    fetchOgMatchData(ct, id, 15_000),
+    rawCompetitorIds.length > 0
+      ? fetchCompareStats(req, ct, id, rawCompetitorIds, 14_000)
+      : Promise.resolve(null),
+  ]);
 
   // Determine cache duration based on match completion status
   const isComplete = match ? match.scoringCompleted >= 95 : false;
@@ -56,28 +73,13 @@ export async function GET(
     });
   }
 
-  console.log("[og] match.imageUrl:", match.imageUrl);
+  // Resolve which of the requested IDs actually exist in the match.
+  const selectedCompetitors = rawCompetitorIds
+    .map((cid) => match.competitors.find((c) => c.id === cid))
+    .filter((c): c is CompetitorInfo => c != null);
 
-  // Resolve selected competitors from the match data
-  const selectedCompetitors = competitorsParam
-    ? competitorsParam
-        .split(",")
-        .map(Number)
-        .filter((n) => Number.isFinite(n) && n > 0)
-        .map((cid) => match.competitors.find((c) => c.id === cid))
-        .filter((c): c is CompetitorInfo => c != null)
-    : [];
-
-  // Fetch comparison data when competitors are selected
-  let statsMap: Map<number, OgCompetitorStats> | null = null;
-  if (selectedCompetitors.length > 0) {
-    statsMap = await fetchCompareStats(
-      req,
-      ct,
-      id,
-      selectedCompetitors.map((c) => c.id),
-    );
-  }
+  // Use the prefetched stats if we have valid competitors, otherwise null.
+  const statsMap = selectedCompetitors.length > 0 ? prefetchedStats : null;
 
   const element =
     selectedCompetitors.length === 1
@@ -109,12 +111,13 @@ async function fetchCompareStats(
   ct: string,
   id: string,
   competitorIds: number[],
+  timeoutMs: number = 12_000,
 ): Promise<Map<number, OgCompetitorStats> | null> {
   try {
     const origin = new URL(req.url).origin;
     const url = `${origin}/api/compare?ct=${ct}&id=${id}&competitor_ids=${competitorIds.join(",")}`;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12_000);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timeout);
@@ -560,11 +563,11 @@ function matchImageBgLayers(imageUrl: string) {
       {/* Spacer: fills the content area, transparent (root bg shows) */}
       <div style={{ display: "flex", flex: 1 }} />
 
-      {/* Gradient strip: 150px, bg → transparent, fades into the image */}
+      {/* Gradient strip: 200px, bg → transparent, fades into the image */}
       <div
         style={{
           display: "flex",
-          width: 150,
+          width: 200,
           backgroundImage: `linear-gradient(to right, ${C.bg}, transparent)`,
         }}
       />
@@ -650,7 +653,9 @@ function singleCompetitorWithStats(
         >
           {brandHeader(logoUrl, matchInfo)}
 
-          {/* Content card: name + performance together */}
+          {/* Content card: name + performance together.
+              maxWidth keeps the card out of the image area (gradient starts
+              at x = OG_W - imgW - gradW = 600). */}
           <div
             style={{
               display: "flex",
@@ -659,6 +664,7 @@ function singleCompetitorWithStats(
               justifyContent: "center",
               gap: "24px",
               width: "100%",
+              maxWidth: 640,
               padding: "28px 36px",
               backgroundColor: C.cardBg,
               borderRadius: "16px",
@@ -744,6 +750,7 @@ function singleCompetitorWithStats(
             display: "flex",
             justifyContent: "flex-end",
             width: "100%",
+            maxWidth: 640,
           }}
         >
           <div style={{ fontSize: "22px", color: C.dim }}>
