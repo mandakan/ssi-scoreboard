@@ -120,9 +120,12 @@ function filterFieldPoints(
   // Division comes from the styleFingerprintStats data — we get it from the field points
   // by looking at which divisions the selected competitors belong to.
   // The selected competitors' division info is on their CompetitorInfo.
+  // CompetitorInfo.division is formatted by formatDivisionDisplay (e.g. "Open Major"),
+  // while FieldFingerprintPoint.division is the raw display value (e.g. "Open").
+  // Strip the Major/Minor suffix so the comparison matches.
   const selectedDivisions = new Set(
     selectedCompetitors
-      .map((c) => c.division?.toLowerCase().trim())
+      .map((c) => c.division?.toLowerCase().trim().replace(/ (major|minor)$/, ""))
       .filter((d): d is string => d != null && d !== "")
   );
 
