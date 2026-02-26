@@ -176,7 +176,7 @@ async function fetchOgCompareStatsImpl(
 
   try {
     const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
-    const { data, cachedAt } = await cachedExecuteQuery<RawOgScorecardsData>(
+    const { data } = await cachedExecuteQuery<RawOgScorecardsData>(
       scorecardsKey,
       SCORECARDS_QUERY,
       { ct: ctNum, id },
@@ -347,30 +347,19 @@ function archetypeIcon(archetype: string, size: number, color: string) {
 
 // ── Shared layout pieces ────────────────────────────────────────────────
 
-/**
- * Brand icon as a styled div — avoids PNG fetch subrequests on CF Workers.
- * Fetching external images inside Satori on CF Workers can fail with
- * "Unsupported image type: unknown" and contribute to CPU time overruns.
- */
+/** Brand icon — concentric-circles target using design system colors. */
 function brandIcon() {
   return (
-    <div
-      style={{
-        display: "flex",
-        width: 48,
-        height: 48,
-        borderRadius: "10px",
-        backgroundColor: C.accent,
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: "18px",
-        fontWeight: 700,
-        color: C.bg,
-        letterSpacing: "-0.03em",
-      }}
+    <svg
+      width={48}
+      height={48}
+      viewBox="0 0 100 100"
+      style={{ display: "flex" }}
     >
-      SSI
-    </div>
+      <circle cx="50" cy="50" r="44" fill="none" stroke={C.dim} strokeWidth="4" />
+      <circle cx="50" cy="50" r="28" fill="none" stroke={C.muted} strokeWidth="4" />
+      <circle cx="50" cy="50" r="12" fill="none" stroke={C.accent} strokeWidth="6" />
+    </svg>
   );
 }
 
@@ -534,7 +523,7 @@ function matchOverviewImage(match: OgMatchData) {
       }}
     >
       {/* Background image layers (below content) */}
-      {match.imageUrl ? matchImageBgLayers(match.imageUrl, match.imageWidth, match.imageHeight) : null}
+      {match.imageUrl ? matchImageBgLayers(match.imageUrl, match.imageWidth, match.imageHeight) : targetBgLayers()}
 
       {/* Content layer (above background) */}
       <div
@@ -719,6 +708,68 @@ function matchImageBgLayers(
   );
 }
 
+/**
+ * Decorative target background — shown when no match image is available.
+ * Positioned on the right third like match images, with left-to-right fade.
+ */
+function targetBgLayers() {
+  const displayW = Math.round(OG_W / 3);
+  const containerLeft = OG_W - displayW;
+  const targetSize = OG_H;
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: containerLeft,
+        top: 0,
+        width: displayW,
+        height: OG_H,
+        display: "flex",
+      }}
+    >
+      {/* Target — shifted right so only the left portion is visible */}
+      <div
+        style={{
+          position: "absolute",
+          left: displayW * 0.15,
+          top: 0,
+          width: targetSize,
+          height: targetSize,
+          display: "flex",
+          opacity: 0.1,
+        }}
+      >
+        <svg
+          width={targetSize}
+          height={targetSize}
+          viewBox="0 0 200 200"
+          style={{ display: "flex" }}
+        >
+          <circle cx="100" cy="100" r="96" fill="none" stroke={C.muted} strokeWidth="2" />
+          <circle cx="100" cy="100" r="72" fill="none" stroke={C.muted} strokeWidth="2" />
+          <circle cx="100" cy="100" r="48" fill="none" stroke={C.muted} strokeWidth="2" />
+          <circle cx="100" cy="100" r="24" fill="none" stroke={C.muted} strokeWidth="2" />
+          <line x1="100" y1="4" x2="100" y2="196" stroke={C.muted} strokeWidth="1" />
+          <line x1="4" y1="100" x2="196" y2="100" stroke={C.muted} strokeWidth="1" />
+        </svg>
+      </div>
+      {/* Gradient fade — same direction as match images */}
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          width: displayW,
+          height: OG_H,
+          backgroundImage: `linear-gradient(to right, ${C.bg}, transparent)`,
+          display: "flex",
+        }}
+      />
+    </div>
+  );
+}
+
 function singleCompetitorWithStats(
   match: OgMatchData,
   competitor: CompetitorInfo,
@@ -749,7 +800,7 @@ function singleCompetitorWithStats(
       }}
     >
       {/* Background image layers (below content) */}
-      {match.imageUrl ? matchImageBgLayers(match.imageUrl, match.imageWidth, match.imageHeight) : null}
+      {match.imageUrl ? matchImageBgLayers(match.imageUrl, match.imageWidth, match.imageHeight) : targetBgLayers()}
 
       {/* Content layer (above background) */}
       <div
@@ -905,7 +956,7 @@ function singleCompetitorNoStats(
         color: C.text,
       }}
     >
-      {match.imageUrl ? matchImageBgLayers(match.imageUrl, match.imageWidth, match.imageHeight) : null}
+      {match.imageUrl ? matchImageBgLayers(match.imageUrl, match.imageWidth, match.imageHeight) : targetBgLayers()}
 
       <div
         style={{
@@ -1098,7 +1149,7 @@ function multiCompetitorWithStats(
         color: C.text,
       }}
     >
-      {match.imageUrl ? matchImageBgLayers(match.imageUrl, match.imageWidth, match.imageHeight) : null}
+      {match.imageUrl ? matchImageBgLayers(match.imageUrl, match.imageWidth, match.imageHeight) : targetBgLayers()}
 
       <div
         style={{
@@ -1240,7 +1291,7 @@ function multiCompetitorNoStats(
         color: C.text,
       }}
     >
-      {match.imageUrl ? matchImageBgLayers(match.imageUrl, match.imageWidth, match.imageHeight) : null}
+      {match.imageUrl ? matchImageBgLayers(match.imageUrl, match.imageWidth, match.imageHeight) : targetBgLayers()}
 
       <div
         style={{
@@ -1330,30 +1381,44 @@ function fallbackImage() {
   return (
     <div
       style={{
+        position: "relative",
         display: "flex",
-        flexDirection: "column",
         width: "100%",
         height: "100%",
         backgroundColor: C.bg,
         color: C.text,
       }}
     >
-      {topAccent()}
+      {targetBgLayers()}
 
       <div
         style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          width: OG_W,
+          height: OG_H,
           display: "flex",
           flexDirection: "column",
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "20px",
         }}
       >
-        {brandIcon()}
-        <div style={{ fontSize: "40px", fontWeight: 700 }}>SSI Scoreboard</div>
-        <div style={{ fontSize: "22px", color: C.muted }}>
-          Live IPSC competitor comparison
+        {topAccent()}
+
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "20px",
+          }}
+        >
+          {brandIcon()}
+          <div style={{ fontSize: "40px", fontWeight: 700 }}>SSI Scoreboard</div>
+          <div style={{ fontSize: "22px", color: C.muted }}>
+            Live IPSC competitor comparison
+          </div>
         </div>
       </div>
     </div>
