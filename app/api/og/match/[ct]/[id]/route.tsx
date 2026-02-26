@@ -1,6 +1,16 @@
 import { ImageResponse } from "next/og";
 import { fetchOgMatchData, type OgMatchData } from "@/lib/og-data";
 import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY } from "@/lib/graphql";
+import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
+import {
+  computeGroupRankings,
+  computeConsistencyStats,
+  computeCompetitorPPS,
+  computeAllFingerprintPoints,
+  computeStyleFingerprint,
+  computePercentileRank,
+  assignArchetype,
+} from "@/app/api/compare/logic";
 import { PALETTE } from "@/lib/colors";
 import type { CompetitorInfo } from "@/lib/types";
 
@@ -124,35 +134,7 @@ export async function GET(
 // On CF Workers the stateless model gives each invocation its own CPU
 // budget; a subrequest to /api/compare would exhaust that budget running
 // the full compute for 100+ competitors. Fetching inline here shares the
-// OG Worker's already-generous budget and only does the minimal work
-// needed for the OG image (group % and division % per selected competitor).
-
-interface RawOgScorecard {
-  competitor_id: number;
-  competitor_division: string | null;
-  stage_id: number;
-  hit_factor: number | null;
-  valid: boolean; // not DQ/zeroed/DNF and HF > 0
-}
-
-interface RawOgScorecardsData {
-  event: {
-    stages?: Array<{
-      id: string;
-      scorecards?: Array<{
-        hitfactor?: number | string | null;
-        disqualified?: boolean | null;
-        zeroed?: boolean | null;
-        stage_not_fired?: boolean | null;
-        competitor?: {
-          id: string;
-          handgun_div?: string | null;
-          get_handgun_div_display?: string | null;
-        } | null;
-      }>;
-    }>;
-  } | null;
-}
+// OG Worker's already-generous budget.
 
 async function fetchOgCompareStats(
   ct: string,
@@ -176,7 +158,7 @@ async function fetchOgCompareStatsImpl(
 
   try {
     const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
-    const { data } = await cachedExecuteQuery<RawOgScorecardsData>(
+    const { data } = await cachedExecuteQuery<RawScorecardsData>(
       scorecardsKey,
       SCORECARDS_QUERY,
       { ct: ctNum, id },
@@ -185,82 +167,75 @@ async function fetchOgCompareStatsImpl(
 
     if (!data.event) return null;
 
-    // Parse the minimal scorecard fields we need
-    const scorecards: RawOgScorecard[] = [];
-    for (const stage of data.event.stages ?? []) {
-      const stageId = parseInt(stage.id, 10);
-      for (const sc of stage.scorecards ?? []) {
-        if (!sc.competitor) continue;
-        const hfRaw = sc.hitfactor != null ? parseFloat(String(sc.hitfactor)) : null;
-        const hf = hfRaw != null && !isNaN(hfRaw) ? hfRaw : null;
-        scorecards.push({
-          competitor_id: parseInt(sc.competitor.id, 10),
-          competitor_division: sc.competitor.get_handgun_div_display ?? sc.competitor.handgun_div ?? null,
-          stage_id: stageId,
-          hit_factor: hf,
-          valid: !(sc.disqualified ?? false) && !(sc.zeroed ?? false) && !(sc.stage_not_fired ?? false) && hf != null && hf > 0,
-        });
+    // Parse full scorecard data using the shared parser (same as compare route)
+    const rawScorecards = parseRawScorecards(data);
+
+    // Build minimal CompetitorInfo for the selected group — only id is used by
+    // computeGroupRankings to define group membership; division comes from scorecards.
+    const requestedCompetitors: CompetitorInfo[] = selectedIds.map((cid) => ({
+      id: cid,
+      name: `Competitor ${String(cid)}`,
+      competitor_number: "",
+      club: null,
+      division: null,
+    }));
+
+    // computeGroupRankings gives accurate group/div/overall % using the full field
+    const stages = computeGroupRankings(rawScorecards, requestedCompetitors);
+
+    // Build division map from scorecards (no match metadata needed here)
+    const divisionMap = new Map<number, string | null>();
+    for (const sc of rawScorecards) {
+      if (!divisionMap.has(sc.competitor_id)) {
+        divisionMap.set(sc.competitor_id, sc.competitor_division);
       }
     }
 
-    // Group by stage so we can compute per-stage leaders
-    const byStage = new Map<number, RawOgScorecard[]>();
-    for (const sc of scorecards) {
-      const arr = byStage.get(sc.stage_id) ?? [];
-      arr.push(sc);
-      byStage.set(sc.stage_id, arr);
-    }
-
-    // Accumulators per competitor
-    const groupSums = new Map(selectedIds.map((cid) => [cid, 0]));
-    const divSums = new Map(selectedIds.map((cid) => [cid, 0]));
-    const counts = new Map(selectedIds.map((cid) => [cid, 0]));
-    const divCounts = new Map(selectedIds.map((cid) => [cid, 0]));
-
-    for (const [, stageScs] of byStage) {
-      const valid = stageScs.filter((sc) => sc.valid);
-      if (valid.length === 0) continue;
-
-      // Group leader = highest HF among selected competitors on this stage
-      const selectedValid = valid.filter((sc) => selectedIds.includes(sc.competitor_id));
-      const groupLeaderHf = selectedValid.reduce((m, sc) => Math.max(m, sc.hit_factor!), 0);
-      if (groupLeaderHf <= 0) continue;
-
-      // Division leaders = highest HF per division (full field)
-      const divLeaders = new Map<string, number>();
-      for (const sc of valid) {
-        const div = sc.competitor_division ?? "__none__";
-        divLeaders.set(div, Math.max(divLeaders.get(div) ?? 0, sc.hit_factor!));
-      }
-
-      for (const cid of selectedIds) {
-        const sc = selectedValid.find((s) => s.competitor_id === cid);
-        if (!sc || sc.hit_factor == null) continue;
-
-        groupSums.set(cid, (groupSums.get(cid) ?? 0) + (sc.hit_factor / groupLeaderHf) * 100);
-        counts.set(cid, (counts.get(cid) ?? 0) + 1);
-
-        const div = sc.competitor_division ?? "__none__";
-        const divLeader = divLeaders.get(div) ?? 0;
-        if (divLeader > 0) {
-          divSums.set(cid, (divSums.get(cid) ?? 0) + (sc.hit_factor / divLeader) * 100);
-          divCounts.set(cid, (divCounts.get(cid) ?? 0) + 1);
-        }
-      }
-    }
+    // Full-field fingerprint points — needed for percentile ranks
+    const fieldFingerprintPoints = computeAllFingerprintPoints(rawScorecards, divisionMap);
+    const fieldAlphaRatios = fieldFingerprintPoints.map((p) => p.alphaRatio);
+    const fieldSpeeds = fieldFingerprintPoints.map((p) => p.pointsPerSecond);
 
     const map = new Map<number, OgCompetitorStats>();
     for (const cid of selectedIds) {
-      const n = counts.get(cid) ?? 0;
-      const dn = divCounts.get(cid) ?? 0;
+      // Aggregate per-stage percentages
+      const firedStages = stages.filter((s) => {
+        const c = s.competitors[cid];
+        return c != null && !c.dnf;
+      });
+
+      const groupPcts = firedStages.map((s) => s.competitors[cid]?.group_percent).filter((v): v is number => v != null);
+      const overallPcts = firedStages.map((s) => s.competitors[cid]?.overall_percent).filter((v): v is number => v != null);
+      const divPcts = firedStages.map((s) => s.competitors[cid]?.div_percent).filter((v): v is number => v != null);
+
+      const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+
+      // Consistency label
+      const { label: consistency } = computeConsistencyStats(stages, cid);
+
+      // Points per shot
+      const pointsPerShot = computeCompetitorPPS(stages, cid);
+
+      // Style fingerprint → archetype
+      const base = computeStyleFingerprint(stages, cid);
+      const accuracyPercentile =
+        base.alphaRatio != null
+          ? computePercentileRank(base.alphaRatio, fieldAlphaRatios)
+          : null;
+      const speedPercentile =
+        base.pointsPerSecond != null
+          ? computePercentileRank(base.pointsPerSecond, fieldSpeeds)
+          : null;
+      const archetype = assignArchetype(accuracyPercentile, speedPercentile);
+
       map.set(cid, {
-        matchPct: n > 0 ? (groupSums.get(cid) ?? 0) / n : 0,
-        overallPct: 0, // not computed in OG mode (would need overall leader per stage)
-        divPct: dn > 0 ? (divSums.get(cid) ?? 0) / dn : 0,
-        archetype: null, // not computed (requires full-field fingerprint)
-        consistency: null,
-        pointsPerShot: null,
-        stagesFired: n,
+        matchPct: avg(groupPcts),
+        overallPct: avg(overallPcts),
+        divPct: avg(divPcts),
+        archetype,
+        consistency,
+        pointsPerShot,
+        stagesFired: firedStages.length,
       });
     }
 
