@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Github, Crosshair, Coffee, Bot } from "lucide-react";
+import { Github, Crosshair, Coffee } from "lucide-react";
+import { McpEndpoint } from "@/components/mcp-endpoint";
 import { InstallInstructions } from "@/components/install-instructions";
 
 export const metadata: Metadata = {
@@ -117,14 +118,7 @@ export default function AboutPage() {
               <strong>get_popular_matches</strong>.
             </p>
           </div>
-          <a
-            href="https://scoreboard.urdr.dev/api/mcp"
-            className="flex items-center gap-3 p-4 rounded-lg border border-border hover:bg-accent hover:text-accent-foreground transition-colors font-mono text-xs break-all"
-            aria-label="MCP HTTP endpoint"
-          >
-            <Bot className="w-5 h-5 shrink-0 font-sans" aria-hidden="true" />
-            <span>https://scoreboard.urdr.dev/api/mcp</span>
-          </a>
+          <McpEndpoint />
         </section>
 
         <section aria-labelledby="about-links-heading" className="space-y-4">
