@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 import { fetchOgMatchData, type OgMatchData } from "@/lib/og-data";
+import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY } from "@/lib/graphql";
 import { PALETTE } from "@/lib/colors";
 import type { CompetitorInfo } from "@/lib/types";
 
@@ -50,11 +51,15 @@ export async function GET(
     : [];
 
   // Run match-data and compare-data fetches in parallel.
+  // Stats are fetched directly from the scorecard cache — no HTTP subrequest
+  // needed. CF Workers stateless model spawns a new Worker invocation per
+  // subrequest, giving it a separate CPU budget that the compare endpoint can
+  // exhaust. Fetching scorecards inline avoids that entirely.
   // Social-media crawlers are patient — allow up to 15s for cold-cache.
   const [match, prefetchedStats] = await Promise.all([
     fetchOgMatchData(ct, id, 15_000),
     rawCompetitorIds.length > 0
-      ? fetchCompareStats(req, ct, id, rawCompetitorIds, 14_000)
+      ? fetchOgCompareStats(ct, id, rawCompetitorIds, 14_000)
       : Promise.resolve(null),
   ]);
 
@@ -112,70 +117,156 @@ export async function GET(
   }
 }
 
-// ── Compare data fetch ─────────────────────────────────────────────────
+// ── Compare stats via direct cache access (no HTTP subrequest) ─────────
+//
+// Fetches scorecard data directly from Redis/GraphQL — the same path the
+// compare route uses — so we avoid spawning a second Worker invocation.
+// On CF Workers the stateless model gives each invocation its own CPU
+// budget; a subrequest to /api/compare would exhaust that budget running
+// the full compute for 100+ competitors. Fetching inline here shares the
+// OG Worker's already-generous budget and only does the minimal work
+// needed for the OG image (group % and division % per selected competitor).
 
-async function fetchCompareStats(
-  req: Request,
+interface RawOgScorecard {
+  competitor_id: number;
+  competitor_division: string | null;
+  stage_id: number;
+  hit_factor: number | null;
+  valid: boolean; // not DQ/zeroed/DNF and HF > 0
+}
+
+interface RawOgScorecardsData {
+  event: {
+    stages?: Array<{
+      id: string;
+      scorecards?: Array<{
+        hitfactor?: number | string | null;
+        disqualified?: boolean | null;
+        zeroed?: boolean | null;
+        stage_not_fired?: boolean | null;
+        competitor?: {
+          id: string;
+          handgun_div?: string | null;
+          get_handgun_div_display?: string | null;
+        } | null;
+      }>;
+    }>;
+  } | null;
+}
+
+async function fetchOgCompareStats(
   ct: string,
   id: string,
-  competitorIds: number[],
+  selectedIds: number[],
   timeoutMs: number = 12_000,
 ): Promise<Map<number, OgCompetitorStats> | null> {
+  return Promise.race([
+    fetchOgCompareStatsImpl(ct, id, selectedIds),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+  ]);
+}
+
+async function fetchOgCompareStatsImpl(
+  ct: string,
+  id: string,
+  selectedIds: number[],
+): Promise<Map<number, OgCompetitorStats> | null> {
+  const ctNum = parseInt(ct, 10);
+  if (isNaN(ctNum)) return null;
+
   try {
-    const origin = new URL(req.url).origin;
-    const url = `${origin}/api/compare?ct=${ct}&id=${id}&competitor_ids=${competitorIds.join(",")}`;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
+    const { data } = await cachedExecuteQuery<RawOgScorecardsData>(
+      scorecardsKey,
+      SCORECARDS_QUERY,
+      { ct: ctNum, id },
+      3600, // fallback TTL on cache miss; compare route will correct it later
+    );
 
-    const res = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeout);
+    if (!data.event) return null;
 
-    if (!res.ok) return null;
+    // Parse the minimal scorecard fields we need
+    const scorecards: RawOgScorecard[] = [];
+    for (const stage of data.event.stages ?? []) {
+      const stageId = parseInt(stage.id, 10);
+      for (const sc of stage.scorecards ?? []) {
+        if (!sc.competitor) continue;
+        const hfRaw = sc.hitfactor != null ? parseFloat(String(sc.hitfactor)) : null;
+        const hf = hfRaw != null && !isNaN(hfRaw) ? hfRaw : null;
+        scorecards.push({
+          competitor_id: parseInt(sc.competitor.id, 10),
+          competitor_division: sc.competitor.get_handgun_div_display ?? sc.competitor.handgun_div ?? null,
+          stage_id: stageId,
+          hit_factor: hf,
+          valid: !(sc.disqualified ?? false) && !(sc.zeroed ?? false) && !(sc.stage_not_fired ?? false) && hf != null && hf > 0,
+        });
+      }
+    }
 
-    const data = await res.json();
-    const map = new Map<number, OgCompetitorStats>();
+    // Group by stage so we can compute per-stage leaders
+    const byStage = new Map<number, RawOgScorecard[]>();
+    for (const sc of scorecards) {
+      const arr = byStage.get(sc.stage_id) ?? [];
+      arr.push(sc);
+      byStage.set(sc.stage_id, arr);
+    }
 
-    for (const cid of competitorIds) {
-      const cidStr = String(cid);
+    // Accumulators per competitor
+    const groupSums = new Map(selectedIds.map((cid) => [cid, 0]));
+    const divSums = new Map(selectedIds.map((cid) => [cid, 0]));
+    const counts = new Map(selectedIds.map((cid) => [cid, 0]));
+    const divCounts = new Map(selectedIds.map((cid) => [cid, 0]));
 
-      // Compute average group_percent, overall_percent, and div_percent from stages
-      let groupSum = 0;
-      let overallSum = 0;
-      let divSum = 0;
-      let count = 0;
-      let divCount = 0;
-      for (const stage of data.stages ?? []) {
-        const cs = stage.competitors?.[cidStr];
-        if (cs && cs.group_percent != null) {
-          groupSum += cs.group_percent;
-          overallSum += cs.overall_percent ?? cs.group_percent;
-          count++;
-          if (cs.div_percent != null) {
-            divSum += cs.div_percent;
-            divCount++;
-          }
-        }
+    for (const [, stageScs] of byStage) {
+      const valid = stageScs.filter((sc) => sc.valid);
+      if (valid.length === 0) continue;
+
+      // Group leader = highest HF among selected competitors on this stage
+      const selectedValid = valid.filter((sc) => selectedIds.includes(sc.competitor_id));
+      const groupLeaderHf = selectedValid.reduce((m, sc) => Math.max(m, sc.hit_factor!), 0);
+      if (groupLeaderHf <= 0) continue;
+
+      // Division leaders = highest HF per division (full field)
+      const divLeaders = new Map<string, number>();
+      for (const sc of valid) {
+        const div = sc.competitor_division ?? "__none__";
+        divLeaders.set(div, Math.max(divLeaders.get(div) ?? 0, sc.hit_factor!));
       }
 
-      const penaltyData = data.penaltyStats?.[cidStr];
-      const consistencyData = data.consistencyStats?.[cidStr];
-      const styleData = data.styleFingerprintStats?.[cidStr];
-      const effData = data.efficiencyStats?.[cidStr];
+      for (const cid of selectedIds) {
+        const sc = selectedValid.find((s) => s.competitor_id === cid);
+        if (!sc || sc.hit_factor == null) continue;
 
+        groupSums.set(cid, (groupSums.get(cid) ?? 0) + (sc.hit_factor / groupLeaderHf) * 100);
+        counts.set(cid, (counts.get(cid) ?? 0) + 1);
+
+        const div = sc.competitor_division ?? "__none__";
+        const divLeader = divLeaders.get(div) ?? 0;
+        if (divLeader > 0) {
+          divSums.set(cid, (divSums.get(cid) ?? 0) + (sc.hit_factor / divLeader) * 100);
+          divCounts.set(cid, (divCounts.get(cid) ?? 0) + 1);
+        }
+      }
+    }
+
+    const map = new Map<number, OgCompetitorStats>();
+    for (const cid of selectedIds) {
+      const n = counts.get(cid) ?? 0;
+      const dn = divCounts.get(cid) ?? 0;
       map.set(cid, {
-        matchPct: penaltyData?.matchPctActual ?? (count > 0 ? groupSum / count : 0),
-        overallPct: count > 0 ? overallSum / count : 0,
-        divPct: divCount > 0 ? divSum / divCount : 0,
-        archetype: styleData?.archetype ?? null,
-        consistency: consistencyData?.label ?? null,
-        pointsPerShot: effData?.pointsPerShot ?? null,
-        stagesFired: consistencyData?.stagesFired ?? count,
+        matchPct: n > 0 ? (groupSums.get(cid) ?? 0) / n : 0,
+        overallPct: 0, // not computed in OG mode (would need overall leader per stage)
+        divPct: dn > 0 ? (divSums.get(cid) ?? 0) / dn : 0,
+        archetype: null, // not computed (requires full-field fingerprint)
+        consistency: null,
+        pointsPerShot: null,
+        stagesFired: n,
       });
     }
 
     return map;
   } catch (err) {
-    console.error("[og] Failed to fetch compare data:", err);
+    console.error("[og] Failed to fetch scorecard stats:", err);
     return null;
   }
 }
