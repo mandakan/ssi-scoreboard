@@ -113,12 +113,33 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const auth = request.headers.get("Authorization");
   const secret = process.env.MCP_SECRET;
-  if (secret) {
-    const auth = request.headers.get("Authorization");
-    if (auth !== `Bearer ${secret}`) {
-      return new Response("Unauthorized", { status: 401, headers: CORS });
-    }
+  const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://scoreboard.urdr.dev";
+
+  // Always require a Bearer token so the OAuth flow is triggered correctly:
+  // unauthenticated clients receive 401 with WWW-Authenticate, complete the
+  // OAuth dance, then retry with the token (per RFC 9728 / MCP OAuth spec).
+  if (!auth?.startsWith("Bearer ")) {
+    return new Response("Unauthorized", {
+      status: 401,
+      headers: {
+        ...CORS,
+        "WWW-Authenticate": `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource"`,
+      },
+    });
+  }
+
+  // If MCP_SECRET is configured, enforce it.  Otherwise accept any Bearer token
+  // (public API — the token is a formality to satisfy the OAuth handshake).
+  if (secret && auth !== `Bearer ${secret}`) {
+    return new Response("Unauthorized", {
+      status: 401,
+      headers: {
+        ...CORS,
+        "WWW-Authenticate": `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource"`,
+      },
+    });
   }
 
   let body: JSONRPCMessage;

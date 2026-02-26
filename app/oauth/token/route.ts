@@ -39,7 +39,11 @@ export async function POST(request: Request) {
       token_type: "Bearer",
       // 1-year expiry — avoids frequent re-auth prompts for a public API.
       expires_in: 365 * 24 * 3600,
-      ...(scope ? { scope } : {}),
+      // Always echo the scope. Claude.ai validates that the granted scope matches
+      // the requested scope=claudeai; if the token request body omits scope (which
+      // is common — it was sent in the authorize request, not repeated here) we
+      // default to "claudeai" so the client doesn't silently reject the grant.
+      scope: scope || "claudeai",
     },
     { headers: CORS },
   );
