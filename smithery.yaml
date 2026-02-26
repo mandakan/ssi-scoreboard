@@ -1,0 +1,7 @@
+runtime: typescript
+build:
+  # The MCP server lives in the mcp/ subdirectory of this monorepo.
+  # Install from the root first so mcp/ can resolve shared deps (zod, MCP SDK)
+  # from the root node_modules, then build the Smithery bundle from mcp/.
+  installCommand: "npm install"
+  buildCommand: "cd mcp && npx @smithery/cli build"
