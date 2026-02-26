@@ -417,73 +417,107 @@ function matchOverviewImage(match: OgMatchData, logoUrl: string) {
       <div
         style={{
           display: "flex",
-          flexDirection: "column",
+          flexDirection: "row",
           flex: 1,
           padding: "40px 56px 36px",
-          justifyContent: "space-between",
+          gap: "40px",
         }}
       >
-        {brandHeader(logoUrl)}
-
-        {/* Main content — match name and subtitle */}
+        {/* Left column: all text content */}
         <div
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: "8px",
-          }}
-        >
-          <div
-            style={{
-              fontSize: "52px",
-              fontWeight: 700,
-              lineHeight: 1.15,
-              letterSpacing: "-0.02em",
-            }}
-          >
-            {match.name}
-          </div>
-          {subtitle !== "" ? (
-            <div style={{ display: "flex", fontSize: "28px", color: C.muted }}>
-              {subtitle}
-            </div>
-          ) : null}
-        </div>
-
-        {/* Stats row */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "row",
-            alignItems: "flex-end",
+            flex: 1,
             justifyContent: "space-between",
-            width: "100%",
           }}
         >
-          <div style={{ display: "flex", flexDirection: "row", gap: "20px" }}>
-            {statBadge(String(match.stagesCount), "stages")}
-            {statBadge(String(match.competitorsCount), "competitors")}
-            {statBadge(`${String(match.scoringCompleted)}%`, "scored")}
-            {match.region
-              ? statBadge(match.region, "region")
-              : null}
-          </div>
+          {brandHeader(logoUrl)}
+
+          {/* Main content — match name and subtitle */}
           <div
             style={{
               display: "flex",
               flexDirection: "column",
-              alignItems: "flex-end",
-              gap: "6px",
+              gap: "8px",
             }}
           >
-            <div style={{ display: "flex", fontSize: "20px", color: C.accent }}>
-              {statusText}
+            <div
+              style={{
+                fontSize: "52px",
+                fontWeight: 700,
+                lineHeight: 1.15,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              {match.name}
             </div>
-            <div style={{ fontSize: "22px", color: C.dim }}>
-              scoreboard.urdr.dev
+            {subtitle !== "" ? (
+              <div style={{ display: "flex", fontSize: "28px", color: C.muted }}>
+                {subtitle}
+              </div>
+            ) : null}
+          </div>
+
+          {/* Stats row */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "flex-end",
+              justifyContent: "space-between",
+              width: "100%",
+            }}
+          >
+            <div style={{ display: "flex", flexDirection: "row", gap: "20px" }}>
+              {statBadge(String(match.stagesCount), "stages")}
+              {statBadge(String(match.competitorsCount), "competitors")}
+              {statBadge(`${String(match.scoringCompleted)}%`, "scored")}
+              {match.region
+                ? statBadge(match.region, "region")
+                : null}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-end",
+                gap: "6px",
+              }}
+            >
+              <div style={{ display: "flex", fontSize: "20px", color: C.accent }}>
+                {statusText}
+              </div>
+              <div style={{ fontSize: "22px", color: C.dim }}>
+                scoreboard.urdr.dev
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Right column: match image (only when available) */}
+        {match.imageUrl ? (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={match.imageUrl}
+              width={200}
+              height={240}
+              alt={match.name}
+              style={{
+                borderRadius: "12px",
+                objectFit: "cover",
+              }}
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -511,6 +545,19 @@ function singleCompetitorImage(
 
   // No results — show metadata card with match stats
   return singleCompetitorNoStats(match, competitor, matchInfo, details, logoUrl);
+}
+
+function matchImageThumb(imageUrl: string, alt: string) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={imageUrl}
+      width={56}
+      height={68}
+      alt={alt}
+      style={{ borderRadius: "8px", objectFit: "cover", flexShrink: 0 }}
+    />
+  );
 }
 
 function singleCompetitorWithStats(
@@ -571,27 +618,30 @@ function singleCompetitorWithStats(
             border: `1px solid ${C.border}`,
           }}
         >
-          {/* Name + details */}
+          {/* Name + details row, with optional match image thumbnail */}
           <div
-            style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+            style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: "20px" }}
           >
-            <div
-              style={{
-                fontSize: "48px",
-                fontWeight: 700,
-                lineHeight: 1.15,
-                letterSpacing: "-0.02em",
-              }}
-            >
-              {competitor.name}
-            </div>
-            {details !== "" ? (
+            {match.imageUrl ? matchImageThumb(match.imageUrl, match.name) : null}
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
               <div
-                style={{ display: "flex", fontSize: "24px", color: C.muted }}
+                style={{
+                  fontSize: "48px",
+                  fontWeight: 700,
+                  lineHeight: 1.15,
+                  letterSpacing: "-0.02em",
+                }}
               >
-                {details}
+                {competitor.name}
               </div>
-            ) : null}
+              {details !== "" ? (
+                <div
+                  style={{ display: "flex", fontSize: "24px", color: C.muted }}
+                >
+                  {details}
+                </div>
+              ) : null}
+            </div>
           </div>
 
           {/* Match % + bar */}
@@ -698,23 +748,26 @@ function singleCompetitorNoStats(
       >
         {brandHeader(logoUrl, matchInfo)}
 
-        {/* Name + details */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          <div
-            style={{
-              fontSize: "56px",
-              fontWeight: 700,
-              lineHeight: 1.15,
-              letterSpacing: "-0.02em",
-            }}
-          >
-            {competitor.name}
-          </div>
-          {details !== "" ? (
-            <div style={{ display: "flex", fontSize: "28px", color: C.muted }}>
-              {details}
+        {/* Name + details, with optional match image thumbnail */}
+        <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: "20px" }}>
+          {match.imageUrl ? matchImageThumb(match.imageUrl, match.name) : null}
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div
+              style={{
+                fontSize: "56px",
+                fontWeight: 700,
+                lineHeight: 1.15,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              {competitor.name}
             </div>
-          ) : null}
+            {details !== "" ? (
+              <div style={{ display: "flex", fontSize: "28px", color: C.muted }}>
+                {details}
+              </div>
+            ) : null}
+          </div>
         </div>
 
         {/* Stats row */}

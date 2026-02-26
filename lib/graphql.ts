@@ -100,6 +100,11 @@ export const MATCH_QUERY = `
         level
         stages_count
         competitors_count
+        image {
+          url
+          width
+          height
+        }
         stages {
           id
           number

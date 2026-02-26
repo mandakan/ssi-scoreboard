@@ -28,6 +28,7 @@ interface RawOgMatchData {
     level?: string | null;
     stages_count?: number;
     competitors_count?: number;
+    image?: { url?: string | null; width?: number | null; height?: number | null } | null;
     competitors_approved_w_wo_results_not_dnf?: RawOgCompetitor[];
   } | null;
 }
@@ -43,6 +44,7 @@ export interface OgMatchData {
   stagesCount: number;
   competitorsCount: number;
   scoringCompleted: number;
+  imageUrl: string | null;
   competitors: CompetitorInfo[];
 }
 
@@ -112,6 +114,9 @@ async function fetchOgMatchDataImpl(
       ),
     }));
 
+    // Only use the image URL if it's non-empty (API returns "" for unset images)
+    const imageUrl = ev.image?.url?.trim() || null;
+
     return {
       name: ev.name,
       venue: ev.venue ?? null,
@@ -120,6 +125,7 @@ async function fetchOgMatchDataImpl(
       region: ev.region ?? null,
       stagesCount: ev.stages_count ?? 0,
       competitorsCount: ev.competitors_count ?? competitors.length,
+      imageUrl,
       scoringCompleted:
         ev.scoring_completed != null
           ? Math.round(parseFloat(String(ev.scoring_completed)))
