@@ -142,6 +142,7 @@ custom subdomain, verifying the deployment, and troubleshooting — see
 - **Server-side cache** — GraphQL response caching with smart TTL tiers (future/pre-match/active/complete) and admin purge endpoint; ioredis on Docker, @upstash/redis on Cloudflare Pages
 - **MCP server** — AI assistant integration via `POST /api/mcp` (HTTP) or stdio subprocess; exposes search, match, compare, and popular-matches tools
 - **New-version banner** — polls `/api/version` every 60 s; shows a non-blocking refresh prompt when a new deployment is detected
+- **Dynamic OG images** — rich Open Graph preview cards generated on-the-fly for match pages (match overview, single competitor, multi-competitor variants); powered by `next/og` (Satori)
 - **PWA installable** — add to home screen on Android, iOS, and desktop; runs fullscreen without browser chrome
 - **Mobile-first** — designed for one-handed use at 390px; no unintentional horizontal overflow
 
@@ -196,10 +197,12 @@ Browser → Next.js Route Handlers → shootnscoreit.com/graphql/
 - **`app/api/match/[ct]/[id]/`** — match metadata: stages, competitors, scoring progress
 - **`app/api/compare/`** — fans out scorecard queries, merges ranking data
 - **`app/api/events/`** — event search with date range, firearms, and country filters
+- **`app/api/og/match/[ct]/[id]/`** — dynamic Open Graph image generation (match overview, single competitor, multi-competitor)
 - **`app/api/mcp/`** — MCP HTTP endpoint (JSON-RPC, single-shot transport)
 - **`app/api/admin/cache/purge/`** — authenticated endpoint to flush the Redis cache
 - **`app/api/compare/logic.ts`** — pure `computeGroupRankings()` function, no I/O, fully unit-tested
 - **`lib/graphql.ts`** — GraphQL query strings and `executeQuery()` helper (server-only)
+- **`lib/og-data.ts`** — server-only helper to fetch match data for OG images and page metadata
 - **`lib/mcp-tools.ts`** — shared MCP tool registration (used by HTTP route and stdio server)
 - **`lib/match-ttl.ts`** — pure `computeMatchTtl()` helper for smart cache TTL tiers
 - **`lib/cache.ts`** — `CacheAdapter` interface; `lib/cache-node.ts` (ioredis) and `lib/cache-edge.ts` (@upstash/redis) are the two implementations; `lib/cache-impl.ts` selects between them at build time
