@@ -21,6 +21,7 @@ const C = {
 interface OgCompetitorStats {
   matchPct: number; // average group_percent across stages
   overallPct: number; // average overall_percent across stages
+  divPct: number; // average div_percent across stages
   archetype: string | null;
   consistency: string | null;
   pointsPerShot: number | null;
@@ -123,16 +124,22 @@ async function fetchCompareStats(
     for (const cid of competitorIds) {
       const cidStr = String(cid);
 
-      // Compute average group_percent and overall_percent from stages
+      // Compute average group_percent, overall_percent, and div_percent from stages
       let groupSum = 0;
       let overallSum = 0;
+      let divSum = 0;
       let count = 0;
+      let divCount = 0;
       for (const stage of data.stages ?? []) {
         const cs = stage.competitors?.[cidStr];
         if (cs && cs.group_percent != null) {
           groupSum += cs.group_percent;
           overallSum += cs.overall_percent ?? cs.group_percent;
           count++;
+          if (cs.div_percent != null) {
+            divSum += cs.div_percent;
+            divCount++;
+          }
         }
       }
 
@@ -144,6 +151,7 @@ async function fetchCompareStats(
       map.set(cid, {
         matchPct: penaltyData?.matchPctActual ?? (count > 0 ? groupSum / count : 0),
         overallPct: count > 0 ? overallSum / count : 0,
+        divPct: divCount > 0 ? divSum / divCount : 0,
         archetype: styleData?.archetype ?? null,
         consistency: consistencyData?.label ?? null,
         pointsPerShot: effData?.pointsPerShot ?? null,
@@ -548,7 +556,7 @@ function singleCompetitorWithStats(
           >
             <div style={{ display: "flex", flexDirection: "column" }}>
               <div style={{ display: "flex", fontSize: "13px", color: C.dim }}>
-                match performance
+                division performance
               </div>
               <div
                 style={{
@@ -565,7 +573,7 @@ function singleCompetitorWithStats(
                     lineHeight: 1,
                   }}
                 >
-                  {formatPct(stats.matchPct)}
+                  {formatPct(stats.divPct)}
                 </div>
                 <div style={{ fontSize: "28px", color: C.dim }}>%</div>
               </div>
@@ -579,7 +587,7 @@ function singleCompetitorWithStats(
                 paddingBottom: "8px",
               }}
             >
-              {pctBar(stats.matchPct, C.accent, "18px")}
+              {pctBar(stats.divPct, C.accent, "18px")}
               <div style={{ display: "flex", fontSize: "14px", color: C.dim }}>
                 {`${String(stats.stagesFired)} of ${String(match.stagesCount)} stages  \u00b7  ${String(match.competitorsCount)} competitors`}
               </div>
