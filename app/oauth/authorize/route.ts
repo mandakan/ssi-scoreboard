@@ -32,8 +32,12 @@ export async function GET(request: Request) {
   }
 
   // Auto-approve: generate a one-time code and redirect immediately.
+  // Echo scope back per RFC 6749 §4.1.2 so clients that validate granted
+  // scopes (e.g. claude.ai requires scope=claudeai) don't reject the grant.
   callbackUrl.searchParams.set("code", crypto.randomUUID());
   if (state) callbackUrl.searchParams.set("state", state);
+  const scope = searchParams.get("scope");
+  if (scope) callbackUrl.searchParams.set("scope", scope);
 
   return Response.redirect(callbackUrl.toString(), 302);
 }
