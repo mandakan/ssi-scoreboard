@@ -24,6 +24,8 @@ const MOCK_MATCH: OgMatchData = {
   competitorsCount: 85,
   scoringCompleted: 100,
   imageUrl: null,
+  imageWidth: null,
+  imageHeight: null,
   competitors: [
     { id: 1, name: "Alice Andersson", competitor_number: "A001", club: "Test Club", division: "Production" },
     { id: 2, name: "Bob Bjork", competitor_number: "B002", club: "Other Club", division: "Open" },
@@ -240,6 +242,8 @@ describe("OG Image Route — GET /api/og/match/[ct]/[id]", () => {
         competitorsCount: 0,
         scoringCompleted: 0,
         imageUrl: null,
+        imageWidth: null,
+        imageHeight: null,
         competitors: [],
       };
       mockFetch.mockResolvedValue(minimal);

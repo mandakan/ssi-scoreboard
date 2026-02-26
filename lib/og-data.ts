@@ -45,6 +45,8 @@ export interface OgMatchData {
   competitorsCount: number;
   scoringCompleted: number;
   imageUrl: string | null;
+  imageWidth: number | null;
+  imageHeight: number | null;
   competitors: CompetitorInfo[];
 }
 
@@ -116,6 +118,8 @@ async function fetchOgMatchDataImpl(
 
     // Only use the image URL if it's non-empty (API returns "" for unset images)
     const imageUrl = ev.image?.url?.trim() || null;
+    const imageWidth = imageUrl && ev.image?.width ? ev.image.width : null;
+    const imageHeight = imageUrl && ev.image?.height ? ev.image.height : null;
 
     return {
       name: ev.name,
@@ -126,6 +130,8 @@ async function fetchOgMatchDataImpl(
       stagesCount: ev.stages_count ?? 0,
       competitorsCount: ev.competitors_count ?? competitors.length,
       imageUrl,
+      imageWidth,
+      imageHeight,
       scoringCompleted:
         ev.scoring_completed != null
           ? Math.round(parseFloat(String(ev.scoring_completed)))

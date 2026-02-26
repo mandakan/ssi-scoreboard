@@ -418,7 +418,7 @@ function matchOverviewImage(match: OgMatchData, logoUrl: string) {
       }}
     >
       {/* Background image layers (below content) */}
-      {match.imageUrl ? matchImageBgLayers(match.imageUrl) : null}
+      {match.imageUrl ? matchImageBgLayers(match.imageUrl, match.imageWidth, match.imageHeight) : null}
 
       {/* Content layer (above background) */}
       <div
@@ -533,69 +533,73 @@ const OG_W = 1200;
 const OG_H = 630;
 
 /**
- * Background layer: the match image covers the full OG height, starting at
- * 1/3 from the left (x=400). Uses objectFit:"cover" so the image fills the
- * 800×630 area regardless of aspect ratio — landscape banners are zoomed and
- * cropped, portrait images are also cropped to fill.
+ * Background layer: the match image sits in the rightmost 1/3 of the canvas
+ * (400px wide) at full OG height, with a linear gradient spanning the FULL
+ * display width (bg→transparent left-to-right) so the image fades in smoothly.
  *
- * A 300px gradient (bg→transparent) is placed ON TOP of the image's left edge
- * using position:absolute within the image container (which has explicit px
- * dimensions — reliable in Satori). The gradient creates the dark-to-image
- * fade effect.
+ * Sizing logic (requires the image's natural dimensions):
+ *   • Scale the image to OG_H height: scaledW = naturalW * (OG_H / naturalH)
+ *   • If scaledW >= 400px → crop to right 400px (objectFit:cover), container
+ *     starts at x = OG_W - 400 = 800
+ *   • If scaledW < 400px → show the full image right-aligned, container width
+ *     = scaledW, starts at x = OG_W - scaledW
+ *   • If dimensions unknown → fall back to 400px container
+ *
+ * The container has position:absolute so Satori positions it via left/top.
+ * The gradient lives inside the same container, also position:absolute, so
+ * it inherits the container as its positioning context.
  *
  * Returns a SINGLE <div> (not a Fragment) — required for Satori.
  */
-function matchImageBgLayers(imageUrl: string) {
-  const imgStartX = Math.round(OG_W / 3); // 400 — image starts at 1/3 from left
-  const imgW = OG_W - imgStartX;           // 800 — image covers right 2/3
-  const gradW = 300;                       // gradient fades across 300px
+function matchImageBgLayers(
+  imageUrl: string,
+  imageWidth: number | null,
+  imageHeight: number | null,
+) {
+  const MAX_W = Math.round(OG_W / 3); // 400px = rightmost 33%
+
+  // Compute natural width when image is scaled to full OG height
+  const scaledW =
+    imageWidth != null && imageHeight != null && imageHeight > 0
+      ? Math.round(imageWidth * (OG_H / imageHeight))
+      : null;
+
+  // If the image is wide enough at full height, crop to MAX_W (objectFit:cover
+  // keeps it full-height). Otherwise show the full image right-aligned.
+  const displayW = scaledW == null || scaledW >= MAX_W ? MAX_W : scaledW;
+  const containerLeft = OG_W - displayW;
 
   return (
     <div
       style={{
         position: "absolute",
-        left: 0,
+        left: containerLeft,
         top: 0,
-        width: OG_W,
+        width: displayW,
         height: OG_H,
         display: "flex",
-        flexDirection: "row",
-        alignItems: "stretch",
       }}
     >
-      {/* Spacer: left 1/3, transparent so root bg shows */}
-      <div style={{ display: "flex", width: imgStartX }} />
-
-      {/* Image container: right 2/3, explicit px so position:absolute inside works */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={imageUrl}
+        alt=""
+        width={displayW}
+        height={OG_H}
+        style={{ objectFit: "cover", display: "flex" }}
+      />
+      {/* Gradient spans the FULL display width → perfectly linear fade */}
       <div
         style={{
-          position: "relative",
-          display: "flex",
-          width: imgW,
+          position: "absolute",
+          left: 0,
+          top: 0,
+          width: displayW,
           height: OG_H,
+          backgroundImage: `linear-gradient(to right, ${C.bg}, transparent)`,
+          display: "flex",
         }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={imageUrl}
-          alt=""
-          width={imgW}
-          height={OG_H}
-          style={{ objectFit: "cover", display: "flex" }}
-        />
-        {/* Gradient overlay: sits on top of image, fades bg→transparent */}
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-            width: gradW,
-            height: OG_H,
-            backgroundImage: `linear-gradient(to right, ${C.bg}, transparent)`,
-            display: "flex",
-          }}
-        />
-      </div>
+      />
     </div>
   );
 }
@@ -631,7 +635,7 @@ function singleCompetitorWithStats(
       }}
     >
       {/* Background image layers (below content) */}
-      {match.imageUrl ? matchImageBgLayers(match.imageUrl) : null}
+      {match.imageUrl ? matchImageBgLayers(match.imageUrl, match.imageWidth, match.imageHeight) : null}
 
       {/* Content layer (above background) */}
       <div
@@ -788,7 +792,7 @@ function singleCompetitorNoStats(
         color: C.text,
       }}
     >
-      {match.imageUrl ? matchImageBgLayers(match.imageUrl) : null}
+      {match.imageUrl ? matchImageBgLayers(match.imageUrl, match.imageWidth, match.imageHeight) : null}
 
       <div
         style={{
@@ -989,7 +993,7 @@ function multiCompetitorWithStats(
         color: C.text,
       }}
     >
-      {match.imageUrl ? matchImageBgLayers(match.imageUrl) : null}
+      {match.imageUrl ? matchImageBgLayers(match.imageUrl, match.imageWidth, match.imageHeight) : null}
 
       <div
         style={{
@@ -1132,7 +1136,7 @@ function multiCompetitorNoStats(
         color: C.text,
       }}
     >
-      {match.imageUrl ? matchImageBgLayers(match.imageUrl) : null}
+      {match.imageUrl ? matchImageBgLayers(match.imageUrl, match.imageWidth, match.imageHeight) : null}
 
       <div
         style={{
