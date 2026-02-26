@@ -409,6 +409,9 @@ function brandHeader(rightText?: string) {
             fontSize: "22px",
             color: C.muted,
             maxWidth: "600px",
+            backgroundColor: "rgba(10, 10, 10, 0.65)",
+            padding: "6px 14px",
+            borderRadius: "8px",
           }}
         >
           {rightText}
