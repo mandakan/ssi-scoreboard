@@ -149,6 +149,43 @@ or any other type that is serialised into Redis via `cachedExecuteQuery`.
 | `MCP_SECRET` | `app/api/mcp/route.ts` | Both | Optional. If set, `POST /api/mcp` requires `Authorization: Bearer <MCP_SECRET>`. Omit for public access. |
 | `NEXT_PUBLIC_APP_URL` | `app/api/mcp/route.ts` | Both | Base URL used by MCP tools for internal API calls. Defaults to `http://localhost:PORT`. Required for Cloudflare Pages (set to the external URL, e.g. `https://scoreboard.urdr.dev`). |
 
+## MCP Server
+
+The app exposes a [Model Context Protocol](https://modelcontextprotocol.io) server with four tools:
+`search_events`, `get_match`, `compare_competitors`, `get_popular_matches`.
+
+Two transport modes share the same tool logic via `lib/mcp-tools.ts`:
+- **HTTP** (`app/api/mcp/route.ts`) — stateless JSON-RPC, single-shot transport; used by the Smithery
+  external deployment and any MCP-over-HTTP client.
+- **stdio** (`mcp/src/index.ts`) — spawned by Claude Desktop / Claude Code via `.mcp.json`.
+
+The stdio server's `configSchema` (a Zod schema exported from `mcp/src/index.ts`) and `createServer`
+default export are used by Smithery's hosted TypeScript runtime. The HTTP server always uses
+`NEXT_PUBLIC_APP_URL` (or `http://localhost:PORT`) as its `baseUrl` — it does not read session config.
+
+User-facing setup guide: `docs/mcp.md`.
+
+### Smithery registry
+
+The server is published on [smithery.ai](https://smithery.ai) as an **external** server
+pointing at `https://scoreboard.urdr.dev/api/mcp`.
+
+**Metadata set via the Smithery UI (registry listing page):**
+- Homepage → `https://scoreboard.urdr.dev`
+- Icon → `https://scoreboard.urdr.dev/icons/icon-512.png`
+
+**Tool annotations** (`readOnlyHint: true`, `openWorldHint: true`) are declared inline in
+`lib/mcp-tools.ts` as the 4th argument to each `server.tool()` call.
+
+**`configSchema` for the external URL deployment** cannot be set through the Smithery UI.
+To update it after a schema change, republish via the CLI:
+```bash
+npx @smithery/cli@latest mcp publish "https://scoreboard.urdr.dev/api/mcp" \
+  -n mandakan/ssi-scoreboard \
+  --config-schema '{"type":"object","properties":{"baseUrl":{"type":"string","format":"uri","description":"Base URL of the SSI Scoreboard instance. Defaults to https://scoreboard.urdr.dev"}}}'
+```
+The `configSchema` block in `smithery.yaml` covers the hosted TypeScript runtime path only.
+
 ## Package Manager
 This project uses **pnpm@10.30.1**. Do not use npm or yarn. Use `pnpm add` / `pnpm add -D`.
 When adding new packages, always specify the exact latest stable version (check with `npm show <pkg> version`).
