@@ -1,0 +1,54 @@
+name: Publish to Smithery Registry
+
+on:
+  workflow_dispatch:
+    inputs:
+      server_url:
+        description: 'MCP server URL to publish'
+        required: true
+        default: 'https://scoreboard.urdr.dev/api/mcp'
+      dry_run:
+        description: 'Dry run — print command without executing'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify SMITHERY_API_KEY is set
+        run: |
+          if [ -z "$SMITHERY_API_KEY" ]; then
+            echo "ERROR: SMITHERY_API_KEY secret is not set in the production environment"
+            exit 1
+          fi
+        env:
+          SMITHERY_API_KEY: ${{ secrets.SMITHERY_API_KEY }}
+
+      - name: Publish to Smithery (dry run)
+        if: ${{ inputs.dry_run == true }}
+        run: |
+          echo "DRY RUN — would execute:"
+          echo "npx @smithery/cli@latest mcp publish \"${{ inputs.server_url }}\" \\"
+          echo "  -n mandakan/ssi-scoreboard \\"
+          echo "  --config-schema mcp/smithery-config-schema.json"
+
+      - name: Publish to Smithery
+        if: ${{ inputs.dry_run != true }}
+        env:
+          SMITHERY_API_KEY: ${{ secrets.SMITHERY_API_KEY }}
+        run: |
+          npx @smithery/cli@latest mcp publish "${{ inputs.server_url }}" \
+            -n mandakan/ssi-scoreboard \
+            --config-schema mcp/smithery-config-schema.json

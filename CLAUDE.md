@@ -148,6 +148,7 @@ or any other type that is serialised into Redis via `cachedExecuteQuery`.
 | `UPSTASH_REDIS_REST_TOKEN` | `lib/cache-edge.ts` | Cloudflare only | REST token from Upstash console. Set via `wrangler secret put` in production. |
 | `MCP_SECRET` | `app/api/mcp/route.ts` | Both | Optional. If set, `POST /api/mcp` requires `Authorization: Bearer <MCP_SECRET>`. Omit for public access. |
 | `NEXT_PUBLIC_APP_URL` | `app/api/mcp/route.ts` | Both | Base URL used by MCP tools for internal API calls. Defaults to `http://localhost:PORT`. Required for Cloudflare Pages (set to the external URL, e.g. `https://scoreboard.urdr.dev`). |
+| `SMITHERY_API_KEY` | `.github/workflows/smithery-publish.yml` | CI only | Smithery registry API key. Store as a GitHub `production` environment secret. Obtain from https://smithery.ai/account/api-keys. Never `NEXT_PUBLIC_`. |
 
 ## MCP Server
 
@@ -168,7 +169,7 @@ User-facing setup guide: `docs/mcp.md`.
 ### Smithery registry
 
 The server is published on [smithery.ai](https://smithery.ai) as an **external** server
-pointing at `https://scoreboard.urdr.dev/api/mcp`.
+pointing at `https://scoreboard.urdr.dev/api/mcp` (qualified name: `mandakan/ssi-scoreboard`).
 
 **Metadata set via the Smithery UI (registry listing page):**
 - Homepage → `https://scoreboard.urdr.dev`
@@ -177,14 +178,17 @@ pointing at `https://scoreboard.urdr.dev/api/mcp`.
 **Tool annotations** (`readOnlyHint: true`, `openWorldHint: true`) are declared inline in
 `lib/mcp-tools.ts` as the 4th argument to each `server.tool()` call.
 
-**`configSchema` for the external URL deployment** cannot be set through the Smithery UI.
-To update it after a schema change, republish via the CLI:
-```bash
-npx @smithery/cli@latest mcp publish "https://scoreboard.urdr.dev/api/mcp" \
-  -n mandakan/ssi-scoreboard \
-  --config-schema '{"type":"object","properties":{"baseUrl":{"type":"string","format":"uri","description":"Base URL of the SSI Scoreboard instance. Defaults to https://scoreboard.urdr.dev"}}}'
-```
-The `configSchema` block in `smithery.yaml` covers the hosted TypeScript runtime path only.
+**Publishing / updating the registry entry** — trigger the `Publish to Smithery Registry`
+workflow manually from the GitHub Actions tab (workflow_dispatch). This pushes the latest
+configSchema (`mcp/smithery-config-schema.json`) to the external deployment. The Smithery UI
+has no field for configSchema on external servers — the workflow is the only way to update it.
+
+Prerequisite: add `SMITHERY_API_KEY` as a secret in the GitHub repo's `production` environment
+(Settings → Environments → production → Add secret). Obtain the key from
+https://smithery.ai/account/api-keys.
+
+The `configSchema` block in `smithery.yaml` mirrors `mcp/smithery-config-schema.json` and
+covers the hosted TypeScript runtime path. Keep both in sync when changing the schema.
 
 ## Package Manager
 This project uses **pnpm@10.30.1**. Do not use npm or yarn. Use `pnpm add` / `pnpm add -D`.

@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Base URL of the SSI Scoreboard instance. Defaults to https://scoreboard.urdr.dev"
+    }
+  },
+  "additionalProperties": false
+}

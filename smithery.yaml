@@ -1,10 +1,10 @@
 runtime: typescript
 
-# configSchema is used by Smithery's hosted TypeScript runtime to prompt users
-# for optional configuration values before launching the server.
-# For the external URL deployment (https://scoreboard.urdr.dev/api/mcp) this
-# must be provided separately via the Smithery CLI — see CLAUDE.md for the
-# republish command.
+# configSchema canonical source: mcp/smithery-config-schema.json
+# This inline copy is used by Smithery's hosted TypeScript runtime.
+# For the external URL deployment the schema is pushed via the
+# "Publish to Smithery Registry" GitHub Actions workflow (workflow_dispatch).
+# When changing the schema, update BOTH this block and mcp/smithery-config-schema.json.
 configSchema:
   type: object
   properties:
