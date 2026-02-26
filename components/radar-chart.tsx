@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   RadarChart,
   Radar,
@@ -33,7 +33,18 @@ export function StageBalanceChart({ data }: StageBalanceChartProps) {
   const { stages, competitors } = data;
   const colorMap = buildColorMap(competitors.map((c) => c.id));
   const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
-  const [pctMode, setPctMode] = useState<PctMode>("group");
+  const [pctMode, setPctMode] = useState<PctMode>(
+    competitors.length < 2 ? "overall" : "group"
+  );
+
+  useEffect(() => {
+    if (competitors.length < 2 && pctMode === "group") {
+      setPctMode("overall");
+    } else if (competitors.length >= 2 && pctMode === "overall") {
+      setPctMode("group");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to count changes
+  }, [competitors.length]);
 
   const radarData = stages.map((stage) => {
     const row: Record<string, string | number> = { stage: `S${stage.stage_num}` };
@@ -95,18 +106,22 @@ export function StageBalanceChart({ data }: StageBalanceChartProps) {
       >
         {PCT_MODES.map((mode) => {
           const active = pctMode === mode.value;
+          const disabled = mode.value === "group" && competitors.length < 2;
           return (
             <button
               key={mode.value}
               type="button"
-              onClick={() => setPctMode(mode.value)}
+              onClick={() => { if (!disabled) setPctMode(mode.value); }}
               aria-pressed={active}
-              title={mode.description}
+              aria-disabled={disabled || undefined}
+              title={disabled ? "Select 2+ competitors to compare within the group" : mode.description}
               className={[
                 "rounded-full border px-3 py-0.5 text-xs font-medium transition-colors",
-                active
-                  ? "bg-foreground text-background border-foreground"
-                  : "text-muted-foreground border-border hover:border-foreground hover:text-foreground",
+                disabled
+                  ? "opacity-40 cursor-default text-muted-foreground border-border"
+                  : active
+                    ? "bg-foreground text-background border-foreground"
+                    : "text-muted-foreground border-border hover:border-foreground hover:text-foreground",
               ].join(" ")}
             >
               {mode.label}
