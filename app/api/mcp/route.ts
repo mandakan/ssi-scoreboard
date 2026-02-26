@@ -33,10 +33,24 @@ class SingleShotTransport implements Transport {
 }
 
 /**
- * GET — server discovery / human-readable landing page.
- * MCP clients probe with GET before issuing POST calls; browsers also hit GET.
+ * GET — server discovery or SSE listening mode.
+ *
+ * Clients that send Accept: text/event-stream are expecting either the old
+ * SSE transport or Streamable HTTP server-push mode — neither is possible on
+ * stateless Cloudflare Workers. Per the Streamable HTTP spec, returning 405
+ * tells well-behaved clients (including the MCP SDK) to fall back to
+ * POST-only request/response mode.
+ *
+ * Plain GET requests (browsers, curl) get a JSON discovery response.
  */
-export async function GET() {
+export async function GET(request: Request) {
+  if (request.headers.get("accept")?.includes("text/event-stream")) {
+    return new Response("SSE transport not supported — use POST", {
+      status: 405,
+      headers: { Allow: "POST" },
+    });
+  }
+
   return NextResponse.json({
     name: "ssi-scoreboard",
     version: "0.1.0",
