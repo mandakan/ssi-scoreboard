@@ -15,7 +15,7 @@
  *   pnpm tsx scripts/warm-cache.ts [options]
  *
  * Options:
- *   --level <l2plus|l3plus|l4plus|all>   Min event level (default: l3plus)
+ *   --level <all|l1plus|l2plus|l3plus|l4plus>  Min event level (default: l3plus)
  *   --country <ISO-3>                    Filter by country, e.g. SWE (default: all)
  *   --after  <YYYY-MM-DD>                Fetch matches starting after (default: 5 years ago)
  *   --before <YYYY-MM-DD>                Fetch matches starting before (default: 4 days ago)
@@ -60,6 +60,7 @@ function computeMatchTtl(
 
 const ALLOWED_LEVELS: Record<string, Set<string> | null> = {
   all: null,
+  l1plus: null, // alias for all — Level I and above
   l2plus: new Set(["Level II", "Level III", "Level IV", "Level V"]),
   l3plus: new Set(["Level III", "Level IV", "Level V"]),
   l4plus: new Set(["Level IV", "Level V"]),
@@ -449,9 +450,11 @@ async function main(): Promise<void> {
 
   const args = parseArgs();
 
-  const levelAllowed = args.level in ALLOWED_LEVELS
-    ? ALLOWED_LEVELS[args.level]
-    : ALLOWED_LEVELS.l3plus;
+  if (!(args.level in ALLOWED_LEVELS)) {
+    console.error(`Error: unknown --level "${args.level}". Valid values: all, l1plus, l2plus, l3plus, l4plus`);
+    process.exit(1);
+  }
+  const levelAllowed = ALLOWED_LEVELS[args.level];
 
   console.log("SSI cache warmer");
   console.log("─".repeat(50));
