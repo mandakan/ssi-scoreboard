@@ -64,15 +64,30 @@ interface StoredFilters {
   country: string;
 }
 
-/** Best-effort country guess from the browser locale. Returns one of the
- *  COUNTRY_OPTIONS ids or "all" as a fallback. Only called client-side. */
-function guessCountryFromLocale(): string {
-  if (typeof navigator === "undefined") return "all";
-  const lang = navigator.language.toLowerCase();
-  if (lang.startsWith("sv")) return "SWE";
-  if (lang.startsWith("no") || lang.startsWith("nb") || lang.startsWith("nn")) return "NOR";
-  if (lang.startsWith("da")) return "DNK";
-  if (lang.startsWith("fi")) return "FIN";
+/** Best-effort country guess for first-time visitors. Returns one of the
+ *  COUNTRY_OPTIONS ids or "all" as a fallback. Only called client-side.
+ *
+ *  Strategy: timezone first (reliable even for English-locale users), then
+ *  language locale as a secondary signal, then "all". Nothing leaves the
+ *  device — both Intl and navigator.language are read-only system settings. */
+function guessCountry(): string {
+  // 1. Timezone — most reliable: a Swedish user with English locale still has
+  //    "Europe/Stockholm" set in their OS.
+  if (typeof Intl !== "undefined") {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz === "Europe/Stockholm") return "SWE";
+    if (tz === "Europe/Oslo") return "NOR";
+    if (tz === "Europe/Copenhagen") return "DNK";
+    if (tz === "Europe/Helsinki" || tz === "Europe/Mariehamn") return "FIN";
+  }
+  // 2. Language locale — weaker signal but catches remaining cases.
+  if (typeof navigator !== "undefined") {
+    const lang = navigator.language.toLowerCase();
+    if (lang.startsWith("sv")) return "SWE";
+    if (lang.startsWith("no") || lang.startsWith("nb") || lang.startsWith("nn")) return "NOR";
+    if (lang.startsWith("da")) return "DNK";
+    if (lang.startsWith("fi")) return "FIN";
+  }
   return "all";
 }
 
@@ -158,7 +173,7 @@ export function EventSearch() {
   useEffect(() => {
     const stored = loadStoredFilters();
     setFirearms(stored?.firearms ?? "all");
-    setCountry(stored?.country ?? guessCountryFromLocale());
+    setCountry(stored?.country ?? guessCountry());
     setLevel(stored?.level ?? "all");
     setFiltersLoaded(true);
   }, []);
