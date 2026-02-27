@@ -88,7 +88,7 @@ export async function GET(req: Request) {
     (q ? wideAfter.toISOString().slice(0, 10) : defaultAfter.toISOString().slice(0, 10));
   const startsBefore = searchParams.get("starts_before") ??
     (q ? wideBefore.toISOString().slice(0, 10) : defaultBefore.toISOString().slice(0, 10));
-  const firearms = searchParams.get("firearms") ?? "hg";
+  const firearms = searchParams.get("firearms") ?? null;
 
   let rawEvents: RawEvent[];
   try {
@@ -104,7 +104,7 @@ export async function GET(req: Request) {
       // No search text: work around the API's per-request result cap by
       // splitting the date range into 2-month sub-windows, fetching in
       // parallel, then deduplicating by event ID.
-      const windows = buildSubWindows(startsAfter, startsBefore, { firearms });
+      const windows = buildSubWindows(startsAfter, startsBefore, firearms ? { firearms } : {});
       const results = await Promise.all(
         windows.map((vars) => executeQuery<RawEventsData>(EVENTS_QUERY, vars, 3600)),
       );

@@ -32,13 +32,12 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const FIREARMS_OPTIONS = [
+  { id: "all", label: "All" },
   { id: "hg", label: "Handgun & PCC" },
   { id: "pc", label: "PCC" },
   { id: "rf", label: "Rifle" },
   { id: "sg", label: "Shotgun" },
 ] as const;
-
-const DEFAULT_FIREARMS = "hg";
 
 const COUNTRY_OPTIONS = [
   { id: "all", label: "All" },
@@ -48,8 +47,6 @@ const COUNTRY_OPTIONS = [
   { id: "FIN", label: "Finland" },
 ] as const;
 
-const DEFAULT_COUNTRY = "SWE";
-
 const LEVEL_OPTIONS = [
   { id: "all",    label: "All"  },
   { id: "l2plus", label: "L2+" },
@@ -57,7 +54,42 @@ const LEVEL_OPTIONS = [
   { id: "l4plus", label: "L4+" },
 ] as const;
 
-const DEFAULT_LEVEL = "l2plus";
+// ── Filter persistence ────────────────────────────────────────────────────────
+
+const LS_FILTERS_KEY = "ssi_event_filters";
+
+interface StoredFilters {
+  level: string;
+  firearms: string;
+  country: string;
+}
+
+/** Best-effort country guess from the browser locale. Returns one of the
+ *  COUNTRY_OPTIONS ids or "all" as a fallback. Only called client-side. */
+function guessCountryFromLocale(): string {
+  if (typeof navigator === "undefined") return "all";
+  const lang = navigator.language.toLowerCase();
+  if (lang.startsWith("sv")) return "SWE";
+  if (lang.startsWith("no") || lang.startsWith("nb") || lang.startsWith("nn")) return "NOR";
+  if (lang.startsWith("da")) return "DNK";
+  if (lang.startsWith("fi")) return "FIN";
+  return "all";
+}
+
+function loadStoredFilters(): StoredFilters | null {
+  try {
+    const raw = localStorage.getItem(LS_FILTERS_KEY);
+    return raw ? (JSON.parse(raw) as StoredFilters) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredFilters(filters: StoredFilters) {
+  try {
+    localStorage.setItem(LS_FILTERS_KEY, JSON.stringify(filters));
+  } catch { /* ignore private-browsing write failures */ }
+}
 
 // ── Pure date helpers ────────────────────────────────────────────────────────
 
@@ -116,9 +148,26 @@ export function EventSearch() {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [browseMonth, setBrowseMonth] = useState<Date>(() => startOfMonth(new Date()));
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [firearms, setFirearms] = useState(DEFAULT_FIREARMS);
-  const [country, setCountry] = useState(DEFAULT_COUNTRY);
-  const [level, setLevel] = useState(DEFAULT_LEVEL);
+  // Start with inclusive "all" defaults — overwritten from localStorage after mount
+  const [firearms, setFirearms] = useState("all");
+  const [country, setCountry] = useState("all");
+  const [level, setLevel] = useState("all");
+  const [filtersLoaded, setFiltersLoaded] = useState(false);
+
+  // Load persisted filters (and locale-guess for country) after first mount
+  useEffect(() => {
+    const stored = loadStoredFilters();
+    setFirearms(stored?.firearms ?? "all");
+    setCountry(stored?.country ?? guessCountryFromLocale());
+    setLevel(stored?.level ?? "all");
+    setFiltersLoaded(true);
+  }, []);
+
+  // Persist filter changes (skip the initial render before we've loaded)
+  useEffect(() => {
+    if (!filtersLoaded) return;
+    saveStoredFilters({ level, firearms, country });
+  }, [level, firearms, country, filtersLoaded]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(inputValue), 300);
@@ -155,11 +204,11 @@ export function EventSearch() {
     router.push(`/match/${event.content_type}/${event.id}`);
   }
 
-  // Active filter summary shown in collapsed filter button
+  // Active filter summary shown in collapsed filter button — omit "all" values
   const activeFilterSummary = [
-    COUNTRY_OPTIONS.find((o) => o.id === country)?.label,
-    LEVEL_OPTIONS.find((o) => o.id === level)?.label,
-    FIREARMS_OPTIONS.find((o) => o.id === firearms)?.label,
+    country   !== "all" ? COUNTRY_OPTIONS.find((o)  => o.id === country)?.label   : null,
+    level     !== "all" ? LEVEL_OPTIONS.find((o)    => o.id === level)?.label     : null,
+    firearms  !== "all" ? FIREARMS_OPTIONS.find((o) => o.id === firearms)?.label  : null,
   ]
     .filter(Boolean)
     .join(" · ");
