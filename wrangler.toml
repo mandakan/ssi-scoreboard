@@ -39,6 +39,9 @@ cpu_ms = 30000
 [placement]
 mode = "smart"
 
+[ai]
+binding = "AI"
+
 [assets]
 directory = ".open-next/assets"
 
