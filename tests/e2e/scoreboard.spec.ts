@@ -13,7 +13,7 @@ const MOCK_MATCH: MatchResponse = {
   stages_count: 3,
   competitors_count: 10,
   scoring_completed: 75,
-  ssi_url: "https://shootnscoreit.com/event/22/26547/",
+  ssi_url: "https://shootnscoreit.com/event/22/99999999/",
   stages: [
     { id: 1, name: "Stage 1", stage_number: 1, max_points: 80, min_rounds: 16, paper_targets: 8, steel_targets: 0, ssi_url: "https://shootnscoreit.com/event/stage/24/1/" },
     { id: 2, name: "Stage 2", stage_number: 2, max_points: 60, min_rounds: 12, paper_targets: 6, steel_targets: 0, ssi_url: "https://shootnscoreit.com/event/stage/24/2/" },
@@ -31,7 +31,7 @@ const MOCK_MATCH: MatchResponse = {
 };
 
 const MOCK_COMPARE: CompareResponse = {
-  match_id: 26547,
+  match_id: 99999999,
   cacheInfo: { cachedAt: null },
   competitors: [
     MOCK_MATCH.competitors[0],
@@ -150,36 +150,36 @@ test.describe("Scoreboard E2E", () => {
   test("pasting non-SSI URL stays on home page", async ({ page }) => {
     await page.goto("/");
     // Input is always visible — no click needed to reveal it
-    await page.getByPlaceholder(/match url/i).fill("https://example.com/event/22/26547/");
+    await page.getByPlaceholder(/match url/i).fill("https://example.com/event/22/99999999/");
     // Non-SSI URLs are treated as search text — no navigation
     await expect(page).toHaveURL("/");
   });
 
   test("valid URL navigates to match page", async ({ page }) => {
     // Mock the match API
-    await page.route("/api/match/22/26547", (route) =>
+    await page.route("/api/match/22/99999999", (route) =>
       route.fulfill({ json: MOCK_MATCH })
     );
 
     await page.goto("/");
     // Input is always visible — no click needed to reveal it
-    await page.getByPlaceholder(/match url/i).fill("https://shootnscoreit.com/event/22/26547/");
+    await page.getByPlaceholder(/match url/i).fill("https://shootnscoreit.com/event/22/99999999/");
 
-    await page.waitForURL("/match/22/26547");
+    await page.waitForURL("/match/22/99999999");
     await expect(page.getByText("Test IPSC Match")).toBeVisible();
     // Competitor picker should be present
     await expect(page.getByRole("button", { name: /add competitor/i })).toBeVisible();
   });
 
   test("selecting 3 competitors shows comparison table with 3 columns", async ({ page }) => {
-    await page.route("/api/match/22/26547", (route) =>
+    await page.route("/api/match/22/99999999", (route) =>
       route.fulfill({ json: MOCK_MATCH })
     );
     await page.route(/\/api\/compare/, (route) =>
       route.fulfill({ json: MOCK_COMPARE })
     );
 
-    await page.goto("/match/22/26547");
+    await page.goto("/match/22/99999999");
     await expect(page.getByText("Test IPSC Match")).toBeVisible();
 
     // Open picker and select all 3 competitors
@@ -197,14 +197,14 @@ test.describe("Scoreboard E2E", () => {
   });
 
   test("chart renders as SVG after competitor selection", async ({ page }) => {
-    await page.route("/api/match/22/26547", (route) =>
+    await page.route("/api/match/22/99999999", (route) =>
       route.fulfill({ json: MOCK_MATCH })
     );
     await page.route(/\/api\/compare/, (route) =>
       route.fulfill({ json: MOCK_COMPARE })
     );
 
-    await page.goto("/match/22/26547");
+    await page.goto("/match/22/99999999");
     await page.getByRole("button", { name: /add competitor/i }).click();
     await page.getByRole("option", { name: /alice/i }).click();
 
@@ -213,14 +213,14 @@ test.describe("Scoreboard E2E", () => {
   });
 
   test("?competitors param pre-selects competitors on load", async ({ page }) => {
-    await page.route("/api/match/22/26547", (route) =>
+    await page.route("/api/match/22/99999999", (route) =>
       route.fulfill({ json: MOCK_MATCH })
     );
     await page.route(/\/api\/compare/, (route) =>
       route.fulfill({ json: MOCK_COMPARE_2 })
     );
 
-    await page.goto("/match/22/26547?competitors=100,200");
+    await page.goto("/match/22/99999999?competitors=100,200");
     await expect(page.getByText("Test IPSC Match")).toBeVisible();
 
     // Pre-selected competitors should appear without manually opening the picker
@@ -230,14 +230,14 @@ test.describe("Scoreboard E2E", () => {
   });
 
   test("selecting a competitor updates the URL", async ({ page }) => {
-    await page.route("/api/match/22/26547", (route) =>
+    await page.route("/api/match/22/99999999", (route) =>
       route.fulfill({ json: MOCK_MATCH })
     );
     await page.route(/\/api\/compare/, (route) =>
       route.fulfill({ json: MOCK_COMPARE_2 })
     );
 
-    await page.goto("/match/22/26547");
+    await page.goto("/match/22/99999999");
     await page.getByRole("button", { name: /add competitor/i }).click();
     await page.getByRole("option", { name: /alice/i }).click();
     await page.getByRole("option", { name: /bob/i }).click();
@@ -246,14 +246,14 @@ test.describe("Scoreboard E2E", () => {
   });
 
   test("deselecting a competitor updates the URL", async ({ page }) => {
-    await page.route("/api/match/22/26547", (route) =>
+    await page.route("/api/match/22/99999999", (route) =>
       route.fulfill({ json: MOCK_MATCH })
     );
     await page.route(/\/api\/compare/, (route) =>
       route.fulfill({ json: MOCK_COMPARE_2 })
     );
 
-    await page.goto("/match/22/26547?competitors=100,200");
+    await page.goto("/match/22/99999999?competitors=100,200");
     await expect(page.getByText("Stage results")).toBeVisible();
 
     await page.getByRole("button", { name: /remove alice/i }).click();
@@ -261,7 +261,7 @@ test.describe("Scoreboard E2E", () => {
   });
 
   test("deselecting a competitor updates the table", async ({ page }) => {
-    await page.route("/api/match/22/26547", (route) =>
+    await page.route("/api/match/22/99999999", (route) =>
       route.fulfill({ json: MOCK_MATCH })
     );
     // Return 3-competitor response when Charlie (id=300) is requested; 2-competitor otherwise
@@ -270,7 +270,7 @@ test.describe("Scoreboard E2E", () => {
       route.fulfill({ json: ids.includes("300") ? MOCK_COMPARE : MOCK_COMPARE_2 });
     });
 
-    await page.goto("/match/22/26547");
+    await page.goto("/match/22/99999999");
     await page.getByRole("button", { name: /add competitor/i }).click();
     await page.getByRole("option", { name: /alice/i }).click();
     await page.getByRole("option", { name: /bob/i }).click();
@@ -284,14 +284,14 @@ test.describe("Scoreboard E2E", () => {
   });
 
   test("squad picker adds all squad members", async ({ page }) => {
-    await page.route("/api/match/22/26547", (route) =>
+    await page.route("/api/match/22/99999999", (route) =>
       route.fulfill({ json: MOCK_MATCH })
     );
     await page.route(/\/api\/compare/, (route) =>
       route.fulfill({ json: MOCK_COMPARE_2 })
     );
 
-    await page.goto("/match/22/26547");
+    await page.goto("/match/22/99999999");
     await expect(page.getByText("Test IPSC Match")).toBeVisible();
 
     // Open the squad picker popover
@@ -319,14 +319,14 @@ test.describe("Mobile 390px viewport", () => {
   });
 
   test("comparison page has no horizontal overflow with 2 competitors", async ({ page }) => {
-    await page.route("/api/match/22/26547", (route) =>
+    await page.route("/api/match/22/99999999", (route) =>
       route.fulfill({ json: MOCK_MATCH })
     );
     await page.route(/\/api\/compare/, (route) =>
       route.fulfill({ json: MOCK_COMPARE_2 })
     );
 
-    await page.goto("/match/22/26547?competitors=100,200");
+    await page.goto("/match/22/99999999?competitors=100,200");
     await expect(page.getByText("Test IPSC Match")).toBeVisible();
     await expect(page.getByText("Stage results")).toBeVisible();
     await expect(page.getByRole("table")).toBeVisible();

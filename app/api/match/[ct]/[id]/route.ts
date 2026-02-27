@@ -1,61 +1,5 @@
 import { NextResponse } from "next/server";
-import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
-import cache from "@/lib/cache-impl";
-import { computeMatchTtl } from "@/lib/match-ttl";
-
-import { formatDivisionDisplay } from "@/lib/divisions";
-import type { MatchResponse, StageInfo, CompetitorInfo, SquadInfo } from "@/lib/types";
-
-interface RawStage {
-  id: string;
-  number: number;
-  name: string;
-  max_points?: number | null; // on IpscStageNode inline fragment
-  minimum_rounds?: number | null;
-  paper?: number | null;
-  popper?: number | null;
-  plate?: number | null;
-  get_full_absolute_url?: string | null;
-}
-
-interface RawCompetitor {
-  id: string;
-  get_content_type_key: number;
-  first_name?: string;
-  last_name?: string;
-  number?: string;
-  club?: string | null;
-  handgun_div?: string | null;
-  get_handgun_div_display?: string | null;
-  shoots_handgun_major?: boolean | null;
-}
-
-interface RawSquad {
-  id: string;
-  number?: number;
-  get_squad_display?: string;
-  competitors?: Array<{ id: string }>;
-}
-
-interface RawMatchData {
-  event: {
-    id: string;
-    get_content_type_key: number;
-    name: string;
-    starts: string | null;
-    venue?: string | null;
-    // scoring_completed is a decimal string from the API, e.g. "56.31067961165048"
-    scoring_completed?: string | number | null;
-    region?: string | null;
-    sub_rule?: string | null;
-    level?: string | null;
-    stages_count?: number;
-    competitors_count?: number;
-    stages?: RawStage[];
-    competitors_approved_w_wo_results_not_dnf?: RawCompetitor[];
-    squads?: RawSquad[];
-  } | null;
-}
+import { fetchMatchData } from "@/lib/match-data";
 
 export async function GET(
   _req: Request,
@@ -69,107 +13,15 @@ export async function GET(
     return NextResponse.json({ error: "Invalid content_type" }, { status: 400 });
   }
 
-  const matchKey = gqlCacheKey("GetMatch", { ct: ctNum, id });
-  let data: RawMatchData;
-  let cachedAt: string | null;
-  try {
-    ({ data, cachedAt } = await cachedExecuteQuery<RawMatchData>(
-      matchKey,
-      MATCH_QUERY,
-      { ct: ctNum, id },
-      30,
-    ));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Upstream error";
-    return NextResponse.json({ error: message }, { status: 502 });
-  }
+  const result = await fetchMatchData(ct, id);
 
-  const tFetch = performance.now();
-
-  if (!data.event) {
+  if (!result) {
     return NextResponse.json({ error: "Match not found" }, { status: 404 });
   }
 
-  const ev = data.event;
-
-  // Determine match state and update TTL accordingly
-  const scoringPct = Math.round(parseFloat(String(ev.scoring_completed ?? 0)));
-  const matchDate = ev.starts ? new Date(ev.starts) : null;
-  const daysSince = matchDate ? (Date.now() - matchDate.getTime()) / 86_400_000 : 0;
-  const isComplete = scoringPct >= 95 || daysSince > 3;
-  const ttl = computeMatchTtl(scoringPct, daysSince, ev.starts ?? null);
-  try {
-    if (ttl === null) {
-      const raw = await cache.get(matchKey);
-      if (raw) await cache.persist(matchKey); // remove TTL → permanent
-    } else if (!cachedAt) {
-      // Cache miss: set correct TTL (initial write used 30s default)
-      await cache.expire(matchKey, ttl);
-    }
-  } catch { /* ignore */ }
-
-  const stages: StageInfo[] = (ev.stages ?? []).map((s) => ({
-    id: parseInt(s.id, 10),
-    name: s.name,
-    stage_number: s.number,
-    max_points: s.max_points ?? 0,
-    min_rounds: s.minimum_rounds ?? null,
-    paper_targets: s.paper ?? null,
-    steel_targets: (s.popper != null || s.plate != null)
-      ? (s.popper ?? 0) + (s.plate ?? 0)
-      : null,
-    ssi_url: s.get_full_absolute_url
-      ? `https://${s.get_full_absolute_url}`
-      : null,
-  }));
-
-  const competitors: CompetitorInfo[] = (
-    ev.competitors_approved_w_wo_results_not_dnf ?? []
-  ).map((c) => ({
-    id: parseInt(c.id, 10),
-    name: [c.first_name, c.last_name].filter(Boolean).join(" ") || "Unknown",
-    competitor_number: c.number ?? "",
-    club: c.club ?? null,
-    division: formatDivisionDisplay(c.get_handgun_div_display ?? c.handgun_div, c.shoots_handgun_major),
-  }));
-
-  const approvedIds = new Set(competitors.map((c) => c.id));
-  const squads: SquadInfo[] = (ev.squads ?? [])
-    .map((s) => {
-      const competitorIds = (s.competitors ?? [])
-        .map((c) => parseInt(c.id, 10))
-        .filter((cid) => approvedIds.has(cid))
-        .sort((a, b) => a - b);
-      return {
-        id: parseInt(s.id, 10),
-        number: s.number ?? 0,
-        name: s.get_squad_display ?? `Squad ${s.number ?? "?"}`,
-        competitorIds,
-      };
-    })
-    .filter((s) => s.competitorIds.length > 0);
-
-  const response: MatchResponse = {
-    name: ev.name,
-    venue: ev.venue ?? null,
-    date: ev.starts ?? null,
-    level: ev.level ?? null,
-    sub_rule: ev.sub_rule ?? null,
-    region: ev.region ?? null,
-    stages_count: ev.stages_count ?? stages.length,
-    competitors_count: ev.competitors_count ?? competitors.length,
-    // scoring_completed comes as a decimal string from the API; convert to 0-100 number
-    scoring_completed: ev.scoring_completed != null
-      ? Math.round(parseFloat(String(ev.scoring_completed)))
-      : 0,
-    ssi_url: `https://shootnscoreit.com/event/${ct}/${id}/`,
-    stages,
-    competitors,
-    squads,
-    cacheInfo: { cachedAt },
-  };
-
   const tDone = performance.now();
+  const { data: response, cachedAt, isComplete } = result;
+
   console.log(JSON.stringify({
     route: "match",
     ct: ctNum,
@@ -179,14 +31,14 @@ export async function GET(
     stages_count: response.stages_count,
     scoring_completed: response.scoring_completed,
     is_complete: isComplete,
-    ms_graphql: Math.round(tFetch - t0),
+    ms_graphql: Math.round(result.msFetch),
     ms_total: Math.round(tDone - t0),
   }));
 
   return NextResponse.json(response, {
     headers: {
       "Server-Timing": [
-        `graphql;dur=${(tFetch - t0).toFixed(1)};desc="GraphQL fetch"`,
+        `graphql;dur=${result.msFetch.toFixed(1)};desc="GraphQL fetch"`,
         `total;dur=${(tDone - t0).toFixed(1)};desc="Total"`,
       ].join(", "),
     },
