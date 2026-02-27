@@ -658,7 +658,7 @@ function printProgress(
     const filled = Math.round(ratio * barWidth);
     bar = "[" + "█".repeat(filled) + "░".repeat(barWidth - filled) + "]";
     parts.push(bar, `warmed ${warmed}/${limit}`, `scanned ${scanned}/${total}`, `elapsed ${formatDuration(elapsed)}`);
-    if (warmed > 0 && warmed < limit) {
+    if (warmed > 0 && warmed < limit && scanned < total) {
       const eta = Math.round((elapsed / warmed) * (limit - warmed));
       parts.push(`ETA ~${formatDuration(eta)}`);
     }
