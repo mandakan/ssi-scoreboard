@@ -202,6 +202,10 @@ export interface FieldFingerprintPoint {
   /** Percentile rank within the full field, 0–100 (100 = fastest). */
   speedPercentile: number;
   cv: number | null;         // coefficient of variation of per-stage HF; null when < 2 stages
+  /** Rank within competitor's division (1 = best); null when no valid data. */
+  actualDivRank: number | null;
+  /** Rank across all competitors regardless of division (1 = best); null when no valid data. */
+  actualOverallRank: number | null;
 }
 
 // Match-level aggregate "style fingerprint" for one competitor.

@@ -2143,13 +2143,66 @@ describe("computeAllFingerprintPoints", () => {
     const result = computeAllFingerprintPoints(cards, divMap);
     expect(result[0].cv).toBe(0);
   });
+
+  it("assigns actualOverallRank=1 to the fastest competitor", () => {
+    const cards = [
+      // comp 1: pps = 40/10 = 4.0 (faster)
+      makeCard(1, 1, { a_hits: 8, c_hits: 2, d_hits: 0, miss_count: 0, points: 40, time: 10 }),
+      // comp 2: pps = 24/12 = 2.0 (slower)
+      makeCard(2, 1, { a_hits: 6, c_hits: 2, d_hits: 2, miss_count: 0, points: 24, time: 12 }),
+    ];
+    const result = computeAllFingerprintPoints(cards, divMap);
+    const p1 = result.find((p) => p.competitorId === 1)!;
+    const p2 = result.find((p) => p.competitorId === 2)!;
+    expect(p1.actualOverallRank).toBe(1);
+    expect(p2.actualOverallRank).toBe(2);
+  });
+
+  it("assigns actualDivRank independently within each division", () => {
+    const divMapMulti = new Map<number, string | null>([
+      [1, "production"], // pps = 40/10 = 4.0
+      [2, "open"],       // pps = 50/10 = 5.0  — faster overall but different div
+      [3, "production"], // pps = 20/10 = 2.0
+    ]);
+    const cards = [
+      makeCard(1, 1, { a_hits: 8, c_hits: 2, d_hits: 0, miss_count: 0, points: 40, time: 10 }),
+      makeCard(2, 1, { a_hits: 8, c_hits: 2, d_hits: 0, miss_count: 0, points: 50, time: 10 }),
+      makeCard(3, 1, { a_hits: 6, c_hits: 2, d_hits: 2, miss_count: 0, points: 20, time: 10 }),
+    ];
+    const result = computeAllFingerprintPoints(cards, divMapMulti);
+    const p1 = result.find((p) => p.competitorId === 1)!;
+    const p2 = result.find((p) => p.competitorId === 2)!;
+    const p3 = result.find((p) => p.competitorId === 3)!;
+    // overall: open(2) is fastest
+    expect(p2.actualOverallRank).toBe(1);
+    expect(p1.actualOverallRank).toBe(2);
+    expect(p3.actualOverallRank).toBe(3);
+    // within production: comp 1 faster than comp 3
+    expect(p1.actualDivRank).toBe(1);
+    expect(p3.actualDivRank).toBe(2);
+    // open only has comp 2
+    expect(p2.actualDivRank).toBe(1);
+  });
+
+  it("assigns the same rank to tied competitors", () => {
+    // Both competitors have identical pps
+    const cards = [
+      makeCard(1, 1, { a_hits: 8, c_hits: 2, d_hits: 0, miss_count: 0, points: 40, time: 10 }),
+      makeCard(2, 1, { a_hits: 8, c_hits: 2, d_hits: 0, miss_count: 0, points: 40, time: 10 }),
+    ];
+    const result = computeAllFingerprintPoints(cards, divMap);
+    const p1 = result.find((p) => p.competitorId === 1)!;
+    const p2 = result.find((p) => p.competitorId === 2)!;
+    expect(p1.actualOverallRank).toBe(1);
+    expect(p2.actualOverallRank).toBe(1);
+  });
 });
 
 // ─── computeStylePercentiles ──────────────────────────────────────────────────
 
 describe("computeStylePercentiles", () => {
   function makeFieldPoint(competitorId: number, alphaRatio: number, pointsPerSecond: number, penaltyRate: number, cv: number | null) {
-    return { competitorId, division: null, alphaRatio, pointsPerSecond, penaltyRate, cv, accuracyPercentile: 50, speedPercentile: 50 };
+    return { competitorId, division: null, alphaRatio, pointsPerSecond, penaltyRate, cv, accuracyPercentile: 50, speedPercentile: 50, actualDivRank: null, actualOverallRank: null };
   }
 
   it("high penalty rate → low composure percentile (inversion correct)", () => {
