@@ -24,7 +24,7 @@ const SUBRULE_LABELS: Record<string, string> = {
 
 export function MatchHeader({ match }: MatchHeaderProps) {
   const dateStr = match.date
-    ? new Date(match.date).toLocaleDateString(undefined, {
+    ? new Date(match.date).toLocaleDateString("en-US", {
         year: "numeric",
         month: "long",
         day: "numeric",
