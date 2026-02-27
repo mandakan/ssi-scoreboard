@@ -6,7 +6,7 @@ import type { PopularMatch } from "@/lib/types";
 const MAX_AGE_SECONDS = 14 * 24 * 60 * 60; // 14 days
 
 /** Maximum number of results to return. */
-const MAX_RESULTS = 8;
+const MAX_RESULTS = 24;
 
 interface RawMatchEvent {
   name: string;
@@ -23,7 +23,7 @@ interface MatchCacheEntry {
 /**
  * GET /api/popular-matches
  *
- * Returns up to 8 matches that have been accessed within the last 14 days,
+ * Returns up to 24 matches that have been accessed within the last 14 days,
  * sorted by access frequency (most-accessed first).
  *
  * Popularity is tracked via two Redis sorted sets written by cachedExecuteQuery
