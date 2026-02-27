@@ -298,6 +298,36 @@ export interface EventSummary {
   level: string; // e.g. "Level II"
 }
 
+// ── Stage Simulator ──────────────────────────────────────────────────────────
+
+// User-driven adjustments for the what-if stage simulator.
+export interface StageSimulatorAdjustments {
+  timeDelta: number;    // seconds added to current time (negative = faster)
+  missToACount: number; // misses converted to A-hits (0 ≤ n ≤ miss_count)
+  aToCCount: number;    // A-hits swapped to C-hits (0 ≤ n ≤ a_hits)
+}
+
+// Result of simulating a single stage after applying adjustments.
+export interface SimulatedStageResult {
+  stageId: number;
+  newPoints: number;
+  newTime: number;
+  newHF: number;
+  newGroupLeaderHF: number; // may equal newHF if competitor becomes leader
+  newGroupPct: number | null;
+  pointDelta: number;
+  hfDelta: number;
+  groupPctDelta: number | null;
+}
+
+// Match-level impact of a simulated stage adjustment.
+export interface SimulatedMatchResult {
+  newMatchPct: number | null;   // new avg group % across all valid stages
+  matchPctDelta: number | null; // positive = improvement
+  newGroupRank: number | null;  // rank among selected competitors
+  groupRankDelta: number | null; // positive = rank improved (moved up)
+}
+
 export interface ReleaseSection {
   heading: string;
   items: string[];

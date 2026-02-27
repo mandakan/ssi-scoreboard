@@ -11,11 +11,25 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-02-27b";
+export const LATEST_RELEASE_ID = "2026-02-27c";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "February 27, 2026",
+    title: "Stage Simulator",
+    sections: [
+      {
+        heading: "New",
+        items: [
+          "Stage Simulator: adjust your time or hit outcomes on any stage and instantly see the impact on hit factor, stage %, match average, and group rank.",
+          "Available after 80% of scorecards are submitted. Find it below the Coaching analysis section on any match page.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-02-27b",
     date: "February 27, 2026",
     title: "Benchmark Picker",
     sections: [
