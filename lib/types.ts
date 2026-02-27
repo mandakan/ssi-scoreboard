@@ -293,3 +293,18 @@ export interface EventSummary {
   discipline: string; // e.g. "IPSC Handgun & PCC"
   level: string; // e.g. "Level II"
 }
+
+export interface ReleaseSection {
+  heading: string;
+  items: string[];
+}
+
+export interface Release {
+  /** Unique release identifier — ISO date string, e.g. "2026-02-27". Used as the localStorage key. */
+  id: string;
+  /** Human-readable display date shown inside the dialog. */
+  date: string;
+  /** Optional short headline for the release, e.g. "Event Filters & More". */
+  title?: string;
+  sections: ReleaseSection[];
+}

@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PWAInstallProvider } from "@/lib/pwa-install";
+import { WhatsNewProvider } from "@/components/whats-new-provider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -23,7 +24,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <PWAInstallProvider>{children}</PWAInstallProvider>
+          <PWAInstallProvider>
+            <WhatsNewProvider>{children}</WhatsNewProvider>
+          </PWAInstallProvider>
         </TooltipProvider>
       </QueryClientProvider>
     </ThemeProvider>
