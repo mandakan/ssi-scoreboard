@@ -7,7 +7,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { PWAInstallProvider } from "@/lib/pwa-install";
 import { WhatsNewProvider } from "@/components/whats-new-provider";
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({
+  children,
+  nonce,
+}: {
+  children: React.ReactNode;
+  nonce?: string;
+}) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -21,7 +27,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange nonce={nonce}>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <PWAInstallProvider>
