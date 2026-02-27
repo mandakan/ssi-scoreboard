@@ -24,7 +24,7 @@ including during an active match before official results are published.
 
 ## Prerequisites
 - Node.js 20+
-- pnpm 10+ (`corepack enable && corepack prepare pnpm@10.30.1 --activate`)
+- pnpm 10+ (`corepack enable && corepack prepare pnpm@10.30.3 --activate`)
 - A ShootNScoreIt API key (account settings on shootnscoreit.com)
 
 ## Local Setup
@@ -160,6 +160,15 @@ pnpm test:e2e:ui  # Playwright with interactive UI
 
 **Quality bar:** `pnpm lint`, `pnpm typecheck`, and `pnpm test` must all pass with **zero
 errors and zero warnings** before merging. CI enforces this.
+
+### Intentionally pinned major versions
+
+Some packages are held back from their latest major release on purpose — don't upgrade these without a migration plan:
+
+| Package | Pinned at | Why |
+|---|---|---|
+| `zod` | 3.x | Zod 4 has breaking API changes. Needs a dedicated migration across `lib/` and `app/api/`. |
+| `eslint` | ^9 | ESLint 10 is brand-new; wait until `eslint-config-next` officially supports it as a peer dep. |
 
 ## MCP Server
 
