@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search,
@@ -91,19 +91,40 @@ function guessCountry(): string {
   return "all";
 }
 
-function loadStoredFilters(): StoredFilters | null {
-  try {
-    const raw = localStorage.getItem(LS_FILTERS_KEY);
-    return raw ? (JSON.parse(raw) as StoredFilters) : null;
-  } catch {
-    return null;
+// ── Filter store (useSyncExternalStore pattern) ───────────────────────────────
+// Avoids setState-in-effect by treating localStorage as an external store.
+// The server snapshot always returns safe defaults (no localStorage on server),
+// preventing SSR hydration mismatches.
+
+const _filterListeners = new Set<() => void>();
+let _filterCache: StoredFilters | null = null;
+
+function _getFilterSnapshot(): StoredFilters {
+  if (_filterCache === null) {
+    try {
+      const raw = localStorage.getItem(LS_FILTERS_KEY);
+      const stored = raw ? (JSON.parse(raw) as StoredFilters) : null;
+      _filterCache = stored ?? { firearms: "all", country: guessCountry(), level: "all" };
+    } catch {
+      _filterCache = { firearms: "all", country: "all", level: "all" };
+    }
   }
+  return _filterCache;
 }
 
-function saveStoredFilters(filters: StoredFilters) {
+const _serverFilterSnapshot: StoredFilters = { firearms: "all", country: "all", level: "all" };
+
+function _subscribeToFilters(cb: () => void): () => void {
+  _filterListeners.add(cb);
+  return () => _filterListeners.delete(cb);
+}
+
+function updateFilters(patch: Partial<StoredFilters>): void {
+  _filterCache = { ..._getFilterSnapshot(), ...patch };
   try {
-    localStorage.setItem(LS_FILTERS_KEY, JSON.stringify(filters));
+    localStorage.setItem(LS_FILTERS_KEY, JSON.stringify(_filterCache));
   } catch { /* ignore private-browsing write failures */ }
+  _filterListeners.forEach((cb) => cb());
 }
 
 // ── Pure date helpers ────────────────────────────────────────────────────────
@@ -163,26 +184,14 @@ export function EventSearch() {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [browseMonth, setBrowseMonth] = useState<Date>(() => startOfMonth(new Date()));
   const [filtersOpen, setFiltersOpen] = useState(false);
-  // Start with inclusive "all" defaults — overwritten from localStorage after mount
-  const [firearms, setFirearms] = useState("all");
-  const [country, setCountry] = useState("all");
-  const [level, setLevel] = useState("all");
-  const [filtersLoaded, setFiltersLoaded] = useState(false);
-
-  // Load persisted filters (and locale-guess for country) after first mount
-  useEffect(() => {
-    const stored = loadStoredFilters();
-    setFirearms(stored?.firearms ?? "all");
-    setCountry(stored?.country ?? guessCountry());
-    setLevel(stored?.level ?? "all");
-    setFiltersLoaded(true);
-  }, []);
-
-  // Persist filter changes (skip the initial render before we've loaded)
-  useEffect(() => {
-    if (!filtersLoaded) return;
-    saveStoredFilters({ level, firearms, country });
-  }, [level, firearms, country, filtersLoaded]);
+  const { firearms, country, level } = useSyncExternalStore(
+    _subscribeToFilters,
+    _getFilterSnapshot,
+    () => _serverFilterSnapshot,
+  );
+  function setFirearms(v: string) { updateFilters({ firearms: v }); }
+  function setCountry(v: string)  { updateFilters({ country: v });  }
+  function setLevel(v: string)    { updateFilters({ level: v });    }
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(inputValue), 300);
