@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { QueryClient, dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import MatchPageClient from "./match-page-client";
+import { fetchMatchData } from "@/lib/match-data";
+import { matchQueryKey } from "@/lib/query-keys";
 
 interface PageProps {
   params: Promise<{ ct: string; id: string }>;
@@ -37,6 +40,28 @@ export async function generateMetadata({
   };
 }
 
-export default function MatchPage() {
-  return <MatchPageClient />;
+/**
+ * Prefetch match data server-side so the client's useMatchQuery resolves
+ * immediately from the TanStack Query hydration cache — eliminating the
+ * client-side /api/match round-trip and its ~900ms contribution to LCP.
+ */
+export default async function MatchPage({ params }: PageProps) {
+  const { ct, id } = await params;
+
+  const queryClient = new QueryClient();
+
+  await queryClient.prefetchQuery({
+    queryKey: matchQueryKey(ct, id),
+    queryFn: async () => {
+      const result = await fetchMatchData(ct, id);
+      if (!result) throw new Error("Match not found");
+      return result.data;
+    },
+  });
+
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <MatchPageClient />
+    </HydrationBoundary>
+  );
 }
