@@ -79,6 +79,10 @@ custom subdomain, verifying the deployment, and troubleshooting — see
 | `UPSTASH_REDIS_REST_TOKEN` | Cloudflare | REST token from the Upstash console (see setup above) |
 | `MCP_SECRET` | Both | Optional. If set, `POST /api/mcp` requires `Authorization: Bearer <MCP_SECRET>`. Omit for public access. |
 | `NEXT_PUBLIC_APP_URL` | Both | Base URL for MCP tool internal API calls. Defaults to `http://localhost:PORT`. Required for Cloudflare Pages (set to e.g. `https://scoreboard.urdr.dev`). |
+| `AI_PROVIDER` | Both | AI provider for coaching tips: `"openai"` or `"cloudflare"`. Omit to disable the feature. |
+| `AI_MODEL` | Both | Model identifier, e.g. `gpt-4o-mini` or `@cf/meta/llama-3.1-8b-instruct`. |
+| `AI_API_KEY` | Both | API key / token for the AI provider. |
+| `AI_API_URL` | Both | Base URL for the AI provider. Required for Cloudflare Workers AI; defaults to `https://api.openai.com/v1` for OpenAI. |
 
 ## Usage
 1. Browse competitions month by month using the month navigator on the landing page — tap the
@@ -102,6 +106,9 @@ custom subdomain, verifying the deployment, and troubleshooting — see
    - **Shooter style fingerprint** — alpha ratio vs. points-per-second scatter with field cohort
      overlay and archetype labels
    - **Shooter style radar** — composure, consistency, and full style profile as a polar chart
+   - **AI coaching tip** — tap the sparkle icon in the comparison table header to generate a
+     personalised coaching insight for any competitor based on their accuracy, speed, and
+     consistency (completed matches only; requires AI to be configured by the instance operator)
 4. Use the **Share** button to copy or send the link — when competitors are selected, the icon
    shows a badge with the count so you know what's included before you send it. Recipients
    open the same match with the same competitors pre-selected, no extra steps needed.
@@ -126,6 +133,7 @@ custom subdomain, verifying the deployment, and troubleshooting — see
 - **What-if analysis** — "one stage away": how a clean stage would move each competitor's ranking
 - **Shooter style fingerprint** — alpha ratio vs. PPS scatter with field cohort and archetypes
 - **Shooter style radar** — composure, consistency, and full multi-axis style profile
+- **AI coaching tips** — personalised coaching insight per competitor based on their accuracy, speed, and consistency; available for completed matches via the sparkle icon in the comparison table header (requires AI provider configuration)
 - **Cell help modal** — annotated guide to every data point in the comparison table
 - **Info popovers** — `?` button on every chart explains axes, reading tips, and interpretation
 - **Hit zone bars** — proportional A/C/D/M visualization per stage and in the totals row
@@ -208,6 +216,7 @@ Browser → Next.js Route Handlers → shootnscoreit.com/graphql/
 - **`app/api/events/`** — event search with date range, firearms, and country filters
 - **`app/api/og/match/[ct]/[id]/`** — dynamic Open Graph image generation (match overview, single competitor, multi-competitor)
 - **`app/api/mcp/`** — MCP HTTP endpoint (JSON-RPC, single-shot transport)
+- **`app/api/coaching/`** — AI coaching tips: fetches match scorecards, computes competitor stats, and calls the configured AI provider to generate a personalised insight
 - **`app/api/admin/cache/purge/`** — authenticated endpoint to flush the Redis cache
 - **`app/api/compare/logic.ts`** — pure `computeGroupRankings()` function, no I/O, fully unit-tested
 - **`lib/graphql.ts`** — GraphQL query strings and `executeQuery()` helper (server-only)

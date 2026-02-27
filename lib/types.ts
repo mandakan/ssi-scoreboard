@@ -352,6 +352,21 @@ export interface WhatIfSimulationResponse {
   newOverallRank:            number | null;
 }
 
+// ── AI Coaching Tips ─────────────────────────────────────────────────────────
+
+export interface CoachingTipResponse {
+  tip: string;                // 1–2 sentence coaching insight
+  generatedAt: string;        // ISO timestamp of generation
+  model: string;              // model identifier used (e.g. "@cf/meta/llama-3.1-8b-instruct")
+  competitorId: number;
+  matchId: string;
+  ct: string;
+}
+
+export interface CoachingAvailability {
+  available: boolean;         // true if AI provider is configured
+}
+
 export interface ReleaseSection {
   heading: string;
   items: string[];

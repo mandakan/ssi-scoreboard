@@ -10,7 +10,7 @@ import { CompetitorPicker } from "@/components/competitor-picker";
 import { SquadPicker } from "@/components/squad-picker";
 import { BenchmarkPicker } from "@/components/benchmark-picker";
 import { ComparisonTable } from "@/components/comparison-table";
-import { useMatchQuery, useCompareQuery } from "@/lib/queries";
+import { useMatchQuery, useCompareQuery, useCoachingAvailability } from "@/lib/queries";
 import { CacheInfoBadge } from "@/components/cache-info-badge";
 import { LoadingBar } from "@/components/loading-bar";
 import { Button } from "@/components/ui/button";
@@ -125,6 +125,11 @@ export default function MatchPageClient() {
 
   const matchQuery = useMatchQuery(ct, id);
   const compareQuery = useCompareQuery(ct, id, selectedIds);
+  const coachingAvailability = useCoachingAvailability();
+
+  // Capture mount timestamp once to avoid impure Date.now() in render path.
+  // useState initializer runs once on mount and is stable across re-renders.
+  const [mountMs] = useState(() => Date.now());
 
   // Save match to recents whenever data loads/changes (localStorage write, no setState).
   useEffect(() => {
@@ -198,6 +203,12 @@ export default function MatchPageClient() {
   }
 
   const match = matchQuery.data;
+
+  // Match is complete when scoring ≥ 95% OR the match date is >3 days ago.
+  const matchDateMs = match.date ? new Date(match.date).getTime() : null;
+  const isMatchComplete = match.scoring_completed >= 95 ||
+    (matchDateMs != null && (mountMs - matchDateMs) / 86_400_000 > 3);
+  const aiAvailable = coachingAvailability.data?.available === true;
 
   // Pick the older (more stale) cachedAt between match and compare responses.
   // null means "just fetched live" — prefer non-null if one is cached.
@@ -321,6 +332,10 @@ export default function MatchPageClient() {
                   data={compareQuery.data}
                   scoringCompleted={match.scoring_completed}
                   onRemove={(id) => handleSelectionChange(selectedIds.filter((s) => s !== id))}
+                  aiAvailable={aiAvailable}
+                  isComplete={isMatchComplete}
+                  ct={ct}
+                  matchId={id}
                 />
               </div>
 

@@ -18,12 +18,17 @@ import { buildColorMap } from "@/lib/colors";
 import { HitZoneBar } from "@/components/hit-zone-bar";
 import { RankBadge, PenaltyBadge, ShootingOrderBadge, StageClassificationBadge, ordinal } from "@/components/stage-cell-parts";
 import { CellHelpModal } from "@/components/cell-help-modal";
+import { CoachingTip } from "@/components/coaching-tip";
 import type { CompareResponse, CompetitorInfo, CompetitorSummary, LossBreakdownStats, PctMode, ShooterArchetype, ViewMode, WhatIfResult } from "@/lib/types";
 
 interface ComparisonTableProps {
   data: CompareResponse;
   scoringCompleted: number;
   onRemove?: (id: number) => void;
+  aiAvailable?: boolean;
+  isComplete?: boolean;
+  ct?: string;
+  matchId?: string;
 }
 
 /**
@@ -486,7 +491,7 @@ function ArchetypePill({ archetype, color }: { archetype: ShooterArchetype; colo
   );
 }
 
-export function ComparisonTable({ data, scoringCompleted, onRemove }: ComparisonTableProps) {
+export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable, isComplete, ct, matchId }: ComparisonTableProps) {
   const { stages, competitors, penaltyStats, efficiencyStats, consistencyStats, lossBreakdownStats, whatIfStats, styleFingerprintStats } = data;
   const [mode, setMode] = useState<PctMode>(
     competitors.length < 2 ? "division" : "group"
@@ -719,6 +724,14 @@ export function ComparisonTable({ data, scoringCompleted, onRemove }: Comparison
                           <ArchetypePill archetype={archetype} color={colorMap[comp.id]} />
                         ) : null;
                       })()}
+                      {aiAvailable && isComplete && ct && matchId && (
+                        <CoachingTip
+                          ct={ct}
+                          id={matchId}
+                          competitorId={comp.id}
+                          competitorName={comp.name}
+                        />
+                      )}
                     </div>
                   </th>
                 );
