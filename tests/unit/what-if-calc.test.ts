@@ -66,6 +66,8 @@ function makeStage(overrides: Partial<StageComparison> = {}): StageComparison {
 const noAdj: StageSimulatorAdjustments = {
   timeDelta: 0, missToACount: 0, missToCCount: 0,
   nsToACount: 0, nsToCCount: 0, cToACount: 0,
+  dToACount: 0, dToCCount: 0, removedProcedurals: 0,
+  aToCCount: 0, aToMissCount: 0, aToNSCount: 0,
 };
 
 // ─── isMajorPowerFactor ──────────────────────────────────────────────────────
@@ -145,10 +147,32 @@ describe("computePointDelta", () => {
     expect(computePointDelta(adj, false)).toBe(6);
   });
 
+  it("adds +3 pts per D→A upgrade for major", () => {
+    const adj: StageSimulatorAdjustments = { ...noAdj, dToACount: 2 };
+    expect(computePointDelta(adj, true)).toBe(6);
+  });
+
+  it("adds +4 pts per D→A upgrade for minor", () => {
+    const adj: StageSimulatorAdjustments = { ...noAdj, dToACount: 2 };
+    expect(computePointDelta(adj, false)).toBe(8);
+  });
+
+  it("adds +2 pts per D→C upgrade (same for major and minor)", () => {
+    const adj: StageSimulatorAdjustments = { ...noAdj, dToCCount: 3 };
+    expect(computePointDelta(adj, true)).toBe(6);
+    expect(computePointDelta(adj, false)).toBe(6);
+  });
+
+  it("adds +10 pts per removed procedural (same for major and minor)", () => {
+    const adj: StageSimulatorAdjustments = { ...noAdj, removedProcedurals: 2 };
+    expect(computePointDelta(adj, true)).toBe(20);
+    expect(computePointDelta(adj, false)).toBe(20);
+  });
+
   it("combines all adjustments correctly (major)", () => {
     // 1 miss→A: +15, 1 miss→C: +14, 1 NS→A: +15, 1 NS→C: +14, 2 C→A: +2 → total +60
     const adj: StageSimulatorAdjustments = {
-      timeDelta: 0,
+      ...noAdj,
       missToACount: 1, missToCCount: 1,
       nsToACount: 1, nsToCCount: 1,
       cToACount: 2,
@@ -159,12 +183,30 @@ describe("computePointDelta", () => {
   it("combines all adjustments correctly (minor)", () => {
     // 1 miss→A: +15, 1 miss→C: +13, 1 NS→A: +15, 1 NS→C: +13, 2 C→A: +4 → total +60
     const adj: StageSimulatorAdjustments = {
-      timeDelta: 0,
+      ...noAdj,
       missToACount: 1, missToCCount: 1,
       nsToACount: 1, nsToCCount: 1,
       cToACount: 2,
     };
     expect(computePointDelta(adj, false)).toBe(60);
+  });
+
+  it("subtracts −1 pt per A→C (major) / −2 pts (minor)", () => {
+    const adj: StageSimulatorAdjustments = { ...noAdj, aToCCount: 3 };
+    expect(computePointDelta(adj, true)).toBe(-3);
+    expect(computePointDelta(adj, false)).toBe(-6);
+  });
+
+  it("subtracts −15 pts per A→Miss (same for major and minor)", () => {
+    const adj: StageSimulatorAdjustments = { ...noAdj, aToMissCount: 2 };
+    expect(computePointDelta(adj, true)).toBe(-30);
+    expect(computePointDelta(adj, false)).toBe(-30);
+  });
+
+  it("subtracts −15 pts per A→NS (same for major and minor)", () => {
+    const adj: StageSimulatorAdjustments = { ...noAdj, aToNSCount: 1 };
+    expect(computePointDelta(adj, true)).toBe(-15);
+    expect(computePointDelta(adj, false)).toBe(-15);
   });
 });
 
@@ -270,7 +312,7 @@ describe("simulateMatchImpact", () => {
     const { stages, comp1 } = makeMultiStage();
     const stage = stages[0];
     const simResult = simulateStageAdjustment(comp1, stage, noAdj, false);
-    const impact = simulateMatchImpact(stages, 1, [1, 2], simResult);
+    const impact = simulateMatchImpact(stages, 1, [1, 2], { [simResult.stageId]: simResult });
     // With no change, matchPctDelta should be ~0
     expect(impact.matchPctDelta).toBeCloseTo(0, 4);
     expect(impact.groupRankDelta).toBe(0);
@@ -282,7 +324,7 @@ describe("simulateMatchImpact", () => {
     // Convert 2 misses to A: +30 pts (minor)
     const adj: StageSimulatorAdjustments = { ...noAdj, timeDelta: -2, missToACount: 2 };
     const simResult = simulateStageAdjustment(comp1, stage, adj, false);
-    const impact = simulateMatchImpact(stages, 1, [1, 2], simResult);
+    const impact = simulateMatchImpact(stages, 1, [1, 2], { [simResult.stageId]: simResult });
     expect(impact.matchPctDelta).not.toBeNull();
     expect(impact.matchPctDelta!).toBeGreaterThan(0);
   });
@@ -294,7 +336,7 @@ describe("simulateMatchImpact", () => {
     const stage = stages[0];
     const adj: StageSimulatorAdjustments = { ...noAdj, timeDelta: -4, missToACount: 2 };
     const simResult = simulateStageAdjustment(comp1, stage, adj, false);
-    const impact = simulateMatchImpact(stages, 1, [1, 2], simResult);
+    const impact = simulateMatchImpact(stages, 1, [1, 2], { [simResult.stageId]: simResult });
     // If match avg improved enough, rank should improve
     if (impact.newMatchPct != null && impact.newMatchPct > 90) {
       expect(impact.newGroupRank).toBe(1);
@@ -306,7 +348,7 @@ describe("simulateMatchImpact", () => {
     const stage = stages[0];
     const adj: StageSimulatorAdjustments = { ...noAdj, timeDelta: -1 };
     const simResult = simulateStageAdjustment(comp1, stage, adj, false);
-    const impact = simulateMatchImpact(stages, 1, [1], simResult);
+    const impact = simulateMatchImpact(stages, 1, [1], { [simResult.stageId]: simResult });
     expect(impact.newGroupRank).toBe(1);
     expect(impact.groupRankDelta).toBe(0);
   });
@@ -317,8 +359,32 @@ describe("simulateMatchImpact", () => {
     stages[1].competitors[1] = { ...stages[1].competitors[1], dnf: true, group_percent: null };
     const stage = stages[0];
     const simResult = simulateStageAdjustment(comp1, stage, noAdj, false);
-    const impact = simulateMatchImpact(stages, 1, [1, 2], simResult);
+    const impact = simulateMatchImpact(stages, 1, [1, 2], { [simResult.stageId]: simResult });
     // Should still work (only stage 1 counts for comp1)
     expect(impact.newMatchPct).not.toBeNull();
+  });
+
+  it("accumulates adjustments across multiple stages", () => {
+    const { stages, comp1 } = makeMultiStage();
+    const stage1 = stages[0];
+    const stage2 = stages[1];
+    const comp1s2 = stage2.competitors[1];
+
+    const adj1: StageSimulatorAdjustments = { ...noAdj, missToACount: 1 };
+    const adj2: StageSimulatorAdjustments = { ...noAdj, timeDelta: -2 };
+
+    const sim1 = simulateStageAdjustment(comp1, stage1, adj1, false);
+    const sim2 = simulateStageAdjustment(comp1s2, stage2, adj2, false);
+
+    const impactSingle = simulateMatchImpact(stages, 1, [1, 2], { [sim1.stageId]: sim1 });
+    const impactMulti = simulateMatchImpact(stages, 1, [1, 2], {
+      [sim1.stageId]: sim1,
+      [sim2.stageId]: sim2,
+    });
+
+    // Multi-stage impact should be greater than single-stage impact
+    expect(impactMulti.matchPctDelta).not.toBeNull();
+    expect(impactSingle.matchPctDelta).not.toBeNull();
+    expect(impactMulti.matchPctDelta!).toBeGreaterThan(impactSingle.matchPctDelta!);
   });
 });

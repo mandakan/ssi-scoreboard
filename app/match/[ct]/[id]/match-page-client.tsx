@@ -535,40 +535,40 @@ export default function MatchPageClient() {
               {/* Stage Simulator — collapsed by default, only ≥ 80% complete */}
               {match.scoring_completed >= 80 && (
                 <div className="rounded-lg border p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <h2 className="font-semibold text-base m-0 leading-none">
-                        <button
-                          type="button"
-                          id="stage-simulator-heading"
-                          onClick={() => setShowSimulator((v) => !v)}
-                          className="flex items-center gap-2 text-left"
-                          aria-expanded={showSimulator}
-                          aria-controls="stage-simulator-panel"
-                        >
-                          <span>
-                            Stage Simulator
-                            <span className="block text-xs font-normal text-muted-foreground mt-0.5">
-                              Simulate one stage at a time to see how a cleaner run would affect your match rank.
-                            </span>
+                  <div className="flex items-start gap-2">
+                    <h2 className="flex-1 font-semibold text-base m-0 leading-none">
+                      <button
+                        type="button"
+                        id="stage-simulator-heading"
+                        onClick={() => setShowSimulator((v) => !v)}
+                        className="flex w-full items-center justify-between text-left gap-2"
+                        aria-expanded={showSimulator}
+                        aria-controls="stage-simulator-panel"
+                      >
+                        <span>
+                          Stage Simulator
+                          <span className="block text-xs font-normal text-muted-foreground mt-0.5">
+                            What-if sandbox — the comparison table above is not affected.
                           </span>
-                          {showSimulator ? (
-                            <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-                          ) : (
-                            <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-                          )}
-                        </button>
-                      </h2>
+                        </span>
+                        {showSimulator ? (
+                          <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                        )}
+                      </button>
+                    </h2>
+                    {showSimulator && (
                       <Popover>
                         <PopoverTrigger asChild>
                           <button
-                            className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                            className="flex-none text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
                             aria-label="About the stage simulator"
                           >
                             <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-80" side="bottom" align="start">
+                        <PopoverContent className="w-80" side="bottom" align="end">
                           <PopoverHeader>
                             <PopoverTitle>Stage Simulator</PopoverTitle>
                             <PopoverDescription>
@@ -576,13 +576,14 @@ export default function MatchPageClient() {
                             </PopoverDescription>
                           </PopoverHeader>
                           <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                            <p>Pick a competitor and stage, then dial in adjustments — faster time, converting misses or no-shoots to A or C hits, or upgrading C-hits to A-hits.</p>
-                            <p>The results panel shows stage rank and match rank among the currently selected competitors, updating instantly as you adjust.</p>
-                            <p>Only one stage is simulated at a time. Match rank reflects changing that single stage while all other stages remain as scored.</p>
+                            <p>Pick a competitor and stage, then dial in adjustments — faster time, converting misses or no-shoots to A or C hits, upgrading C or D-hits to A-hits, or removing procedural penalties.</p>
+                            <p>Adjust multiple stages independently; the match avg and group rank rows show the cumulative impact across all modified stages.</p>
+                            <p>Division rank and overall rank (vs the full field) appear below the group rank after a short delay — they reflect the simulated scorecards server-side.</p>
+                            <p>Your adjustments are saved per-stage and restored if you refresh the page.</p>
                           </div>
                         </PopoverContent>
                       </Popover>
-                    </div>
+                    )}
                   </div>
 
                   {showSimulator && (
@@ -593,6 +594,8 @@ export default function MatchPageClient() {
                       className="pt-4"
                     >
                       <StageSimulator
+                        ct={ct}
+                        id={id}
                         data={compareQuery.data}
                         competitors={compareQuery.data.competitors}
                         scoringCompleted={match.scoring_completed}
