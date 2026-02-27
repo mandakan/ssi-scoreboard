@@ -124,13 +124,20 @@ patterns.
 
 ## Environment variables
 
-The script reads `.env.local` automatically when run from the repo root. The two
-relevant variables are:
+The script reads `.env.local` automatically when run from the repo root.
 
 | Variable | Description |
 |---|---|
 | `SSI_API_KEY` | ShootNScoreIt API key — required |
-| `REDIS_URL` | Redis connection string (default: `redis://localhost:6379`) |
+| `UPSTASH_REDIS_REST_URL` | Upstash REST endpoint — takes priority over `REDIS_URL` when set |
+| `UPSTASH_REDIS_REST_TOKEN` | Upstash REST token — required when using Upstash |
+| `REDIS_URL` | ioredis connection string (default: `redis://localhost:6379`) — used when Upstash vars are absent |
+| `CACHE_KEY_PREFIX` | Key prefix applied to every Redis write (e.g. `staging:`) — must match the app's setting |
+
+When both `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are present the
+script uses the Upstash REST adapter (same as the Cloudflare Pages build). Otherwise
+it falls back to ioredis for Docker / local Redis. The active backend and any prefix
+are printed in the header when a live run starts.
 
 ---
 

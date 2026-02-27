@@ -29,7 +29,8 @@
 
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
-import Redis from "ioredis";
+import IORedis from "ioredis";
+import { Redis as UpstashRedis } from "@upstash/redis";
 
 // ─── Inline constants (keep in sync with lib/constants.ts) ───────────────────
 
@@ -297,9 +298,68 @@ function gqlCacheKey(operationName: string, variables: Record<string, unknown>):
   return `gql:${operationName}:${JSON.stringify(variables)}`;
 }
 
-async function isCachedAtCurrentVersion(redis: Redis, key: string): Promise<boolean> {
+// ─── Cache client abstraction ─────────────────────────────────────────────────
+// Allows the script to target either Upstash (REST) or ioredis (binary protocol)
+// without changing any warming logic. Key prefix is applied inside the client.
+
+interface SimpleCacheClient {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string, ttl: number | null): Promise<void>;
+  quit(): Promise<void>;
+}
+
+async function createCacheClient(): Promise<SimpleCacheClient> {
+  const prefix = process.env.CACHE_KEY_PREFIX ?? "";
+  const pk = (key: string) => `${prefix}${key}`;
+
+  const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (upstashUrl && upstashToken) {
+    const redis = new UpstashRedis({ url: upstashUrl, token: upstashToken, automaticDeserialization: false });
+    // Smoke-test the connection before starting the warm run
+    try {
+      await redis.ping();
+    } catch (err) {
+      console.error(`Upstash connection failed: ${err instanceof Error ? err.message : err}`);
+      process.exit(1);
+    }
+    const host = new URL(upstashUrl).hostname;
+    console.log(`Redis        : Upstash (${host})${prefix ? `  prefix="${prefix}"` : ""}`);
+    return {
+      async get(key) { return redis.get<string>(pk(key)); },
+      async set(key, value, ttl) {
+        if (ttl === null) await redis.set(pk(key), value);
+        else await redis.set(pk(key), value, { ex: ttl });
+      },
+      async quit() { /* no-op — Upstash is stateless HTTP */ },
+    };
+  }
+
+  // Fall back to ioredis for Docker / local Redis
+  const redisUrl = process.env.REDIS_URL ?? "redis://localhost:6379";
+  const redis = new IORedis(redisUrl, { lazyConnect: true, connectTimeout: 5000, maxRetriesPerRequest: 2 });
   try {
-    const raw = await redis.get(key);
+    await redis.connect();
+  } catch (err) {
+    console.error(`Redis connection failed (${redisUrl}): ${err instanceof Error ? err.message : err}`);
+    await redis.quit().catch(() => {});
+    process.exit(1);
+  }
+  console.log(`Redis        : ioredis (${redisUrl})${prefix ? `  prefix="${prefix}"` : ""}`);
+  return {
+    async get(key) { return redis.get(pk(key)); },
+    async set(key, value, ttl) {
+      if (ttl === null) await redis.set(pk(key), value);
+      else await redis.set(pk(key), value, "EX", ttl);
+    },
+    async quit() { await redis.quit(); },
+  };
+}
+
+async function isCachedAtCurrentVersion(client: SimpleCacheClient, key: string): Promise<boolean> {
+  try {
+    const raw = await client.get(key);
     if (!raw) return false;
     const entry = JSON.parse(raw) as { v?: number };
     return entry.v === CACHE_SCHEMA_VERSION;
@@ -309,7 +369,7 @@ async function isCachedAtCurrentVersion(redis: Redis, key: string): Promise<bool
 }
 
 async function writeToCache(
-  redis: Redis,
+  client: SimpleCacheClient,
   key: string,
   data: unknown,
   ttl: number | null,
@@ -319,12 +379,7 @@ async function writeToCache(
     cachedAt: new Date().toISOString(),
     v: CACHE_SCHEMA_VERSION,
   };
-  const payload = JSON.stringify(entry);
-  if (ttl === null) {
-    await redis.set(key, payload); // no expiry — permanent
-  } else {
-    await redis.set(key, payload, "EX", ttl);
-  }
+  await client.set(key, JSON.stringify(entry), ttl);
 }
 
 // ─── Event fetching with sub-window strategy ──────────────────────────────────
@@ -392,8 +447,6 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const redisUrl = process.env.REDIS_URL ?? "redis://localhost:6379";
-
   const args = parseArgs();
 
   const levelAllowed = args.level in ALLOWED_LEVELS
@@ -452,19 +505,7 @@ async function main(): Promise<void> {
 
   // ── Connect to Redis ──────────────────────────────────────────────────────
 
-  const redis = new Redis(redisUrl, {
-    lazyConnect: true,
-    connectTimeout: 5000,
-    maxRetriesPerRequest: 2,
-  });
-
-  try {
-    await redis.connect();
-  } catch (err) {
-    console.error(`Redis connection failed (${redisUrl}): ${err instanceof Error ? err.message : err}`);
-    await redis.quit().catch(() => {});
-    process.exit(1);
-  }
+  const client = await createCacheClient();
 
   // ── Warm each match ───────────────────────────────────────────────────────
 
@@ -481,7 +522,7 @@ async function main(): Promise<void> {
     // ── GetMatch ─────────────────────────────────────────────────────────
 
     const matchKey = gqlCacheKey("GetMatch", { ct, id });
-    const matchCached = !args.force && await isCachedAtCurrentVersion(redis, matchKey);
+    const matchCached = !args.force && await isCachedAtCurrentVersion(client, matchKey);
 
     if (!matchCached) {
       process.stdout.write(`${label}\n  GetMatch... `);
@@ -501,7 +542,7 @@ async function main(): Promise<void> {
           continue;
         }
 
-        await writeToCache(redis, matchKey, data, ttl);
+        await writeToCache(client, matchKey, data, ttl);
         console.log(`ok (ttl=${ttl === null ? "permanent" : ttl + "s"})`);
         warmed++;
       } catch (err) {
@@ -522,13 +563,13 @@ async function main(): Promise<void> {
     // ── GetMatchScorecards ───────────────────────────────────────────────
 
     const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct, id });
-    const scorecardsCached = !args.force && await isCachedAtCurrentVersion(redis, scorecardsKey);
+    const scorecardsCached = !args.force && await isCachedAtCurrentVersion(client, scorecardsKey);
 
     if (!scorecardsCached) {
       process.stdout.write(`  GetMatchScorecards... `);
       try {
         const data = await gqlFetch(SCORECARDS_QUERY, { ct, id }, apiKey);
-        await writeToCache(redis, scorecardsKey, data, null); // scorecards always permanent for historical
+        await writeToCache(client, scorecardsKey, data, null); // scorecards always permanent for historical
         console.log("ok");
       } catch (err) {
         console.log(`FAILED: ${err instanceof Error ? err.message : err}`);
@@ -541,7 +582,7 @@ async function main(): Promise<void> {
     }
   }
 
-  await redis.quit();
+  await client.quit();
 
   console.log("\n" + "─".repeat(50));
   console.log(`Done. warmed=${warmed}  skipped=${skipped}  failed=${failed}`);
