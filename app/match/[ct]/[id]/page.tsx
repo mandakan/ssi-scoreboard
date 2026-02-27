@@ -59,8 +59,18 @@ export default async function MatchPage({ params }: PageProps) {
     },
   });
 
+  // Only dehydrate successfully prefetched queries. If the server-side fetch
+  // fails (e.g. no API key in test/dev, cache miss on a cold node), we must
+  // NOT propagate the error state to the client — TanStack Query v5 dehydrates
+  // errors by default, which would prevent the client from retrying via its
+  // own /api/match fetch. An empty dehydrated state causes the client to
+  // start fresh, which is exactly the graceful-degradation behaviour we want.
   return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
+    <HydrationBoundary
+      state={dehydrate(queryClient, {
+        shouldDehydrateQuery: (query) => query.state.status === "success",
+      })}
+    >
       <MatchPageClient />
     </HydrationBoundary>
   );
