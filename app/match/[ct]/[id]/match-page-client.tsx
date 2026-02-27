@@ -504,28 +504,55 @@ export default function MatchPageClient() {
               {/* Stage Simulator — collapsed by default, only ≥ 80% complete */}
               {match.scoring_completed >= 80 && (
                 <div className="rounded-lg border p-4">
-                  <h2 className="font-semibold text-base m-0 leading-none">
-                    <button
-                      type="button"
-                      id="stage-simulator-heading"
-                      onClick={() => setShowSimulator((v) => !v)}
-                      className="flex w-full items-center justify-between text-left gap-2"
-                      aria-expanded={showSimulator}
-                      aria-controls="stage-simulator-panel"
-                    >
-                      <span>
-                        Stage Simulator
-                        <span className="block text-xs font-normal text-muted-foreground mt-0.5">
-                          Adjust time or hit outcomes to see rank impact.
-                        </span>
-                      </span>
-                      {showSimulator ? (
-                        <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-                      )}
-                    </button>
-                  </h2>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <h2 className="font-semibold text-base m-0 leading-none">
+                        <button
+                          type="button"
+                          id="stage-simulator-heading"
+                          onClick={() => setShowSimulator((v) => !v)}
+                          className="flex items-center gap-2 text-left"
+                          aria-expanded={showSimulator}
+                          aria-controls="stage-simulator-panel"
+                        >
+                          <span>
+                            Stage Simulator
+                            <span className="block text-xs font-normal text-muted-foreground mt-0.5">
+                              Simulate one stage at a time to see how a cleaner run would affect your match rank.
+                            </span>
+                          </span>
+                          {showSimulator ? (
+                            <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                          )}
+                        </button>
+                      </h2>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button
+                            className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                            aria-label="About the stage simulator"
+                          >
+                            <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80" side="bottom" align="start">
+                          <PopoverHeader>
+                            <PopoverTitle>Stage Simulator</PopoverTitle>
+                            <PopoverDescription>
+                              Adjust one stage at a time to see how a cleaner run would affect your hit factor, stage percentage, and match rank.
+                            </PopoverDescription>
+                          </PopoverHeader>
+                          <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+                            <p>Pick a competitor and stage, then dial in adjustments — faster time, converting misses or no-shoots to A or C hits, or upgrading C-hits to A-hits.</p>
+                            <p>The results panel shows stage rank and match rank among the currently selected competitors, updating instantly as you adjust.</p>
+                            <p>Only one stage is simulated at a time. Match rank reflects changing that single stage while all other stages remain as scored.</p>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </div>
 
                   {showSimulator && (
                     <section

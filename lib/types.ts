@@ -302,9 +302,12 @@ export interface EventSummary {
 
 // User-driven adjustments for the what-if stage simulator.
 export interface StageSimulatorAdjustments {
-  timeDelta: number;    // seconds added to current time (negative = faster)
-  missToACount: number; // misses converted to A-hits (0 ≤ n ≤ miss_count)
-  aToCCount: number;    // A-hits swapped to C-hits (0 ≤ n ≤ a_hits)
+  timeDelta:    number; // seconds added to current time (negative = faster)
+  missToACount: number; // 0 ≤ n ≤ miss_count
+  missToCCount: number; // 0 ≤ n ≤ miss_count − missToACount
+  nsToACount:   number; // 0 ≤ n ≤ no_shoots
+  nsToCCount:   number; // 0 ≤ n ≤ no_shoots − nsToACount
+  cToACount:    number; // 0 ≤ n ≤ c_hits  (upgrade C-hits to A-hits)
 }
 
 // Result of simulating a single stage after applying adjustments.
