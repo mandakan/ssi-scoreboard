@@ -67,6 +67,7 @@ const noAdj: StageSimulatorAdjustments = {
   timeDelta: 0, missToACount: 0, missToCCount: 0,
   nsToACount: 0, nsToCCount: 0, cToACount: 0,
   dToACount: 0, dToCCount: 0, removedProcedurals: 0,
+  aToCCount: 0, aToMissCount: 0, aToNSCount: 0,
 };
 
 // ─── isMajorPowerFactor ──────────────────────────────────────────────────────
@@ -171,11 +172,10 @@ describe("computePointDelta", () => {
   it("combines all adjustments correctly (major)", () => {
     // 1 miss→A: +15, 1 miss→C: +14, 1 NS→A: +15, 1 NS→C: +14, 2 C→A: +2 → total +60
     const adj: StageSimulatorAdjustments = {
-      timeDelta: 0,
+      ...noAdj,
       missToACount: 1, missToCCount: 1,
       nsToACount: 1, nsToCCount: 1,
       cToACount: 2,
-      dToACount: 0, dToCCount: 0, removedProcedurals: 0,
     };
     expect(computePointDelta(adj, true)).toBe(60);
   });
@@ -183,13 +183,30 @@ describe("computePointDelta", () => {
   it("combines all adjustments correctly (minor)", () => {
     // 1 miss→A: +15, 1 miss→C: +13, 1 NS→A: +15, 1 NS→C: +13, 2 C→A: +4 → total +60
     const adj: StageSimulatorAdjustments = {
-      timeDelta: 0,
+      ...noAdj,
       missToACount: 1, missToCCount: 1,
       nsToACount: 1, nsToCCount: 1,
       cToACount: 2,
-      dToACount: 0, dToCCount: 0, removedProcedurals: 0,
     };
     expect(computePointDelta(adj, false)).toBe(60);
+  });
+
+  it("subtracts −1 pt per A→C (major) / −2 pts (minor)", () => {
+    const adj: StageSimulatorAdjustments = { ...noAdj, aToCCount: 3 };
+    expect(computePointDelta(adj, true)).toBe(-3);
+    expect(computePointDelta(adj, false)).toBe(-6);
+  });
+
+  it("subtracts −15 pts per A→Miss (same for major and minor)", () => {
+    const adj: StageSimulatorAdjustments = { ...noAdj, aToMissCount: 2 };
+    expect(computePointDelta(adj, true)).toBe(-30);
+    expect(computePointDelta(adj, false)).toBe(-30);
+  });
+
+  it("subtracts −15 pts per A→NS (same for major and minor)", () => {
+    const adj: StageSimulatorAdjustments = { ...noAdj, aToNSCount: 1 };
+    expect(computePointDelta(adj, true)).toBe(-15);
+    expect(computePointDelta(adj, false)).toBe(-15);
   });
 });
 

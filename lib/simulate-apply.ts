@@ -21,6 +21,9 @@ import { computePointDelta, isMajorPowerFactor } from "@/lib/what-if-calc";
  *   - dToA:    d_hits -= n, a_hits += n
  *   - dToC:    d_hits -= n, c_hits += n
  *   - removedProcedurals: procedurals -= n
+ *   - aToC:    a_hits -= n, c_hits += n
+ *   - aToMiss: a_hits -= n, miss_count += n
+ *   - aToNS:   a_hits -= n, no_shoots += n
  */
 export function applyAdjustmentsToScorecards(
   scorecards: RawScorecard[],
@@ -50,10 +53,12 @@ export function applyAdjustmentsToScorecards(
       a_hits:
         sc.a_hits != null
           ? sc.a_hits + adj.missToACount + adj.nsToACount + adj.cToACount + adj.dToACount
+            - adj.aToCCount - adj.aToMissCount - adj.aToNSCount
           : sc.a_hits,
       c_hits:
         sc.c_hits != null
           ? sc.c_hits + adj.missToCCount + adj.nsToCCount - adj.cToACount + adj.dToCCount
+            + adj.aToCCount
           : sc.c_hits,
       d_hits:
         sc.d_hits != null
@@ -61,11 +66,11 @@ export function applyAdjustmentsToScorecards(
           : sc.d_hits,
       miss_count:
         sc.miss_count != null
-          ? sc.miss_count - adj.missToACount - adj.missToCCount
+          ? sc.miss_count - adj.missToACount - adj.missToCCount + adj.aToMissCount
           : sc.miss_count,
       no_shoots:
         sc.no_shoots != null
-          ? sc.no_shoots - adj.nsToACount - adj.nsToCCount
+          ? sc.no_shoots - adj.nsToACount - adj.nsToCCount + adj.aToNSCount
           : sc.no_shoots,
       procedurals:
         sc.procedurals != null

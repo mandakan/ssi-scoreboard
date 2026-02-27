@@ -45,14 +45,12 @@ function ordinal(n: number): string {
 function isZeroAdj(adj: StageSimulatorAdjustments): boolean {
   return (
     adj.timeDelta === 0 &&
-    adj.missToACount === 0 &&
-    adj.missToCCount === 0 &&
-    adj.nsToACount === 0 &&
-    adj.nsToCCount === 0 &&
+    adj.missToACount === 0 && adj.missToCCount === 0 &&
+    adj.nsToACount === 0 && adj.nsToCCount === 0 &&
     adj.cToACount === 0 &&
-    adj.dToACount === 0 &&
-    adj.dToCCount === 0 &&
-    adj.removedProcedurals === 0
+    adj.dToACount === 0 && adj.dToCCount === 0 &&
+    adj.removedProcedurals === 0 &&
+    adj.aToCCount === 0 && adj.aToMissCount === 0 && adj.aToNSCount === 0
   );
 }
 
@@ -179,6 +177,7 @@ const ZERO_ADJ: StageSimulatorAdjustments = {
   timeDelta: 0, missToACount: 0, missToCCount: 0,
   nsToACount: 0, nsToCCount: 0, cToACount: 0,
   dToACount: 0, dToCCount: 0, removedProcedurals: 0,
+  aToCCount: 0, aToMissCount: 0, aToNSCount: 0,
 };
 
 export function StageSimulator({ ct, id, data, competitors, scoringCompleted }: StageSimulatorProps) {
@@ -190,6 +189,7 @@ export function StageSimulator({ ct, id, data, competitors, scoringCompleted }: 
     data.stages[0]?.stage_id ?? 0
   );
   const [adjByStage, setAdjByStage] = useState<Record<number, StageSimulatorAdjustments>>({});
+  const [simMode, setSimMode] = useState<"improve" | "trade">("improve");
   const [serverRank, setServerRank] = useState<WhatIfSimulationResponse | null>(null);
   const [serverRankLoading, setServerRankLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -274,6 +274,7 @@ export function StageSimulator({ ct, id, data, competitors, scoringCompleted }: 
   const currentPoints = compSummary?.points ?? null;
   const currentHF = compSummary?.hit_factor ?? null;
   const currentGroupPct = compSummary?.group_percent ?? null;
+  const currentAHits = compSummary?.a_hits ?? 0;
   const currentMisses = compSummary?.miss_count ?? 0;
   const currentNS = compSummary?.no_shoots ?? 0;
   const currentCHits = compSummary?.c_hits ?? 0;
@@ -305,7 +306,15 @@ export function StageSimulator({ ct, id, data, competitors, scoringCompleted }: 
     dToACount: Math.min(adj.dToACount, maxDToA),
     dToCCount: Math.min(adj.dToCCount, Math.max(0, currentDHits - Math.min(adj.dToACount, maxDToA))),
     removedProcedurals: Math.min(adj.removedProcedurals, maxProcedurals),
+    aToCCount: Math.min(adj.aToCCount, currentAHits),
+    aToMissCount: Math.min(adj.aToMissCount, Math.max(0, currentAHits - Math.min(adj.aToCCount, currentAHits))),
+    aToNSCount: Math.min(adj.aToNSCount, Math.max(0, currentAHits - Math.min(adj.aToCCount, currentAHits) - Math.min(adj.aToMissCount, Math.max(0, currentAHits - Math.min(adj.aToCCount, currentAHits))))),
   };
+
+  // Max values for Trade mode steppers (derived from safeAdj to avoid double-counting)
+  const maxAToC = currentAHits;
+  const maxAToMiss = Math.max(0, currentAHits - safeAdj.aToCCount);
+  const maxAToNS = Math.max(0, currentAHits - safeAdj.aToCCount - safeAdj.aToMissCount);
 
   function updateAdj(updater: (a: StageSimulatorAdjustments) => StageSimulatorAdjustments) {
     setAdjByStage((prev) => {
@@ -447,13 +456,14 @@ export function StageSimulator({ ct, id, data, competitors, scoringCompleted }: 
               </span>
             </p>
             <p>
-              {compSummary?.a_hits ?? 0}A · {currentCHits}C · {currentDHits}D ·{" "}
+              {currentAHits}A · {currentCHits}C · {currentDHits}D ·{" "}
               {currentMisses}M · {currentNS}NS · {currentProcedurals}P
             </p>
           </div>
 
           {/* Adjustment controls */}
-          <div className="space-y-2 border rounded-md px-3 py-3">
+          <div className="border rounded-md px-3 py-3 space-y-3">
+            {/* Time — always visible regardless of mode */}
             <Stepper
               label="Time (s)"
               value={parseFloat((currentTime! + safeAdj.timeDelta).toFixed(10))}
@@ -467,96 +477,174 @@ export function StageSimulator({ ct, id, data, competitors, scoringCompleted }: 
               decrementLabel="Decrease time by 0.5 seconds (shoot faster)"
               incrementLabel="Increase time by 0.5 seconds (shoot slower)"
             />
-            {currentMisses > 0 && (
-              <div className="pt-2 border-t border-border/30 mt-2 space-y-2">
-                <Stepper
-                  label="Misses → A"
-                  value={safeAdj.missToACount}
-                  min={0}
-                  max={maxMissToA}
-                  onChange={(v) => updateAdj((a) => ({ ...a, missToACount: v }))}
-                  decrementLabel="Convert one fewer miss to A-hit"
-                  incrementLabel="Convert one miss to A-hit (+15 pts)"
-                />
-                <Stepper
-                  label="Misses → C"
-                  value={safeAdj.missToCCount}
-                  min={0}
-                  max={maxMissToC}
-                  onChange={(v) => updateAdj((a) => ({ ...a, missToCCount: v }))}
-                  decrementLabel="Convert one fewer miss to C-hit"
-                  incrementLabel={`Convert one miss to C-hit (${isMajor ? "+14 pts major" : "+13 pts minor"})`}
-                />
+
+            {/* Mode toggle */}
+            <div
+              className="flex rounded-md border border-input overflow-hidden text-sm"
+              role="group"
+              aria-label="Adjustment mode"
+            >
+              <button
+                type="button"
+                onClick={() => setSimMode("improve")}
+                aria-pressed={simMode === "improve"}
+                className={cn(
+                  "flex-1 py-2 font-medium transition-colors",
+                  simMode === "improve"
+                    ? "bg-foreground text-background"
+                    : "bg-background text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Improve
+              </button>
+              <button
+                type="button"
+                onClick={() => setSimMode("trade")}
+                aria-pressed={simMode === "trade"}
+                className={cn(
+                  "flex-1 py-2 font-medium transition-colors border-l border-input",
+                  simMode === "trade"
+                    ? "bg-foreground text-background"
+                    : "bg-background text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Trade
+              </button>
+            </div>
+
+            {/* Improve mode: upgrade zones, remove penalties */}
+            {simMode === "improve" && (
+              <div className="space-y-2">
+                {currentMisses > 0 && (
+                  <div className="space-y-2">
+                    <Stepper
+                      label="Misses → A"
+                      value={safeAdj.missToACount}
+                      min={0}
+                      max={maxMissToA}
+                      onChange={(v) => updateAdj((a) => ({ ...a, missToACount: v }))}
+                      decrementLabel="Convert one fewer miss to A-hit"
+                      incrementLabel="Convert one miss to A-hit (+15 pts)"
+                    />
+                    <Stepper
+                      label="Misses → C"
+                      value={safeAdj.missToCCount}
+                      min={0}
+                      max={maxMissToC}
+                      onChange={(v) => updateAdj((a) => ({ ...a, missToCCount: v }))}
+                      decrementLabel="Convert one fewer miss to C-hit"
+                      incrementLabel={`Convert one miss to C-hit (${isMajor ? "+14 pts major" : "+13 pts minor"})`}
+                    />
+                  </div>
+                )}
+                {currentNS > 0 && (
+                  <div className="space-y-2">
+                    <Stepper
+                      label="NS → A"
+                      value={safeAdj.nsToACount}
+                      min={0}
+                      max={maxNsToA}
+                      onChange={(v) => updateAdj((a) => ({ ...a, nsToACount: v }))}
+                      decrementLabel="Convert one fewer no-shoot to A-hit"
+                      incrementLabel="Convert one no-shoot to A-hit (+15 pts)"
+                    />
+                    <Stepper
+                      label="NS → C"
+                      value={safeAdj.nsToCCount}
+                      min={0}
+                      max={maxNsToC}
+                      onChange={(v) => updateAdj((a) => ({ ...a, nsToCCount: v }))}
+                      decrementLabel="Convert one fewer no-shoot to C-hit"
+                      incrementLabel={`Convert one no-shoot to C-hit (${isMajor ? "+14 pts major" : "+13 pts minor"})`}
+                    />
+                  </div>
+                )}
+                {currentCHits > 0 && (
+                  <Stepper
+                    label="C → A"
+                    value={safeAdj.cToACount}
+                    min={0}
+                    max={maxCToA}
+                    onChange={(v) => updateAdj((a) => ({ ...a, cToACount: v }))}
+                    decrementLabel="Upgrade one fewer C-hit to A-hit"
+                    incrementLabel={`Upgrade one C-hit to A-hit (${isMajor ? "+1 pt major" : "+2 pts minor"})`}
+                  />
+                )}
+                {currentDHits > 0 && (
+                  <div className="space-y-2">
+                    <Stepper
+                      label="D → A"
+                      value={safeAdj.dToACount}
+                      min={0}
+                      max={maxDToA}
+                      onChange={(v) => updateAdj((a) => ({ ...a, dToACount: v }))}
+                      decrementLabel="Upgrade one fewer D-hit to A-hit"
+                      incrementLabel={`Upgrade one D-hit to A-hit (${isMajor ? "+3 pts major" : "+4 pts minor"})`}
+                    />
+                    <Stepper
+                      label="D → C"
+                      value={safeAdj.dToCCount}
+                      min={0}
+                      max={maxDToC}
+                      onChange={(v) => updateAdj((a) => ({ ...a, dToCCount: v }))}
+                      decrementLabel="Upgrade one fewer D-hit to C-hit"
+                      incrementLabel="Upgrade one D-hit to C-hit (+2 pts)"
+                    />
+                  </div>
+                )}
+                {currentProcedurals > 0 && (
+                  <Stepper
+                    label="Remove proc."
+                    value={safeAdj.removedProcedurals}
+                    min={0}
+                    max={maxProcedurals}
+                    onChange={(v) => updateAdj((a) => ({ ...a, removedProcedurals: v }))}
+                    decrementLabel="Restore one procedural penalty"
+                    incrementLabel="Remove one procedural penalty (+10 pts)"
+                  />
+                )}
+                {currentMisses === 0 && currentNS === 0 && currentCHits === 0 && currentDHits === 0 && currentProcedurals === 0 && (
+                  <p className="text-xs text-muted-foreground">No zone upgrades available — adjust time above.</p>
+                )}
               </div>
             )}
-            {currentNS > 0 && (
-              <div className="pt-2 border-t border-border/30 mt-2 space-y-2">
-                <Stepper
-                  label="NS → A"
-                  value={safeAdj.nsToACount}
-                  min={0}
-                  max={maxNsToA}
-                  onChange={(v) => updateAdj((a) => ({ ...a, nsToACount: v }))}
-                  decrementLabel="Convert one fewer no-shoot to A-hit"
-                  incrementLabel="Convert one no-shoot to A-hit (+15 pts)"
-                />
-                <Stepper
-                  label="NS → C"
-                  value={safeAdj.nsToCCount}
-                  min={0}
-                  max={maxNsToC}
-                  onChange={(v) => updateAdj((a) => ({ ...a, nsToCCount: v }))}
-                  decrementLabel="Convert one fewer no-shoot to C-hit"
-                  incrementLabel={`Convert one no-shoot to C-hit (${isMajor ? "+14 pts major" : "+13 pts minor"})`}
-                />
-              </div>
-            )}
-            {currentCHits > 0 && (
-              <div className="pt-2 border-t border-border/30 mt-2">
-                <Stepper
-                  label="C → A"
-                  value={safeAdj.cToACount}
-                  min={0}
-                  max={maxCToA}
-                  onChange={(v) => updateAdj((a) => ({ ...a, cToACount: v }))}
-                  decrementLabel="Upgrade one fewer C-hit to A-hit"
-                  incrementLabel={`Upgrade one C-hit to A-hit (${isMajor ? "+1 pt major" : "+2 pts minor"})`}
-                />
-              </div>
-            )}
-            {currentDHits > 0 && (
-              <div className="pt-2 border-t border-border/30 mt-2 space-y-2">
-                <Stepper
-                  label="D → A"
-                  value={safeAdj.dToACount}
-                  min={0}
-                  max={maxDToA}
-                  onChange={(v) => updateAdj((a) => ({ ...a, dToACount: v }))}
-                  decrementLabel="Upgrade one fewer D-hit to A-hit"
-                  incrementLabel={`Upgrade one D-hit to A-hit (${isMajor ? "+3 pts major" : "+4 pts minor"})`}
-                />
-                <Stepper
-                  label="D → C"
-                  value={safeAdj.dToCCount}
-                  min={0}
-                  max={maxDToC}
-                  onChange={(v) => updateAdj((a) => ({ ...a, dToCCount: v }))}
-                  decrementLabel="Upgrade one fewer D-hit to C-hit"
-                  incrementLabel="Upgrade one D-hit to C-hit (+2 pts)"
-                />
-              </div>
-            )}
-            {currentProcedurals > 0 && (
-              <div className="pt-2 border-t border-border/30 mt-2">
-                <Stepper
-                  label="Remove proc."
-                  value={safeAdj.removedProcedurals}
-                  min={0}
-                  max={maxProcedurals}
-                  onChange={(v) => updateAdj((a) => ({ ...a, removedProcedurals: v }))}
-                  decrementLabel="Restore one procedural penalty"
-                  incrementLabel="Remove one procedural penalty (+10 pts)"
-                />
+
+            {/* Trade mode: downgrade A-hits to simulate going faster with lower accuracy */}
+            {simMode === "trade" && (
+              <div className="space-y-2">
+                {currentAHits > 0 ? (
+                  <>
+                    <Stepper
+                      label="A → C"
+                      value={safeAdj.aToCCount}
+                      min={0}
+                      max={maxAToC}
+                      onChange={(v) => updateAdj((a) => ({ ...a, aToCCount: v }))}
+                      decrementLabel="Convert one fewer A-hit to C-hit"
+                      incrementLabel={`Convert one A-hit to C-hit (${isMajor ? "−1 pt major" : "−2 pts minor"})`}
+                    />
+                    <Stepper
+                      label="A → Miss"
+                      value={safeAdj.aToMissCount}
+                      min={0}
+                      max={maxAToMiss}
+                      onChange={(v) => updateAdj((a) => ({ ...a, aToMissCount: v }))}
+                      decrementLabel="Convert one fewer A-hit to miss"
+                      incrementLabel="Convert one A-hit to miss (−15 pts)"
+                    />
+                    <Stepper
+                      label="A → NS"
+                      value={safeAdj.aToNSCount}
+                      min={0}
+                      max={maxAToNS}
+                      onChange={(v) => updateAdj((a) => ({ ...a, aToNSCount: v }))}
+                      decrementLabel="Convert one fewer A-hit to no-shoot"
+                      incrementLabel="Convert one A-hit to no-shoot (−15 pts)"
+                    />
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">No A-hits on this stage to trade down.</p>
+                )}
               </div>
             )}
           </div>
@@ -589,15 +677,15 @@ export function StageSimulator({ ct, id, data, competitors, scoringCompleted }: 
                 aria-atomic="true"
                 aria-label={
                   adjustedStageCount > 1
-                    ? `Simulated result — ${adjustedStageCount} stages`
-                    : "Simulated result — this stage"
+                    ? `What-if result — ${adjustedStageCount} stages`
+                    : "What-if result — this stage"
                 }
               >
                 <div className="rounded-md border px-3 py-3 space-y-0.5">
                   <p className="text-xs font-medium text-muted-foreground mb-2">
                     {adjustedStageCount > 1
                       ? `Simulated result — ${adjustedStageCount} stage(s)`
-                      : "Simulated result — this stage"}
+                      : "What-if result — this stage"}
                   </p>
                   <ResultRow
                     label="Points"
@@ -703,6 +791,9 @@ export function StageSimulator({ ct, id, data, competitors, scoringCompleted }: 
                       </>
                     );
                   })()}
+                  <p className="text-xs text-muted-foreground/60 pt-2 mt-1 border-t border-border/30">
+                    Hypothetical only — the comparison table above is unchanged.
+                  </p>
                 </div>
               </div>
             );

@@ -17,6 +17,9 @@
 //   D → A:           +3 pts major / +4 pts minor
 //   D → C:           +2 pts major / +2 pts minor
 //   Procedural removed: +10 pts (power factor irrelevant)
+//   A → C:           −1 pt major / −2 pts minor (trade mode: accuracy for speed)
+//   A → Miss:        −15 pts (both: inverse of miss → A)
+//   A → NS:          −15 pts (both: inverse of NS → A)
 
 import type {
   StageComparison,
@@ -50,6 +53,7 @@ export function computePointDelta(
   const cToADelta = isMajor ? 1 : 2;       // inverse of A→C
   const dToADelta = isMajor ? 3 : 4;       // D→A: major 2→5 = +3; minor 1→5 = +4
   const dToCDelta = 2;                      // D→C: major 2→4 = +2; minor 1→3 = +2
+  const aToCDelta = isMajor ? -1 : -2;     // A→C: major 5→4 = -1; minor 5→3 = -2
   return (
     adjustments.missToACount * 15 +
     adjustments.missToCCount * missToCDelta +
@@ -58,7 +62,10 @@ export function computePointDelta(
     adjustments.cToACount * cToADelta +
     adjustments.dToACount * dToADelta +
     adjustments.dToCCount * dToCDelta +
-    adjustments.removedProcedurals * 10
+    adjustments.removedProcedurals * 10 +
+    adjustments.aToCCount * aToCDelta +
+    adjustments.aToMissCount * -15 +
+    adjustments.aToNSCount * -15
   );
 }
 

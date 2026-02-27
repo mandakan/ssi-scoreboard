@@ -34,6 +34,7 @@ const noAdj: StageSimulatorAdjustments = {
   timeDelta: 0, missToACount: 0, missToCCount: 0,
   nsToACount: 0, nsToCCount: 0, cToACount: 0,
   dToACount: 0, dToCCount: 0, removedProcedurals: 0,
+  aToCCount: 0, aToMissCount: 0, aToNSCount: 0,
 };
 
 // ─── applyAdjustmentsToScorecards ─────────────────────────────────────────────
@@ -185,5 +186,46 @@ describe("applyAdjustmentsToScorecards", () => {
     expect(result[0].points).toBeCloseTo(expectedPoints, 5);
     expect(result[0].time).toBeCloseTo(expectedTime, 5);
     expect(result[0].hit_factor).toBeCloseTo(expectedHF, 5);
+  });
+
+  it("A→C: subtracts −1 pt major, updates zone counts", () => {
+    const sc = makeScorecard({ points: 80, time: 10.0, a_hits: 10, c_hits: 4 });
+    const result = applyAdjustmentsToScorecards(
+      [sc], 1, "Open Major", { 1: { ...noAdj, aToCCount: 2 } }
+    );
+    expect(result[0].points).toBe(78); // −2 pts (2 × 1)
+    expect(result[0].a_hits).toBe(8);
+    expect(result[0].c_hits).toBe(6);
+  });
+
+  it("A→C: subtracts −2 pts minor, updates zone counts", () => {
+    const sc = makeScorecard({ points: 80, time: 10.0, a_hits: 10, c_hits: 4,
+      competitor_division: "Production" });
+    const result = applyAdjustmentsToScorecards(
+      [sc], 1, "Production", { 1: { ...noAdj, aToCCount: 2 } }
+    );
+    expect(result[0].points).toBe(76); // −4 pts (2 × 2)
+    expect(result[0].a_hits).toBe(8);
+    expect(result[0].c_hits).toBe(6);
+  });
+
+  it("A→Miss: subtracts −15 pts, updates zone counts", () => {
+    const sc = makeScorecard({ points: 80, time: 10.0, a_hits: 10, miss_count: 1 });
+    const result = applyAdjustmentsToScorecards(
+      [sc], 1, "Open Major", { 1: { ...noAdj, aToMissCount: 1 } }
+    );
+    expect(result[0].points).toBe(65); // −15 pts
+    expect(result[0].a_hits).toBe(9);
+    expect(result[0].miss_count).toBe(2);
+  });
+
+  it("A→NS: subtracts −15 pts, updates zone counts", () => {
+    const sc = makeScorecard({ points: 80, time: 10.0, a_hits: 10, no_shoots: 0 });
+    const result = applyAdjustmentsToScorecards(
+      [sc], 1, "Open Major", { 1: { ...noAdj, aToNSCount: 2 } }
+    );
+    expect(result[0].points).toBe(50); // −30 pts
+    expect(result[0].a_hits).toBe(8);
+    expect(result[0].no_shoots).toBe(2);
   });
 });

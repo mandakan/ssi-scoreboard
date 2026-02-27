@@ -311,6 +311,9 @@ export interface StageSimulatorAdjustments {
   dToACount:          number; // 0 ≤ n ≤ d_hits
   dToCCount:          number; // 0 ≤ n ≤ d_hits − dToACount
   removedProcedurals: number; // 0 ≤ n ≤ procedurals
+  aToCCount:          number; // 0 ≤ n ≤ a_hits  (trade: downgrade A-hits to C-hits)
+  aToMissCount:       number; // 0 ≤ n ≤ a_hits − aToCCount
+  aToNSCount:         number; // 0 ≤ n ≤ a_hits − aToCCount − aToMissCount
 }
 
 // Result of simulating a single stage after applying adjustments.

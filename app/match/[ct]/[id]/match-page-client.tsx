@@ -535,40 +535,40 @@ export default function MatchPageClient() {
               {/* Stage Simulator — collapsed by default, only ≥ 80% complete */}
               {match.scoring_completed >= 80 && (
                 <div className="rounded-lg border p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <h2 className="font-semibold text-base m-0 leading-none">
-                        <button
-                          type="button"
-                          id="stage-simulator-heading"
-                          onClick={() => setShowSimulator((v) => !v)}
-                          className="flex items-center gap-2 text-left"
-                          aria-expanded={showSimulator}
-                          aria-controls="stage-simulator-panel"
-                        >
-                          <span>
-                            Stage Simulator
-                            <span className="block text-xs font-normal text-muted-foreground mt-0.5">
-                              Simulate one stage at a time to see how a cleaner run would affect your match rank.
-                            </span>
+                  <div className="flex items-start gap-2">
+                    <h2 className="flex-1 font-semibold text-base m-0 leading-none">
+                      <button
+                        type="button"
+                        id="stage-simulator-heading"
+                        onClick={() => setShowSimulator((v) => !v)}
+                        className="flex w-full items-center justify-between text-left gap-2"
+                        aria-expanded={showSimulator}
+                        aria-controls="stage-simulator-panel"
+                      >
+                        <span>
+                          Stage Simulator
+                          <span className="block text-xs font-normal text-muted-foreground mt-0.5">
+                            What-if sandbox — the comparison table above is not affected.
                           </span>
-                          {showSimulator ? (
-                            <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-                          ) : (
-                            <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-                          )}
-                        </button>
-                      </h2>
+                        </span>
+                        {showSimulator ? (
+                          <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                        )}
+                      </button>
+                    </h2>
+                    {showSimulator && (
                       <Popover>
                         <PopoverTrigger asChild>
                           <button
-                            className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                            className="flex-none text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
                             aria-label="About the stage simulator"
                           >
                             <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-80" side="bottom" align="start">
+                        <PopoverContent className="w-80" side="bottom" align="end">
                           <PopoverHeader>
                             <PopoverTitle>Stage Simulator</PopoverTitle>
                             <PopoverDescription>
@@ -583,7 +583,7 @@ export default function MatchPageClient() {
                           </div>
                         </PopoverContent>
                       </Popover>
-                    </div>
+                    )}
                   </div>
 
                   {showSimulator && (
