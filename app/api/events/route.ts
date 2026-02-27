@@ -19,12 +19,14 @@ interface RawEventsData {
   events: RawEvent[];
 }
 
-// Which level strings to exclude for each minLevel value.
-// Unknown level strings pass through (safe default).
-const EXCLUDED_LEVELS: Record<string, Set<string>> = {
-  l2plus: new Set(["Level I"]),
-  l3plus: new Set(["Level I", "Level II"]),
-  l4plus: new Set(["Level I", "Level II", "Level III"]),
+// Which level strings are accepted for each minLevel value.
+// null = accept everything (used for "all").
+// Unsanctioned/unrecognised level strings are excluded by any non-"all" filter.
+const ALLOWED_LEVELS: Record<string, Set<string> | null> = {
+  all: null,
+  l2plus: new Set(["Level II", "Level III", "Level IV", "Level V"]),
+  l3plus: new Set(["Level III", "Level IV", "Level V"]),
+  l4plus: new Set(["Level IV", "Level V"]),
 };
 
 // The SSI API applies an undocumented result cap per query when browsing
@@ -127,10 +129,13 @@ export async function GET(req: Request) {
     .filter((e) => e.get_content_type_key === 22)
     // Filter by country/region if specified
     .filter((e) => !country || e.region.toUpperCase() === country.toUpperCase())
-    // Filter by minimum level (e.g. l2plus excludes Level I)
+    // Filter by minimum level (e.g. l2plus keeps only Level II+).
+    // "all" (null entry) passes everything; unknown minLevel falls back to l2plus.
+    // Any unrecognised level string (e.g. "Unsanctioned") is excluded.
     .filter((e) => {
-      const excluded = EXCLUDED_LEVELS[minLevel];
-      return !excluded || !excluded.has(e.get_full_level_display);
+      const entry = ALLOWED_LEVELS[minLevel];
+      const allowed = entry === undefined ? ALLOWED_LEVELS.l2plus : entry;
+      return allowed === null || allowed.has(e.get_full_level_display);
     })
     // Sort by start date descending (upcoming/most-recent first)
     .sort((a, b) => new Date(b.starts).getTime() - new Date(a.starts).getTime())
