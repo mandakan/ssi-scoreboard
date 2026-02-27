@@ -1,25 +1,15 @@
 "use client";
 
 import { useCallback, useSyncExternalStore, useEffect, useRef, useState } from "react";
-
-// Stable empty array for useSyncExternalStore server snapshot — must be a
-// constant reference so React's referential equality check doesn't loop.
-const EMPTY_IDS: number[] = [];
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { MatchHeader } from "@/components/match-header";
 import { ShareButton } from "@/components/share-button";
 import { CompetitorPicker } from "@/components/competitor-picker";
 import { SquadPicker } from "@/components/squad-picker";
 import { BenchmarkPicker } from "@/components/benchmark-picker";
 import { ComparisonTable } from "@/components/comparison-table";
-import { ComparisonChart } from "@/components/comparison-chart";
-import { HfPercentChart } from "@/components/hf-percent-chart";
-import { SpeedAccuracyChart } from "@/components/scatter-chart";
-import { StageBalanceChart } from "@/components/radar-chart";
-import { StyleFingerprintChart } from "@/components/style-fingerprint-chart";
-import { ShooterStyleRadarChart } from "@/components/shooter-style-radar-chart";
-import { StageSimulator } from "@/components/stage-simulator";
 import { useMatchQuery, useCompareQuery } from "@/lib/queries";
 import { CacheInfoBadge } from "@/components/cache-info-badge";
 import { LoadingBar } from "@/components/loading-bar";
@@ -40,6 +30,47 @@ import {
   getCompetitorSelectionSnapshot,
   SELECTION_CHANGED,
 } from "@/lib/competition-store";
+
+// Stable empty array for useSyncExternalStore server snapshot — must be a
+// constant reference so React's referential equality check doesn't loop.
+const EMPTY_IDS: number[] = [];
+
+const ChartSkeleton = () => <Skeleton className="h-64 w-full rounded-lg" />;
+
+const ComparisonChart = dynamic(
+  () => import("@/components/comparison-chart").then((m) => m.ComparisonChart),
+  { ssr: false, loading: ChartSkeleton },
+);
+const HfPercentChart = dynamic(
+  () => import("@/components/hf-percent-chart").then((m) => m.HfPercentChart),
+  { ssr: false, loading: ChartSkeleton },
+);
+const SpeedAccuracyChart = dynamic(
+  () => import("@/components/scatter-chart").then((m) => m.SpeedAccuracyChart),
+  { ssr: false, loading: ChartSkeleton },
+);
+const StageBalanceChart = dynamic(
+  () => import("@/components/radar-chart").then((m) => m.StageBalanceChart),
+  { ssr: false, loading: ChartSkeleton },
+);
+const StyleFingerprintChart = dynamic(
+  () =>
+    import("@/components/style-fingerprint-chart").then(
+      (m) => m.StyleFingerprintChart,
+    ),
+  { ssr: false, loading: ChartSkeleton },
+);
+const ShooterStyleRadarChart = dynamic(
+  () =>
+    import("@/components/shooter-style-radar-chart").then(
+      (m) => m.ShooterStyleRadarChart,
+    ),
+  { ssr: false, loading: ChartSkeleton },
+);
+const StageSimulator = dynamic(
+  () => import("@/components/stage-simulator").then((m) => m.StageSimulator),
+  { ssr: false, loading: () => <Skeleton className="h-48 w-full rounded-lg" /> },
+);
 
 export default function MatchPageClient() {
   const [showCoachingView, setShowCoachingView] = useState(false);
