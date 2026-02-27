@@ -132,9 +132,10 @@ const MOCK_COMPARE_2: CompareResponse = {
 
 test.describe("Scoreboard E2E", () => {
   test.beforeEach(async ({ page }) => {
-    // Suppress the first-visit help modal so it doesn't intercept clicks in tests.
+    // Suppress first-visit modals so they don't intercept clicks in tests.
     await page.addInitScript(() => {
       localStorage.setItem("ssi-cell-help-seen", "1");
+      localStorage.setItem("whats-new-seen-id", "suppress-in-tests");
     });
   });
 
@@ -309,9 +310,10 @@ test.describe("Mobile 390px viewport", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
   test.beforeEach(async ({ page }) => {
-    // Suppress the first-visit help modal so it doesn't intercept clicks in tests.
+    // Suppress first-visit modals so they don't intercept clicks in tests.
     await page.addInitScript(() => {
       localStorage.setItem("ssi-cell-help-seen", "1");
+      localStorage.setItem("whats-new-seen-id", "suppress-in-tests");
     });
   });
 

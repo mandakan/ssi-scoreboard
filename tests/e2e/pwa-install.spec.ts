@@ -6,6 +6,13 @@ const IOS_UA =
   "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
 
 test.describe("PWA install — About page", () => {
+  test.beforeEach(async ({ page }) => {
+    // Suppress first-visit modals so they don't intercept clicks in tests.
+    await page.addInitScript(() => {
+      localStorage.setItem("whats-new-seen-id", "suppress-in-tests");
+    });
+  });
+
   test("about page has an install section", async ({ page }) => {
     await page.goto("/about");
     await expect(
