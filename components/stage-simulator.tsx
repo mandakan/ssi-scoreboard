@@ -148,7 +148,10 @@ interface StageSimulatorProps {
   scoringCompleted: number;
 }
 
-const ZERO_ADJ: StageSimulatorAdjustments = { timeDelta: 0, missToACount: 0, aToCCount: 0 };
+const ZERO_ADJ: StageSimulatorAdjustments = {
+  timeDelta: 0, missToACount: 0, missToCCount: 0,
+  nsToACount: 0, nsToCCount: 0, cToACount: 0,
+};
 
 export function StageSimulator({ data, competitors, scoringCompleted }: StageSimulatorProps) {
   // All hooks must be called unconditionally before any early return.
@@ -177,18 +180,25 @@ export function StageSimulator({ data, competitors, scoringCompleted }: StageSim
   const currentHF = compSummary?.hit_factor ?? null;
   const currentGroupPct = compSummary?.group_percent ?? null;
   const currentMisses = compSummary?.miss_count ?? 0;
-  const currentAHits = compSummary?.a_hits ?? 0;
+  const currentNS = compSummary?.no_shoots ?? 0;
+  const currentCHits = compSummary?.c_hits ?? 0;
   const stageUnavailable =
     !compSummary || compSummary.dnf || compSummary.dq || compSummary.zeroed;
 
   // Constrain adjustments when stage/competitor changes
   const maxMissToA = currentMisses;
-  const maxAToC = Math.max(0, currentAHits - adj.missToACount);
+  const maxMissToC = Math.max(0, currentMisses - adj.missToACount);
+  const maxNsToA = currentNS;
+  const maxNsToC = Math.max(0, currentNS - adj.nsToACount);
+  const maxCToA = currentCHits;
 
   const safeAdj: StageSimulatorAdjustments = {
     timeDelta: adj.timeDelta,
     missToACount: Math.min(adj.missToACount, maxMissToA),
-    aToCCount: Math.min(adj.aToCCount, maxAToC),
+    missToCCount: Math.min(adj.missToCCount, Math.max(0, currentMisses - Math.min(adj.missToACount, maxMissToA))),
+    nsToACount: Math.min(adj.nsToACount, maxNsToA),
+    nsToCCount: Math.min(adj.nsToCCount, Math.max(0, currentNS - Math.min(adj.nsToACount, maxNsToA))),
+    cToACount: Math.min(adj.cToACount, maxCToA),
   };
 
   // Simulation — pure functions, synchronous, negligible cost (≤20 stages × 12 competitors)
@@ -229,9 +239,9 @@ export function StageSimulator({ data, competitors, scoringCompleted }: StageSim
   const currentGroupRank = currentGroupRankIdx >= 0 ? currentGroupRankIdx + 1 : null;
 
   const hasChanges =
-    safeAdj.timeDelta !== 0 ||
-    safeAdj.missToACount !== 0 ||
-    safeAdj.aToCCount !== 0;
+    safeAdj.timeDelta !== 0 || safeAdj.missToACount !== 0 ||
+    safeAdj.missToCCount !== 0 || safeAdj.nsToACount !== 0 ||
+    safeAdj.nsToCCount !== 0 || safeAdj.cToACount !== 0;
 
   function resetAdj() {
     setAdj(ZERO_ADJ);
@@ -300,7 +310,7 @@ export function StageSimulator({ data, competitors, scoringCompleted }: StageSim
               </span>
             </p>
             <p>
-              {currentAHits}A · {compSummary?.c_hits ?? 0}C · {compSummary?.d_hits ?? 0}D ·{" "}
+              {compSummary?.a_hits ?? 0}A · {currentCHits}C · {compSummary?.d_hits ?? 0}D ·{" "}
               {currentMisses}M · {compSummary?.no_shoots ?? 0}NS ·{" "}
               {compSummary?.procedurals ?? 0}P
             </p>
@@ -322,94 +332,165 @@ export function StageSimulator({ data, competitors, scoringCompleted }: StageSim
               incrementLabel="Increase time by 0.5 seconds (shoot slower)"
             />
             {currentMisses > 0 && (
-              <Stepper
-                label="Misses → A"
-                value={safeAdj.missToACount}
-                min={0}
-                max={maxMissToA}
-                onChange={(v) => setAdj((a) => ({ ...a, missToACount: v }))}
-                decrementLabel="Convert one fewer miss to A-hit"
-                incrementLabel="Convert one miss to A-hit (+15 pts)"
-              />
+              <div className="pt-2 border-t border-border/30 mt-2 space-y-2">
+                <Stepper
+                  label="Misses → A"
+                  value={safeAdj.missToACount}
+                  min={0}
+                  max={maxMissToA}
+                  onChange={(v) => setAdj((a) => ({ ...a, missToACount: v }))}
+                  decrementLabel="Convert one fewer miss to A-hit"
+                  incrementLabel="Convert one miss to A-hit (+15 pts)"
+                />
+                <Stepper
+                  label="Misses → C"
+                  value={safeAdj.missToCCount}
+                  min={0}
+                  max={maxMissToC}
+                  onChange={(v) => setAdj((a) => ({ ...a, missToCCount: v }))}
+                  decrementLabel="Convert one fewer miss to C-hit"
+                  incrementLabel={`Convert one miss to C-hit (${isMajor ? "+14 pts major" : "+13 pts minor"})`}
+                />
+              </div>
             )}
-            {currentAHits > 0 && (
-              <Stepper
-                label="A → C"
-                value={safeAdj.aToCCount}
-                min={0}
-                max={maxAToC}
-                onChange={(v) => setAdj((a) => ({ ...a, aToCCount: v }))}
-                decrementLabel="Swap one fewer A-hit to C-hit"
-                incrementLabel={`Swap one A-hit to C-hit (${isMajor ? "−1 pt major" : "−2 pts minor"})`}
-              />
+            {currentNS > 0 && (
+              <div className="pt-2 border-t border-border/30 mt-2 space-y-2">
+                <Stepper
+                  label="NS → A"
+                  value={safeAdj.nsToACount}
+                  min={0}
+                  max={maxNsToA}
+                  onChange={(v) => setAdj((a) => ({ ...a, nsToACount: v }))}
+                  decrementLabel="Convert one fewer no-shoot to A-hit"
+                  incrementLabel="Convert one no-shoot to A-hit (+15 pts)"
+                />
+                <Stepper
+                  label="NS → C"
+                  value={safeAdj.nsToCCount}
+                  min={0}
+                  max={maxNsToC}
+                  onChange={(v) => setAdj((a) => ({ ...a, nsToCCount: v }))}
+                  decrementLabel="Convert one fewer no-shoot to C-hit"
+                  incrementLabel={`Convert one no-shoot to C-hit (${isMajor ? "+14 pts major" : "+13 pts minor"})`}
+                />
+              </div>
+            )}
+            {currentCHits > 0 && (
+              <div className="pt-2 border-t border-border/30 mt-2">
+                <Stepper
+                  label="C → A"
+                  value={safeAdj.cToACount}
+                  min={0}
+                  max={maxCToA}
+                  onChange={(v) => setAdj((a) => ({ ...a, cToACount: v }))}
+                  decrementLabel="Upgrade one fewer C-hit to A-hit"
+                  incrementLabel={`Upgrade one C-hit to A-hit (${isMajor ? "+1 pt major" : "+2 pts minor"})`}
+                />
+              </div>
             )}
           </div>
 
-          {/* Live result */}
-          <div
-            id={liveRegionId}
-            aria-live="polite"
-            aria-atomic="true"
-            aria-label="Simulated result"
-          >
-            <div className="rounded-md border px-3 py-3 space-y-0.5">
-              <p className="text-xs font-medium text-muted-foreground mb-2">Simulated result</p>
-              <ResultRow
-                label="Points"
-                current={fmt(currentPoints, 0)}
-                simulated={fmt(simStage?.newPoints ?? currentPoints, 0)}
-                delta={fmtDelta(simStage?.pointDelta ?? null, 0)}
-                deltaPositive={simStage ? simStage.pointDelta > 0 : null}
-              />
-              <ResultRow
-                label="HF"
-                current={fmt(currentHF)}
-                simulated={fmt(simStage?.newHF ?? currentHF)}
-                delta={fmtDelta(simStage?.hfDelta ?? null)}
-                deltaPositive={simStage ? simStage.hfDelta > 0 : null}
-              />
-              <ResultRow
-                label="Stage %"
-                current={fmt(currentGroupPct, 1)}
-                simulated={fmt(simStage?.newGroupPct ?? currentGroupPct, 1)}
-                delta={fmtDelta(simStage?.groupPctDelta ?? null, 1)}
-                deltaPositive={simStage ? (simStage.groupPctDelta ?? 0) > 0 : null}
-              />
-              {competitors.length > 1 && (
-                <>
+          {/* Stage group rank — computed inline */}
+          {(() => {
+            const currentStageGroupRank = compSummary?.group_rank ?? null;
+            let simStageGroupRank: number | null = null;
+            if (simStage) {
+              const betterCount = competitors
+                .filter(c => c.id !== selectedComp.id)
+                .filter(c => {
+                  const hf = selectedStage.competitors[c.id]?.hit_factor ?? null;
+                  return hf != null && hf > simStage.newHF;
+                }).length;
+              simStageGroupRank = betterCount + 1;
+            }
+            const stageGroupRankDelta =
+              simStageGroupRank != null && currentStageGroupRank != null
+                ? currentStageGroupRank - simStageGroupRank
+                : null;
+
+            return (
+              /* Live result */
+              <div
+                id={liveRegionId}
+                aria-live="polite"
+                aria-atomic="true"
+                aria-label="Simulated result — this stage only"
+              >
+                <div className="rounded-md border px-3 py-3 space-y-0.5">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Simulated result — this stage only</p>
                   <ResultRow
-                    label="Match avg"
-                    current={fmt(currentMatchPct, 1)}
-                    simulated={fmt(simMatch?.newMatchPct ?? currentMatchPct, 1)}
-                    delta={fmtDelta(simMatch?.matchPctDelta ?? null, 1)}
-                    deltaPositive={simMatch ? (simMatch.matchPctDelta ?? 0) > 0 : null}
+                    label="Points"
+                    current={fmt(currentPoints, 0)}
+                    simulated={fmt(simStage?.newPoints ?? currentPoints, 0)}
+                    delta={fmtDelta(simStage?.pointDelta ?? null, 0)}
+                    deltaPositive={simStage ? simStage.pointDelta > 0 : null}
                   />
                   <ResultRow
-                    label="Group rank"
-                    current={currentGroupRank != null ? ordinal(currentGroupRank) : "—"}
-                    simulated={
-                      simMatch?.newGroupRank != null
-                        ? ordinal(simMatch.newGroupRank)
-                        : currentGroupRank != null
-                        ? ordinal(currentGroupRank)
-                        : "—"
-                    }
-                    delta={fmtRankDelta(simMatch?.groupRankDelta ?? null)}
-                    deltaPositive={simMatch ? (simMatch.groupRankDelta ?? 0) > 0 : null}
+                    label="HF"
+                    current={fmt(currentHF)}
+                    simulated={fmt(simStage?.newHF ?? currentHF)}
+                    delta={fmtDelta(simStage?.hfDelta ?? null)}
+                    deltaPositive={simStage ? simStage.hfDelta > 0 : null}
                   />
-                </>
-              )}
-              {competitors.length === 1 && (
-                <ResultRow
-                  label="Match avg"
-                  current={fmt(currentMatchPct, 1)}
-                  simulated={fmt(simMatch?.newMatchPct ?? currentMatchPct, 1)}
-                  delta={fmtDelta(simMatch?.matchPctDelta ?? null, 1)}
-                  deltaPositive={simMatch ? (simMatch.matchPctDelta ?? 0) > 0 : null}
-                />
-              )}
-            </div>
-          </div>
+                  <ResultRow
+                    label="Stage %"
+                    current={fmt(currentGroupPct, 1)}
+                    simulated={fmt(simStage?.newGroupPct ?? currentGroupPct, 1)}
+                    delta={fmtDelta(simStage?.groupPctDelta ?? null, 1)}
+                    deltaPositive={simStage ? (simStage.groupPctDelta ?? 0) > 0 : null}
+                  />
+                  {competitors.length > 1 && (
+                    <ResultRow
+                      label="Stage rank"
+                      current={currentStageGroupRank != null ? ordinal(currentStageGroupRank) : "—"}
+                      simulated={
+                        simStageGroupRank != null
+                          ? ordinal(simStageGroupRank)
+                          : currentStageGroupRank != null
+                          ? ordinal(currentStageGroupRank)
+                          : "—"
+                      }
+                      delta={fmtRankDelta(stageGroupRankDelta)}
+                      deltaPositive={stageGroupRankDelta != null ? stageGroupRankDelta > 0 : null}
+                    />
+                  )}
+                  {competitors.length > 1 && (
+                    <>
+                      <ResultRow
+                        label="Match avg"
+                        current={fmt(currentMatchPct, 1)}
+                        simulated={fmt(simMatch?.newMatchPct ?? currentMatchPct, 1)}
+                        delta={fmtDelta(simMatch?.matchPctDelta ?? null, 1)}
+                        deltaPositive={simMatch ? (simMatch.matchPctDelta ?? 0) > 0 : null}
+                      />
+                      <ResultRow
+                        label="Group rank"
+                        current={currentGroupRank != null ? ordinal(currentGroupRank) : "—"}
+                        simulated={
+                          simMatch?.newGroupRank != null
+                            ? ordinal(simMatch.newGroupRank)
+                            : currentGroupRank != null
+                            ? ordinal(currentGroupRank)
+                            : "—"
+                        }
+                        delta={fmtRankDelta(simMatch?.groupRankDelta ?? null)}
+                        deltaPositive={simMatch ? (simMatch.groupRankDelta ?? 0) > 0 : null}
+                      />
+                    </>
+                  )}
+                  {competitors.length === 1 && (
+                    <ResultRow
+                      label="Match avg"
+                      current={fmt(currentMatchPct, 1)}
+                      simulated={fmt(simMatch?.newMatchPct ?? currentMatchPct, 1)}
+                      delta={fmtDelta(simMatch?.matchPctDelta ?? null, 1)}
+                      deltaPositive={simMatch ? (simMatch.matchPctDelta ?? 0) > 0 : null}
+                    />
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Reset */}
           {hasChanges && (

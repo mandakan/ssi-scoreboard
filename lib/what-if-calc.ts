@@ -5,10 +5,14 @@
 //   C = 4 pts major / 3 pts minor
 //   D = 2 pts major / 1 pt minor
 //   Miss = 0 pts + 10 pt penalty
+//   No-shoot = 0 pts + 10 pt penalty
 //
 // Point deltas for swaps:
-//   Miss → A: +15 pts (major and minor identical: +10 penalty removed + 5 hit)
-//   A → C: −1 pt major / −2 pts minor
+//   Miss → A:  +15 pts (major and minor identical: +10 penalty removed + 5 hit)
+//   Miss → C:  +14 pts major / +13 pts minor (+10 penalty removed + 4 or 3 hit)
+//   NS → A:    +15 pts (identical to miss → A)
+//   NS → C:    +14 pts major / +13 pts minor (identical to miss → C)
+//   C → A:     +1 pt major / +2 pts minor (inverse of old A → C)
 
 import type {
   StageComparison,
@@ -38,8 +42,15 @@ export function computePointDelta(
   adjustments: StageSimulatorAdjustments,
   isMajor: boolean
 ): number {
-  const cDelta = isMajor ? -1 : -2;
-  return adjustments.missToACount * 15 + adjustments.aToCCount * cDelta;
+  const missToCDelta = isMajor ? 14 : 13; // +10 penalty removed + 4 or 3 hit
+  const cToADelta = isMajor ? 1 : 2;       // inverse of A→C
+  return (
+    adjustments.missToACount * 15 +
+    adjustments.missToCCount * missToCDelta +
+    adjustments.nsToACount * 15 +
+    adjustments.nsToCCount * missToCDelta +
+    adjustments.cToACount * cToADelta
+  );
 }
 
 /**
