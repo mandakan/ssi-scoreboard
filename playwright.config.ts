@@ -18,9 +18,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    // In CI the production build is already done — serve it with `next start` (fast).
-    // Locally, use `next dev` so tests run against the live dev server.
-    command: process.env.CI ? "pnpm start" : "pnpm dev",
+    // In CI the production build is already done — serve the standalone output directly
+    // (next start is incompatible with output: "standalone"). Locally use next dev.
+    command: process.env.CI ? "node .next/standalone/server.js" : "pnpm dev",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
