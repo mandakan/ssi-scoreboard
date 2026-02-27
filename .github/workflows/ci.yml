@@ -45,6 +45,11 @@ jobs:
         env:
           SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
 
+      - name: Prepare standalone server for e2e
+        run: |
+          cp -r .next/static .next/standalone/.next/static
+          cp -r public .next/standalone/public
+
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
