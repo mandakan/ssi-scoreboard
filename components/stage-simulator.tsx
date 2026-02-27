@@ -133,15 +133,20 @@ interface ResultRowProps {
   simulated: string;
   delta: string;
   deltaPositive?: boolean | null; // true = green, false = red, null = neutral
+  simulatedLoading?: boolean;     // show animated skeleton in the simulated cell
 }
 
-function ResultRow({ label, current, simulated, delta, deltaPositive }: ResultRowProps) {
+function ResultRow({ label, current, simulated, delta, deltaPositive, simulatedLoading }: ResultRowProps) {
   return (
     <div className="flex items-baseline justify-between gap-2 py-1 border-b border-border/40 last:border-0">
       <span className="text-xs text-muted-foreground w-20 shrink-0">{label}</span>
       <span className="text-sm font-mono tabular-nums text-muted-foreground">{current}</span>
       <span className="text-muted-foreground text-xs">→</span>
-      <span className="text-sm font-mono tabular-nums font-medium">{simulated}</span>
+      {simulatedLoading ? (
+        <span className="h-4 w-14 rounded bg-muted/60 animate-pulse" aria-label="Loading" />
+      ) : (
+        <span className="text-sm font-mono tabular-nums font-medium">{simulated}</span>
+      )}
       {delta ? (
         <span
           className={cn(
@@ -156,18 +161,6 @@ function ResultRow({ label, current, simulated, delta, deltaPositive }: ResultRo
       ) : (
         <span className="min-w-[3rem]" />
       )}
-    </div>
-  );
-}
-
-function SkeletonRow({ label }: { label: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-2 py-1 border-b border-border/40 last:border-0">
-      <span className="text-xs text-muted-foreground w-20 shrink-0">{label}</span>
-      <span className="text-sm font-mono tabular-nums text-muted-foreground">—</span>
-      <span className="text-muted-foreground text-xs">→</span>
-      <span className="h-4 w-14 rounded bg-muted/60 animate-pulse" />
-      <span className="min-w-[3rem]" />
     </div>
   );
 }
@@ -675,32 +668,41 @@ export function StageSimulator({ ct, id, data, competitors, scoringCompleted }: 
                       deltaPositive={simMatch ? (simMatch.matchPctDelta ?? 0) > 0 : null}
                     />
                   )}
-                  {/* Server-side div/overall rank */}
-                  {hasAnyChanges && (
-                    serverRankLoading ? (
-                      <>
-                        <SkeletonRow label="Div rank" />
-                        <SkeletonRow label="Overall rank" />
-                      </>
-                    ) : serverRank ? (
+                  {/* Div / overall rank — always shown; current from whatIfStats, simulated from server */}
+                  {(() => {
+                    const currentDivRank = data.whatIfStats[selectedComp.id]?.actualDivRank ?? null;
+                    const currentOverallRank = data.whatIfStats[selectedComp.id]?.actualOverallRank ?? null;
+                    const simDivRank = serverRank?.newDivRank ?? null;
+                    const simOverallRank = serverRank?.newOverallRank ?? null;
+                    const divRankDelta = simDivRank != null && currentDivRank != null ? currentDivRank - simDivRank : null;
+                    const overallRankDelta = simOverallRank != null && currentOverallRank != null ? currentOverallRank - simOverallRank : null;
+
+                    function simRankDisplay(current: number | null, simulated: number | null): string {
+                      if (simulated != null) return ordinal(simulated);
+                      return current != null ? ordinal(current) : "—";
+                    }
+
+                    return (
                       <>
                         <ResultRow
                           label="Div rank"
-                          current="—"
-                          simulated={serverRank.newDivRank != null ? ordinal(serverRank.newDivRank) : "—"}
-                          delta=""
-                          deltaPositive={null}
+                          current={currentDivRank != null ? ordinal(currentDivRank) : "—"}
+                          simulated={simRankDisplay(currentDivRank, simDivRank)}
+                          simulatedLoading={hasAnyChanges && serverRankLoading}
+                          delta={hasAnyChanges && !serverRankLoading ? fmtRankDelta(divRankDelta) : ""}
+                          deltaPositive={divRankDelta != null ? divRankDelta > 0 : null}
                         />
                         <ResultRow
                           label="Overall rank"
-                          current="—"
-                          simulated={serverRank.newOverallRank != null ? ordinal(serverRank.newOverallRank) : "—"}
-                          delta=""
-                          deltaPositive={null}
+                          current={currentOverallRank != null ? ordinal(currentOverallRank) : "—"}
+                          simulated={simRankDisplay(currentOverallRank, simOverallRank)}
+                          simulatedLoading={hasAnyChanges && serverRankLoading}
+                          delta={hasAnyChanges && !serverRankLoading ? fmtRankDelta(overallRankDelta) : ""}
+                          deltaPositive={overallRankDelta != null ? overallRankDelta > 0 : null}
                         />
                       </>
-                    ) : null
-                  )}
+                    );
+                  })()}
                 </div>
               </div>
             );
