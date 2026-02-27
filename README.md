@@ -24,7 +24,7 @@ including during an active match before official results are published.
 
 ## Prerequisites
 - Node.js 20+
-- pnpm 10+ (`corepack enable && corepack prepare pnpm@10.30.1 --activate`)
+- pnpm 10+ (`corepack enable && corepack prepare pnpm@10.30.3 --activate`)
 - A ShootNScoreIt API key (account settings on shootnscoreit.com)
 
 ## Local Setup

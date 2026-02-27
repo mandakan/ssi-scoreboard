@@ -23,7 +23,7 @@ and doesn't define its own `lint`/`typecheck`/`test` scripts that match the root
 
 ## Architecture
 
-Next.js 15 full-stack app. Route Handlers in `app/api/` are the only place that call
+Next.js 16 full-stack app. Route Handlers in `app/api/` are the only place that call
 the ShootNScoreIt GraphQL API — the `SSI_API_KEY` lives in `.env.local` and must never
 be referenced from any file with `"use client"` or any file under `lib/` that is imported
 by client components.
@@ -272,7 +272,7 @@ The `configSchema` block in `smithery.yaml` mirrors `mcp/smithery-config-schema.
 covers the hosted TypeScript runtime path. Keep both in sync when changing the schema.
 
 ## Package Manager
-This project uses **pnpm@10.30.1**. Do not use npm or yarn. Use `pnpm add` / `pnpm add -D`.
+This project uses **pnpm@10.30.3**. Do not use npm or yarn. Use `pnpm add` / `pnpm add -D`.
 When adding new packages, always specify the exact latest stable version (check with `npm show <pkg> version`).
 
 ## Deployment targets
