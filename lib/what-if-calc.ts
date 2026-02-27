@@ -6,13 +6,17 @@
 //   D = 2 pts major / 1 pt minor
 //   Miss = 0 pts + 10 pt penalty
 //   No-shoot = 0 pts + 10 pt penalty
+//   Procedural = 10 pt penalty (power factor irrelevant)
 //
 // Point deltas for swaps:
-//   Miss → A:  +15 pts (major and minor identical: +10 penalty removed + 5 hit)
-//   Miss → C:  +14 pts major / +13 pts minor (+10 penalty removed + 4 or 3 hit)
-//   NS → A:    +15 pts (identical to miss → A)
-//   NS → C:    +14 pts major / +13 pts minor (identical to miss → C)
-//   C → A:     +1 pt major / +2 pts minor (inverse of old A → C)
+//   Miss → A:        +15 pts (major and minor identical: +10 penalty removed + 5 hit)
+//   Miss → C:        +14 pts major / +13 pts minor (+10 penalty removed + 4 or 3 hit)
+//   NS → A:          +15 pts (identical to miss → A)
+//   NS → C:          +14 pts major / +13 pts minor (identical to miss → C)
+//   C → A:           +1 pt major / +2 pts minor (inverse of old A → C)
+//   D → A:           +3 pts major / +4 pts minor
+//   D → C:           +2 pts major / +2 pts minor
+//   Procedural removed: +10 pts (power factor irrelevant)
 
 import type {
   StageComparison,
@@ -44,12 +48,17 @@ export function computePointDelta(
 ): number {
   const missToCDelta = isMajor ? 14 : 13; // +10 penalty removed + 4 or 3 hit
   const cToADelta = isMajor ? 1 : 2;       // inverse of A→C
+  const dToADelta = isMajor ? 3 : 4;       // D→A: major 2→5 = +3; minor 1→5 = +4
+  const dToCDelta = 2;                      // D→C: major 2→4 = +2; minor 1→3 = +2
   return (
     adjustments.missToACount * 15 +
     adjustments.missToCCount * missToCDelta +
     adjustments.nsToACount * 15 +
     adjustments.nsToCCount * missToCDelta +
-    adjustments.cToACount * cToADelta
+    adjustments.cToACount * cToADelta +
+    adjustments.dToACount * dToADelta +
+    adjustments.dToCCount * dToCDelta +
+    adjustments.removedProcedurals * 10
   );
 }
 
@@ -102,30 +111,35 @@ export function simulateStageAdjustment(
 }
 
 /**
- * Computes the match-level impact of a simulated stage adjustment.
+ * Computes the match-level impact of one or more simulated stage adjustments.
  *
  * For each selected competitor, recomputes their avg group % replacing the
- * simulated stage's value. When the simulated competitor becomes the group
- * leader for that stage, other competitors' stage % is scaled down accordingly.
+ * simulated stages' values. When the simulated competitor becomes the group
+ * leader for a stage, other competitors' stage % is scaled down accordingly.
  *
- * @param stages         All stages from CompareResponse
- * @param competitorId   The competitor whose stage was adjusted
+ * @param stages           All stages from CompareResponse
+ * @param competitorId     The competitor whose stages were adjusted
  * @param allCompetitorIds All selected competitor IDs (used for group rank)
- * @param simResult      Result from simulateStageAdjustment
+ * @param simResults       Map of stageId → SimulatedStageResult (one or more stages)
  */
 export function simulateMatchImpact(
   stages: StageComparison[],
   competitorId: number,
   allCompetitorIds: number[],
-  simResult: SimulatedStageResult
+  simResults: Record<number, SimulatedStageResult>
 ): SimulatedMatchResult {
-  const leaderChanged =
-    simResult.newGroupLeaderHF > (stages.find((s) => s.stage_id === simResult.stageId)?.group_leader_hf ?? 0);
+  // Pre-compute whether the leader changed per adjusted stage.
+  const leaderChangedMap = new Map<number, boolean>();
+  for (const [stageIdStr, simResult] of Object.entries(simResults)) {
+    const stageId = Number(stageIdStr);
+    const originalLeaderHF = stages.find((s) => s.stage_id === stageId)?.group_leader_hf ?? 0;
+    leaderChangedMap.set(stageId, simResult.newGroupLeaderHF > originalLeaderHF);
+  }
 
   /**
    * Computes the avg group % for a competitor, optionally overriding the
-   * simulated stage. When the leader changed, other competitors' stage %
-   * on the simulated stage is scaled to the new leader HF.
+   * simulated stages. When the leader changed for a stage, other competitors'
+   * stage % is scaled to the new leader HF.
    */
   function avgPct(compId: number, applySimulation: boolean): number | null {
     let sum = 0;
@@ -136,11 +150,12 @@ export function simulateMatchImpact(
       if (!sc || sc.dnf || sc.dq || sc.zeroed) continue;
 
       let groupPct: number | null;
+      const simResult = applySimulation ? simResults[stage.stage_id] : undefined;
 
-      if (applySimulation && stage.stage_id === simResult.stageId) {
+      if (simResult) {
         if (compId === competitorId) {
           groupPct = simResult.newGroupPct;
-        } else if (leaderChanged) {
+        } else if (leaderChangedMap.get(stage.stage_id)) {
           // Scale down: other competitor keeps their HF but compares to new leader
           const otherHF = sc.hit_factor ?? 0;
           groupPct =

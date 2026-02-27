@@ -576,9 +576,10 @@ export default function MatchPageClient() {
                             </PopoverDescription>
                           </PopoverHeader>
                           <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                            <p>Pick a competitor and stage, then dial in adjustments — faster time, converting misses or no-shoots to A or C hits, or upgrading C-hits to A-hits.</p>
-                            <p>The results panel shows stage rank and match rank among the currently selected competitors, updating instantly as you adjust.</p>
-                            <p>Only one stage is simulated at a time. Match rank reflects changing that single stage while all other stages remain as scored.</p>
+                            <p>Pick a competitor and stage, then dial in adjustments — faster time, converting misses or no-shoots to A or C hits, upgrading C or D-hits to A-hits, or removing procedural penalties.</p>
+                            <p>Adjust multiple stages independently; the match avg and group rank rows show the cumulative impact across all modified stages.</p>
+                            <p>Division rank and overall rank (vs the full field) appear below the group rank after a short delay — they reflect the simulated scorecards server-side.</p>
+                            <p>Your adjustments are saved per-stage and restored if you refresh the page.</p>
                           </div>
                         </PopoverContent>
                       </Popover>
@@ -593,6 +594,8 @@ export default function MatchPageClient() {
                       className="pt-4"
                     >
                       <StageSimulator
+                        ct={ct}
+                        id={id}
                         data={compareQuery.data}
                         competitors={compareQuery.data.competitors}
                         scoringCompleted={match.scoring_completed}

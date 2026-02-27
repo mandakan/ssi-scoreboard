@@ -11,11 +11,35 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-02-28";
+export const LATEST_RELEASE_ID = "2026-02-28b";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "February 28, 2026",
+    title: "Stage Simulator: Multi-Stage & Full-Field Rank",
+    sections: [
+      {
+        heading: "New",
+        items: [
+          "Adjust multiple stages independently — the match avg and group rank rows show the cumulative impact across all modified stages.",
+          "D-hit upgrades: convert D-hits to A or C-hits and see the immediate point impact.",
+          "Procedural penalty removal: dial out procedural penalties to see how clean execution would have changed your result.",
+          "Division rank and overall rank (vs the full field) now appear after a short delay, computed server-side against all match competitors.",
+        ],
+      },
+      {
+        heading: "Improved",
+        items: [
+          "Stage adjustments are saved in your browser and restored when you refresh the page.",
+          "Modified stages are marked [✓] in the stage selector; a counter shows how many stages have adjustments.",
+          "Separate reset buttons for the current stage or all stages.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-02-28",
     date: "February 28, 2026",
     title: "Stage Simulator",
     sections: [

@@ -302,12 +302,15 @@ export interface EventSummary {
 
 // User-driven adjustments for the what-if stage simulator.
 export interface StageSimulatorAdjustments {
-  timeDelta:    number; // seconds added to current time (negative = faster)
-  missToACount: number; // 0 ≤ n ≤ miss_count
-  missToCCount: number; // 0 ≤ n ≤ miss_count − missToACount
-  nsToACount:   number; // 0 ≤ n ≤ no_shoots
-  nsToCCount:   number; // 0 ≤ n ≤ no_shoots − nsToACount
-  cToACount:    number; // 0 ≤ n ≤ c_hits  (upgrade C-hits to A-hits)
+  timeDelta:          number; // seconds added to current time (negative = faster)
+  missToACount:       number; // 0 ≤ n ≤ miss_count
+  missToCCount:       number; // 0 ≤ n ≤ miss_count − missToACount
+  nsToACount:         number; // 0 ≤ n ≤ no_shoots
+  nsToCCount:         number; // 0 ≤ n ≤ no_shoots − nsToACount
+  cToACount:          number; // 0 ≤ n ≤ c_hits  (upgrade C-hits to A-hits)
+  dToACount:          number; // 0 ≤ n ≤ d_hits
+  dToCCount:          number; // 0 ≤ n ≤ d_hits − dToACount
+  removedProcedurals: number; // 0 ≤ n ≤ procedurals
 }
 
 // Result of simulating a single stage after applying adjustments.
@@ -329,6 +332,21 @@ export interface SimulatedMatchResult {
   matchPctDelta: number | null; // positive = improvement
   newGroupRank: number | null;  // rank among selected competitors
   groupRankDelta: number | null; // positive = rank improved (moved up)
+}
+
+// Request/response types for the POST /api/simulate endpoint.
+export interface WhatIfSimulationRequest {
+  ct: string;
+  id: string;
+  competitorId: number;
+  adjustments: Record<number, StageSimulatorAdjustments>; // keyed by stageId
+}
+
+export interface WhatIfSimulationResponse {
+  newMatchAvgDivPercent:     number | null;
+  newMatchAvgOverallPercent: number | null;
+  newDivRank:                number | null;
+  newOverallRank:            number | null;
 }
 
 export interface ReleaseSection {
