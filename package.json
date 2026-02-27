@@ -26,7 +26,8 @@
     "cf:deploy": "pnpm cf:build && wrangler deploy",
     "cf:deploy:staging": "pnpm cf:build && wrangler deploy --env staging",
     "setup": "cp -n .env.local.example .env.local || true",
-    "icons": "bash scripts/generate-icons.sh"
+    "icons": "bash scripts/generate-icons.sh",
+    "warm-cache": "tsx scripts/warm-cache.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.27.1",
