@@ -19,6 +19,7 @@ import { SpeedAccuracyChart } from "@/components/scatter-chart";
 import { StageBalanceChart } from "@/components/radar-chart";
 import { StyleFingerprintChart } from "@/components/style-fingerprint-chart";
 import { ShooterStyleRadarChart } from "@/components/shooter-style-radar-chart";
+import { StageSimulator } from "@/components/stage-simulator";
 import { useMatchQuery, useCompareQuery } from "@/lib/queries";
 import { CacheInfoBadge } from "@/components/cache-info-badge";
 import { LoadingBar } from "@/components/loading-bar";
@@ -42,6 +43,7 @@ import {
 
 export default function MatchPageClient() {
   const [showCoachingView, setShowCoachingView] = useState(false);
+  const [showSimulator, setShowSimulator] = useState(false);
   const params = useParams<{ ct: string; id: string }>();
   const { ct, id } = params;
   const searchParams = useSearchParams();
@@ -436,6 +438,7 @@ export default function MatchPageClient() {
                     aria-labelledby="coaching-view-heading"
                     className="space-y-6 pt-2"
                   >
+
                     <div className="space-y-2">
                       <div className="flex items-center gap-1.5">
                         <h3 className="text-sm font-semibold">Shooter style fingerprint</h3>
@@ -497,6 +500,49 @@ export default function MatchPageClient() {
                   </section>
                 )}
               </div>
+
+              {/* Stage Simulator — collapsed by default, only ≥ 80% complete */}
+              {match.scoring_completed >= 80 && (
+                <div className="rounded-lg border p-4">
+                  <h2 className="font-semibold text-base m-0 leading-none">
+                    <button
+                      type="button"
+                      id="stage-simulator-heading"
+                      onClick={() => setShowSimulator((v) => !v)}
+                      className="flex w-full items-center justify-between text-left gap-2"
+                      aria-expanded={showSimulator}
+                      aria-controls="stage-simulator-panel"
+                    >
+                      <span>
+                        Stage Simulator
+                        <span className="block text-xs font-normal text-muted-foreground mt-0.5">
+                          Adjust time or hit outcomes to see rank impact.
+                        </span>
+                      </span>
+                      {showSimulator ? (
+                        <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                      )}
+                    </button>
+                  </h2>
+
+                  {showSimulator && (
+                    <section
+                      id="stage-simulator-panel"
+                      role="region"
+                      aria-labelledby="stage-simulator-heading"
+                      className="pt-4"
+                    >
+                      <StageSimulator
+                        data={compareQuery.data}
+                        competitors={compareQuery.data.competitors}
+                        scoringCompleted={match.scoring_completed}
+                      />
+                    </section>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
