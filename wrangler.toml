@@ -27,6 +27,18 @@ preview_urls = false
 # since @opennextjs/cloudflare already bundles with minifyIdentifiers=false.
 keep_names = false
 
+# Paid plan: allow up to 30 s of CPU per request.
+# Covers the compare fan-out (multiple parallel GraphQL fetches) and
+# Satori-based OG image generation which can be CPU-intensive.
+[limits]
+cpu_ms = 30000
+
+# Smart Placement: Cloudflare automatically routes each invocation to the
+# datacenter closest to our upstream services (SSI GraphQL API + Upstash Redis),
+# cutting round-trip latency without any manual region pinning.
+[placement]
+mode = "smart"
+
 [assets]
 directory = ".open-next/assets"
 
