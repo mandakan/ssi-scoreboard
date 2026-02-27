@@ -561,13 +561,9 @@ async function main(): Promise<void> {
       skipped++;
     }
 
-    if (args.limit !== null && warmed >= args.limit) {
-      printProgress(i + 1, filtered.length, warmed, args.limit, sessionStart);
-      break;
-    }
-
     if (args.skipScorecards) {
       printProgress(i + 1, filtered.length, warmed, args.limit, sessionStart);
+      if (args.limit !== null && warmed >= args.limit) break;
       continue;
     }
 
@@ -593,6 +589,7 @@ async function main(): Promise<void> {
     }
 
     printProgress(i + 1, filtered.length, warmed, args.limit, sessionStart);
+    if (args.limit !== null && warmed >= args.limit) break;
   }
 
   await client.quit();
