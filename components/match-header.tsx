@@ -94,7 +94,11 @@ export function MatchHeader({ match }: MatchHeaderProps) {
             {isComplete ? "Complete" : `${Math.round(pct)}%`}
           </span>
         </div>
-        <Progress value={pct} className="h-2" />
+        <Progress
+          value={pct}
+          className="h-2"
+          aria-label={isComplete ? "Scoring complete" : `Scoring progress: ${Math.round(pct)}%`}
+        />
       </div>
     </div>
   );

@@ -34,6 +34,12 @@ const nextConfig: NextConfig = {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=()",
           },
+          // HSTS: ignored over HTTP, so safe to set unconditionally.
+          // 2-year max-age is the recommended value for preload-list eligibility.
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=63072000; includeSubDomains",
+          },
         ],
       },
     ];
