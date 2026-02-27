@@ -461,7 +461,7 @@ async function main(): Promise<void> {
   console.log(`Delay        : ${args.delay}ms between requests${args.jitter ? " ±50% jitter" : ""}`);
   console.log(`Scorecards   : ${args.skipScorecards ? "skip" : "include"}`);
   console.log(`Mode         : ${args.dryRun ? "DRY RUN (no writes)" : args.force ? "force re-warm" : "normal (skip already cached)"}`);
-  if (args.limit) console.log(`Limit        : ${args.limit} matches`);
+  if (args.limit !== null) console.log(`Warm limit   : ${args.limit} uncached matches`);
   console.log("─".repeat(50));
 
   // ── Fetch event list ──────────────────────────────────────────────────────
@@ -487,17 +487,16 @@ async function main(): Promise<void> {
     .filter((e) => new Date(e.starts).getTime() <= fourDaysAgo)
     .sort((a, b) => new Date(b.starts).getTime() - new Date(a.starts).getTime());
 
-  const matches = args.limit !== null ? filtered.slice(0, args.limit) : filtered;
-  console.log(`found ${rawEvents.length} raw events → ${filtered.length} after filters${args.limit !== null ? ` → ${matches.length} after limit` : ""}`);
+  console.log(`found ${rawEvents.length} raw events → ${filtered.length} to scan${args.limit !== null ? ` (warm up to ${args.limit} uncached)` : ""}`);
 
-  if (matches.length === 0) {
+  if (filtered.length === 0) {
     console.log("Nothing to warm.");
     return;
   }
 
   if (args.dryRun) {
-    console.log("\nMatches that would be warmed:");
-    for (const m of matches) {
+    console.log(`\nMatches to scan${args.limit !== null ? ` (warm up to ${args.limit} uncached)` : ""}:`);
+    for (const m of filtered) {
       console.log(`  [ct=22 id=${m.id}] ${m.starts.slice(0, 10)}  ${m.get_full_level_display}  ${m.region}  ${m.name}`);
     }
     return;
@@ -515,11 +514,11 @@ async function main(): Promise<void> {
   const ct = 22;
   const sessionStart = Date.now();
 
-  for (let i = 0; i < matches.length; i++) {
-    const ev = matches[i];
+  for (let i = 0; i < filtered.length; i++) {
+    const ev = filtered[i];
     const id = ev.id;
 
-    console.log(`\n[${i + 1}/${matches.length}] ${ev.name}`);
+    console.log(`\n[${i + 1}/${filtered.length}] ${ev.name}`);
     console.log(`      ${ev.starts.slice(0, 10)}  ${ev.get_full_level_display}  ${ev.region}`);
 
     // ── GetMatch ─────────────────────────────────────────────────────────
@@ -562,8 +561,13 @@ async function main(): Promise<void> {
       skipped++;
     }
 
+    if (args.limit !== null && warmed >= args.limit) {
+      printProgress(i + 1, filtered.length, warmed, args.limit, sessionStart);
+      break;
+    }
+
     if (args.skipScorecards) {
-      printProgress(i + 1, matches.length, sessionStart);
+      printProgress(i + 1, filtered.length, warmed, args.limit, sessionStart);
       continue;
     }
 
@@ -588,7 +592,7 @@ async function main(): Promise<void> {
       opLine("GetMatchScorecards", "skip", `cached v${CACHE_SCHEMA_VERSION}`);
     }
 
-    printProgress(i + 1, matches.length, sessionStart);
+    printProgress(i + 1, filtered.length, warmed, args.limit, sessionStart);
   }
 
   await client.quit();
@@ -626,19 +630,50 @@ function opLine(op: string, status: string, detail: string, ms?: number): void {
   console.log(parts.join("  ").trimEnd());
 }
 
-/** Print an ASCII progress bar with ETA after each completed match. */
-function printProgress(done: number, total: number, startMs: number): void {
-  if (total <= 1) return; // no point showing progress for a single match
+/** Print an ASCII progress bar with ETA after each completed match.
+ *
+ * When a warm limit is active, the bar tracks warmed/limit and the ETA is
+ * based on average time per warmed match (excludes skipped-as-cached matches).
+ * When no limit, the bar tracks scanned/total candidates.
+ */
+function printProgress(
+  scanned: number,
+  total: number,
+  warmed: number,
+  limit: number | null,
+  startMs: number,
+): void {
+  const showForLimit = limit !== null && limit > 1;
+  const showForTotal = limit === null && total > 1;
+  if (!showForLimit && !showForTotal) return;
+
   const elapsed = Date.now() - startMs;
-  const pct = Math.round((done / total) * 100);
   const barWidth = 28;
-  const filled = Math.round((done / total) * barWidth);
-  const bar = "[" + "█".repeat(filled) + "░".repeat(barWidth - filled) + "]";
-  const parts: string[] = [bar, `${done}/${total}`, `${pct}%`, `elapsed ${formatDuration(elapsed)}`];
-  if (done < total) {
-    const eta = Math.round((elapsed / done) * (total - done));
-    parts.push(`ETA ~${formatDuration(eta)}`);
+  let bar: string;
+  const parts: string[] = [];
+
+  if (limit !== null) {
+    // Bar tracks progress toward the warm limit
+    const ratio = Math.min(1, warmed / limit);
+    const filled = Math.round(ratio * barWidth);
+    bar = "[" + "█".repeat(filled) + "░".repeat(barWidth - filled) + "]";
+    parts.push(bar, `warmed ${warmed}/${limit}`, `scanned ${scanned}/${total}`, `elapsed ${formatDuration(elapsed)}`);
+    if (warmed > 0 && warmed < limit) {
+      const eta = Math.round((elapsed / warmed) * (limit - warmed));
+      parts.push(`ETA ~${formatDuration(eta)}`);
+    }
+  } else {
+    // Bar tracks scanned candidates
+    const filled = Math.round((scanned / total) * barWidth);
+    bar = "[" + "█".repeat(filled) + "░".repeat(barWidth - filled) + "]";
+    const pct = Math.round((scanned / total) * 100);
+    parts.push(bar, `${scanned}/${total}`, `${pct}%`, `elapsed ${formatDuration(elapsed)}`);
+    if (scanned < total) {
+      const eta = Math.round((elapsed / scanned) * (total - scanned));
+      parts.push(`ETA ~${formatDuration(eta)}`);
+    }
   }
+
   console.log("\n" + parts.join("  "));
 }
 
