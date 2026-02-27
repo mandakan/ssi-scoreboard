@@ -22,8 +22,7 @@ export const RELEASES: Release[] = [
       {
         heading: "New",
         items: [
-          "AI coaching tips: get a 1–2 sentence coaching insight for any competitor in a completed match. Tap the sparkle icon in the comparison table header.",
-          "Supports OpenAI-compatible APIs and Cloudflare Workers AI. Configure via AI_PROVIDER, AI_MODEL, and AI_API_KEY environment variables.",
+          "AI coaching tips: get a personalised coaching insight for any competitor in a completed match, based on their accuracy, speed, and consistency across all stages. Tap the sparkle icon in the comparison table header.",
         ],
       },
     ],
