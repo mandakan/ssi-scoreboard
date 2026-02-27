@@ -17,7 +17,7 @@
  * Options:
  *   --level <l2plus|l3plus|l4plus|all>   Min event level (default: l3plus)
  *   --country <ISO-3>                    Filter by country, e.g. SWE (default: all)
- *   --after  <YYYY-MM-DD>                Fetch matches starting after (default: 1 year ago)
+ *   --after  <YYYY-MM-DD>                Fetch matches starting after (default: 5 years ago)
  *   --before <YYYY-MM-DD>                Fetch matches starting before (default: 4 days ago)
  *   --delay  <ms>                        Delay between GraphQL requests (default: 5000)
  *   --jitter                             Add ±50% random jitter to each delay
@@ -232,7 +232,7 @@ interface CliArgs {
 function parseArgs(): CliArgs {
   const now = new Date();
   const defaultAfter = new Date(now);
-  defaultAfter.setFullYear(defaultAfter.getFullYear() - 1);
+  defaultAfter.setFullYear(defaultAfter.getFullYear() - 5);
   const defaultBefore = new Date(now);
   defaultBefore.setDate(defaultBefore.getDate() - 4); // historical only
 

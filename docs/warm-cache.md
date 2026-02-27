@@ -60,7 +60,7 @@ npx tsx scripts/warm-cache.ts [options]
 |---|---|---|
 | `--level <value>` | `l3plus` | Minimum event level: `all`, `l2plus`, `l3plus`, `l4plus` |
 | `--country <ISO-3>` | *(all)* | Filter by country code, e.g. `SWE`, `NOR`, `FIN` |
-| `--after <YYYY-MM-DD>` | 1 year ago | Only fetch matches starting after this date |
+| `--after <YYYY-MM-DD>` | 5 years ago | Only fetch matches starting after this date |
 | `--before <YYYY-MM-DD>` | 4 days ago | Only fetch matches starting before this date |
 | `--delay <ms>` | `5000` | Base delay between GraphQL requests |
 | `--jitter` | off | Add ±50% random jitter to each delay (e.g. 5000ms → 2500–7500ms) |
