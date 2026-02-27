@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   // Generate a per-request cryptographic nonce (Web Crypto API — works in both
   // Node.js and Cloudflare Workers edge runtime).
   const nonce = btoa(crypto.randomUUID());
