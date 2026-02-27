@@ -197,6 +197,10 @@ or any other type that is serialised into Redis via `cachedExecuteQuery`.
 | `UPSTASH_REDIS_REST_TOKEN` | `lib/cache-edge.ts` | Cloudflare only | REST token from Upstash console. Set via `wrangler secret put` in production. |
 | `MCP_SECRET` | `app/api/mcp/route.ts` | Both | Optional. If set, `POST /api/mcp` requires `Authorization: Bearer <MCP_SECRET>`. Omit for public access. |
 | `NEXT_PUBLIC_APP_URL` | `app/api/mcp/route.ts`, `app/match/[ct]/[id]/layout.tsx` | Both | Base URL used by MCP tools and OG image meta tags. Defaults to `http://localhost:PORT`. Required for Cloudflare Pages (set to the external URL, e.g. `https://scoreboard.urdr.dev`). |
+| `AI_PROVIDER` | `lib/ai-provider.ts` (server-only) | Both | `"cloudflare"` or `"openai"`. Omit to disable AI coaching tips. Never `NEXT_PUBLIC_`. |
+| `AI_MODEL` | `lib/ai-provider.ts` (server-only) | Both | Model identifier, e.g. `"gpt-4o-mini"` or `"@cf/meta/llama-3.1-8b-instruct"`. Never `NEXT_PUBLIC_`. |
+| `AI_API_KEY` | `lib/ai-provider.ts` (server-only) | Both | API key/token for the AI provider. Never `NEXT_PUBLIC_`. |
+| `AI_API_URL` | `lib/ai-provider.ts` (server-only) | Both | Base URL. Required for Cloudflare Workers AI. Defaults to `https://api.openai.com/v1` for `openai`. |
 | `SMITHERY_API_KEY` | `.github/workflows/smithery-publish.yml` | CI only | Smithery registry API key. Store as a GitHub `production` environment secret. Obtain from https://smithery.ai/account/api-keys. Never `NEXT_PUBLIC_`. |
 
 ## OG Images

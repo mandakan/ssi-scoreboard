@@ -11,11 +11,25 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-02-28b";
+export const LATEST_RELEASE_ID = "2026-02-27c";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "February 27, 2026",
+    title: "AI Coaching Tips",
+    sections: [
+      {
+        heading: "New",
+        items: [
+          "AI coaching tips: get a 1–2 sentence coaching insight for any competitor in a completed match. Tap the sparkle icon in the comparison table header.",
+          "Supports OpenAI-compatible APIs and Cloudflare Workers AI. Configure via AI_PROVIDER, AI_MODEL, and AI_API_KEY environment variables.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-02-28b",
     date: "February 28, 2026",
     title: "Stage Simulator: Multi-Stage & Full-Field Rank",
     sections: [

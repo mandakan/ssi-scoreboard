@@ -6,6 +6,8 @@ import type {
   CompareResponse,
   EventSummary,
   PopularMatch,
+  CoachingTipResponse,
+  CoachingAvailability,
 } from "@/lib/types";
 
 export async function fetchMatch(ct: string, id: string): Promise<MatchResponse> {
@@ -63,6 +65,25 @@ export async function fetchCompare(
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`Compare fetch failed (${res.status}): ${body}`);
+  }
+  return res.json();
+}
+
+export async function fetchCoachingAvailability(): Promise<CoachingAvailability> {
+  const res = await fetch("/api/coaching/availability");
+  if (!res.ok) return { available: false };
+  return res.json();
+}
+
+export async function fetchCoachingTip(
+  ct: string,
+  id: string,
+  competitorId: number,
+): Promise<CoachingTipResponse> {
+  const res = await fetch(`/api/coaching/${ct}/${id}/${competitorId}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(body.error ?? `HTTP ${res.status}`);
   }
   return res.json();
 }

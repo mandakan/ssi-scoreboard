@@ -10,3 +10,12 @@ export const compareQueryKey = (
   id: string,
   competitorIds: number[],
 ) => ["compare", ct, id, competitorIds] as const;
+
+export const coachingAvailabilityKey = () =>
+  ["coaching-availability"] as const;
+
+export const coachingTipQueryKey = (
+  ct: string,
+  id: string,
+  competitorId: number,
+) => ["coaching-tip", ct, id, competitorId] as const;

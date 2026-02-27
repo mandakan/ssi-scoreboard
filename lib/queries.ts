@@ -1,9 +1,9 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { fetchMatch, fetchCompare, fetchEvents, fetchPopularMatches } from "@/lib/api";
-import type { MatchResponse, CompareResponse, EventSummary, PopularMatch } from "@/lib/types";
-import { matchQueryKey, compareQueryKey } from "@/lib/query-keys";
+import { fetchMatch, fetchCompare, fetchEvents, fetchPopularMatches, fetchCoachingAvailability, fetchCoachingTip } from "@/lib/api";
+import type { MatchResponse, CompareResponse, EventSummary, PopularMatch, CoachingTipResponse, CoachingAvailability } from "@/lib/types";
+import { matchQueryKey, compareQueryKey, coachingAvailabilityKey, coachingTipQueryKey } from "@/lib/query-keys";
 
 // Re-export so existing imports from lib/queries keep working.
 export { matchQueryKey, compareQueryKey };
@@ -51,5 +51,27 @@ export function useCompareQuery(
     staleTime: 30_000, // 30 seconds — aligned with server cache TTL
     refetchInterval: 30_000, // poll every 30s while mounted
     enabled: Boolean(ct && id && competitorIds.length > 0),
+  });
+}
+
+export function useCoachingAvailability() {
+  return useQuery<CoachingAvailability, Error>({
+    queryKey: coachingAvailabilityKey(),
+    queryFn: fetchCoachingAvailability,
+    staleTime: 300_000, // 5 minutes
+  });
+}
+
+export function useCoachingTipQuery(
+  ct: string,
+  id: string,
+  competitorId: number,
+) {
+  return useQuery<CoachingTipResponse, Error>({
+    queryKey: coachingTipQueryKey(ct, id, competitorId),
+    queryFn: () => fetchCoachingTip(ct, id, competitorId),
+    enabled: false, // manual trigger only — user clicks button
+    staleTime: Infinity, // coaching tips for completed matches never go stale
+    retry: false,
   });
 }
