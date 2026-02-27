@@ -19,6 +19,13 @@ compatibility_flags = ["nodejs_compat"]
 main = ".open-next/worker.js"
 workers_dev = true
 preview_urls = false
+# Wrangler's esbuild defaults to keepNames=true, which transforms named function
+# bodies (e.g. inside next-themes' theme-init script) with __name() helpers.
+# Those helpers are not in scope when next-themes serialises the function via
+# .toString() and injects it as a browser-side <script> tag → ReferenceError.
+# Setting keep_names=false disables that transform without affecting behaviour,
+# since @opennextjs/cloudflare already bundles with minifyIdentifiers=false.
+keep_names = false
 
 [assets]
 directory = ".open-next/assets"
