@@ -10,9 +10,12 @@ import type { Release } from "@/lib/types";
  * The dialog auto-shows once per browser profile whenever RELEASES[0].id
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
+/** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
+export const LATEST_RELEASE_ID = "2026-02-27";
+
 export const RELEASES: Release[] = [
   {
-    id: "2026-02-27",
+    id: LATEST_RELEASE_ID,
     date: "February 27, 2026",
     title: "Event Filters & More",
     sections: [

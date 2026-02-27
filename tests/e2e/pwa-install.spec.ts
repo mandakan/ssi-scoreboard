@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { LATEST_RELEASE_ID } from "@/lib/releases";
 
 // Simulate iPhone Safari user agent for iOS-branch tests
 const IOS_UA =
@@ -8,9 +9,9 @@ const IOS_UA =
 test.describe("PWA install — About page", () => {
   test.beforeEach(async ({ page }) => {
     // Suppress first-visit modals so they don't intercept clicks in tests.
-    await page.addInitScript(() => {
-      localStorage.setItem("whats-new-seen-id", "suppress-in-tests");
-    });
+    await page.addInitScript((releaseId) => {
+      localStorage.setItem("whats-new-seen-id", releaseId);
+    }, LATEST_RELEASE_ID);
   });
 
   test("about page has an install section", async ({ page }) => {
@@ -74,6 +75,9 @@ test.describe("PWA install — footer link", () => {
   test("footer contains Install app link pointing to /about#install", async ({
     page,
   }) => {
+    await page.addInitScript((releaseId) => {
+      localStorage.setItem("whats-new-seen-id", releaseId);
+    }, LATEST_RELEASE_ID);
     await page.goto("/");
     const link = page.getByRole("link", { name: /install app/i });
     await expect(link).toBeVisible();
@@ -82,6 +86,12 @@ test.describe("PWA install — footer link", () => {
 });
 
 test.describe("PWA install — banner", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript((releaseId) => {
+      localStorage.setItem("whats-new-seen-id", releaseId);
+    }, LATEST_RELEASE_ID);
+  });
+
   test("iOS banner is visible on first visit (iOS UA, not standalone)", async ({
     page,
   }) => {

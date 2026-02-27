@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import type { MatchResponse, CompareResponse } from "@/lib/types";
+import { LATEST_RELEASE_ID } from "@/lib/releases";
 
 const MOCK_MATCH: MatchResponse = {
   name: "Test IPSC Match",
@@ -133,10 +134,10 @@ const MOCK_COMPARE_2: CompareResponse = {
 test.describe("Scoreboard E2E", () => {
   test.beforeEach(async ({ page }) => {
     // Suppress first-visit modals so they don't intercept clicks in tests.
-    await page.addInitScript(() => {
+    await page.addInitScript((releaseId) => {
       localStorage.setItem("ssi-cell-help-seen", "1");
-      localStorage.setItem("whats-new-seen-id", "suppress-in-tests");
-    });
+      localStorage.setItem("whats-new-seen-id", releaseId);
+    }, LATEST_RELEASE_ID);
   });
 
   test("home page loads and URL input is visible", async ({ page }) => {
@@ -311,10 +312,10 @@ test.describe("Mobile 390px viewport", () => {
 
   test.beforeEach(async ({ page }) => {
     // Suppress first-visit modals so they don't intercept clicks in tests.
-    await page.addInitScript(() => {
+    await page.addInitScript((releaseId) => {
       localStorage.setItem("ssi-cell-help-seen", "1");
-      localStorage.setItem("whats-new-seen-id", "suppress-in-tests");
-    });
+      localStorage.setItem("whats-new-seen-id", releaseId);
+    }, LATEST_RELEASE_ID);
   });
 
   test("comparison page has no horizontal overflow with 2 competitors", async ({ page }) => {
