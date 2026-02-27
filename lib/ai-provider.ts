@@ -14,7 +14,8 @@ export interface AIProvider {
 export interface AIProviderConfig {
   provider: string;
   model: string;
-  apiKey: string;
+  /** Not required for the cloudflare provider when using the Workers AI binding. */
+  apiKey?: string;
   apiUrl?: string;
 }
 
@@ -28,7 +29,10 @@ export function createAIProvider(): AIProvider | null {
   const apiKey = process.env.AI_API_KEY;
   const apiUrl = process.env.AI_API_URL;
 
-  if (!provider || !model || !apiKey) return null;
+  // For the cloudflare provider the API key is optional — the Workers AI
+  // binding (env.AI) is used when no key is supplied.
+  if (!provider || !model) return null;
+  if (provider !== "cloudflare" && !apiKey) return null;
 
   const config: AIProviderConfig = { provider, model, apiKey, apiUrl };
 
@@ -45,9 +49,10 @@ export function createAIProvider(): AIProvider | null {
 
 /** Check whether the AI coaching feature is configured (env vars present). */
 export function isAIConfigured(): boolean {
-  return Boolean(
-    process.env.AI_PROVIDER &&
-    process.env.AI_MODEL &&
-    process.env.AI_API_KEY,
-  );
+  const provider = process.env.AI_PROVIDER;
+  const model = process.env.AI_MODEL;
+  if (!provider || !model) return false;
+  // Cloudflare provider uses the Workers AI binding — no API key needed.
+  if (provider === "cloudflare") return true;
+  return Boolean(process.env.AI_API_KEY);
 }
