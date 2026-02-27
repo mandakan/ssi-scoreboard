@@ -1244,7 +1244,7 @@ export function computeAllFingerprintPoints(
   }
 
   // First pass: compute raw metrics for each valid competitor.
-  const rawPoints: Omit<FieldFingerprintPoint, "accuracyPercentile" | "speedPercentile">[] = [];
+  const rawPoints: Omit<FieldFingerprintPoint, "accuracyPercentile" | "speedPercentile" | "actualDivRank" | "actualOverallRank">[] = [];
 
   for (const [competitorId, agg] of byComp) {
     if (!agg.hasZoneData) continue;
@@ -1273,7 +1273,38 @@ export function computeAllFingerprintPoints(
     });
   }
 
-  // Second pass: compute field-wide percentile ranks and attach them.
+  // Compute overall ranks (all competitors, descending by pointsPerSecond).
+  const sortedBySpeed = [...rawPoints].sort((a, b) => b.pointsPerSecond - a.pointsPerSecond);
+  const overallRankMap = new Map<number, number>();
+  {
+    let rank = 1;
+    for (let i = 0; i < sortedBySpeed.length; i++) {
+      if (i > 0 && sortedBySpeed[i].pointsPerSecond < sortedBySpeed[i - 1].pointsPerSecond) {
+        rank = i + 1;
+      }
+      overallRankMap.set(sortedBySpeed[i].competitorId, rank);
+    }
+  }
+
+  // Compute per-division ranks.
+  const divRankMap = new Map<number, number>();
+  const byDiv = new Map<string, typeof rawPoints[number][]>();
+  for (const p of rawPoints) {
+    const key = p.division ?? "__none__";
+    const arr = byDiv.get(key) ?? [];
+    arr.push(p);
+    byDiv.set(key, arr);
+  }
+  for (const divPoints of byDiv.values()) {
+    const sorted = [...divPoints].sort((a, b) => b.pointsPerSecond - a.pointsPerSecond);
+    let rank = 1;
+    for (let i = 0; i < sorted.length; i++) {
+      if (i > 0 && sorted[i].pointsPerSecond < sorted[i - 1].pointsPerSecond) rank = i + 1;
+      divRankMap.set(sorted[i].competitorId, rank);
+    }
+  }
+
+  // Second pass: compute field-wide percentile ranks and attach all derived fields.
   const allAlphaRatios = rawPoints.map((p) => p.alphaRatio);
   const allSpeeds = rawPoints.map((p) => p.pointsPerSecond);
 
@@ -1281,6 +1312,8 @@ export function computeAllFingerprintPoints(
     ...p,
     accuracyPercentile: computePercentileRank(p.alphaRatio, allAlphaRatios) ?? 50,
     speedPercentile: computePercentileRank(p.pointsPerSecond, allSpeeds) ?? 50,
+    actualDivRank: divRankMap.get(p.competitorId) ?? null,
+    actualOverallRank: overallRankMap.get(p.competitorId) ?? null,
   }));
 }
 

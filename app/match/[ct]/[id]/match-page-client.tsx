@@ -11,6 +11,7 @@ import { MatchHeader } from "@/components/match-header";
 import { ShareButton } from "@/components/share-button";
 import { CompetitorPicker } from "@/components/competitor-picker";
 import { SquadPicker } from "@/components/squad-picker";
+import { BenchmarkPicker } from "@/components/benchmark-picker";
 import { ComparisonTable } from "@/components/comparison-table";
 import { ComparisonChart } from "@/components/comparison-chart";
 import { HfPercentChart } from "@/components/hf-percent-chart";
@@ -215,6 +216,17 @@ export default function MatchPageClient() {
               squads={match.squads}
               selectedIds={selectedIds}
               onSelectionChange={handleSelectionChange}
+            />
+          )}
+          {selectedIds.length > 0 && (
+            <BenchmarkPicker
+              fieldFingerprintPoints={
+                compareQuery.data?.fieldFingerprintPoints ?? []
+              }
+              competitors={match.competitors}
+              selectedIds={selectedIds}
+              onSelectionChange={handleSelectionChange}
+              disabled={!compareQuery.data}
             />
           )}
         </div>
