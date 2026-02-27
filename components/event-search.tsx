@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search,
@@ -32,13 +32,12 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const FIREARMS_OPTIONS = [
+  { id: "all", label: "All" },
   { id: "hg", label: "Handgun & PCC" },
   { id: "pc", label: "PCC" },
   { id: "rf", label: "Rifle" },
   { id: "sg", label: "Shotgun" },
 ] as const;
-
-const DEFAULT_FIREARMS = "hg";
 
 const COUNTRY_OPTIONS = [
   { id: "all", label: "All" },
@@ -48,8 +47,6 @@ const COUNTRY_OPTIONS = [
   { id: "FIN", label: "Finland" },
 ] as const;
 
-const DEFAULT_COUNTRY = "SWE";
-
 const LEVEL_OPTIONS = [
   { id: "all",    label: "All"  },
   { id: "l2plus", label: "L2+" },
@@ -57,7 +54,78 @@ const LEVEL_OPTIONS = [
   { id: "l4plus", label: "L4+" },
 ] as const;
 
-const DEFAULT_LEVEL = "l2plus";
+// ── Filter persistence ────────────────────────────────────────────────────────
+
+const LS_FILTERS_KEY = "ssi_event_filters";
+
+interface StoredFilters {
+  level: string;
+  firearms: string;
+  country: string;
+}
+
+/** Best-effort country guess for first-time visitors. Returns one of the
+ *  COUNTRY_OPTIONS ids or "all" as a fallback. Only called client-side.
+ *
+ *  Strategy: timezone first (reliable even for English-locale users), then
+ *  language locale as a secondary signal, then "all". Nothing leaves the
+ *  device — both Intl and navigator.language are read-only system settings. */
+function guessCountry(): string {
+  // 1. Timezone — most reliable: a Swedish user with English locale still has
+  //    "Europe/Stockholm" set in their OS.
+  if (typeof Intl !== "undefined") {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz === "Europe/Stockholm") return "SWE";
+    if (tz === "Europe/Oslo") return "NOR";
+    if (tz === "Europe/Copenhagen") return "DNK";
+    if (tz === "Europe/Helsinki" || tz === "Europe/Mariehamn") return "FIN";
+  }
+  // 2. Language locale — weaker signal but catches remaining cases.
+  if (typeof navigator !== "undefined") {
+    const lang = navigator.language.toLowerCase();
+    if (lang.startsWith("sv")) return "SWE";
+    if (lang.startsWith("no") || lang.startsWith("nb") || lang.startsWith("nn")) return "NOR";
+    if (lang.startsWith("da")) return "DNK";
+    if (lang.startsWith("fi")) return "FIN";
+  }
+  return "all";
+}
+
+// ── Filter store (useSyncExternalStore pattern) ───────────────────────────────
+// Avoids setState-in-effect by treating localStorage as an external store.
+// The server snapshot always returns safe defaults (no localStorage on server),
+// preventing SSR hydration mismatches.
+
+const _filterListeners = new Set<() => void>();
+let _filterCache: StoredFilters | null = null;
+
+function _getFilterSnapshot(): StoredFilters {
+  if (_filterCache === null) {
+    try {
+      const raw = localStorage.getItem(LS_FILTERS_KEY);
+      const stored = raw ? (JSON.parse(raw) as StoredFilters) : null;
+      _filterCache = stored ?? { firearms: "all", country: guessCountry(), level: "all" };
+    } catch {
+      _filterCache = { firearms: "all", country: "all", level: "all" };
+    }
+  }
+  return _filterCache;
+}
+
+const _serverFilterSnapshot: StoredFilters = { firearms: "all", country: "all", level: "all" };
+
+function _subscribeToFilters(cb: () => void): () => void {
+  _filterListeners.add(cb);
+  return () => _filterListeners.delete(cb);
+}
+
+function updateFilters(patch: Partial<StoredFilters>): void {
+  _filterCache = { ..._getFilterSnapshot(), ...patch };
+  try {
+    localStorage.setItem(LS_FILTERS_KEY, JSON.stringify(_filterCache));
+  } catch { /* ignore private-browsing write failures */ }
+  _filterListeners.forEach((cb) => cb());
+}
 
 // ── Pure date helpers ────────────────────────────────────────────────────────
 
@@ -116,9 +184,14 @@ export function EventSearch() {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [browseMonth, setBrowseMonth] = useState<Date>(() => startOfMonth(new Date()));
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [firearms, setFirearms] = useState(DEFAULT_FIREARMS);
-  const [country, setCountry] = useState(DEFAULT_COUNTRY);
-  const [level, setLevel] = useState(DEFAULT_LEVEL);
+  const { firearms, country, level } = useSyncExternalStore(
+    _subscribeToFilters,
+    _getFilterSnapshot,
+    () => _serverFilterSnapshot,
+  );
+  function setFirearms(v: string) { updateFilters({ firearms: v }); }
+  function setCountry(v: string)  { updateFilters({ country: v });  }
+  function setLevel(v: string)    { updateFilters({ level: v });    }
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(inputValue), 300);
@@ -155,11 +228,11 @@ export function EventSearch() {
     router.push(`/match/${event.content_type}/${event.id}`);
   }
 
-  // Active filter summary shown in collapsed filter button
+  // Active filter summary shown in collapsed filter button — omit "all" values
   const activeFilterSummary = [
-    COUNTRY_OPTIONS.find((o) => o.id === country)?.label,
-    LEVEL_OPTIONS.find((o) => o.id === level)?.label,
-    FIREARMS_OPTIONS.find((o) => o.id === firearms)?.label,
+    country   !== "all" ? COUNTRY_OPTIONS.find((o)  => o.id === country)?.label   : null,
+    level     !== "all" ? LEVEL_OPTIONS.find((o)    => o.id === level)?.label     : null,
+    firearms  !== "all" ? FIREARMS_OPTIONS.find((o) => o.id === firearms)?.label  : null,
   ]
     .filter(Boolean)
     .join(" · ");

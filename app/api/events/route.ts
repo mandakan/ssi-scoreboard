@@ -63,7 +63,7 @@ export async function GET(req: Request) {
 
   // Query params: q (search), starts_after, starts_before (ISO dates),
   // firearms (default "hg"), country (ISO 3166-1 alpha-3, e.g. "SWE"),
-  // minLevel (default "l2plus" — hides Level I club matches).
+  // minLevel (default "all" — callers omit the param when they want everything).
   // Caller may override the date window; fall back to ±3 months from today.
   const now = new Date();
   const defaultAfter = new Date(now);
@@ -72,7 +72,7 @@ export async function GET(req: Request) {
   defaultBefore.setMonth(defaultBefore.getMonth() + 3);
 
   const country = searchParams.get("country");
-  const minLevel = searchParams.get("minLevel") ?? "l2plus";
+  const minLevel = searchParams.get("minLevel") ?? "all";
 
   // When a text query is present the caller is searching for a specific event
   // and we should not silently clip results to a narrow date window — use a
@@ -88,7 +88,7 @@ export async function GET(req: Request) {
     (q ? wideAfter.toISOString().slice(0, 10) : defaultAfter.toISOString().slice(0, 10));
   const startsBefore = searchParams.get("starts_before") ??
     (q ? wideBefore.toISOString().slice(0, 10) : defaultBefore.toISOString().slice(0, 10));
-  const firearms = searchParams.get("firearms") ?? "hg";
+  const firearms = searchParams.get("firearms") ?? null;
 
   let rawEvents: RawEvent[];
   try {
@@ -104,7 +104,7 @@ export async function GET(req: Request) {
       // No search text: work around the API's per-request result cap by
       // splitting the date range into 2-month sub-windows, fetching in
       // parallel, then deduplicating by event ID.
-      const windows = buildSubWindows(startsAfter, startsBefore, { firearms });
+      const windows = buildSubWindows(startsAfter, startsBefore, firearms ? { firearms } : {});
       const results = await Promise.all(
         windows.map((vars) => executeQuery<RawEventsData>(EVENTS_QUERY, vars, 3600)),
       );

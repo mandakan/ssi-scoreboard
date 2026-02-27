@@ -29,7 +29,7 @@ export async function fetchEvents(
   if (q) params.set("q", q);
   if (starts_after) params.set("starts_after", starts_after);
   if (starts_before) params.set("starts_before", starts_before);
-  if (firearms) params.set("firearms", firearms);
+  if (firearms && firearms !== "all") params.set("firearms", firearms);
   if (country && country !== "all") params.set("country", country);
   if (minLevel && minLevel !== "all") params.set("minLevel", minLevel);
   const res = await fetch(`/api/events?${params}`);
