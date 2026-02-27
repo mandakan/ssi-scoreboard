@@ -348,8 +348,8 @@ function ToggleLegend({
             <span className={hidden ? "line-through" : ""}>{label}</span>
             {archetype && !hidden && (
               <span
-                className="rounded px-1.5 py-0 text-xs font-semibold"
-                style={{ backgroundColor: color + "28", color }}
+                className="rounded px-1.5 py-0 text-xs font-semibold text-foreground"
+                style={{ backgroundColor: color + "28" }}
               >
                 {archetype}
               </span>

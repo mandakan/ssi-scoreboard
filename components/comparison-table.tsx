@@ -293,7 +293,7 @@ function CompetitorLossPanel({
                           {hitLoss > 0 ? `−${hitLoss}` : "—"}
                         </span>
                       ) : (
-                        <span className="text-muted-foreground/50" title="Zone data unavailable">n/a</span>
+                        <span className="text-muted-foreground" title="Zone data unavailable">n/a</span>
                       )}
                     </td>
                     <td className="py-1 px-2 text-right tabular-nums">
@@ -307,7 +307,7 @@ function CompetitorLossPanel({
                           {stageTotalLoss > 0 ? `−${stageTotalLoss}` : "—"}
                         </span>
                       ) : (
-                        <span className="text-muted-foreground/50">n/a</span>
+                        <span className="text-muted-foreground">n/a</span>
                       )}
                     </td>
                   </tr>
@@ -769,7 +769,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove }: Comparison
                             </div>
                             {(stage.min_rounds != null || stage.paper_targets != null ||
                               (stage.steel_targets != null && stage.steel_targets > 0)) && (
-                              <span className="text-xs text-muted-foreground/70 tabular-nums">
+                              <span className="text-xs text-muted-foreground tabular-nums">
                                 {[
                                   stage.min_rounds != null ? `${stage.min_rounds} rds` : null,
                                   stage.paper_targets != null ? `${stage.paper_targets} paper` : null,
@@ -778,7 +778,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove }: Comparison
                               </span>
                             )}
                             {stage.field_median_hf != null && (
-                              <span className="text-xs text-muted-foreground/60 tabular-nums">
+                              <span className="text-xs text-muted-foreground tabular-nums">
                                 {`Field median: ${formatHF(stage.field_median_hf)}`}
                                 {stage.field_competitor_count != null && ` (${stage.field_competitor_count} competitors)`}
                               </span>
@@ -817,7 +817,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove }: Comparison
                       <span className="truncate max-w-32">{stage.stage_name}</span>
                       {(stage.min_rounds != null || stage.paper_targets != null ||
                         (stage.steel_targets != null && stage.steel_targets > 0)) && (
-                        <span className="text-xs text-muted-foreground/70 tabular-nums">
+                        <span className="text-xs text-muted-foreground tabular-nums">
                           {[
                             stage.min_rounds != null ? `${stage.min_rounds} rds` : null,
                             stage.paper_targets != null ? `${stage.paper_targets} paper` : null,
@@ -829,7 +829,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove }: Comparison
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <span
-                              className="text-xs text-muted-foreground/60 tabular-nums cursor-help"
+                              className="text-xs text-muted-foreground tabular-nums cursor-help"
                               aria-label={`Field median hit factor: ${formatHF(stage.field_median_hf)} across ${stage.field_competitor_count} competitors`}
                             >
                               {`med: ${formatHF(stage.field_median_hf)}`}
@@ -1091,7 +1091,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove }: Comparison
               </div>
 
               {/* Explanation note */}
-              <p className="text-xs text-muted-foreground/70">
+              <p className="text-xs text-muted-foreground">
                 Hit quality loss = points left on table from C/D/miss vs best possible A-zone.
                 Penalty loss = miss + no-shoot + procedural penalties (10 pts each).
                 Only valid (non-DQ, non-zeroed, non-DNF) stages are included.
@@ -1157,7 +1157,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove }: Comparison
                   );
                 })}
               </div>
-              <p className="text-xs text-muted-foreground/70">
+              <p className="text-xs text-muted-foreground">
                 Simulates replacing each competitor&apos;s worst group-% stage with their
                 median or second-worst performance. Rank shown in the currently selected
                 context ({mode === "group" ? "compared group" : mode === "division" ? "division, full field" : "overall, full field"}).
@@ -1226,7 +1226,7 @@ function WhatIfCompetitorPanel({
         <span className="text-foreground font-medium">
           {formatPct(wi.medianReplacement.matchPct)}
         </span>{" "}
-        <span className="text-muted-foreground/70">
+        <span className="text-muted-foreground">
           (vs actual {formatPct(wi.actualMatchPct)})
         </span>
         {" — "}rank{" "}
@@ -1240,7 +1240,7 @@ function WhatIfCompetitorPanel({
         {" "}{rankLabel}.
       </p>
       {/* Second-worst replacement scenario */}
-      <p className="text-xs text-muted-foreground/75 pl-4">
+      <p className="text-xs text-muted-foreground pl-4">
         Conservative (second-worst {formatPct(wi.secondWorstReplacement.replacementPct)}%): match %{" "}
         <span className="font-medium text-muted-foreground">
           {formatPct(wi.secondWorstReplacement.matchPct)}
@@ -1437,7 +1437,7 @@ function StageCell({
       {/* Secondary: raw points and time */}
       <div className="text-xs text-muted-foreground tabular-nums">
         {sc.points != null ? sc.points.toFixed(0) : "—"}
-        <span className="opacity-50">/{maxPoints}</span>
+        <span>/{maxPoints}</span>
         <span className="mx-0.5">·</span>
         {formatTime(sc.time)}
       </div>
