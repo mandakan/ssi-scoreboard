@@ -479,38 +479,52 @@ export function StageSimulator({ ct, id, data, competitors, scoringCompleted }: 
             />
 
             {/* Mode toggle */}
-            <div
-              className="flex rounded-md border border-input overflow-hidden text-sm"
-              role="group"
-              aria-label="Adjustment mode"
-            >
-              <button
-                type="button"
-                onClick={() => setSimMode("improve")}
-                aria-pressed={simMode === "improve"}
-                className={cn(
-                  "flex-1 py-2 font-medium transition-colors",
-                  simMode === "improve"
-                    ? "bg-foreground text-background"
-                    : "bg-background text-muted-foreground hover:text-foreground"
-                )}
-              >
-                Improve
-              </button>
-              <button
-                type="button"
-                onClick={() => setSimMode("trade")}
-                aria-pressed={simMode === "trade"}
-                className={cn(
-                  "flex-1 py-2 font-medium transition-colors border-l border-input",
-                  simMode === "trade"
-                    ? "bg-foreground text-background"
-                    : "bg-background text-muted-foreground hover:text-foreground"
-                )}
-              >
-                Trade
-              </button>
-            </div>
+            {(() => {
+              const improveActive = safeAdj.missToACount > 0 || safeAdj.missToCCount > 0 ||
+                safeAdj.nsToACount > 0 || safeAdj.nsToCCount > 0 || safeAdj.cToACount > 0 ||
+                safeAdj.dToACount > 0 || safeAdj.dToCCount > 0 || safeAdj.removedProcedurals > 0;
+              const tradeActive = safeAdj.aToCCount > 0 || safeAdj.aToMissCount > 0 || safeAdj.aToNSCount > 0;
+              return (
+                <div
+                  className="flex rounded-md border border-input overflow-hidden text-sm"
+                  role="group"
+                  aria-label="Adjustment mode"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSimMode("improve")}
+                    aria-pressed={simMode === "improve"}
+                    className={cn(
+                      "flex-1 py-2 font-medium transition-colors flex items-center justify-center gap-1.5",
+                      simMode === "improve"
+                        ? "bg-foreground text-background"
+                        : "bg-background text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Improve
+                    {improveActive && simMode !== "improve" && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" aria-hidden="true" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSimMode("trade")}
+                    aria-pressed={simMode === "trade"}
+                    className={cn(
+                      "flex-1 py-2 font-medium transition-colors border-l border-input flex items-center justify-center gap-1.5",
+                      simMode === "trade"
+                        ? "bg-foreground text-background"
+                        : "bg-background text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Trade
+                    {tradeActive && simMode !== "trade" && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
+              );
+            })()}
 
             {/* Improve mode: upgrade zones, remove penalties */}
             {simMode === "improve" && (
@@ -684,7 +698,7 @@ export function StageSimulator({ ct, id, data, competitors, scoringCompleted }: 
                 <div className="rounded-md border px-3 py-3 space-y-0.5">
                   <p className="text-xs font-medium text-muted-foreground mb-2">
                     {adjustedStageCount > 1
-                      ? `Simulated result — ${adjustedStageCount} stage(s)`
+                      ? `What-if result — ${adjustedStageCount} stages`
                       : "What-if result — this stage"}
                   </p>
                   <ResultRow
@@ -819,7 +833,7 @@ export function StageSimulator({ ct, id, data, competitors, scoringCompleted }: 
                 Reset this stage
               </button>
             )}
-            {modifiedStageCount > 1 && (
+            {(modifiedStageCount > 1 || (hasAnyChanges && !hasChangesForCurrentStage)) && (
               <button
                 type="button"
                 onClick={() => {
