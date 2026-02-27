@@ -513,11 +513,14 @@ async function main(): Promise<void> {
   let skipped = 0;
   let failed = 0;
   const ct = 22;
+  const sessionStart = Date.now();
 
   for (let i = 0; i < matches.length; i++) {
     const ev = matches[i];
     const id = ev.id;
-    const label = `[${i + 1}/${matches.length}] ${ev.starts.slice(0, 10)} ${ev.name}`;
+
+    console.log(`\n[${i + 1}/${matches.length}] ${ev.name}`);
+    console.log(`      ${ev.starts.slice(0, 10)}  ${ev.get_full_level_display}  ${ev.region}`);
 
     // ── GetMatch ─────────────────────────────────────────────────────────
 
@@ -525,9 +528,10 @@ async function main(): Promise<void> {
     const matchCached = !args.force && await isCachedAtCurrentVersion(client, matchKey);
 
     if (!matchCached) {
-      process.stdout.write(`${label}\n  GetMatch... `);
+      const t0 = Date.now();
       try {
         const data = await gqlFetch(MATCH_QUERY, { ct, id }, apiKey);
+        const fetchMs = Date.now() - t0;
 
         // Determine TTL from match state
         const ev2 = (data as { event?: { scoring_completed?: string | number | null; starts?: string | null } }).event;
@@ -537,16 +541,16 @@ async function main(): Promise<void> {
         const ttl = computeMatchTtl(scoringPct, daysSince, ev2?.starts ?? null);
 
         if (scoringPct > 0 && scoringPct < 95 && daysSince <= 3) {
-          console.log(`warning: match appears still active (${scoringPct}% scored) — skipping`);
+          opLine("GetMatch", "SKIP", `still active (${scoringPct}% scored)`, fetchMs);
           failed++;
           continue;
         }
 
         await writeToCache(client, matchKey, data, ttl);
-        console.log(`ok (ttl=${ttl === null ? "permanent" : ttl + "s"})`);
+        opLine("GetMatch", "ok", ttl === null ? "permanent" : `ttl=${ttl}s`, fetchMs);
         warmed++;
       } catch (err) {
-        console.log(`FAILED: ${err instanceof Error ? err.message : err}`);
+        opLine("GetMatch", "FAIL", err instanceof Error ? err.message : String(err), Date.now() - t0);
         failed++;
         await wait(args.delay, args.jitter);
         continue;
@@ -554,11 +558,14 @@ async function main(): Promise<void> {
 
       await wait(args.delay, args.jitter);
     } else {
-      process.stdout.write(`${label}\n  GetMatch... skipped (already cached v${CACHE_SCHEMA_VERSION})\n`);
+      opLine("GetMatch", "skip", `cached v${CACHE_SCHEMA_VERSION}`);
       skipped++;
     }
 
-    if (args.skipScorecards) continue;
+    if (args.skipScorecards) {
+      printProgress(i + 1, matches.length, sessionStart);
+      continue;
+    }
 
     // ── GetMatchScorecards ───────────────────────────────────────────────
 
@@ -566,26 +573,29 @@ async function main(): Promise<void> {
     const scorecardsCached = !args.force && await isCachedAtCurrentVersion(client, scorecardsKey);
 
     if (!scorecardsCached) {
-      process.stdout.write(`  GetMatchScorecards... `);
+      const t0 = Date.now();
       try {
         const data = await gqlFetch(SCORECARDS_QUERY, { ct, id }, apiKey);
-        await writeToCache(client, scorecardsKey, data, null); // scorecards always permanent for historical
-        console.log("ok");
+        await writeToCache(client, scorecardsKey, data, null);
+        opLine("GetMatchScorecards", "ok", "permanent", Date.now() - t0);
       } catch (err) {
-        console.log(`FAILED: ${err instanceof Error ? err.message : err}`);
+        opLine("GetMatchScorecards", "FAIL", err instanceof Error ? err.message : String(err), Date.now() - t0);
         failed++;
       }
 
       await wait(args.delay, args.jitter);
     } else {
-      console.log(`  GetMatchScorecards... skipped (already cached v${CACHE_SCHEMA_VERSION})`);
+      opLine("GetMatchScorecards", "skip", `cached v${CACHE_SCHEMA_VERSION}`);
     }
+
+    printProgress(i + 1, matches.length, sessionStart);
   }
 
   await client.quit();
 
+  const totalMs = Date.now() - sessionStart;
   console.log("\n" + "─".repeat(50));
-  console.log(`Done. warmed=${warmed}  skipped=${skipped}  failed=${failed}`);
+  console.log(`Done in ${formatDuration(totalMs)}  ·  warmed=${warmed}  skipped=${skipped}  failed=${failed}`);
 }
 
 function sleep(ms: number): Promise<void> {
@@ -597,8 +607,48 @@ async function wait(base: number, jitter: boolean): Promise<void> {
   const ms = jitter
     ? Math.round(base * (0.5 + Math.random())) // uniform in [0.5×, 1.5×]
     : base;
-  process.stdout.write(`  waiting ${ms}ms...\n`);
+  console.log(`  waiting ${formatDuration(ms)}`);
   await sleep(ms);
+}
+
+// ─── CLI output helpers ───────────────────────────────────────────────────────
+
+const OP_COL = 20; // width of the operation name column
+
+/** Print a single operation result line, e.g. "  GetMatch            ok   45ms" */
+function opLine(op: string, status: string, detail: string, ms?: number): void {
+  const parts = [
+    "  " + op.padEnd(OP_COL),
+    status.padEnd(4),
+    detail,
+    ms !== undefined ? `  ${formatDuration(ms)}` : "",
+  ];
+  console.log(parts.join("  ").trimEnd());
+}
+
+/** Print an ASCII progress bar with ETA after each completed match. */
+function printProgress(done: number, total: number, startMs: number): void {
+  if (total <= 1) return; // no point showing progress for a single match
+  const elapsed = Date.now() - startMs;
+  const pct = Math.round((done / total) * 100);
+  const barWidth = 28;
+  const filled = Math.round((done / total) * barWidth);
+  const bar = "[" + "█".repeat(filled) + "░".repeat(barWidth - filled) + "]";
+  const parts: string[] = [bar, `${done}/${total}`, `${pct}%`, `elapsed ${formatDuration(elapsed)}`];
+  if (done < total) {
+    const eta = Math.round((elapsed / done) * (total - done));
+    parts.push(`ETA ~${formatDuration(eta)}`);
+  }
+  console.log("\n" + parts.join("  "));
+}
+
+/** Format a millisecond duration as a human-readable string. */
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  const m = Math.floor(ms / 60_000);
+  const s = Math.floor((ms % 60_000) / 1000);
+  return `${m}m ${s < 10 ? "0" : ""}${s}s`;
 }
 
 main().catch((err) => {
