@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// Next.js 16 proxy files default to the Node.js runtime; Cloudflare Workers
-// require the Edge runtime. Declare it explicitly so @opennextjs/cloudflare
-// can bundle this file correctly.
-export const runtime = "edge";
-
-export function proxy(request: NextRequest) {
+// NOTE: Next.js 16 renamed this file convention from "middleware" to "proxy",
+// but @opennextjs/cloudflare does not yet support the new Node.js-runtime proxy
+// convention. We keep the deprecated middleware.ts name so Cloudflare builds
+// continue to work. Revisit once @opennextjs/cloudflare adds proxy support.
+export function middleware(request: NextRequest) {
   // Generate a per-request cryptographic nonce (Web Crypto API — works in both
   // Node.js and Cloudflare Workers edge runtime).
   const nonce = btoa(crypto.randomUUID());
