@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+// Next.js 16 proxy files default to the Node.js runtime; Cloudflare Workers
+// require the Edge runtime. Declare it explicitly so @opennextjs/cloudflare
+// can bundle this file correctly.
+export const runtime = "edge";
+
 export function proxy(request: NextRequest) {
   // Generate a per-request cryptographic nonce (Web Crypto API — works in both
   // Node.js and Cloudflare Workers edge runtime).
