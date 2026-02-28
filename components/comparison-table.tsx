@@ -1028,7 +1028,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                 <td className="py-2 pr-4">
                   <span className="inline-flex items-center gap-1 text-xs text-muted-foreground font-medium">
                     <Sparkles className="w-3 h-3" aria-hidden="true" />
-                    AI
+                    AI Coach
                   </span>
                 </td>
                 {competitors.map((comp) => (

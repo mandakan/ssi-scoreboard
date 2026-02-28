@@ -111,10 +111,11 @@ export function CoachingTip({
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <button
-          className="text-muted-foreground hover:text-foreground transition-colors"
+          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           aria-label={`AI coaching for ${competitorName}`}
         >
-          <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+          <Sparkles className="w-3 h-3" aria-hidden="true" />
+          Ask AI
         </button>
       </PopoverTrigger>
       <PopoverContent
