@@ -79,8 +79,10 @@ export async function fetchCoachingTip(
   ct: string,
   id: string,
   competitorId: number,
+  mode: "coach" | "roast" = "coach",
 ): Promise<CoachingTipResponse> {
-  const res = await fetch(`/api/coaching/${ct}/${id}/${competitorId}`);
+  const url = `/api/coaching/${ct}/${id}/${competitorId}${mode === "roast" ? "?mode=roast" : ""}`;
+  const res = await fetch(url);
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: "Unknown error" }));
     throw new Error(body.error ?? `HTTP ${res.status}`);

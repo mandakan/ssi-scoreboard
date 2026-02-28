@@ -66,12 +66,13 @@ export function useCoachingTipQuery(
   ct: string,
   id: string,
   competitorId: number,
+  mode: "coach" | "roast" = "coach",
 ) {
   return useQuery<CoachingTipResponse, Error>({
-    queryKey: coachingTipQueryKey(ct, id, competitorId),
-    queryFn: () => fetchCoachingTip(ct, id, competitorId),
-    enabled: false, // manual trigger only — user clicks button
-    staleTime: Infinity, // coaching tips for completed matches never go stale
+    queryKey: coachingTipQueryKey(ct, id, competitorId, mode),
+    queryFn: () => fetchCoachingTip(ct, id, competitorId, mode),
+    enabled: false, // manual trigger only — user opens popover
+    staleTime: Infinity, // tips for completed matches never go stale
     retry: false,
   });
 }

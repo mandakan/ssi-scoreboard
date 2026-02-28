@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildCoachingPrompt,
+  buildRoastPrompt,
   checkCoachingEligibility,
   type CoachingPromptInput,
 } from "@/lib/coaching-prompt";
@@ -219,7 +220,8 @@ describe("buildCoachingPrompt", () => {
         stages: [makeStage(1, makeSummary({ dq: true }))],
       }),
     );
-    expect(prompt).toContain('Stage 1 "Stage 1": DQ');
+    // Format is now: Stage N "name" [difficulty, course]: DQ
+    expect(prompt).toMatch(/Stage 1 "Stage 1" \[.*\]: DQ/);
   });
 
   it("handles DNF stages", () => {
@@ -228,7 +230,7 @@ describe("buildCoachingPrompt", () => {
         stages: [makeStage(1, makeSummary({ dnf: true }))],
       }),
     );
-    expect(prompt).toContain('Stage 1 "Stage 1": DNF');
+    expect(prompt).toMatch(/Stage 1 "Stage 1" \[.*\]: DNF/);
   });
 
   it("skips stages where competitor has no scorecard", () => {
@@ -256,9 +258,44 @@ describe("buildCoachingPrompt", () => {
 
   it("includes instruction block", () => {
     const prompt = buildCoachingPrompt(makeInput());
-    expect(prompt).toContain("Write 1-2 sentences");
+    expect(prompt).toContain("Write 3-4 sentences");
+    expect(prompt).toContain("professional IPSC coach");
     expect(prompt).toContain("Do NOT compare them to other competitors");
     expect(prompt).toContain("Do not include the competitor's name");
+  });
+
+  it("includes stage difficulty and course size", () => {
+    const prompt = buildCoachingPrompt(makeInput());
+    // stageDifficultyLabel = "hard", min_rounds = null, max_points = 100 → medium course
+    expect(prompt).toContain("[hard, medium course]");
+  });
+
+  it("uses min_rounds to determine short course when available", () => {
+    const input = makeInput({
+      stages: [
+        {
+          ...makeStage(1, makeSummary()),
+          min_rounds: 8,
+          stageDifficultyLabel: "easy",
+        },
+      ],
+    });
+    const prompt = buildCoachingPrompt(input);
+    expect(prompt).toContain("[easy, short course]");
+  });
+
+  it("uses min_rounds to determine long course when available", () => {
+    const input = makeInput({
+      stages: [
+        {
+          ...makeStage(1, makeSummary()),
+          min_rounds: 32,
+          stageDifficultyLabel: "hard",
+        },
+      ],
+    });
+    const prompt = buildCoachingPrompt(input);
+    expect(prompt).toContain("[hard, long course]");
   });
 
   it("handles stages with null zone data", () => {
@@ -279,6 +316,36 @@ describe("buildCoachingPrompt", () => {
     );
     expect(prompt).toContain("HF 4.00");
     expect(prompt).not.toContain("A:null");
+  });
+});
+
+// ── buildRoastPrompt tests ─────────────────────────────────────────────────────
+
+describe("buildRoastPrompt", () => {
+  it("includes the same context header as coaching prompt", () => {
+    const prompt = buildRoastPrompt(makeInput());
+    expect(prompt).toContain("John Doe (Production)");
+    expect(prompt).toContain("Match: Test Cup 2026");
+    expect(prompt).toContain("2.0 per 100 rounds");
+  });
+
+  it("includes stage breakdown with difficulty and course size", () => {
+    const prompt = buildRoastPrompt(makeInput());
+    expect(prompt).toContain("[hard, medium course]");
+    expect(prompt).toContain("HF 4.00");
+  });
+
+  it("includes roast-specific instruction block", () => {
+    const prompt = buildRoastPrompt(makeInput());
+    expect(prompt).toContain("roasting");
+    expect(prompt).toContain("friendly, humorous");
+    expect(prompt).toContain("make them laugh");
+    expect(prompt).toContain("Do not include the competitor's name");
+  });
+
+  it("does not include professional coach framing", () => {
+    const prompt = buildRoastPrompt(makeInput());
+    expect(prompt).not.toContain("professional IPSC coach");
   });
 });
 
@@ -325,13 +392,14 @@ describe("checkCoachingEligibility", () => {
     expect(result).toBe("Missing scorecards on some stages");
   });
 
-  it("rejects DQ'd competitor", () => {
+  it("accepts DQ'd competitor (DQ does not block coaching)", () => {
     const stages = [
       makeStage(1, makeSummary({ dq: true }), competitorId),
       makeStage(2, makeSummary(), competitorId),
     ];
-    const result = checkCoachingEligibility(100, 5, stages, competitorId);
-    expect(result).toBe("Disqualified competitors are excluded");
+    expect(
+      checkCoachingEligibility(100, 5, stages, competitorId),
+    ).toBeNull();
   });
 
   it("accepts match at exactly 95% scoring", () => {

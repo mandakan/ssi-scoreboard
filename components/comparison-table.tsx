@@ -12,7 +12,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronUp, Crosshair, ExternalLink, Flame, Gauge, HelpCircle, Info, Shield, Target, TrendingUp, X, Zap } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronUp, Crosshair, ExternalLink, Flame, Gauge, HelpCircle, Info, Shield, Sparkles, Target, TrendingUp, X, Zap } from "lucide-react";
 import { cn, formatHF, formatTime, formatPct, computePointsDelta, formatDelta } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
 import { HitZoneBar } from "@/components/hit-zone-bar";
@@ -724,14 +724,6 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                           <ArchetypePill archetype={archetype} color={colorMap[comp.id]} />
                         ) : null;
                       })()}
-                      {aiAvailable && isComplete && ct && matchId && (
-                        <CoachingTip
-                          ct={ct}
-                          id={matchId}
-                          competitorId={comp.id}
-                          competitorName={comp.name}
-                        />
-                      )}
                     </div>
                   </th>
                 );
@@ -1030,6 +1022,27 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                 </td>
               ))}
             </tr>
+            {/* AI coaching row — one sparkle button per competitor */}
+            {aiAvailable && isComplete && ct && matchId && (
+              <tr className="border-t bg-muted/20">
+                <td className="py-2 pr-4">
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground font-medium">
+                    <Sparkles className="w-3 h-3" aria-hidden="true" />
+                    AI
+                  </span>
+                </td>
+                {competitors.map((comp) => (
+                  <td key={comp.id} className="py-2 px-2 text-center">
+                    <CoachingTip
+                      ct={ct}
+                      id={matchId}
+                      competitorId={comp.id}
+                      competitorName={comp.name}
+                    />
+                  </td>
+                ))}
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
