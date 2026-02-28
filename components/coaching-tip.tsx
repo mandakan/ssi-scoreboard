@@ -1,7 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverDescription,
+} from "@/components/ui/popover";
 import { useCoachingTipQuery } from "@/lib/queries";
 
 interface CoachingTipProps {
@@ -17,55 +25,67 @@ export function CoachingTip({
   competitorId,
   competitorName,
 }: CoachingTipProps) {
+  const [open, setOpen] = useState(false);
   const { data, isFetching, isError, refetch } = useCoachingTipQuery(
     ct,
     id,
     competitorId,
   );
 
+  function handleOpenChange(next: boolean) {
+    setOpen(next);
+    if (next && !data && !isFetching) {
+      void refetch();
+    }
+  }
+
   return (
-    <div className="mt-1">
-      {!data && !isFetching && !isError && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="gap-1.5 text-[11px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 h-auto"
-          onClick={() => refetch()}
-          aria-label={`Get coaching tip for ${competitorName}`}
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <button
+          className="text-muted-foreground hover:text-foreground transition-colors mt-1"
+          aria-label={`AI coaching tip for ${competitorName}`}
         >
-          <Sparkles className="w-3 h-3" aria-hidden="true" />
-          AI tip
-        </Button>
-      )}
+          <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="center"
+        side="bottom"
+        className="w-72 max-w-[calc(100vw-2rem)] p-3"
+      >
+        <PopoverHeader className="mb-2">
+          <PopoverTitle className="flex items-center gap-1.5 text-sm">
+            <Sparkles className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
+            AI Coaching Tip
+          </PopoverTitle>
+          <PopoverDescription className="text-xs">{competitorName}</PopoverDescription>
+        </PopoverHeader>
 
-      {isFetching && (
-        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground py-0.5">
-          <Loader2
-            className="w-3 h-3 animate-spin"
-            aria-hidden="true"
-          />
-          Generating…
-        </span>
-      )}
+        {isFetching && (
+          <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+            Generating…
+          </span>
+        )}
 
-      {isError && !isFetching && (
-        <span className="text-[11px] text-muted-foreground py-0.5">
-          Unavailable.{" "}
-          <button
-            className="underline hover:text-foreground"
-            onClick={() => refetch()}
-            aria-label={`Retry coaching tip for ${competitorName}`}
-          >
-            Retry
-          </button>
-        </span>
-      )}
+        {isError && !isFetching && (
+          <p className="text-sm text-muted-foreground">
+            Could not generate tip.{" "}
+            <button
+              className="underline hover:text-foreground"
+              onClick={() => void refetch()}
+              aria-label={`Retry coaching tip for ${competitorName}`}
+            >
+              Retry
+            </button>
+          </p>
+        )}
 
-      {data && (
-        <div className="text-[11px] text-muted-foreground bg-muted/50 rounded px-2 py-1.5 mt-1 max-w-[12rem] leading-relaxed">
-          {data.tip}
-        </div>
-      )}
-    </div>
+        {data && (
+          <p className="text-sm leading-relaxed">{data.tip}</p>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }
