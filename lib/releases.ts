@@ -11,18 +11,39 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-02-27c";
+export const LATEST_RELEASE_ID = "2026-02-28";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "February 28, 2026",
+    title: "AI Coach & Roast",
+    sections: [
+      {
+        heading: "New",
+        items: [
+          "Roast mode: tap \"Ask AI\" in the AI Coach row and switch to the Roast tab for a friendly, humorous take on your results.",
+        ],
+      },
+      {
+        heading: "Improved",
+        items: [
+          "AI coaching tips are now longer and written from a professional IPSC coach perspective, with stage difficulty and course length factored in.",
+          "The AI Coach button moved from the column header to a dedicated row at the bottom of the comparison table.",
+          "DQ'd competitors can now receive coaching and roast feedback.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-02-27c",
     date: "February 27, 2026",
     title: "AI Coaching Tips",
     sections: [
       {
         heading: "New",
         items: [
-          "AI coaching tips: get a personalised coaching insight for any competitor in a completed match, based on their accuracy, speed, and consistency across all stages. Tap the sparkle icon in the comparison table header.",
+          "AI coaching tips: get a personalised coaching insight for any competitor in a completed match, based on their accuracy, speed, and consistency across all stages.",
         ],
       },
     ],
