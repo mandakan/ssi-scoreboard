@@ -22,28 +22,8 @@ export const RELEASES: Release[] = [
       {
         heading: "New",
         items: [
-          "Roast mode: tap \"Ask AI\" in the AI Coach row and switch to the Roast tab for a friendly, humorous take on your results.",
-        ],
-      },
-      {
-        heading: "Improved",
-        items: [
-          "AI coaching tips are now longer and written from a professional IPSC coach perspective, with stage difficulty and course length factored in.",
-          "The AI Coach button moved from the column header to a dedicated row at the bottom of the comparison table.",
-          "DQ'd competitors can now receive coaching and roast feedback.",
-        ],
-      },
-    ],
-  },
-  {
-    id: "2026-02-27c",
-    date: "February 27, 2026",
-    title: "AI Coaching Tips",
-    sections: [
-      {
-        heading: "New",
-        items: [
-          "AI coaching tips: get a personalised coaching insight for any competitor in a completed match, based on their accuracy, speed, and consistency across all stages.",
+          "AI coaching tips: get a personalised, professional IPSC coaching insight for any competitor in a completed match — based on accuracy, speed, consistency, penalties, and per-stage performance.",
+          "Roast mode: tap \"Ask AI\" in the AI Coach row at the bottom of the comparison table and switch to the Roast tab for a friendly, humorous take on the results.",
         ],
       },
     ],
