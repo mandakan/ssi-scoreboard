@@ -80,6 +80,12 @@ export default function MatchPageClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
+  // On mount: reset scroll position to top so navigating from a scrolled landing
+  // page doesn't land mid-page on the match view.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   // On mount: seed localStorage from ?competitors= URL param (shared links),
   // or reflect existing localStorage selection into the URL (backward compat).
   const seededRef = useRef(false);
