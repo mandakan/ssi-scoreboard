@@ -63,3 +63,8 @@ enabled = true
 # Secrets set independently via: wrangler secret put <NAME> --env staging
 [env.staging]
 name = "ssi-scoreboard-staging"
+
+# The top-level [ai] binding is not automatically inherited by named environments
+# in Wrangler — declare it explicitly so the staging worker gets the AI binding.
+[env.staging.ai]
+binding = "AI"
