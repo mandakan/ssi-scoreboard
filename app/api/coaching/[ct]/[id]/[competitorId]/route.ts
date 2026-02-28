@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAIProvider } from "@/lib/ai-provider";
-import { buildCoachingPrompt, checkCoachingEligibility } from "@/lib/coaching-prompt";
+import { buildCoachingPrompt, buildRoastPrompt, checkCoachingEligibility } from "@/lib/coaching-prompt";
 import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY, SCORECARDS_QUERY } from "@/lib/graphql";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
 import {
@@ -45,10 +45,11 @@ interface RawMatchData {
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ ct: string; id: string; competitorId: string }> },
 ) {
   const { ct, id, competitorId: competitorIdStr } = await params;
+  const mode = new URL(req.url).searchParams.get("mode") === "roast" ? "roast" : "coach";
 
   // 1. Check provider is configured
   const provider = createAIProvider();
@@ -66,8 +67,8 @@ export async function GET(
     return NextResponse.json({ error: "Invalid parameters" }, { status: 400 });
   }
 
-  // 3. Check coaching-specific cache (key includes model for auto-invalidation)
-  const coachingCacheKey = `coaching:${ct}:${id}:${competitorId}:${provider.modelId}`;
+  // 3. Check coaching-specific cache (key includes model + mode for auto-invalidation)
+  const coachingCacheKey = `coaching:${mode}:${ct}:${id}:${competitorId}:${provider.modelId}`;
   try {
     const cached = await cache.get(coachingCacheKey);
     if (cached) {
@@ -218,14 +219,18 @@ export async function GET(
   };
 
   // 9. Build prompt (pure function)
-  const prompt = buildCoachingPrompt({
+  const promptInput = {
     competitor: competitorInfo,
     stages,
     penaltyStats,
     consistencyStats,
     styleFingerprint,
     matchName,
-  });
+  };
+  const prompt =
+    mode === "roast"
+      ? buildRoastPrompt(promptInput)
+      : buildCoachingPrompt(promptInput);
 
   // 10. Call AI provider
   let tip: string;

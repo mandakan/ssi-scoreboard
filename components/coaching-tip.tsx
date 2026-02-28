@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import { Flame, GraduationCap, Loader2, Sparkles } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -10,13 +10,78 @@ import {
   PopoverTitle,
   PopoverDescription,
 } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { useCoachingTipQuery } from "@/lib/queries";
+
+type Mode = "coach" | "roast";
 
 interface CoachingTipProps {
   ct: string;
   id: string;
   competitorId: number;
   competitorName: string;
+}
+
+interface TipPanelProps {
+  ct: string;
+  id: string;
+  competitorId: number;
+  competitorName: string;
+  mode: Mode;
+  /** Called when the popover first opens — triggers initial fetch */
+  autoFetch: boolean;
+}
+
+function TipPanel({ ct, id, competitorId, competitorName, mode, autoFetch }: TipPanelProps) {
+  const { data, isFetching, isError, refetch } = useCoachingTipQuery(
+    ct,
+    id,
+    competitorId,
+    mode,
+  );
+
+  // Trigger on first render when autoFetch is true and no data exists
+  if (autoFetch && !data && !isFetching && !isError) {
+    void refetch();
+  }
+
+  if (isFetching) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+        <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+        {mode === "roast" ? "Preparing roast…" : "Generating…"}
+      </span>
+    );
+  }
+
+  if (isError) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Could not generate.{" "}
+        <button
+          className="underline hover:text-foreground"
+          onClick={() => void refetch()}
+          aria-label={`Retry ${mode} for ${competitorName}`}
+        >
+          Retry
+        </button>
+      </p>
+    );
+  }
+
+  if (data) {
+    return <p className="text-sm leading-relaxed">{data.tip}</p>;
+  }
+
+  return (
+    <button
+      className="text-sm text-muted-foreground underline hover:text-foreground"
+      onClick={() => void refetch()}
+      aria-label={`Generate ${mode === "roast" ? "roast" : "coaching tip"} for ${competitorName}`}
+    >
+      Generate
+    </button>
+  );
 }
 
 export function CoachingTip({
@@ -26,25 +91,28 @@ export function CoachingTip({
   competitorName,
 }: CoachingTipProps) {
   const [open, setOpen] = useState(false);
-  const { data, isFetching, isError, refetch } = useCoachingTipQuery(
-    ct,
-    id,
-    competitorId,
-  );
+  const [mode, setMode] = useState<Mode>("coach");
+  // Track which modes have been opened so TipPanel knows when to auto-fetch
+  const [activated, setActivated] = useState<Set<Mode>>(new Set());
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
-    if (next && !data && !isFetching) {
-      void refetch();
+    if (next) {
+      setActivated((prev) => new Set(prev).add(mode));
     }
+  }
+
+  function switchMode(next: Mode) {
+    setMode(next);
+    setActivated((prev) => new Set(prev).add(next));
   }
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <button
-          className="text-muted-foreground hover:text-foreground transition-colors mt-1"
-          aria-label={`AI coaching tip for ${competitorName}`}
+          className="text-muted-foreground hover:text-foreground transition-colors"
+          aria-label={`AI coaching for ${competitorName}`}
         >
           <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
         </button>
@@ -57,34 +125,54 @@ export function CoachingTip({
         <PopoverHeader className="mb-2">
           <PopoverTitle className="flex items-center gap-1.5 text-sm">
             <Sparkles className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
-            AI Coaching Tip
+            AI Analysis
           </PopoverTitle>
           <PopoverDescription className="text-xs">{competitorName}</PopoverDescription>
         </PopoverHeader>
 
-        {isFetching && (
-          <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
-            Generating…
-          </span>
-        )}
+        {/* Mode toggle */}
+        <div
+          className="flex gap-1 mb-3 rounded-md border p-0.5"
+          role="group"
+          aria-label="Analysis mode"
+        >
+          <button
+            onClick={() => switchMode("coach")}
+            className={cn(
+              "flex flex-1 items-center justify-center gap-1.5 rounded py-1 px-2 text-xs font-medium transition-colors",
+              mode === "coach"
+                ? "bg-foreground text-background"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            aria-pressed={mode === "coach"}
+          >
+            <GraduationCap className="w-3 h-3" aria-hidden="true" />
+            Coach
+          </button>
+          <button
+            onClick={() => switchMode("roast")}
+            className={cn(
+              "flex flex-1 items-center justify-center gap-1.5 rounded py-1 px-2 text-xs font-medium transition-colors",
+              mode === "roast"
+                ? "bg-foreground text-background"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            aria-pressed={mode === "roast"}
+          >
+            <Flame className="w-3 h-3" aria-hidden="true" />
+            Roast
+          </button>
+        </div>
 
-        {isError && !isFetching && (
-          <p className="text-sm text-muted-foreground">
-            Could not generate tip.{" "}
-            <button
-              className="underline hover:text-foreground"
-              onClick={() => void refetch()}
-              aria-label={`Retry coaching tip for ${competitorName}`}
-            >
-              Retry
-            </button>
-          </p>
-        )}
-
-        {data && (
-          <p className="text-sm leading-relaxed">{data.tip}</p>
-        )}
+        <TipPanel
+          key={mode}
+          ct={ct}
+          id={id}
+          competitorId={competitorId}
+          competitorName={competitorName}
+          mode={mode}
+          autoFetch={activated.has(mode)}
+        />
       </PopoverContent>
     </Popover>
   );

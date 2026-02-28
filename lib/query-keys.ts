@@ -18,4 +18,5 @@ export const coachingTipQueryKey = (
   ct: string,
   id: string,
   competitorId: number,
-) => ["coaching-tip", ct, id, competitorId] as const;
+  mode: "coach" | "roast" = "coach",
+) => ["coaching-tip", ct, id, competitorId, mode] as const;
