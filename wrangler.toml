@@ -12,6 +12,9 @@
 #                wrangler secret put UPSTASH_REDIS_REST_TOKEN --env staging
 #                wrangler secret put CACHE_PURGE_SECRET --env staging
 #                wrangler secret put CACHE_KEY_PREFIX --env staging   # value: "staging:"
+#
+# Non-secret vars (AI coaching feature) are committed here under [vars] /
+# [env.staging.vars] so they are version-controlled alongside the binding.
 
 name = "ssi-scoreboard"
 compatibility_date = "2024-09-23"
@@ -41,6 +44,14 @@ mode = "smart"
 
 [ai]
 binding = "AI"
+
+[vars]
+AI_PROVIDER = "cloudflare"
+AI_MODEL = "@cf/meta/llama-3.1-8b-instruct"
+
+[env.staging.vars]
+AI_PROVIDER = "cloudflare"
+AI_MODEL = "@cf/meta/llama-3.1-8b-instruct"
 
 [assets]
 directory = ".open-next/assets"
