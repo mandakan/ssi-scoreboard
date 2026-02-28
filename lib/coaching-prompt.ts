@@ -153,8 +153,5 @@ export function checkCoachingEligibility(
   const missingStages = stages.filter((s) => !s.competitors[competitorId]);
   if (missingStages.length > 0) return "Missing scorecards on some stages";
 
-  const isDq = stages.some((s) => s.competitors[competitorId]?.dq);
-  if (isDq) return "Disqualified competitors are excluded";
-
   return null;
 }

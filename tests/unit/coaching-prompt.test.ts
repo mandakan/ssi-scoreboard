@@ -392,13 +392,14 @@ describe("checkCoachingEligibility", () => {
     expect(result).toBe("Missing scorecards on some stages");
   });
 
-  it("rejects DQ'd competitor", () => {
+  it("accepts DQ'd competitor (DQ does not block coaching)", () => {
     const stages = [
       makeStage(1, makeSummary({ dq: true }), competitorId),
       makeStage(2, makeSummary(), competitorId),
     ];
-    const result = checkCoachingEligibility(100, 5, stages, competitorId);
-    expect(result).toBe("Disqualified competitors are excluded");
+    expect(
+      checkCoachingEligibility(100, 5, stages, competitorId),
+    ).toBeNull();
   });
 
   it("accepts match at exactly 95% scoring", () => {
