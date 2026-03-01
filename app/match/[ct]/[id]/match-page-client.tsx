@@ -78,6 +78,13 @@ const StageSimulator = dynamic(
   () => import("@/components/stage-simulator").then((m) => m.StageSimulator),
   { ssr: false, loading: () => <Skeleton className="h-48 w-full rounded-lg" /> },
 );
+const DivisionDistributionChart = dynamic(
+  () =>
+    import("@/components/division-distribution-chart").then(
+      (m) => m.DivisionDistributionChart,
+    ),
+  { ssr: false, loading: ChartSkeleton },
+);
 
 export default function MatchPageClient() {
   const [showCoachingView, setShowCoachingView] = useState(false);
@@ -443,6 +450,39 @@ export default function MatchPageClient() {
                 </div>
                 <HfPercentChart data={compareQuery.data} />
               </div>
+
+              {compareQuery.data.stages.some(
+                (s) => Object.keys(s.divisionDistributions ?? {}).length > 0
+              ) && (
+                <div className="rounded-lg border p-4 space-y-3">
+                  <div className="flex items-center gap-1.5">
+                    <h2 className="font-semibold">Division position</h2>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                          aria-label="About this chart"
+                        >
+                          <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-80" side="bottom" align="start">
+                        <PopoverHeader>
+                          <PopoverTitle>Division position</PopoverTitle>
+                          <PopoverDescription>Where each competitor sits within their division&apos;s HF distribution per stage — as a percentage of the division winner.</PopoverDescription>
+                        </PopoverHeader>
+                        <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+                          <p>The shaded band shows where the middle 50% of the division scored (Q1–Q3). The dashed line is the division median, and the faint dotted line is the division minimum.</p>
+                          <p>A competitor sitting above the band outperformed most of their division on that stage; below the band means they trailed the majority.</p>
+                          <p>Compare stages where your line dips below the band — those are disproportionate opportunities relative to peers in the same division.</p>
+                          <p>When competitors are in different divisions, use the selector to switch between them.</p>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <DivisionDistributionChart data={compareQuery.data} />
+                </div>
+              )}
 
               <div className="rounded-lg border p-4 space-y-3">
                 <div className="flex items-center gap-1.5">

@@ -227,6 +227,7 @@ export async function GET(req: Request) {
         stageDifficultyLabel: "—",
         stageArchetype: null,
         competitors: {},
+        divisionDistributions: {},
         ...(meta ?? {}),
       } satisfies StageComparison;
     });

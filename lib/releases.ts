@@ -11,11 +11,26 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-03-01";
+export const LATEST_RELEASE_ID = "2026-03-02";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "March 2, 2026",
+    title: "Division Position Chart",
+    sections: [
+      {
+        heading: "New",
+        items: [
+          "Division position chart: see where each competitor sits within their division's HF distribution per stage — the shaded band shows the middle 50% (Q1–Q3) of the division, with the median and minimum as reference lines.",
+          "Quickly spot stages where you outperformed or underperformed your division peers, regardless of the group you're comparing.",
+          "When selected competitors span multiple divisions, use the division selector to switch between them.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-03-01",
     date: "March 1, 2026",
     title: "Stage Archetype Analysis",
     sections: [

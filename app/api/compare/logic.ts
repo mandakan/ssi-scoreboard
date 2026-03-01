@@ -17,6 +17,7 @@ import type {
   SimResult,
   WhatIfResult,
   ArchetypePerformance,
+  DivisionHFDistribution,
 } from "@/lib/types";
 
 export interface RawScorecard {
@@ -122,6 +123,27 @@ export function computePercentileRank(value: number, allValues: number[]): numbe
   const below = allValues.filter((v) => v < value).length;
   const equal = allValues.filter((v) => v === value).length;
   return ((below + 0.5 * equal) / allValues.length) * 100;
+}
+
+/**
+ * Compute Q1, median, and Q3 of a pre-sorted array using linear interpolation.
+ *
+ * - Input must already be sorted ascending.
+ * - Returns null for empty arrays.
+ * - Single-element arrays return that value for all three quartiles.
+ */
+export function computeQuartiles(
+  sorted: number[]
+): { q1: number; median: number; q3: number } | null {
+  if (sorted.length === 0) return null;
+  const lerp = (p: number): number => {
+    const index = p * (sorted.length - 1);
+    const lo = Math.floor(index);
+    const hi = Math.ceil(index);
+    if (lo === hi) return sorted[lo];
+    return sorted[lo] + (index - lo) * (sorted[hi] - sorted[lo]);
+  };
+  return { q1: lerp(0.25), median: lerp(0.5), q3: lerp(0.75) };
 }
 
 /**
@@ -400,6 +422,33 @@ export function computeGroupRankings(
       divResults.set(div, rankByHF(divCards));
     }
 
+    // Per-division HF distributions (quartiles as % of division leader HF)
+    const divisionDistributions: Record<string, DivisionHFDistribution> = {};
+    for (const [div, divCards] of byDivision) {
+      if (div === "__none__") continue;
+      const divInfo = divResults.get(div);
+      const leaderHF = divInfo?.leaderHF;
+      if (!leaderHF || leaderHF <= 0) continue;
+      const validPcts = divCards
+        .filter(
+          (sc) =>
+            !sc.dnf && !sc.dq && !sc.zeroed &&
+            sc.hit_factor != null && sc.hit_factor > 0
+        )
+        .map((sc) => (sc.hit_factor! / leaderHF) * 100)
+        .sort((a, b) => a - b);
+      if (validPcts.length < 2) continue;
+      const q = computeQuartiles(validPcts);
+      if (!q) continue;
+      divisionDistributions[div] = {
+        minPct: validPcts[0],
+        q1Pct: q.q1,
+        medianPct: q.median,
+        q3Pct: q.q3,
+        count: validPcts.length,
+      };
+    }
+
     // group_leader_points kept for the benchmark overlay hook (issue #1)
     const groupFired = groupScorecards.filter((sc) => !sc.dnf);
     const validPts = groupFired
@@ -427,6 +476,7 @@ export function computeGroupRankings(
           overall_rank: null,
           overall_percent: null,
           overall_percentile: null,
+          divisionKey: null,
           dq: sc?.dq ?? false,
           zeroed: sc?.zeroed ?? false,
           dnf: true,
@@ -494,6 +544,7 @@ export function computeGroupRankings(
           no_shoots: sc.no_shoots,
           procedurals: sc.procedurals,
           shooting_order,
+          divisionKey: sc.competitor_division ?? null,
           stageClassification: classifyStageRun(
             groupPercent,
             sc.a_hits,
@@ -524,6 +575,7 @@ export function computeGroupRankings(
       stageDifficultyLevel: 3,
       stageDifficultyLabel: "hard",
       competitors: competitorMap,
+      divisionDistributions,
     };
 
     return comparison;

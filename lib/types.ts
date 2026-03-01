@@ -111,6 +111,10 @@ export interface CompetitorSummary {
   // Formula: 1 − (overall_rank − 1) / (N − 1) where N = non-DNF field competitors.
   // null for DNF or when N = 0.
   overall_percentile: number | null;
+  // Raw competitor_division key used to index into StageComparison.divisionDistributions.
+  // Matches the key used in RawScorecard.competitor_division (e.g. "Open", "Production").
+  // Null when the competitor has no division or fired a DNF.
+  divisionKey?: string | null;
   // Run quality classification based on HF% vs group leader, A%, and penalty counts.
   // null when there is insufficient data or the run is DNF.
   stageClassification: StageClassification | null;
@@ -120,6 +124,22 @@ export interface CompetitorSummary {
   // Points lost to penalties (miss + no_shoot + procedural × 10 each).
   // Always 0 for DNF; always ≥ 0 for fired stages.
   penaltyLossPoints: number;
+}
+
+// Per-stage HF distribution for a single division.
+// All percentage values are relative to the division leader's HF (0–100 scale).
+// Competitors who DNF, DQ, or zero the stage are excluded.
+export interface DivisionHFDistribution {
+  /** Min HF as % of division leader. */
+  minPct: number;
+  /** Q1 (25th percentile) HF as % of division leader. */
+  q1Pct: number;
+  /** Median (50th percentile) HF as % of division leader. */
+  medianPct: number;
+  /** Q3 (75th percentile) HF as % of division leader. */
+  q3Pct: number;
+  /** Number of valid competitors contributing to this distribution. */
+  count: number;
 }
 
 export interface StageComparison {
@@ -140,6 +160,8 @@ export interface StageComparison {
   stageDifficultyLabel: string;       // human-readable label: easy/moderate/hard/very hard/brutal
   stageArchetype?: StageArchetype | null; // speed / precision / mixed — null when target data is insufficient
   competitors: Record<number, CompetitorSummary>; // keyed by competitor_id
+  /** Per-division HF distribution (quartiles) for this stage. Keyed by competitor_division string. */
+  divisionDistributions?: Record<string, DivisionHFDistribution>;
 }
 
 // Run quality classification for a single stage × competitor result.

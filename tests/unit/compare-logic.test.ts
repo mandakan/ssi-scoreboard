@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computePercentileRank, assignArchetype, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computePercentileRank, assignArchetype, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, computeQuartiles, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompetitorInfo, StageComparison } from "@/lib/types";
 
 const competitors: CompetitorInfo[] = [
@@ -2492,5 +2492,122 @@ describe("computeArchetypePerformance", () => {
     ];
     const result = computeArchetypePerformance(stages, 1);
     expect(result.map((r) => r.archetype)).toEqual(["speed", "precision", "mixed"]);
+  });
+});
+
+// ─── computeQuartiles ────────────────────────────────────────────────────────
+
+describe("computeQuartiles", () => {
+  it("returns null for empty array", () => {
+    expect(computeQuartiles([])).toBeNull();
+  });
+
+  it("returns the single value for all three quartiles when n=1", () => {
+    const result = computeQuartiles([50]);
+    expect(result).not.toBeNull();
+    expect(result!.q1).toBe(50);
+    expect(result!.median).toBe(50);
+    expect(result!.q3).toBe(50);
+  });
+
+  it("computes correct quartiles for [10, 20, 30, 40] (even n)", () => {
+    // sorted: [10, 20, 30, 40]
+    // Q1: 0.25 * 3 = 0.75 → lerp(10, 20, 0.75) = 17.5
+    // median: 0.5 * 3 = 1.5 → lerp(20, 30, 0.5) = 25
+    // Q3: 0.75 * 3 = 2.25 → lerp(30, 40, 0.25) = 32.5
+    const result = computeQuartiles([10, 20, 30, 40]);
+    expect(result).not.toBeNull();
+    expect(result!.q1).toBeCloseTo(17.5, 5);
+    expect(result!.median).toBeCloseTo(25, 5);
+    expect(result!.q3).toBeCloseTo(32.5, 5);
+  });
+
+  it("computes correct quartiles for [10, 20, 30] (odd n)", () => {
+    // sorted: [10, 20, 30]
+    // Q1: 0.25 * 2 = 0.5 → lerp(10, 20, 0.5) = 15
+    // median: 0.5 * 2 = 1 → sorted[1] = 20
+    // Q3: 0.75 * 2 = 1.5 → lerp(20, 30, 0.5) = 25
+    const result = computeQuartiles([10, 20, 30]);
+    expect(result).not.toBeNull();
+    expect(result!.q1).toBeCloseTo(15, 5);
+    expect(result!.median).toBeCloseTo(20, 5);
+    expect(result!.q3).toBeCloseTo(25, 5);
+  });
+
+  it("returns q1 <= median <= q3 for any sorted array", () => {
+    const sorted = [5, 12, 18, 25, 31, 40, 55, 72, 88, 100];
+    const result = computeQuartiles(sorted);
+    expect(result).not.toBeNull();
+    expect(result!.q1).toBeLessThanOrEqual(result!.median);
+    expect(result!.median).toBeLessThanOrEqual(result!.q3);
+  });
+});
+
+// ─── divisionDistributions in computeGroupRankings ───────────────────────────
+
+describe("computeGroupRankings — divisionDistributions", () => {
+  it("populates divisionDistributions for each stage", () => {
+    // Three competitors in the same division with different HFs
+    const scorecards: RawScorecard[] = [
+      makeCard(1, 1, { competitor_division: "Open", hit_factor: 10.0 }),
+      makeCard(2, 1, { competitor_division: "Open", hit_factor: 8.0 }),
+      makeCard(3, 1, { competitor_division: "Open", hit_factor: 6.0 }),
+    ];
+    const result = computeGroupRankings(scorecards, competitors);
+    const dist = result[0].divisionDistributions?.["Open"];
+    expect(dist).toBeDefined();
+    expect(dist!.count).toBe(3);
+    // Q3% should be >= Q1%
+    expect(dist!.q3Pct).toBeGreaterThanOrEqual(dist!.q1Pct);
+    // medianPct = 80% of leader (8.0/10.0 * 100)
+    expect(dist!.medianPct).toBeCloseTo(80, 1);
+    // minPct = 60% of leader (6.0/10.0 * 100)
+    expect(dist!.minPct).toBeCloseTo(60, 1);
+  });
+
+  it("excludes DNF competitors from distributions", () => {
+    const scorecards: RawScorecard[] = [
+      makeCard(1, 1, { competitor_division: "Open", hit_factor: 10.0 }),
+      makeCard(2, 1, { competitor_division: "Open", hit_factor: 8.0, dnf: true }),
+      makeCard(3, 1, { competitor_division: "Open", hit_factor: 6.0 }),
+    ];
+    const result = computeGroupRankings(scorecards, competitors);
+    const dist = result[0].divisionDistributions?.["Open"];
+    // Only 2 valid competitors (comp 1 and 3); comp 2 is DNF
+    expect(dist!.count).toBe(2);
+  });
+
+  it("skips __none__ key (no division competitors)", () => {
+    const scorecards: RawScorecard[] = [
+      makeCard(1, 1, { competitor_division: null, hit_factor: 8.0 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    expect(result[0].divisionDistributions?.["__none__"]).toBeUndefined();
+  });
+
+  it("requires at least 2 valid competitors for a distribution", () => {
+    const scorecards: RawScorecard[] = [
+      makeCard(1, 1, { competitor_division: "Open", hit_factor: 10.0 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    expect(result[0].divisionDistributions?.["Open"]).toBeUndefined();
+  });
+
+  it("sets divisionKey on CompetitorSummary for non-DNF competitors", () => {
+    const scorecards: RawScorecard[] = [
+      makeCard(1, 1, { competitor_division: "Open", hit_factor: 10.0 }),
+      makeCard(2, 1, { competitor_division: "Open", hit_factor: 8.0 }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    expect(result[0].competitors[1].divisionKey).toBe("Open");
+    expect(result[0].competitors[2].divisionKey).toBe("Open");
+  });
+
+  it("sets divisionKey to null for DNF competitors", () => {
+    const scorecards: RawScorecard[] = [
+      makeCard(1, 1, { competitor_division: "Open", hit_factor: 10.0, dnf: true }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0]]);
+    expect(result[0].competitors[1].divisionKey).toBeNull();
   });
 });
