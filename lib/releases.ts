@@ -17,13 +17,16 @@ export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
     date: "March 1, 2026",
-    title: "Stage Archetype Analysis",
+    title: "Stage Archetype Analysis & Division Position Chart",
     sections: [
       {
         heading: "New",
         items: [
           "Stage archetype badges: stages are now classified as Speed, Precision, or Mixed based on target composition — look for the icon next to the difficulty bars.",
           "Archetype performance breakdown in the Coaching analysis panel: compare average group % across stage types to spot strengths and weaknesses.",
+          "Division position chart: see where each competitor sits within their division's HF distribution per stage — the shaded band shows the middle 50% (Q1–Q3) of the division, with the median and minimum as reference lines.",
+          "Quickly spot stages where you outperformed or underperformed your division peers, regardless of the group you're comparing.",
+          "When selected competitors span multiple divisions, use the division selector to switch between them.",
         ],
       },
     ],
