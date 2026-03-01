@@ -13,5 +13,6 @@ export const MAX_COMPETITORS = 12;
  *   1 → initial (implicit, unversioned entries)
  *   2 → added squads[] to MatchResponse (squad picker feature)
  *   3 → added image { url width height } to IpscMatchNode in MATCH_QUERY (OG images)
+ *   4 → added match_status + results_status to MatchResponse (results published flag)
  */
-export const CACHE_SCHEMA_VERSION = 3;
+export const CACHE_SCHEMA_VERSION = 4;

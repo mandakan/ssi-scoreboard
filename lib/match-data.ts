@@ -48,6 +48,8 @@ export interface RawMatchData {
     name: string;
     starts: string | null;
     venue?: string | null;
+    status?: string | null;
+    results?: string | null;
     scoring_completed?: string | number | null;
     region?: string | null;
     sub_rule?: string | null;
@@ -106,8 +108,13 @@ export async function fetchMatchData(
   const scoringPct = Math.round(parseFloat(String(ev.scoring_completed ?? 0)));
   const matchDate = ev.starts ? new Date(ev.starts) : null;
   const daysSince = matchDate ? (Date.now() - matchDate.getTime()) / 86_400_000 : 0;
-  const isComplete = scoringPct >= 95 || daysSince > 3;
-  const ttl = computeMatchTtl(scoringPct, daysSince, ev.starts ?? null);
+  const resultsPublished = ev.results === "all";
+  const cancelled = ev.status === "cs";
+  // results=all or cancelled are definitive — cache permanently regardless of scoring %.
+  const ttl = (resultsPublished || cancelled)
+    ? null
+    : computeMatchTtl(scoringPct, daysSince, ev.starts ?? null);
+  const isComplete = resultsPublished || scoringPct >= 95 || daysSince > 3;
 
   try {
     if (ttl === null) {
@@ -176,6 +183,8 @@ export async function fetchMatchData(
       ev.scoring_completed != null
         ? Math.round(parseFloat(String(ev.scoring_completed)))
         : 0,
+    match_status: ev.status ?? "on",
+    results_status: ev.results ?? "org",
     ssi_url: `https://shootnscoreit.com/event/${ct}/${id}/`,
     stages,
     competitors,

@@ -14,6 +14,8 @@ const baseMatch: MatchResponse = {
   stages_count: 8,
   competitors_count: 105,
   scoring_completed: 56,
+  match_status: "on",
+  results_status: "org",
   ssi_url: "https://shootnscoreit.com/event/22/123/",
   stages: [],
   competitors: [],

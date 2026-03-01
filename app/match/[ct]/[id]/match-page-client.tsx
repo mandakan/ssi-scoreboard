@@ -15,7 +15,7 @@ import { CacheInfoBadge } from "@/components/cache-info-badge";
 import { LoadingBar } from "@/components/loading-bar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, AlertCircle, ArrowLeft, RefreshCw, ChevronDown, ChevronUp, HelpCircle } from "lucide-react";
+import { Loader2, AlertCircle, ArrowLeft, RefreshCw, ChevronDown, ChevronUp, HelpCircle, ExternalLink, Info } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -210,10 +210,14 @@ export default function MatchPageClient() {
 
   const match = matchQuery.data;
 
-  // Match is complete when scoring ≥ 95% OR the match date is >3 days ago.
   const matchDateMs = match.date ? new Date(match.date).getTime() : null;
-  const isMatchComplete = match.scoring_completed >= 95 ||
+  // results_status === "all" is the definitive "published" signal from SSI.
+  // Fall back to scoring % and age heuristics for matches that haven't published yet.
+  const isMatchComplete = match.results_status === "all" ||
+    match.scoring_completed >= 95 ||
     (matchDateMs != null && (mountMs - matchDateMs) / 86_400_000 > 3);
+  const resultsPublished = match.results_status === "all";
+  const matchCancelled = match.match_status === "cs";
   const aiAvailable = coachingAvailability.data?.available === true;
 
   // Pick the older (more stale) cachedAt between match and compare responses.
@@ -251,6 +255,38 @@ export default function MatchPageClient() {
 
       {/* Match header */}
       <MatchHeader match={match} />
+
+      {/* Results disclaimer — shown whenever SSI has not publicly published results */}
+      {!resultsPublished && (
+        <div
+          role="alert"
+          className="flex items-start gap-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3.5 py-3 text-sm text-amber-900 dark:text-amber-200"
+        >
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+          <span>
+            {matchCancelled
+              ? "This match was cancelled."
+              : "Results are not yet officially published by the organizers — data shown here may change."
+            }
+            {match.ssi_url && !matchCancelled && (
+              <>
+                {" "}
+                <a
+                  href={match.ssi_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 font-medium underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-100"
+                >
+                  ShootNScoreIt is the source of truth
+                  <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                  <span className="sr-only">(opens in new tab)</span>
+                </a>
+                .
+              </>
+            )}
+          </span>
+        </div>
+      )}
 
       {/* Competitor picker */}
       <div className="space-y-1">
