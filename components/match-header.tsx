@@ -32,7 +32,7 @@ export function MatchHeader({ match }: MatchHeaderProps) {
     : null;
 
   const pct = match.scoring_completed ?? 0;
-  const isComplete = pct >= 100;
+  const isComplete = match.results_status === "all" || pct >= 100;
 
   return (
     <div className="space-y-3">

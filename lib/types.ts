@@ -41,6 +41,10 @@ export interface MatchResponse {
   stages_count: number;
   competitors_count: number;
   scoring_completed: number; // percentage 0-100
+  /** SSI match lifecycle status: "dr" Draft | "on" Active | "ol" Active/no-self-edit | "pr" Preliminary | "cp" Completed | "cs" Cancelled */
+  match_status: string;
+  /** SSI results visibility: "org" organizers-only | "stg" scores-public | "cmp" participants-only | "all" publicly published */
+  results_status: string;
   ssi_url: string | null;
   stages: StageInfo[];
   competitors: CompetitorInfo[];

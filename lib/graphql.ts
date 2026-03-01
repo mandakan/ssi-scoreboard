@@ -93,6 +93,8 @@ export const MATCH_QUERY = `
       name
       venue
       starts
+      status
+      results
       scoring_completed
       ... on IpscMatchNode {
         region
