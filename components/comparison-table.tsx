@@ -792,8 +792,9 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
               <tr key={stage.stage_id} className="border-b hover:bg-muted/30">
                 <td className="py-2 pr-4 font-medium">
                   <div className="flex flex-col gap-0.5">
-                    {/* Mobile: stage number + info popover icon */}
-                    <div className="flex items-center gap-1 sm:hidden">
+                    {/* Mobile: stage number + info popover icon, with difficulty/archetype below */}
+                    <div className="flex flex-col gap-0.5 sm:hidden">
+                      <div className="flex items-center gap-1">
                       {stage.ssi_url ? (
                         <a
                           href={stage.ssi_url}
@@ -862,6 +863,17 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                           </div>
                         </PopoverContent>
                       </Popover>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <StageDifficultyIcon
+                          level={stage.stageDifficultyLevel}
+                          label={stage.stageDifficultyLabel}
+                          medianHF={stage.field_median_hf}
+                        />
+                        {stage.stageArchetype && (
+                          <StageArchetypeIcon archetype={stage.stageArchetype} />
+                        )}
+                      </div>
                     </div>
 
                     {/* Desktop: full 4-line layout */}
