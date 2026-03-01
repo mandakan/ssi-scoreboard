@@ -17,7 +17,7 @@ import {
   ShootingOrderBadge,
   StageClassificationBadge,
 } from "@/components/stage-cell-parts";
-import { CheckCircle2, Flame, Shield, Zap } from "lucide-react";
+import { CheckCircle2, Flame, Focus, Layers, Shield, Timer, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { StageClassification } from "@/lib/types";
 
@@ -127,11 +127,37 @@ function StageColumnDiagram() {
         />
         <DiagramRow
           visual={
+            <div className="flex items-center gap-2">
+              <span className="inline-flex text-blue-500" aria-label="Speed stage" role="img">
+                <Timer className="w-3.5 h-3.5" aria-hidden="true" />
+              </span>
+              <span className="inline-flex text-purple-500" aria-label="Precision stage" role="img">
+                <Focus className="w-3.5 h-3.5" aria-hidden="true" />
+              </span>
+              <span className="inline-flex text-muted-foreground" aria-label="Mixed stage" role="img">
+                <Layers className="w-3.5 h-3.5" aria-hidden="true" />
+              </span>
+            </div>
+          }
+          badge="3"
+          title="Stage archetype"
+          description={<>
+            Appears next to the difficulty bars.{" "}
+            <span className="inline-flex items-center gap-0.5 text-blue-500"><Timer className="w-3 h-3" aria-hidden="true" /> Speed</span>
+            {" — "}
+            <span className="inline-flex items-center gap-0.5 text-purple-500"><Focus className="w-3 h-3" aria-hidden="true" /> Precision</span>
+            {" — "}
+            <span className="inline-flex items-center gap-0.5 text-muted-foreground"><Layers className="w-3 h-3" aria-hidden="true" /> Mixed</span>
+            {". Derived from the ratio of steel to paper targets. Hover for the label."}
+          </>}
+        />
+        <DiagramRow
+          visual={
             <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
               {MOCK_STAGE_ROUNDS}r · {MOCK_STAGE_PAPER}P · {MOCK_STAGE_STEEL}S
             </span>
           }
-          badge="3"
+          badge="4"
           title="Rounds & targets"
           description="Minimum round count, paper targets (P), and steel targets (S). Indicates stage type — high round count suggests a long course."
         />
@@ -142,7 +168,7 @@ function StageColumnDiagram() {
               med: {MOCK_STAGE_MEDIAN_HF.toFixed(2)}
             </span>
           }
-          badge="4"
+          badge="5"
           title="Field median HF"
           description="Median hit factor of all competitors on this stage. A useful baseline — compare it with the hit factors in the cells above."
         />
