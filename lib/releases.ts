@@ -11,11 +11,25 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-02-28";
+export const LATEST_RELEASE_ID = "2026-03-01";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "March 1, 2026",
+    title: "Stage Archetype Analysis",
+    sections: [
+      {
+        heading: "New",
+        items: [
+          "Stage archetype badges: stages are now classified as Speed, Precision, or Mixed based on target composition — look for the icon next to the difficulty bars.",
+          "Archetype performance breakdown in the Coaching analysis panel: compare average group % across stage types to spot strengths and weaknesses.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-02-28",
     date: "February 28, 2026",
     title: "AI Coach & Roast",
     sections: [
