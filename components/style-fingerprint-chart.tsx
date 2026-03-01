@@ -411,6 +411,15 @@ export function StyleFingerprintChart({ data }: StyleFingerprintChartProps) {
   const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
   const [cohortMode, setCohortMode] = useState<CohortMode>("all");
 
+  // Live mode returns null for these fields — early return.
+  if (!styleFingerprintStats || !fieldFingerprintPoints) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Not enough scored stages to display the style fingerprint.
+      </p>
+    );
+  }
+
   const selectedPoints = buildSelectedPoints(competitors, styleFingerprintStats);
   const selectedIds = new Set(competitors.map((c) => c.id));
 
@@ -447,7 +456,7 @@ export function StyleFingerprintChart({ data }: StyleFingerprintChartProps) {
     id: comp.id,
     label: formatLabel(comp),
     color: colorMap[comp.id],
-    archetype: styleFingerprintStats[comp.id]?.archetype ?? null,
+    archetype: styleFingerprintStats?.[comp.id]?.archetype ?? null,
   }));
 
   return (

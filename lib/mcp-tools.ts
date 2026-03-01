@@ -267,7 +267,7 @@ function createHttpProviders(baseUrl: string): DataProviders {
     },
     getMatch: (ct, id) => apiFetch<MatchResponse>(baseUrl, `/api/match/${ct}/${id}`),
     compareCompetitors: (ct, id, ids) => {
-      const p = new URLSearchParams({ ct, id, competitor_ids: ids.join(",") });
+      const p = new URLSearchParams({ ct, id, competitor_ids: ids.join(","), mode: "coaching" });
       return apiFetch<CompareResponse>(baseUrl, `/api/compare?${p}`);
     },
     getPopularMatches: () => apiFetch<PopularMatch[]>(baseUrl, "/api/popular-matches"),

@@ -2,6 +2,7 @@
 // NOT the SSI API directly (which has no CORS headers).
 
 import type {
+  CompareMode,
   MatchResponse,
   CompareResponse,
   EventSummary,
@@ -51,7 +52,8 @@ export async function fetchPopularMatches(): Promise<PopularMatch[]> {
 export async function fetchCompare(
   ct: string,
   id: string,
-  competitorIds: number[]
+  competitorIds: number[],
+  mode: CompareMode = "coaching",
 ): Promise<CompareResponse> {
   if (competitorIds.length === 0) {
     throw new Error("No competitor IDs provided");
@@ -60,6 +62,7 @@ export async function fetchCompare(
     ct,
     id,
     competitor_ids: competitorIds.join(","),
+    mode,
   });
   const res = await fetch(`/api/compare?${params}`);
   if (!res.ok) {

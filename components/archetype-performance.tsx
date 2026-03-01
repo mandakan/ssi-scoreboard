@@ -130,6 +130,7 @@ export function ArchetypePerformanceSummary({ data }: ArchetypePerformanceSummar
 /** Highlights strongest vs weakest archetype gap per competitor. */
 function ArchetypeGapHighlight({ data, colorMap }: { data: CompareResponse; colorMap: Record<number, string> }) {
   const { competitors, archetypePerformance } = data;
+  if (!archetypePerformance) return null;
 
   const highlights: { name: string; color: string; strongest: string; weakest: string; gap: number }[] = [];
 

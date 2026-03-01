@@ -34,6 +34,7 @@ const MOCK_MATCH: MatchResponse = {
 
 const MOCK_COMPARE: CompareResponse = {
   match_id: 99999999,
+  mode: "coaching",
   cacheInfo: { cachedAt: null },
   competitors: [
     MOCK_MATCH.competitors[0],

@@ -772,8 +772,8 @@ export function StageSimulator({ ct, id, data, competitors, scoringCompleted }: 
                   )}
                   {/* Div / overall rank — always shown; current from whatIfStats, simulated from server */}
                   {(() => {
-                    const currentDivRank = data.whatIfStats[selectedComp.id]?.actualDivRank ?? null;
-                    const currentOverallRank = data.whatIfStats[selectedComp.id]?.actualOverallRank ?? null;
+                    const currentDivRank = data.whatIfStats?.[selectedComp.id]?.actualDivRank ?? null;
+                    const currentOverallRank = data.whatIfStats?.[selectedComp.id]?.actualOverallRank ?? null;
                     const simDivRank = serverRank?.newDivRank ?? null;
                     const simOverallRank = serverRank?.newOverallRank ?? null;
                     const divRankDelta = simDivRank != null && currentDivRank != null ? currentDivRank - simDivRank : null;

@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { fetchMatch, fetchCompare, fetchEvents, fetchPopularMatches, fetchCoachingAvailability, fetchCoachingTip } from "@/lib/api";
-import type { MatchResponse, CompareResponse, EventSummary, PopularMatch, CoachingTipResponse, CoachingAvailability } from "@/lib/types";
+import type { CompareMode, MatchResponse, CompareResponse, EventSummary, PopularMatch, CoachingTipResponse, CoachingAvailability } from "@/lib/types";
 import { matchQueryKey, compareQueryKey, coachingAvailabilityKey, coachingTipQueryKey } from "@/lib/query-keys";
 
 // Re-export so existing imports from lib/queries keep working.
@@ -43,13 +43,14 @@ export function usePopularMatchesQuery() {
 export function useCompareQuery(
   ct: string,
   id: string,
-  competitorIds: number[]
+  competitorIds: number[],
+  mode: CompareMode = "coaching",
 ) {
   return useQuery<CompareResponse, Error>({
-    queryKey: compareQueryKey(ct, id, competitorIds),
-    queryFn: () => fetchCompare(ct, id, competitorIds),
-    staleTime: 30_000, // 30 seconds — aligned with server cache TTL
-    refetchInterval: 30_000, // poll every 30s while mounted
+    queryKey: compareQueryKey(ct, id, competitorIds, mode),
+    queryFn: () => fetchCompare(ct, id, competitorIds, mode),
+    staleTime: mode === "live" ? 30_000 : 300_000,
+    refetchInterval: mode === "live" ? 30_000 : false,
     enabled: Boolean(ct && id && competitorIds.length > 0),
   });
 }

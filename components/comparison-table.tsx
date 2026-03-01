@@ -547,7 +547,9 @@ function ArchetypePill({ archetype, color }: { archetype: ShooterArchetype; colo
 }
 
 export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable, isComplete, ct, matchId }: ComparisonTableProps) {
-  const { stages, competitors, penaltyStats, efficiencyStats, consistencyStats, lossBreakdownStats, whatIfStats, styleFingerprintStats } = data;
+  const { stages, competitors, penaltyStats, efficiencyStats, consistencyStats, lossBreakdownStats } = data;
+  const whatIfStats = data.whatIfStats;
+  const styleFingerprintStats = data.styleFingerprintStats;
   const [mode, setMode] = useState<PctMode>(
     competitors.length < 2 ? "division" : "group"
   );
@@ -774,7 +776,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                         </Tooltip>
                       )}
                       {(() => {
-                        const archetype = styleFingerprintStats[comp.id]?.archetype;
+                        const archetype = styleFingerprintStats?.[comp.id]?.archetype;
                         return archetype ? (
                           <ArchetypePill archetype={archetype} color={colorMap[comp.id]} />
                         ) : null;
@@ -1200,7 +1202,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
       )}
 
       {/* What if? panel — only rendered when match is ≥ 80 % complete */}
-      {scoringCompleted >= 80 && competitors.some((c) => whatIfStats[c.id] != null) && (
+      {whatIfStats && scoringCompleted >= 80 && competitors.some((c) => whatIfStats[c.id] != null) && (
         <div className="rounded-lg border border-sky-200 dark:border-sky-900/50">
           <button
             id="whatif-heading"
@@ -1238,7 +1240,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
               </div>
               <div className="space-y-5">
                 {competitors.map((comp) => {
-                  const wi = whatIfStats[comp.id];
+                  const wi = whatIfStats?.[comp.id];
                   if (!wi) return null;
                   const stageName =
                     stages.find((s) => s.stage_num === wi.worstStageNum)?.stage_name ??
