@@ -17,7 +17,7 @@ import {
   ShootingOrderBadge,
   StageClassificationBadge,
 } from "@/components/stage-cell-parts";
-import { CheckCircle2, Flame, Focus, Layers, Shield, Timer, Zap } from "lucide-react";
+import { CheckCircle2, Crosshair, Flame, Focus, Hand, HandMetal, Layers, Shield, Timer, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { StageClassification } from "@/lib/types";
 
@@ -160,6 +160,18 @@ function StageColumnDiagram() {
           badge="4"
           title="Rounds & targets"
           description="Minimum round count, paper targets (P), and steel targets (S). Indicates stage type — high round count suggests a long course."
+        />
+        <DiagramRow
+          visual={
+            <div className="flex items-center gap-1" aria-hidden="true">
+              <Hand className="w-3.5 h-3.5 text-amber-500" />
+              <Crosshair className="w-3.5 h-3.5 text-teal-500" />
+              <HandMetal className="w-3.5 h-3.5 text-cyan-500" />
+            </div>
+          }
+          badge="4"
+          title="Constraint badges"
+          description={<>Shown when the stage brief includes a shooting restriction: <span className="inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400"><Hand className="w-3 h-3" aria-hidden="true" /> strong hand only</span>, <span className="inline-flex items-center gap-0.5 text-cyan-600 dark:text-cyan-400"><HandMetal className="w-3 h-3" aria-hidden="true" /> weak hand only</span>, or <span className="inline-flex items-center gap-0.5 text-teal-600 dark:text-teal-400"><Crosshair className="w-3 h-3" aria-hidden="true" /> moving targets</span>. Tap the icon for a tooltip. Also visible in the stage info popover on mobile.</>}
         />
         <DiagramRow
           last

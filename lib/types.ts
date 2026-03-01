@@ -10,6 +10,8 @@ export interface StageInfo {
   paper_targets: number | null;
   steel_targets: number | null;
   ssi_url: string | null;
+  /** Official course-length classification set by the match director ("Short"/"Medium"/"Long"). */
+  course_display: string | null;
 }
 
 export interface CompetitorInfo {
@@ -151,6 +153,10 @@ export interface StageComparison {
   min_rounds?: number | null;
   paper_targets?: number | null;
   steel_targets?: number | null;
+  /** Official course-length classification ("Short"/"Medium"/"Long"). */
+  course_display?: string | null;
+  /** Parsed constraint signals from procedure and firearm_condition. */
+  constraints?: StageConstraints | null;
   group_leader_hf: number | null;     // best HF in selected group
   group_leader_points: number | null; // best raw pts in selected group — benchmark overlay hook, do not remove
   overall_leader_hf: number | null;   // best HF across full field — benchmark overlay hook
@@ -224,6 +230,30 @@ export interface ArchetypePerformance {
   avgGroupPercent: number | null;
   avgDivPercent: number | null;
   avgOverallPercent: number | null;
+}
+
+// Constraint signals parsed from stage procedure text and firearm_condition.
+export interface StageConstraints {
+  strongHand: boolean;      // /strong hand/i in procedure
+  weakHand: boolean;        // /weak hand/i in procedure
+  movingTargets: boolean;   // /moving target/i in procedure
+  unloadedStart: boolean;   // /empty|unloaded/i in firearm_condition
+}
+
+// Per-course-length performance aggregate for one competitor.
+// Same shape as ArchetypePerformance but keyed by course display string.
+export interface CourseLengthPerformance {
+  courseDisplay: string;        // "Short" | "Medium" | "Long"
+  stageCount: number;
+  avgGroupPercent: number | null;
+  avgDivPercent: number | null;
+  avgOverallPercent: number | null;
+}
+
+// Constrained vs normal stage performance for one competitor.
+export interface ConstraintPerformance {
+  normal: { stageCount: number; avgGroupPercent: number | null };
+  constrained: { stageCount: number; avgGroupPercent: number | null };
 }
 
 export type ShooterArchetype = "Gunslinger" | "Surgeon" | "Speed Demon" | "Grinder";
@@ -313,6 +343,8 @@ export interface CompareResponse {
   styleFingerprintStats: Record<number, StyleFingerprintStats>; // keyed by competitor_id
   fieldFingerprintPoints: FieldFingerprintPoint[]; // all match competitors (for cohort cloud)
   archetypePerformance: Record<number, ArchetypePerformance[]>; // keyed by competitor_id
+  courseLengthPerformance: Record<number, CourseLengthPerformance[]>; // keyed by competitor_id
+  constraintPerformance: Record<number, ConstraintPerformance>; // keyed by competitor_id
   cacheInfo: CacheInfo;
 }
 

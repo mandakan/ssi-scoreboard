@@ -118,6 +118,10 @@ export const MATCH_QUERY = `
             popper
             plate
             get_full_absolute_url
+            course
+            get_course_display
+            procedure
+            firearm_condition
           }
         }
         competitors_approved_w_wo_results_not_dnf {

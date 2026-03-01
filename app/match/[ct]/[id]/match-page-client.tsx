@@ -67,6 +67,20 @@ const ArchetypePerformanceSummary = dynamic(
     ),
   { ssr: false },
 );
+const CourseLengthSummary = dynamic(
+  () =>
+    import("@/components/course-performance").then(
+      (m) => m.CourseLengthSummary,
+    ),
+  { ssr: false },
+);
+const ConstraintSummary = dynamic(
+  () =>
+    import("@/components/course-performance").then(
+      (m) => m.ConstraintSummary,
+    ),
+  { ssr: false },
+);
 const ShooterStyleRadarChart = dynamic(
   () =>
     import("@/components/shooter-style-radar-chart").then(
@@ -574,6 +588,8 @@ export default function MatchPageClient() {
                     className="space-y-6 pt-2"
                   >
 
+                    <CourseLengthSummary data={compareQuery.data} />
+                    <ConstraintSummary data={compareQuery.data} />
                     <ArchetypePerformanceSummary data={compareQuery.data} />
 
                     <div className="space-y-2">

@@ -20,6 +20,10 @@ interface RawStage {
   popper?: number | null;
   plate?: number | null;
   get_full_absolute_url?: string | null;
+  course?: string | null;
+  get_course_display?: string | null;
+  procedure?: string | null;
+  firearm_condition?: string | null;
 }
 
 interface RawCompetitor {
@@ -139,6 +143,7 @@ export async function fetchMatchData(
     ssi_url: s.get_full_absolute_url
       ? `https://${s.get_full_absolute_url}`
       : null,
+    course_display: s.get_course_display ?? null,
   }));
 
   const competitors: CompetitorInfo[] = (
