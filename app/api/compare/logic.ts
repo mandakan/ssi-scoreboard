@@ -18,6 +18,9 @@ import type {
   WhatIfResult,
   ArchetypePerformance,
   DivisionHFDistribution,
+  StageConstraints,
+  CourseLengthPerformance,
+  ConstraintPerformance,
 } from "@/lib/types";
 
 export interface RawScorecard {
@@ -1413,14 +1416,24 @@ const LONG_COURSE_MIN_ROUNDS = 25;
  *   3. min_rounds only (no targets) → ≥ 25 = precision; else mixed
  *   4. max_points only → implied rounds (max_points/5) ≥ 25 = precision; else null
  *   5. nothing → null
+ *
+ * Long course is determined by course_display ("Long") when available, else falls back
+ * to the min_rounds ≥ 25 heuristic for backward compatibility.
  */
 export function classifyStageArchetype(stage: {
   paper_targets: number | null;
   steel_targets: number | null;
   min_rounds: number | null;
   max_points: number;
+  course_display?: string | null;
 }): StageArchetype | null {
-  const { paper_targets, steel_targets, min_rounds, max_points } = stage;
+  const { paper_targets, steel_targets, min_rounds, max_points, course_display } = stage;
+
+  // Authoritative course-length flag: prefer course_display when available,
+  // otherwise fall back to the min_rounds ≥ 25 heuristic.
+  const isLong = course_display != null
+    ? course_display === "Long"
+    : (min_rounds != null ? min_rounds >= LONG_COURSE_MIN_ROUNDS : false);
 
   const hasPaper = paper_targets != null && paper_targets > 0;
   const hasSteel = steel_targets != null && steel_targets > 0;
@@ -1431,7 +1444,6 @@ export function classifyStageArchetype(stage: {
     if (totalTargets > 0) {
       const steelRatio = (steel_targets ?? 0) / totalTargets;
       if (steelRatio > 0.5) return "speed";
-      const isLong = min_rounds != null ? min_rounds >= LONG_COURSE_MIN_ROUNDS : false;
       if (steelRatio <= 0.3 && isLong) return "precision";
       return "mixed";
     }
@@ -1439,7 +1451,7 @@ export function classifyStageArchetype(stage: {
 
   // Priority 2–3: min_rounds only
   if (min_rounds != null && min_rounds > 0) {
-    return min_rounds >= LONG_COURSE_MIN_ROUNDS ? "precision" : "mixed";
+    return isLong ? "precision" : "mixed";
   }
 
   // Priority 4: max_points fallback (5 pts per round in IPSC)
@@ -1497,4 +1509,112 @@ export function computeArchetypePerformance(
   }
 
   return result;
+}
+
+// ── Stage Constraint Detection ───────────────────────────────────────────────
+
+/**
+ * Parse constraint signals from a stage's procedure text and firearm_condition.
+ * Case-insensitive keyword matching — designed to work on SSI free-text fields.
+ */
+export function parseStageConstraints(
+  procedure: string,
+  firearmCondition: string,
+): StageConstraints {
+  return {
+    strongHand:     /strong hand/i.test(procedure),
+    weakHand:       /weak hand/i.test(procedure),
+    movingTargets:  /moving target/i.test(procedure),
+    unloadedStart:  /empty|unloaded/i.test(firearmCondition),
+  };
+}
+
+// ── Course-Length Performance ────────────────────────────────────────────────
+
+/**
+ * Compute per-course-length average performance for one competitor.
+ *
+ * Groups stages by course_display, computes avg group/div/overall % per bucket.
+ * Excludes DNF/DQ/zeroed stages. Returns only lengths that have at least one stage.
+ * Order: Short, Medium, Long (standard IPSC course-length progression).
+ */
+export function computeCourseLengthPerformance(
+  stages: StageComparison[],
+  competitorId: number,
+): CourseLengthPerformance[] {
+  const buckets = new Map<string, { groupPcts: number[]; divPcts: number[]; overallPcts: number[] }>();
+
+  for (const stage of stages) {
+    if (!stage.course_display) continue;
+    const sc = stage.competitors[competitorId];
+    if (!sc || sc.dnf || sc.dq || sc.zeroed) continue;
+
+    const bucket = buckets.get(stage.course_display) ?? { groupPcts: [], divPcts: [], overallPcts: [] };
+    if (sc.group_percent != null) bucket.groupPcts.push(sc.group_percent);
+    if (sc.div_percent != null) bucket.divPcts.push(sc.div_percent);
+    if (sc.overall_percent != null) bucket.overallPcts.push(sc.overall_percent);
+    buckets.set(stage.course_display, bucket);
+  }
+
+  const avg = (arr: number[]): number | null =>
+    arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+
+  // Return in canonical course-length order
+  const order = ["Short", "Medium", "Long"];
+  const result: CourseLengthPerformance[] = [];
+  for (const courseDisplay of order) {
+    const bucket = buckets.get(courseDisplay);
+    if (!bucket) continue;
+    const stageCount = Math.max(bucket.groupPcts.length, bucket.divPcts.length, bucket.overallPcts.length);
+    if (stageCount === 0) continue;
+    result.push({
+      courseDisplay,
+      stageCount,
+      avgGroupPercent: avg(bucket.groupPcts),
+      avgDivPercent: avg(bucket.divPcts),
+      avgOverallPercent: avg(bucket.overallPcts),
+    });
+  }
+
+  return result;
+}
+
+// ── Constraint Performance ───────────────────────────────────────────────────
+
+/**
+ * Compute average group % on constrained vs normal stages for one competitor.
+ *
+ * A stage is "constrained" when any of strongHand, weakHand, or movingTargets is true.
+ * Excludes DNF/DQ/zeroed stages. avgGroupPercent is null when no valid stages exist
+ * for that bucket.
+ */
+export function computeConstraintPerformance(
+  stages: StageComparison[],
+  competitorId: number,
+): ConstraintPerformance {
+  const normalPcts: number[] = [];
+  const constrainedPcts: number[] = [];
+
+  for (const stage of stages) {
+    const sc = stage.competitors[competitorId];
+    if (!sc || sc.dnf || sc.dq || sc.zeroed) continue;
+    if (sc.group_percent == null) continue;
+
+    const c = stage.constraints;
+    const isConstrained = c != null && (c.strongHand || c.weakHand || c.movingTargets);
+
+    if (isConstrained) {
+      constrainedPcts.push(sc.group_percent);
+    } else {
+      normalPcts.push(sc.group_percent);
+    }
+  }
+
+  const avg = (arr: number[]): number | null =>
+    arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+
+  return {
+    normal:      { stageCount: normalPcts.length, avgGroupPercent: avg(normalPcts) },
+    constrained: { stageCount: constrainedPcts.length, avgGroupPercent: avg(constrainedPcts) },
+  };
 }

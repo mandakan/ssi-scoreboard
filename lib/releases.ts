@@ -17,7 +17,7 @@ export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
     date: "March 1, 2026",
-    title: "Stage Archetype Analysis & Division Position Chart",
+    title: "Stage Archetype Analysis, Division Position Chart & Constraint Analytics",
     sections: [
       {
         heading: "New",
@@ -27,6 +27,9 @@ export const RELEASES: Release[] = [
           "Division position chart: see where each competitor sits within their division's HF distribution per stage — the shaded band shows the middle 50% (Q1–Q3) of the division, with the median and minimum as reference lines.",
           "Quickly spot stages where you outperformed or underperformed your division peers, regardless of the group you're comparing.",
           "When selected competitors span multiple divisions, use the division selector to switch between them.",
+          "Constraint badges on stage headers: strong hand only, weak hand only, and moving target stages are now flagged with coloured icons.",
+          "Course length split in the Coaching analysis panel: see avg group % broken down by Short / Medium / Long course length.",
+          "Constrained vs normal stage performance: compare how each competitor performs on restricted-technique stages vs standard stages.",
         ],
       },
     ],

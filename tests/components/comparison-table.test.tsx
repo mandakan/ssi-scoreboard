@@ -25,6 +25,11 @@ const baseData: CompareResponse = {
   styleFingerprintStats: {},
   fieldFingerprintPoints: [],
   archetypePerformance: {},
+  courseLengthPerformance: {},
+  constraintPerformance: {
+    1: { normal: { stageCount: 1, avgGroupPercent: 89.2 }, constrained: { stageCount: 0, avgGroupPercent: null } },
+    2: { normal: { stageCount: 1, avgGroupPercent: 100 }, constrained: { stageCount: 0, avgGroupPercent: null } },
+  },
   consistencyStats: {
     1: { coefficientOfVariation: null, label: null, stagesFired: 1 },
     2: { coefficientOfVariation: null, label: null, stagesFired: 1 },
@@ -36,6 +41,8 @@ const baseData: CompareResponse = {
       stage_num: 1,
       max_points: 80,
       ssi_url: "https://shootnscoreit.com/event/stage/24/100/",
+      course_display: "Medium",
+      constraints: { strongHand: false, weakHand: false, movingTargets: false, unloadedStart: false },
       group_leader_hf: 5.63,
       group_leader_points: 76,
       overall_leader_hf: 5.63,

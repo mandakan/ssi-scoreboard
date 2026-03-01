@@ -12,14 +12,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronUp, Crosshair, ExternalLink, Flame, Focus, Gauge, HelpCircle, Info, Layers, Shield, Target, Timer, TrendingUp, X, Zap } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronUp, Crosshair, ExternalLink, Flame, Focus, Gauge, Hand, HandMetal, HelpCircle, Info, Layers, Shield, Target, Timer, TrendingUp, X, Zap } from "lucide-react";
 import { cn, formatHF, formatTime, formatPct, computePointsDelta, formatDelta } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
 import { HitZoneBar } from "@/components/hit-zone-bar";
 import { RankBadge, PenaltyBadge, ShootingOrderBadge, StageClassificationBadge, ordinal } from "@/components/stage-cell-parts";
 import { CellHelpModal } from "@/components/cell-help-modal";
 import { CoachingTip } from "@/components/coaching-tip";
-import type { CompareResponse, CompetitorInfo, CompetitorSummary, LossBreakdownStats, PctMode, ShooterArchetype, StageArchetype, ViewMode, WhatIfResult } from "@/lib/types";
+import type { CompareResponse, CompetitorInfo, CompetitorSummary, LossBreakdownStats, PctMode, ShooterArchetype, StageArchetype, StageConstraints, ViewMode, WhatIfResult } from "@/lib/types";
 
 interface ComparisonTableProps {
   data: CompareResponse;
@@ -170,6 +170,39 @@ function StageArchetypeIcon({ archetype }: { archetype: StageArchetype }) {
         {label}
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+const CONSTRAINT_BADGES: Array<{
+  key: keyof StageConstraints;
+  icon: typeof Hand;
+  label: string;
+  color: string;
+}> = [
+  { key: "strongHand",    icon: Hand,      label: "Strong hand only", color: "text-amber-500" },
+  { key: "weakHand",      icon: HandMetal, label: "Weak hand only",   color: "text-cyan-500"  },
+  { key: "movingTargets", icon: Crosshair, label: "Moving targets",   color: "text-teal-500"  },
+];
+
+function StageConstraintBadges({ constraints }: { constraints: StageConstraints | null | undefined }) {
+  if (!constraints) return null;
+  const active = CONSTRAINT_BADGES.filter((b) => constraints[b.key]);
+  if (active.length === 0) return null;
+  return (
+    <>
+      {active.map(({ key, icon: Icon, label, color }) => (
+        <Tooltip key={key}>
+          <TooltipTrigger asChild>
+            <span className={cn("inline-flex cursor-help", color)} aria-label={label} role="img">
+              <Icon className="w-3 h-3" aria-hidden="true" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs">
+            {label}
+          </TooltipContent>
+        </Tooltip>
+      ))}
+    </>
   );
 }
 
@@ -796,10 +829,16 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                               {stage.stageArchetype && (
                                 <StageArchetypeIcon archetype={stage.stageArchetype} />
                               )}
+                              <StageConstraintBadges constraints={stage.constraints} />
                             </div>
                             {stage.stageArchetype && (
                               <span className="text-xs text-muted-foreground">
                                 Type: {stage.stageArchetype.charAt(0).toUpperCase() + stage.stageArchetype.slice(1)}
+                              </span>
+                            )}
+                            {stage.constraints && CONSTRAINT_BADGES.filter((b) => stage.constraints![b.key]).length > 0 && (
+                              <span className="text-xs text-muted-foreground">
+                                Constraints: {CONSTRAINT_BADGES.filter((b) => stage.constraints![b.key]).map((b) => b.label).join(", ")}
                               </span>
                             )}
                             {(stage.min_rounds != null || stage.paper_targets != null ||
@@ -851,6 +890,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                         {stage.stageArchetype && (
                           <StageArchetypeIcon archetype={stage.stageArchetype} />
                         )}
+                        <StageConstraintBadges constraints={stage.constraints} />
                       </div>
                       <span className="truncate max-w-32">{stage.stage_name}</span>
                       {(stage.min_rounds != null || stage.paper_targets != null ||

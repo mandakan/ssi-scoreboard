@@ -14,5 +14,6 @@ export const MAX_COMPETITORS = 12;
  *   2 → added squads[] to MatchResponse (squad picker feature)
  *   3 → added image { url width height } to IpscMatchNode in MATCH_QUERY (OG images)
  *   4 → added match_status + results_status to MatchResponse (results published flag)
+ *   5 → added procedure, firearm_condition, course, get_course_display to IpscStageNode in MATCH_QUERY
  */
-export const CACHE_SCHEMA_VERSION = 4;
+export const CACHE_SCHEMA_VERSION = 5;

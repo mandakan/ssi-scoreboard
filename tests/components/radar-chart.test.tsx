@@ -16,6 +16,8 @@ const baseData: CompareResponse = {
   styleFingerprintStats: {},
   fieldFingerprintPoints: [],
   archetypePerformance: {},
+  courseLengthPerformance: {},
+  constraintPerformance: {},
   consistencyStats: {
     1: { coefficientOfVariation: null, label: null, stagesFired: 1 },
     2: { coefficientOfVariation: null, label: null, stagesFired: 1 },

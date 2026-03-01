@@ -5,7 +5,7 @@ import cache from "@/lib/cache-impl";
 import { computeMatchTtl } from "@/lib/match-ttl";
 
 import { formatDivisionDisplay } from "@/lib/divisions";
-import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance } from "@/app/api/compare/logic";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
 import type { CompareResponse, CompetitorInfo, StageComparison } from "@/lib/types";
 
@@ -35,6 +35,9 @@ interface RawMatchData {
       popper?: number | null;
       plate?: number | null;
       get_full_absolute_url?: string | null;
+      get_course_display?: string | null;
+      procedure?: string | null;
+      firearm_condition?: string | null;
     }[];
     competitors_approved_w_wo_results_not_dnf?: RawCompetitor[];
   } | null;
@@ -186,6 +189,8 @@ export async function GET(req: Request) {
         steel_targets: (s.popper != null || s.plate != null)
           ? (s.popper ?? 0) + (s.plate ?? 0)
           : null,
+        course_display: s.get_course_display ?? null,
+        constraints: parseStageConstraints(s.procedure ?? "", s.firearm_condition ?? ""),
       },
     ])
   );
@@ -201,6 +206,7 @@ export async function GET(req: Request) {
           steel_targets: meta?.steel_targets ?? null,
           min_rounds: meta?.min_rounds ?? null,
           max_points: s.max_points,
+          course_display: meta?.course_display ?? null,
         }),
       };
     }
@@ -260,6 +266,14 @@ export async function GET(req: Request) {
 
   const archetypePerformance = Object.fromEntries(
     requestedCompetitors.map((c) => [c.id, computeArchetypePerformance(stages, c.id)])
+  );
+
+  const courseLengthPerformance = Object.fromEntries(
+    requestedCompetitors.map((c) => [c.id, computeCourseLengthPerformance(stages, c.id)])
+  );
+
+  const constraintPerformance = Object.fromEntries(
+    requestedCompetitors.map((c) => [c.id, computeConstraintPerformance(stages, c.id)])
   );
 
   const whatIfStats = simulateWithoutWorstStage(stages, requestedCompetitors, rawScorecards);
@@ -332,6 +346,8 @@ export async function GET(req: Request) {
     styleFingerprintStats,
     fieldFingerprintPoints,
     archetypePerformance,
+    courseLengthPerformance,
+    constraintPerformance,
     cacheInfo,
   };
 

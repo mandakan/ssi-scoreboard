@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computePercentileRank, assignArchetype, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, computeQuartiles, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computePercentileRank, assignArchetype, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, computeQuartiles, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompetitorInfo, StageComparison } from "@/lib/types";
 
 const competitors: CompetitorInfo[] = [
@@ -2609,5 +2609,281 @@ describe("computeGroupRankings — divisionDistributions", () => {
     ];
     const result = computeGroupRankings(scorecards, [competitors[0]]);
     expect(result[0].competitors[1].divisionKey).toBeNull();
+  });
+});
+
+// ── parseStageConstraints ─────────────────────────────────────────────────────
+
+describe("parseStageConstraints", () => {
+  it("detects strong hand", () => {
+    expect(parseStageConstraints("Strong hand only", "").strongHand).toBe(true);
+  });
+
+  it("detects strong hand case-insensitively", () => {
+    expect(parseStageConstraints("STRONG HAND only draw", "").strongHand).toBe(true);
+  });
+
+  it("does not flag strong hand when absent", () => {
+    expect(parseStageConstraints("Draw from holster", "").strongHand).toBe(false);
+  });
+
+  it("detects weak hand", () => {
+    expect(parseStageConstraints("Shoot with weak hand only", "").weakHand).toBe(true);
+  });
+
+  it("detects moving targets", () => {
+    expect(parseStageConstraints("There is a moving target on the left", "").movingTargets).toBe(true);
+  });
+
+  it("detects moving targets case-insensitively", () => {
+    expect(parseStageConstraints("Moving Target must be engaged first", "").movingTargets).toBe(true);
+  });
+
+  it("does not flag moving targets when absent", () => {
+    expect(parseStageConstraints("Shoot all targets from behind the fault line", "").movingTargets).toBe(false);
+  });
+
+  it("detects unloaded start from 'empty'", () => {
+    expect(parseStageConstraints("", "Chamber empty, magazine inserted").unloadedStart).toBe(true);
+  });
+
+  it("detects unloaded start from 'unloaded'", () => {
+    expect(parseStageConstraints("", "Unloaded and holstered").unloadedStart).toBe(true);
+  });
+
+  it("does not flag unloaded when loaded", () => {
+    expect(parseStageConstraints("", "Loaded and holstered").unloadedStart).toBe(false);
+  });
+
+  it("returns all false for empty strings", () => {
+    const result = parseStageConstraints("", "");
+    expect(result).toEqual({ strongHand: false, weakHand: false, movingTargets: false, unloadedStart: false });
+  });
+
+  it("can detect multiple constraints simultaneously", () => {
+    const result = parseStageConstraints("Moving target. Strong hand only.", "Chamber empty");
+    expect(result.strongHand).toBe(true);
+    expect(result.movingTargets).toBe(true);
+    expect(result.unloadedStart).toBe(true);
+    expect(result.weakHand).toBe(false);
+  });
+});
+
+// ── classifyStageArchetype with course_display ────────────────────────────────
+
+describe("classifyStageArchetype — course_display override", () => {
+  it("course_display=Long overrides min_rounds < 25 for precision", () => {
+    // Would normally be "mixed" (12 rounds), but Long forces precision
+    expect(classifyStageArchetype({
+      paper_targets: 6, steel_targets: 1, min_rounds: 12, max_points: 60, course_display: "Long",
+    })).toBe("precision");
+  });
+
+  it("course_display=Short prevents precision even with min_rounds ≥ 25", () => {
+    // Would be "precision" from min_rounds, but Short says otherwise
+    expect(classifyStageArchetype({
+      paper_targets: null, steel_targets: null, min_rounds: 30, max_points: 150, course_display: "Short",
+    })).toBe("mixed");
+  });
+
+  it("course_display=Medium with steel-heavy → speed (steel dominates)", () => {
+    expect(classifyStageArchetype({
+      paper_targets: 3, steel_targets: 8, min_rounds: 12, max_points: 60, course_display: "Medium",
+    })).toBe("speed");
+  });
+
+  it("course_display=null falls back to min_rounds heuristic", () => {
+    expect(classifyStageArchetype({
+      paper_targets: null, steel_targets: null, min_rounds: 30, max_points: 150, course_display: null,
+    })).toBe("precision");
+  });
+});
+
+// ── computeCourseLengthPerformance ───────────────────────────────────────────
+
+describe("computeCourseLengthPerformance", () => {
+  function makeStageWithCourse(
+    stageId: number,
+    courseDisplay: string | null,
+    competitorSummaries: Record<number, { group_percent?: number | null; dnf?: boolean; dq?: boolean; zeroed?: boolean }>
+  ): StageComparison {
+    const comps: Record<number, StageComparison["competitors"][number]> = {};
+    for (const [id, overrides] of Object.entries(competitorSummaries)) {
+      comps[Number(id)] = {
+        competitor_id: Number(id),
+        hit_factor: 4.0, points: 80, time: 20,
+        dq: overrides.dq ?? false, zeroed: overrides.zeroed ?? false, dnf: overrides.dnf ?? false,
+        incomplete: false, a_hits: 10, c_hits: 2, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0,
+        group_rank: 1, group_percent: overrides.group_percent ?? 90,
+        div_rank: 1, div_percent: 85, overall_rank: 1, overall_percent: 80,
+        overall_percentile: 0.9, stageClassification: null, hitLossPoints: null, penaltyLossPoints: 0,
+      };
+    }
+    return {
+      stage_id: stageId, stage_name: `Stage ${stageId}`, stage_num: stageId, max_points: 100,
+      group_leader_hf: 5.0, group_leader_points: 100, overall_leader_hf: 5.5, field_median_hf: 3.0,
+      field_competitor_count: 10, stageDifficultyLevel: 3, stageDifficultyLabel: "moderate",
+      stageArchetype: null, course_display: courseDisplay, competitors: comps,
+    };
+  }
+
+  it("groups stages by course length and computes avg group %", () => {
+    const stages = [
+      makeStageWithCourse(1, "Short",  { 1: { group_percent: 90 } }),
+      makeStageWithCourse(2, "Short",  { 1: { group_percent: 80 } }),
+      makeStageWithCourse(3, "Long",   { 1: { group_percent: 70 } }),
+    ];
+    const result = computeCourseLengthPerformance(stages, 1);
+    const short = result.find((r) => r.courseDisplay === "Short");
+    const long  = result.find((r) => r.courseDisplay === "Long");
+    expect(short?.avgGroupPercent).toBeCloseTo(85, 5);
+    expect(short?.stageCount).toBe(2);
+    expect(long?.avgGroupPercent).toBeCloseTo(70, 5);
+    expect(long?.stageCount).toBe(1);
+  });
+
+  it("returns in canonical Short / Medium / Long order", () => {
+    const stages = [
+      makeStageWithCourse(1, "Long",   { 1: { group_percent: 70 } }),
+      makeStageWithCourse(2, "Short",  { 1: { group_percent: 90 } }),
+      makeStageWithCourse(3, "Medium", { 1: { group_percent: 80 } }),
+    ];
+    const result = computeCourseLengthPerformance(stages, 1);
+    expect(result.map((r) => r.courseDisplay)).toEqual(["Short", "Medium", "Long"]);
+  });
+
+  it("excludes DNF/DQ/zeroed stages", () => {
+    const stages = [
+      makeStageWithCourse(1, "Short", { 1: { group_percent: 90 } }),
+      makeStageWithCourse(2, "Short", { 1: { group_percent: 70, dnf: true } }),
+    ];
+    const result = computeCourseLengthPerformance(stages, 1);
+    expect(result[0].stageCount).toBe(1);
+    expect(result[0].avgGroupPercent).toBeCloseTo(90, 5);
+  });
+
+  it("skips stages with null course_display", () => {
+    const stages = [
+      makeStageWithCourse(1, null,    { 1: { group_percent: 90 } }),
+      makeStageWithCourse(2, "Long",  { 1: { group_percent: 70 } }),
+    ];
+    const result = computeCourseLengthPerformance(stages, 1);
+    expect(result).toHaveLength(1);
+    expect(result[0].courseDisplay).toBe("Long");
+  });
+
+  it("returns empty when all stages have null course_display", () => {
+    const stages = [
+      makeStageWithCourse(1, null, { 1: { group_percent: 90 } }),
+    ];
+    expect(computeCourseLengthPerformance(stages, 1)).toHaveLength(0);
+  });
+});
+
+// ── computeConstraintPerformance ─────────────────────────────────────────────
+
+describe("computeConstraintPerformance", () => {
+  function makeStageWithConstraints(
+    stageId: number,
+    strongHand: boolean,
+    competitorSummaries: Record<number, { group_percent?: number | null; dnf?: boolean; dq?: boolean; zeroed?: boolean }>
+  ): StageComparison {
+    const comps: Record<number, StageComparison["competitors"][number]> = {};
+    for (const [id, overrides] of Object.entries(competitorSummaries)) {
+      comps[Number(id)] = {
+        competitor_id: Number(id),
+        hit_factor: 4.0, points: 80, time: 20,
+        dq: overrides.dq ?? false, zeroed: overrides.zeroed ?? false, dnf: overrides.dnf ?? false,
+        incomplete: false, a_hits: 10, c_hits: 2, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0,
+        group_rank: 1, group_percent: overrides.group_percent ?? 90,
+        div_rank: 1, div_percent: 85, overall_rank: 1, overall_percent: 80,
+        overall_percentile: 0.9, stageClassification: null, hitLossPoints: null, penaltyLossPoints: 0,
+      };
+    }
+    return {
+      stage_id: stageId, stage_name: `Stage ${stageId}`, stage_num: stageId, max_points: 100,
+      group_leader_hf: 5.0, group_leader_points: 100, overall_leader_hf: 5.5, field_median_hf: 3.0,
+      field_competitor_count: 10, stageDifficultyLevel: 3, stageDifficultyLabel: "moderate",
+      stageArchetype: null,
+      constraints: { strongHand, weakHand: false, movingTargets: false, unloadedStart: false },
+      competitors: comps,
+    };
+  }
+
+  it("separates normal and constrained stages", () => {
+    const stages = [
+      makeStageWithConstraints(1, false, { 1: { group_percent: 90 } }),
+      makeStageWithConstraints(2, false, { 1: { group_percent: 80 } }),
+      makeStageWithConstraints(3, true,  { 1: { group_percent: 60 } }),
+    ];
+    const result = computeConstraintPerformance(stages, 1);
+    expect(result.normal.stageCount).toBe(2);
+    expect(result.normal.avgGroupPercent).toBeCloseTo(85, 5);
+    expect(result.constrained.stageCount).toBe(1);
+    expect(result.constrained.avgGroupPercent).toBeCloseTo(60, 5);
+  });
+
+  it("returns null avgGroupPercent when no constrained stages exist", () => {
+    const stages = [
+      makeStageWithConstraints(1, false, { 1: { group_percent: 90 } }),
+    ];
+    const result = computeConstraintPerformance(stages, 1);
+    expect(result.constrained.stageCount).toBe(0);
+    expect(result.constrained.avgGroupPercent).toBeNull();
+  });
+
+  it("excludes DNF/DQ/zeroed stages from both buckets", () => {
+    const stages = [
+      makeStageWithConstraints(1, false, { 1: { group_percent: 90 } }),
+      makeStageWithConstraints(2, false, { 1: { group_percent: 80, dnf: true } }),
+      makeStageWithConstraints(3, true,  { 1: { group_percent: 60, dq: true } }),
+    ];
+    const result = computeConstraintPerformance(stages, 1);
+    expect(result.normal.stageCount).toBe(1);
+    expect(result.constrained.stageCount).toBe(0);
+  });
+
+  it("treats null constraints as normal (no restriction)", () => {
+    const stages: StageComparison[] = [{
+      stage_id: 1, stage_name: "Stage 1", stage_num: 1, max_points: 100,
+      group_leader_hf: 5.0, group_leader_points: 100, overall_leader_hf: 5.5,
+      field_median_hf: 3.0, field_competitor_count: 10,
+      stageDifficultyLevel: 3, stageDifficultyLabel: "moderate", stageArchetype: null,
+      constraints: null,
+      competitors: {
+        1: {
+          competitor_id: 1, hit_factor: 4.0, points: 80, time: 20,
+          dq: false, zeroed: false, dnf: false, incomplete: false,
+          a_hits: 10, c_hits: 2, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0,
+          group_rank: 1, group_percent: 88, div_rank: 1, div_percent: 85, overall_rank: 1, overall_percent: 80,
+          overall_percentile: 0.9, stageClassification: null, hitLossPoints: null, penaltyLossPoints: 0,
+        },
+      },
+    }];
+    const result = computeConstraintPerformance(stages, 1);
+    expect(result.normal.stageCount).toBe(1);
+    expect(result.constrained.stageCount).toBe(0);
+  });
+
+  it("correctly flags movingTargets as constrained", () => {
+    const stages: StageComparison[] = [{
+      stage_id: 1, stage_name: "Stage 1", stage_num: 1, max_points: 100,
+      group_leader_hf: 5.0, group_leader_points: 100, overall_leader_hf: 5.5,
+      field_median_hf: 3.0, field_competitor_count: 10,
+      stageDifficultyLevel: 3, stageDifficultyLabel: "moderate", stageArchetype: null,
+      constraints: { strongHand: false, weakHand: false, movingTargets: true, unloadedStart: false },
+      competitors: {
+        1: {
+          competitor_id: 1, hit_factor: 4.0, points: 80, time: 20,
+          dq: false, zeroed: false, dnf: false, incomplete: false,
+          a_hits: 10, c_hits: 2, d_hits: 0, miss_count: 0, no_shoots: 0, procedurals: 0,
+          group_rank: 1, group_percent: 75, div_rank: 1, div_percent: 70, overall_rank: 1, overall_percent: 65,
+          overall_percentile: 0.8, stageClassification: null, hitLossPoints: null, penaltyLossPoints: 0,
+        },
+      },
+    }];
+    const result = computeConstraintPerformance(stages, 1);
+    expect(result.constrained.stageCount).toBe(1);
+    expect(result.constrained.avgGroupPercent).toBeCloseTo(75, 5);
   });
 });
