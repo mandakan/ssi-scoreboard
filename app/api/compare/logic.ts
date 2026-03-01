@@ -12,9 +12,11 @@ import type {
   StyleFingerprintStats,
   FieldFingerprintPoint,
   ShooterArchetype,
+  StageArchetype,
   StageClassification,
   SimResult,
   WhatIfResult,
+  ArchetypePerformance,
 } from "@/lib/types";
 
 export interface RawScorecard {
@@ -1343,4 +1345,104 @@ export function computeStylePercentiles(
       : 50;
 
   return { composurePercentile, consistencyPercentile };
+}
+
+// ── Stage Archetype Classification ──────────────────────────────────────────
+
+// Minimum rounds threshold for "long course" classification (IPSC: ≥25 rounds).
+const LONG_COURSE_MIN_ROUNDS = 25;
+
+/**
+ * Classify a stage archetype based on target composition.
+ *
+ * Priority tiers:
+ *   1. paper + steel counts → steel ratio > 50% = speed; ≤ 30% AND long course = precision; else mixed
+ *   2. paper only (steel null/0) → long course = precision; else mixed
+ *   3. min_rounds only (no targets) → ≥ 25 = precision; else mixed
+ *   4. max_points only → implied rounds (max_points/5) ≥ 25 = precision; else null
+ *   5. nothing → null
+ */
+export function classifyStageArchetype(stage: {
+  paper_targets: number | null;
+  steel_targets: number | null;
+  min_rounds: number | null;
+  max_points: number;
+}): StageArchetype | null {
+  const { paper_targets, steel_targets, min_rounds, max_points } = stage;
+
+  const hasPaper = paper_targets != null && paper_targets > 0;
+  const hasSteel = steel_targets != null && steel_targets > 0;
+
+  // Priority 1: both paper and steel counts available
+  if (hasPaper || hasSteel) {
+    const totalTargets = (paper_targets ?? 0) + (steel_targets ?? 0);
+    if (totalTargets > 0) {
+      const steelRatio = (steel_targets ?? 0) / totalTargets;
+      if (steelRatio > 0.5) return "speed";
+      const isLong = min_rounds != null ? min_rounds >= LONG_COURSE_MIN_ROUNDS : false;
+      if (steelRatio <= 0.3 && isLong) return "precision";
+      return "mixed";
+    }
+  }
+
+  // Priority 2–3: min_rounds only
+  if (min_rounds != null && min_rounds > 0) {
+    return min_rounds >= LONG_COURSE_MIN_ROUNDS ? "precision" : "mixed";
+  }
+
+  // Priority 4: max_points fallback (5 pts per round in IPSC)
+  if (max_points > 0) {
+    const impliedRounds = max_points / 5;
+    return impliedRounds >= LONG_COURSE_MIN_ROUNDS ? "precision" : null;
+  }
+
+  // Priority 5: nothing
+  return null;
+}
+
+/**
+ * Compute per-archetype average performance for one competitor.
+ *
+ * Groups stages by archetype, computes avg group/div/overall % per bucket.
+ * Excludes DNF/DQ/zeroed stages. Returns only archetypes that have at least one stage.
+ */
+export function computeArchetypePerformance(
+  stages: StageComparison[],
+  competitorId: number
+): ArchetypePerformance[] {
+  const buckets = new Map<StageArchetype, { groupPcts: number[]; divPcts: number[]; overallPcts: number[] }>();
+
+  for (const stage of stages) {
+    if (!stage.stageArchetype) continue;
+    const sc = stage.competitors[competitorId];
+    if (!sc || sc.dnf || sc.dq || sc.zeroed) continue;
+
+    const bucket = buckets.get(stage.stageArchetype) ?? { groupPcts: [], divPcts: [], overallPcts: [] };
+    if (sc.group_percent != null) bucket.groupPcts.push(sc.group_percent);
+    if (sc.div_percent != null) bucket.divPcts.push(sc.div_percent);
+    if (sc.overall_percent != null) bucket.overallPcts.push(sc.overall_percent);
+    buckets.set(stage.stageArchetype, bucket);
+  }
+
+  const avg = (arr: number[]): number | null =>
+    arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+
+  // Return in consistent order: speed, precision, mixed
+  const order: StageArchetype[] = ["speed", "precision", "mixed"];
+  const result: ArchetypePerformance[] = [];
+  for (const archetype of order) {
+    const bucket = buckets.get(archetype);
+    if (!bucket) continue;
+    const stageCount = bucket.groupPcts.length || bucket.divPcts.length || bucket.overallPcts.length;
+    if (stageCount === 0) continue;
+    result.push({
+      archetype,
+      stageCount: Math.max(bucket.groupPcts.length, bucket.divPcts.length, bucket.overallPcts.length),
+      avgGroupPercent: avg(bucket.groupPcts),
+      avgDivPercent: avg(bucket.divPcts),
+      avgOverallPercent: avg(bucket.overallPcts),
+    });
+  }
+
+  return result;
 }

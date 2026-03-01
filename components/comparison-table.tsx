@@ -12,14 +12,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronUp, Crosshair, ExternalLink, Flame, Gauge, HelpCircle, Info, Shield, Target, TrendingUp, X, Zap } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronUp, Crosshair, ExternalLink, Flame, Focus, Gauge, HelpCircle, Info, Layers, Shield, Target, Timer, TrendingUp, X, Zap } from "lucide-react";
 import { cn, formatHF, formatTime, formatPct, computePointsDelta, formatDelta } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
 import { HitZoneBar } from "@/components/hit-zone-bar";
 import { RankBadge, PenaltyBadge, ShootingOrderBadge, StageClassificationBadge, ordinal } from "@/components/stage-cell-parts";
 import { CellHelpModal } from "@/components/cell-help-modal";
 import { CoachingTip } from "@/components/coaching-tip";
-import type { CompareResponse, CompetitorInfo, CompetitorSummary, LossBreakdownStats, PctMode, ShooterArchetype, ViewMode, WhatIfResult } from "@/lib/types";
+import type { CompareResponse, CompetitorInfo, CompetitorSummary, LossBreakdownStats, PctMode, ShooterArchetype, StageArchetype, ViewMode, WhatIfResult } from "@/lib/types";
 
 interface ComparisonTableProps {
   data: CompareResponse;
@@ -150,6 +150,28 @@ function StageDifficultyIcon({
   );
 }
 
+
+const ARCHETYPE_CONFIG: Record<StageArchetype, { icon: typeof Timer; label: string; color: string }> = {
+  speed: { icon: Timer, label: "Speed stage", color: "text-blue-500" },
+  precision: { icon: Focus, label: "Precision stage", color: "text-purple-500" },
+  mixed: { icon: Layers, label: "Mixed stage", color: "text-muted-foreground" },
+};
+
+function StageArchetypeIcon({ archetype }: { archetype: StageArchetype }) {
+  const { icon: Icon, label, color } = ARCHETYPE_CONFIG[archetype];
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className={cn("inline-flex cursor-help", color)} aria-label={label} role="img">
+          <Icon className="w-3 h-3" aria-hidden="true" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-xs">
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 /**
  * Horizontal stacked bar showing: remaining points / hit-quality loss / penalty loss.
@@ -771,7 +793,15 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                                 label={stage.stageDifficultyLabel}
                                 medianHF={stage.field_median_hf}
                               />
+                              {stage.stageArchetype && (
+                                <StageArchetypeIcon archetype={stage.stageArchetype} />
+                              )}
                             </div>
+                            {stage.stageArchetype && (
+                              <span className="text-xs text-muted-foreground">
+                                Type: {stage.stageArchetype.charAt(0).toUpperCase() + stage.stageArchetype.slice(1)}
+                              </span>
+                            )}
                             {(stage.min_rounds != null || stage.paper_targets != null ||
                               (stage.steel_targets != null && stage.steel_targets > 0)) && (
                               <span className="text-xs text-muted-foreground tabular-nums">
@@ -818,6 +848,9 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                           label={stage.stageDifficultyLabel}
                           medianHF={stage.field_median_hf}
                         />
+                        {stage.stageArchetype && (
+                          <StageArchetypeIcon archetype={stage.stageArchetype} />
+                        )}
                       </div>
                       <span className="truncate max-w-32">{stage.stage_name}</span>
                       {(stage.min_rounds != null || stage.paper_targets != null ||

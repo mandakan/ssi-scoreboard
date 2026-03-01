@@ -5,7 +5,7 @@ import cache from "@/lib/cache-impl";
 import { computeMatchTtl } from "@/lib/match-ttl";
 
 import { formatDivisionDisplay } from "@/lib/divisions";
-import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance } from "@/app/api/compare/logic";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
 import type { CompareResponse, CompetitorInfo, StageComparison } from "@/lib/types";
 
@@ -191,7 +191,19 @@ export async function GET(req: Request) {
   );
 
   let stages: StageComparison[] = computeGroupRankings(rawScorecards, requestedCompetitors).map(
-    (s) => ({ ...s, ...stageMetaMap.get(s.stage_id) })
+    (s) => {
+      const meta = stageMetaMap.get(s.stage_id);
+      return {
+        ...s,
+        ...meta,
+        stageArchetype: classifyStageArchetype({
+          paper_targets: meta?.paper_targets ?? null,
+          steel_targets: meta?.steel_targets ?? null,
+          min_rounds: meta?.min_rounds ?? null,
+          max_points: s.max_points,
+        }),
+      };
+    }
   );
 
   // Fallback for future matches: if no scorecards exist yet but stage metadata is
@@ -213,6 +225,7 @@ export async function GET(req: Request) {
         field_competitor_count: 0,
         stageDifficultyLevel: 3 as const,
         stageDifficultyLabel: "—",
+        stageArchetype: null,
         competitors: {},
         ...(meta ?? {}),
       } satisfies StageComparison;
@@ -242,6 +255,10 @@ export async function GET(req: Request) {
 
   const lossBreakdownStats = Object.fromEntries(
     requestedCompetitors.map((c) => [c.id, computeLossBreakdown(stages, c.id)])
+  );
+
+  const archetypePerformance = Object.fromEntries(
+    requestedCompetitors.map((c) => [c.id, computeArchetypePerformance(stages, c.id)])
   );
 
   const whatIfStats = simulateWithoutWorstStage(stages, requestedCompetitors, rawScorecards);
@@ -313,6 +330,7 @@ export async function GET(req: Request) {
     whatIfStats,
     styleFingerprintStats,
     fieldFingerprintPoints,
+    archetypePerformance,
     cacheInfo,
   };
 
