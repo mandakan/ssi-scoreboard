@@ -1,8 +1,8 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import { X } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import {
   subscribeRecent,
@@ -82,8 +82,10 @@ export function CompetitionCard({
 }
 
 const EMPTY_COMPETITIONS: StoredCompetition[] = [];
+const INITIAL_VISIBLE = 8;
 
 export function RecentCompetitions() {
+  const [showAll, setShowAll] = useState(false);
   // useSyncExternalStore handles SSR safety: getServerSnapshot returns []
   // and the client snapshot reads from localStorage after hydration.
   const competitions = useSyncExternalStore(
@@ -106,6 +108,9 @@ export function RecentCompetitions() {
     // will cause useSyncExternalStore to re-render with updated data.
   }
 
+  const visible = showAll ? competitions : competitions.slice(0, INITIAL_VISIBLE);
+  const hiddenCount = competitions.length - INITIAL_VISIBLE;
+
   return (
     <section aria-labelledby="recent-heading" className="w-full max-w-2xl">
       <h2
@@ -115,7 +120,7 @@ export function RecentCompetitions() {
         My recents
       </h2>
       <div className="grid gap-3 sm:grid-cols-2">
-        {competitions.map((comp) => (
+        {visible.map((comp) => (
           <CompetitionCard
             key={`${comp.ct}-${comp.id}`}
             comp={comp}
@@ -123,6 +128,19 @@ export function RecentCompetitions() {
           />
         ))}
       </div>
+      {competitions.length > INITIAL_VISIBLE && (
+        <button
+          type="button"
+          onClick={() => setShowAll((prev) => !prev)}
+          aria-expanded={showAll}
+          className="mt-3 w-full py-2 flex items-center justify-center gap-1 text-sm text-muted-foreground"
+        >
+          {showAll ? "Show less" : `Show more (${hiddenCount})`}
+          <ChevronDown
+            className={`w-4 h-4 transition-transform${showAll ? " rotate-180" : ""}`}
+          />
+        </button>
+      )}
     </section>
   );
 }
