@@ -1,4 +1,4 @@
-import type { MatchResponse } from "@/lib/types";
+import type { CompareMode, MatchResponse } from "@/lib/types";
 
 export interface StoredCompetition {
   ct: string;
@@ -18,6 +18,9 @@ export const RECENTS_CHANGED = "ssi:recents_changed";
 
 /** Custom event dispatched (same-tab) whenever a competitor selection changes. */
 export const SELECTION_CHANGED = "ssi:selection_changed";
+
+/** Custom event dispatched (same-tab) whenever a mode override changes. */
+export const MODE_CHANGED = "ssi:mode_changed";
 
 function competitorKey(ct: string, id: string): string {
   return `ssi_competitors_${ct}_${id}`;
@@ -159,4 +162,55 @@ export function getCompetitorSelectionSnapshot(
   }
   _selCache.set(key, { json: raw ?? "", ids });
   return ids;
+}
+
+// ---------------------------------------------------------------------------
+// Mode override — helpers
+// ---------------------------------------------------------------------------
+
+function modeKey(ct: string, id: string): string {
+  return `ssi_mode_${ct}_${id}`;
+}
+
+/** Save a mode override for this match. Pass null to clear (revert to auto). */
+export function saveModeOverride(ct: string, id: string, mode: CompareMode | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    const key = modeKey(ct, id);
+    if (mode === null) {
+      localStorage.removeItem(key);
+    } else {
+      localStorage.setItem(key, mode);
+    }
+    window.dispatchEvent(new Event(MODE_CHANGED));
+  } catch {
+    // ignore
+  }
+}
+
+/** Stable-reference snapshot cache for mode override. */
+const _modeCache = new Map<string, { raw: string | null; mode: CompareMode | null }>();
+
+export function getModeOverrideSnapshot(ct: string, id: string): CompareMode | null {
+  if (typeof window === "undefined") return null;
+  const key = modeKey(ct, id);
+  const raw = localStorage.getItem(key);
+  const cached = _modeCache.get(key);
+  if (cached && cached.raw === raw) return cached.mode;
+  const mode = raw === "live" || raw === "coaching" ? raw : null;
+  _modeCache.set(key, { raw, mode });
+  return mode;
+}
+
+/**
+ * Subscribe function for useSyncExternalStore — mode override.
+ * Listens for same-tab MODE_CHANGED and cross-tab storage events.
+ */
+export function subscribeMode(onChange: () => void): () => void {
+  window.addEventListener(MODE_CHANGED, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(MODE_CHANGED, onChange);
+    window.removeEventListener("storage", onChange);
+  };
 }

@@ -10,7 +10,9 @@ import { CompetitorPicker } from "@/components/competitor-picker";
 import { SquadPicker } from "@/components/squad-picker";
 import { BenchmarkPicker } from "@/components/benchmark-picker";
 import { ComparisonTable } from "@/components/comparison-table";
+import { ModeToggle } from "@/components/mode-toggle";
 import { useMatchQuery, useCompareQuery, useCoachingAvailability } from "@/lib/queries";
+import { detectMode } from "@/lib/mode";
 import { CacheInfoBadge } from "@/components/cache-info-badge";
 import { LoadingBar } from "@/components/loading-bar";
 import { Button } from "@/components/ui/button";
@@ -29,6 +31,9 @@ import {
   saveCompetitorSelection,
   getCompetitorSelectionSnapshot,
   SELECTION_CHANGED,
+  saveModeOverride,
+  getModeOverrideSnapshot,
+  subscribeMode,
 } from "@/lib/competition-store";
 
 // Stable empty array for useSyncExternalStore server snapshot — must be a
@@ -157,13 +162,30 @@ export default function MatchPageClient() {
     () => EMPTY_IDS
   );
 
+  // Mode override from localStorage (useSyncExternalStore for SSR safety).
+  const modeOverride = useSyncExternalStore(
+    subscribeMode,
+    useCallback(() => getModeOverrideSnapshot(ct, id), [ct, id]),
+    () => null,
+  );
+
   const matchQuery = useMatchQuery(ct, id);
-  const compareQuery = useCompareQuery(ct, id, selectedIds);
-  const coachingAvailability = useCoachingAvailability();
 
   // Capture mount timestamp once to avoid impure Date.now() in render path.
-  // useState initializer runs once on mount and is stable across re-renders.
   const [mountMs] = useState(() => Date.now());
+
+  // Compute auto mode from match data (defaults to "coaching" until loaded).
+  const matchDateMs = matchQuery.data?.date ? new Date(matchQuery.data.date).getTime() : null;
+  const autoMode = matchQuery.data
+    ? detectMode(
+        matchQuery.data.scoring_completed,
+        matchDateMs != null ? (mountMs - matchDateMs) / 86_400_000 : 0,
+      )
+    : "coaching";
+  const effectiveMode = modeOverride ?? autoMode;
+
+  const compareQuery = useCompareQuery(ct, id, selectedIds, effectiveMode);
+  const coachingAvailability = useCoachingAvailability();
 
   // Save match to recents whenever data loads/changes (localStorage write, no setState).
   useEffect(() => {
@@ -238,12 +260,8 @@ export default function MatchPageClient() {
 
   const match = matchQuery.data;
 
-  const matchDateMs = match.date ? new Date(match.date).getTime() : null;
   // results_status === "all" is the definitive "published" signal from SSI.
-  // Fall back to scoring % and age heuristics for matches that haven't published yet.
-  const isMatchComplete = match.results_status === "all" ||
-    match.scoring_completed >= 95 ||
-    (matchDateMs != null && (mountMs - matchDateMs) / 86_400_000 > 3);
+  const isMatchComplete = match.results_status === "all" || effectiveMode === "coaching";
   const resultsPublished = match.results_status === "all";
   const matchCancelled = match.match_status === "cs";
   const aiAvailable = coachingAvailability.data?.available === true;
@@ -315,6 +333,43 @@ export default function MatchPageClient() {
           </span>
         </div>
       )}
+
+      {/* Mode toggle */}
+      <div className="space-y-1">
+        <div className="flex items-center gap-1.5">
+          <ModeToggle
+            autoMode={autoMode}
+            effectiveMode={effectiveMode}
+            onModeChange={(mode) => saveModeOverride(ct, id, mode)}
+          />
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                aria-label="About live and coaching modes"
+              >
+                <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80" side="bottom" align="start">
+              <PopoverHeader>
+                <PopoverTitle>Live vs Coaching mode</PopoverTitle>
+                <PopoverDescription>The app picks a mode based on match state. You can override it.</PopoverDescription>
+              </PopoverHeader>
+              <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+                <p><strong>Live</strong> — for active matches. Refreshes every 30 seconds. Shows stage results, charts, and core stats only. Skips heavy analytics to keep things fast courtside.</p>
+                <p><strong>Coaching</strong> — for completed matches. Full analysis: style fingerprints, archetype breakdown, course-length splits, constraint performance, and the stage simulator.</p>
+                <p>The mode is auto-detected: matches with ≥ 95% scored or older than 3 days default to Coaching. Tap the other mode to override, or tap the active mode to reset to auto.</p>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {effectiveMode === "live"
+            ? "Fast refresh, stage-focused view. Coaching analytics hidden."
+            : "Full analysis with style fingerprints, breakdowns, and simulator."}
+        </p>
+      </div>
 
       {/* Competitor picker */}
       <div className="space-y-1">
@@ -554,177 +609,182 @@ export default function MatchPageClient() {
                 <StageBalanceChart data={compareQuery.data} />
               </div>
 
-              {/* Coaching / analysis view — hidden by default (not for courtside use) */}
-              <div className="rounded-lg border p-4 space-y-3">
-                {/* WAI-ARIA accordion pattern: heading wraps the disclosure button */}
-                <h2 className="font-semibold text-base m-0 leading-none">
-                  <button
-                    type="button"
-                    id="coaching-view-heading"
-                    onClick={() => setShowCoachingView((v) => !v)}
-                    className="flex w-full items-center justify-between text-left gap-2"
-                    aria-expanded={showCoachingView}
-                    aria-controls="coaching-view-panel"
-                  >
-                    <span>
-                      Coaching analysis
-                      <span className="block text-xs font-normal text-muted-foreground mt-0.5">
-                        Post-match aggregate view — not recommended during active shooting.
-                      </span>
-                    </span>
-                    {showCoachingView ? (
-                      <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-                    )}
-                  </button>
-                </h2>
-
-                {showCoachingView && (
-                  <section
-                    id="coaching-view-panel"
-                    role="region"
-                    aria-labelledby="coaching-view-heading"
-                    className="space-y-6 pt-2"
-                  >
-
-                    <CourseLengthSummary data={compareQuery.data} />
-                    <ConstraintSummary data={compareQuery.data} />
-                    <ArchetypePerformanceSummary data={compareQuery.data} />
-
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1.5">
-                        <h3 className="text-sm font-semibold">Shooter style fingerprint</h3>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button
-                              className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                              aria-label="About this chart"
-                            >
-                              <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-80" side="bottom" align="start">
-                            <PopoverHeader>
-                              <PopoverTitle>Shooter style fingerprint</PopoverTitle>
-                              <PopoverDescription>Match-wide accuracy vs. speed plotted for each competitor.</PopoverDescription>
-                            </PopoverHeader>
-                            <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                              <p>Both axes are <strong>field percentile ranks</strong> (0–100): X = accuracy rank (A-zone ratio vs. the full field), Y = speed rank (pts/s vs. the full field). A value of 50 means exactly field median.</p>
-                              <p>The dashed crosshair is always at (50, 50) — the field median — so each quadrant contains roughly 25 % of the field. Quadrant labels: <strong>Gunslinger</strong> (fast & accurate), <strong>Surgeon</strong> (accurate, leaving time on table), <strong>Speed Demon</strong> (fast, bleeding points), <strong>Grinder</strong> (room to grow).</p>
-                              <p>Each competitor gets an archetype badge based on their quadrant. Hover a dot or check the legend to see the archetype with raw values (α%, pts/s) and exact percentile.</p>
-                              <p>Faded background dots = field cohort cloud. Use the Field overlay toggle to show all competitors, same division, or none. Dot size ∝ penalty rate.</p>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <StyleFingerprintChart data={compareQuery.data} />
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1.5">
-                        <h3 className="text-sm font-semibold">Shooter style profile</h3>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button
-                              className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                              aria-label="About this chart"
-                            >
-                              <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-80" side="bottom" align="start">
-                            <PopoverHeader>
-                              <PopoverTitle>Shooter style profile</PopoverTitle>
-                              <PopoverDescription>Four-axis radar showing where each competitor ranks across key shooting dimensions.</PopoverDescription>
-                            </PopoverHeader>
-                            <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                              <p><strong>Speed</strong> — points-per-second percentile rank. 100 = fastest scorer in the field.</p>
-                              <p><strong>Accuracy</strong> — A-zone ratio percentile rank. 100 = highest proportion of alpha hits.</p>
-                              <p><strong>Composure</strong> — inverse penalty-rate rank. 100 = fewest misses, no-shoots, and procedurals per round fired.</p>
-                              <p><strong>Consistency</strong> — inverse stage-to-stage hit-factor variability rank. 100 = most repeatable across stages. Shows 50 when only one stage is available.</p>
-                              <p>The dashed polygon marks the field median (50th percentile on all axes). A larger polygon means a stronger overall profile.</p>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <ShooterStyleRadarChart data={compareQuery.data} />
-                    </div>
-                  </section>
-                )}
-              </div>
-
-              {/* Stage Simulator — collapsed by default, only ≥ 80% complete */}
-              {match.scoring_completed >= 80 && (
-                <div className="rounded-lg border p-4">
-                  <div className="flex items-start gap-2">
-                    <h2 className="flex-1 font-semibold text-base m-0 leading-none">
+              {/* Coaching sections — only rendered in coaching mode */}
+              {effectiveMode === "coaching" && (
+                <>
+                  {/* Coaching / analysis view — hidden by default */}
+                  <div className="rounded-lg border p-4 space-y-3">
+                    {/* WAI-ARIA accordion pattern: heading wraps the disclosure button */}
+                    <h2 className="font-semibold text-base m-0 leading-none">
                       <button
                         type="button"
-                        id="stage-simulator-heading"
-                        onClick={() => setShowSimulator((v) => !v)}
+                        id="coaching-view-heading"
+                        onClick={() => setShowCoachingView((v) => !v)}
                         className="flex w-full items-center justify-between text-left gap-2"
-                        aria-expanded={showSimulator}
-                        aria-controls="stage-simulator-panel"
+                        aria-expanded={showCoachingView}
+                        aria-controls="coaching-view-panel"
                       >
                         <span>
-                          Stage Simulator
+                          Coaching analysis
                           <span className="block text-xs font-normal text-muted-foreground mt-0.5">
-                            What-if sandbox — the comparison table above is not affected.
+                            Post-match aggregate view — not recommended during active shooting.
                           </span>
                         </span>
-                        {showSimulator ? (
+                        {showCoachingView ? (
                           <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
                         ) : (
                           <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
                         )}
                       </button>
                     </h2>
-                    {showSimulator && (
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button
-                            className="flex-none text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                            aria-label="About the stage simulator"
-                          >
-                            <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-80" side="bottom" align="end">
-                          <PopoverHeader>
-                            <PopoverTitle>Stage Simulator</PopoverTitle>
-                            <PopoverDescription>
-                              Adjust one stage at a time to see how a cleaner run would affect your hit factor, stage percentage, and match rank.
-                            </PopoverDescription>
-                          </PopoverHeader>
-                          <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                            <p>Pick a competitor and stage, then dial in adjustments — faster time, converting misses or no-shoots to A or C hits, upgrading C or D-hits to A-hits, or removing procedural penalties.</p>
-                            <p>Adjust multiple stages independently; the match avg and group rank rows show the cumulative impact across all modified stages.</p>
-                            <p>Division rank and overall rank (vs the full field) appear below the group rank after a short delay — they reflect the simulated scorecards server-side.</p>
-                            <p>Your adjustments are saved per-stage and restored if you refresh the page.</p>
+
+                    {showCoachingView && (
+                      <section
+                        id="coaching-view-panel"
+                        role="region"
+                        aria-labelledby="coaching-view-heading"
+                        className="space-y-6 pt-2"
+                      >
+
+                        <CourseLengthSummary data={compareQuery.data} />
+                        <ConstraintSummary data={compareQuery.data} />
+                        <ArchetypePerformanceSummary data={compareQuery.data} />
+
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-1.5">
+                            <h3 className="text-sm font-semibold">Shooter style fingerprint</h3>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button
+                                  className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                                  aria-label="About this chart"
+                                >
+                                  <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-80" side="bottom" align="start">
+                                <PopoverHeader>
+                                  <PopoverTitle>Shooter style fingerprint</PopoverTitle>
+                                  <PopoverDescription>Match-wide accuracy vs. speed plotted for each competitor.</PopoverDescription>
+                                </PopoverHeader>
+                                <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+                                  <p>Both axes are <strong>field percentile ranks</strong> (0–100): X = accuracy rank (A-zone ratio vs. the full field), Y = speed rank (pts/s vs. the full field). A value of 50 means exactly field median.</p>
+                                  <p>The dashed crosshair is always at (50, 50) — the field median — so each quadrant contains roughly 25 % of the field. Quadrant labels: <strong>Gunslinger</strong> (fast & accurate), <strong>Surgeon</strong> (accurate, leaving time on table), <strong>Speed Demon</strong> (fast, bleeding points), <strong>Grinder</strong> (room to grow).</p>
+                                  <p>Each competitor gets an archetype badge based on their quadrant. Hover a dot or check the legend to see the archetype with raw values (α%, pts/s) and exact percentile.</p>
+                                  <p>Faded background dots = field cohort cloud. Use the Field overlay toggle to show all competitors, same division, or none. Dot size ∝ penalty rate.</p>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
                           </div>
-                        </PopoverContent>
-                      </Popover>
+                          <StyleFingerprintChart data={compareQuery.data} />
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-1.5">
+                            <h3 className="text-sm font-semibold">Shooter style profile</h3>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button
+                                  className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                                  aria-label="About this chart"
+                                >
+                                  <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-80" side="bottom" align="start">
+                                <PopoverHeader>
+                                  <PopoverTitle>Shooter style profile</PopoverTitle>
+                                  <PopoverDescription>Four-axis radar showing where each competitor ranks across key shooting dimensions.</PopoverDescription>
+                                </PopoverHeader>
+                                <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+                                  <p><strong>Speed</strong> — points-per-second percentile rank. 100 = fastest scorer in the field.</p>
+                                  <p><strong>Accuracy</strong> — A-zone ratio percentile rank. 100 = highest proportion of alpha hits.</p>
+                                  <p><strong>Composure</strong> — inverse penalty-rate rank. 100 = fewest misses, no-shoots, and procedurals per round fired.</p>
+                                  <p><strong>Consistency</strong> — inverse stage-to-stage hit-factor variability rank. 100 = most repeatable across stages. Shows 50 when only one stage is available.</p>
+                                  <p>The dashed polygon marks the field median (50th percentile on all axes). A larger polygon means a stronger overall profile.</p>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                          <ShooterStyleRadarChart data={compareQuery.data} />
+                        </div>
+                      </section>
                     )}
                   </div>
 
-                  {showSimulator && (
-                    <section
-                      id="stage-simulator-panel"
-                      role="region"
-                      aria-labelledby="stage-simulator-heading"
-                      className="pt-4"
-                    >
-                      <StageSimulator
-                        ct={ct}
-                        id={id}
-                        data={compareQuery.data}
-                        competitors={compareQuery.data.competitors}
-                        scoringCompleted={match.scoring_completed}
-                      />
-                    </section>
+                  {/* Stage Simulator — collapsed by default, only ≥ 80% complete */}
+                  {match.scoring_completed >= 80 && (
+                    <div className="rounded-lg border p-4">
+                      <div className="flex items-start gap-2">
+                        <h2 className="flex-1 font-semibold text-base m-0 leading-none">
+                          <button
+                            type="button"
+                            id="stage-simulator-heading"
+                            onClick={() => setShowSimulator((v) => !v)}
+                            className="flex w-full items-center justify-between text-left gap-2"
+                            aria-expanded={showSimulator}
+                            aria-controls="stage-simulator-panel"
+                          >
+                            <span>
+                              Stage Simulator
+                              <span className="block text-xs font-normal text-muted-foreground mt-0.5">
+                                What-if sandbox — the comparison table above is not affected.
+                              </span>
+                            </span>
+                            {showSimulator ? (
+                              <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                            ) : (
+                              <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                            )}
+                          </button>
+                        </h2>
+                        {showSimulator && (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button
+                                className="flex-none text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                                aria-label="About the stage simulator"
+                              >
+                                <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80" side="bottom" align="end">
+                              <PopoverHeader>
+                                <PopoverTitle>Stage Simulator</PopoverTitle>
+                                <PopoverDescription>
+                                  Adjust one stage at a time to see how a cleaner run would affect your hit factor, stage percentage, and match rank.
+                                </PopoverDescription>
+                              </PopoverHeader>
+                              <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+                                <p>Pick a competitor and stage, then dial in adjustments — faster time, converting misses or no-shoots to A or C hits, upgrading C or D-hits to A-hits, or removing procedural penalties.</p>
+                                <p>Adjust multiple stages independently; the match avg and group rank rows show the cumulative impact across all modified stages.</p>
+                                <p>Division rank and overall rank (vs the full field) appear below the group rank after a short delay — they reflect the simulated scorecards server-side.</p>
+                                <p>Your adjustments are saved per-stage and restored if you refresh the page.</p>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                      </div>
+
+                      {showSimulator && (
+                        <section
+                          id="stage-simulator-panel"
+                          role="region"
+                          aria-labelledby="stage-simulator-heading"
+                          className="pt-4"
+                        >
+                          <StageSimulator
+                            ct={ct}
+                            id={id}
+                            data={compareQuery.data}
+                            competitors={compareQuery.data.competitors}
+                            scoringCompleted={match.scoring_completed}
+                          />
+                        </section>
+                      )}
+                    </div>
                   )}
-                </div>
+                </>
               )}
             </>
           )}

@@ -68,6 +68,7 @@ export async function compareCompetitors(
   p.set("ct", ct);
   p.set("id", id);
   p.set("competitor_ids", competitorIds.join(","));
+  p.set("mode", "coaching");
   const res = await compareGET(new Request(`http://localhost/api/compare?${p}`));
   return extractJson<CompareResponse>(res);
 }

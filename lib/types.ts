@@ -181,6 +181,11 @@ export type StageClassification = "solid" | "conservative" | "over-push" | "melt
 // "overall"  — HF % relative to the overall stage winner (full field, all divisions)
 export type PctMode = "group" | "division" | "overall";
 
+// Whether the compare API returns full coaching analytics or just live stage data.
+// "live"     — active match; expensive analytics skipped for fast 30s polling
+// "coaching" — post-match; full fingerprint, archetype, what-if, etc.
+export type CompareMode = "live" | "coaching";
+
 // View mode for the comparison table.
 // "absolute" — shows raw hit factor, points, and percentage
 // "delta"    — shows gap to the group leader per stage (±X.X pts)
@@ -333,18 +338,19 @@ export interface WhatIfResult {
 
 export interface CompareResponse {
   match_id: number;
+  mode: CompareMode;
   stages: StageComparison[];
   competitors: CompetitorInfo[];
   penaltyStats: Record<number, CompetitorPenaltyStats>; // keyed by competitor_id
   efficiencyStats: Record<number, EfficiencyStats>;     // keyed by competitor_id
   consistencyStats: Record<number, ConsistencyStats>;   // keyed by competitor_id
   lossBreakdownStats: Record<number, LossBreakdownStats>; // keyed by competitor_id
-  whatIfStats: Record<number, WhatIfResult | null>;     // keyed by competitor_id; null = not enough stages
-  styleFingerprintStats: Record<number, StyleFingerprintStats>; // keyed by competitor_id
-  fieldFingerprintPoints: FieldFingerprintPoint[]; // all match competitors (for cohort cloud)
-  archetypePerformance: Record<number, ArchetypePerformance[]>; // keyed by competitor_id
-  courseLengthPerformance: Record<number, CourseLengthPerformance[]>; // keyed by competitor_id
-  constraintPerformance: Record<number, ConstraintPerformance>; // keyed by competitor_id
+  whatIfStats: Record<number, WhatIfResult | null> | null;     // null in live mode
+  styleFingerprintStats: Record<number, StyleFingerprintStats> | null; // null in live mode
+  fieldFingerprintPoints: FieldFingerprintPoint[] | null; // null in live mode
+  archetypePerformance: Record<number, ArchetypePerformance[]> | null; // null in live mode
+  courseLengthPerformance: Record<number, CourseLengthPerformance[]> | null; // null in live mode
+  constraintPerformance: Record<number, ConstraintPerformance> | null; // null in live mode
   cacheInfo: CacheInfo;
 }
 

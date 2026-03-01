@@ -17,11 +17,13 @@ export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
     date: "March 1, 2026",
-    title: "Stage Archetype Analysis, Division Position Chart & Constraint Analytics",
+    title: "Live/Coaching Mode & Stage Analytics",
     sections: [
       {
         heading: "New",
         items: [
+          "Live/Coaching mode: the app now auto-detects whether a match is active or complete. Live mode skips heavy analytics for fast 30s polling; Coaching mode loads the full analysis suite.",
+          "Mode toggle between the match header and competitor picker lets you override the auto-detected mode. Tap the active button to reset to auto.",
           "Stage archetype badges: stages are now classified as Speed, Precision, or Mixed based on target composition — look for the icon next to the difficulty bars.",
           "Archetype performance breakdown in the Coaching analysis panel: compare average group % across stage types to spot strengths and weaknesses.",
           "Division position chart: see where each competitor sits within their division's HF distribution per stage — the shaded band shows the middle 50% (Q1–Q3) of the division, with the median and minimum as reference lines.",

@@ -7,7 +7,7 @@ import { computeMatchTtl } from "@/lib/match-ttl";
 import { formatDivisionDisplay } from "@/lib/divisions";
 import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance } from "@/app/api/compare/logic";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
-import type { CompareResponse, CompetitorInfo, StageComparison } from "@/lib/types";
+import type { CompareMode, CompareResponse, CompetitorInfo, StageComparison } from "@/lib/types";
 
 interface RawCompetitor {
   id: string;
@@ -76,6 +76,9 @@ export async function GET(req: Request) {
       { status: 400 }
     );
   }
+
+  const modeParam = searchParams.get("mode");
+  const mode: CompareMode = modeParam === "live" ? "live" : "coaching";
 
   // Step 1 — fetch match metadata to determine TTL for scorecards
   const matchKey = gqlCacheKey("GetMatch", { ct: ctNum, id });
@@ -264,60 +267,73 @@ export async function GET(req: Request) {
     requestedCompetitors.map((c) => [c.id, computeLossBreakdown(stages, c.id)])
   );
 
-  const archetypePerformance = Object.fromEntries(
-    requestedCompetitors.map((c) => [c.id, computeArchetypePerformance(stages, c.id)])
-  );
+  // Coaching-only computations — skipped in live mode for faster responses
+  let archetypePerformance: CompareResponse["archetypePerformance"] = null;
+  let courseLengthPerformance: CompareResponse["courseLengthPerformance"] = null;
+  let constraintPerformance: CompareResponse["constraintPerformance"] = null;
+  let whatIfStats: CompareResponse["whatIfStats"] = null;
+  let fieldFingerprintPoints: CompareResponse["fieldFingerprintPoints"] = null;
+  let styleFingerprintStats: CompareResponse["styleFingerprintStats"] = null;
 
-  const courseLengthPerformance = Object.fromEntries(
-    requestedCompetitors.map((c) => [c.id, computeCourseLengthPerformance(stages, c.id)])
-  );
+  if (mode === "coaching") {
+    archetypePerformance = Object.fromEntries(
+      requestedCompetitors.map((c) => [c.id, computeArchetypePerformance(stages, c.id)])
+    );
 
-  const constraintPerformance = Object.fromEntries(
-    requestedCompetitors.map((c) => [c.id, computeConstraintPerformance(stages, c.id)])
-  );
+    courseLengthPerformance = Object.fromEntries(
+      requestedCompetitors.map((c) => [c.id, computeCourseLengthPerformance(stages, c.id)])
+    );
 
-  const whatIfStats = simulateWithoutWorstStage(stages, requestedCompetitors, rawScorecards);
+    constraintPerformance = Object.fromEntries(
+      requestedCompetitors.map((c) => [c.id, computeConstraintPerformance(stages, c.id)])
+    );
+
+    whatIfStats = simulateWithoutWorstStage(stages, requestedCompetitors, rawScorecards);
+  }
 
   const tPerCompetitor = performance.now();
 
-  // Build division map for the full field (used by the fingerprint cohort cloud)
-  const divisionMap = new Map<number, string | null>(
-    allCompetitors.map((c) => [parseInt(c.id, 10), c.get_handgun_div_display ?? c.handgun_div ?? null])
-  );
-  // fieldFingerprintPoints includes percentile ranks so we compute it before enriching
-  // the selected competitors' stats.
-  const fieldFingerprintPoints = computeAllFingerprintPoints(rawScorecards, divisionMap);
+  if (mode === "coaching") {
+    // Build division map for the full field (used by the fingerprint cohort cloud)
+    const divisionMap = new Map<number, string | null>(
+      allCompetitors.map((c) => [parseInt(c.id, 10), c.get_handgun_div_display ?? c.handgun_div ?? null])
+    );
+    // fieldFingerprintPoints includes percentile ranks so we compute it before enriching
+    // the selected competitors' stats.
+    const ffp = computeAllFingerprintPoints(rawScorecards, divisionMap);
+    fieldFingerprintPoints = ffp;
 
-  const fieldAlphaRatios = fieldFingerprintPoints.map((p) => p.alphaRatio);
-  const fieldSpeeds = fieldFingerprintPoints.map((p) => p.pointsPerSecond);
+    const fieldAlphaRatios = ffp.map((p) => p.alphaRatio);
+    const fieldSpeeds = ffp.map((p) => p.pointsPerSecond);
 
-  const styleFingerprintStats = Object.fromEntries(
-    requestedCompetitors.map((c) => {
-      const base = computeStyleFingerprint(stages, c.id);
-      const accuracyPercentile =
-        base.alphaRatio != null
-          ? computePercentileRank(base.alphaRatio, fieldAlphaRatios)
-          : null;
-      const speedPercentile =
-        base.pointsPerSecond != null
-          ? computePercentileRank(base.pointsPerSecond, fieldSpeeds)
-          : null;
-      const fieldPoint = fieldFingerprintPoints.find((p) => p.competitorId === c.id);
-      const { composurePercentile, consistencyPercentile } =
-        computeStylePercentiles(base, fieldPoint?.cv ?? null, fieldFingerprintPoints);
-      return [
-        c.id,
-        {
-          ...base,
-          accuracyPercentile,
-          speedPercentile,
-          archetype: assignArchetype(accuracyPercentile, speedPercentile),
-          composurePercentile,
-          consistencyPercentile,
-        },
-      ];
-    })
-  );
+    styleFingerprintStats = Object.fromEntries(
+      requestedCompetitors.map((c) => {
+        const base = computeStyleFingerprint(stages, c.id);
+        const accuracyPercentile =
+          base.alphaRatio != null
+            ? computePercentileRank(base.alphaRatio, fieldAlphaRatios)
+            : null;
+        const speedPercentile =
+          base.pointsPerSecond != null
+            ? computePercentileRank(base.pointsPerSecond, fieldSpeeds)
+            : null;
+        const fieldPoint = ffp.find((p) => p.competitorId === c.id);
+        const { composurePercentile, consistencyPercentile } =
+          computeStylePercentiles(base, fieldPoint?.cv ?? null, ffp);
+        return [
+          c.id,
+          {
+            ...base,
+            accuracyPercentile,
+            speedPercentile,
+            archetype: assignArchetype(accuracyPercentile, speedPercentile),
+            composurePercentile,
+            consistencyPercentile,
+          },
+        ];
+      })
+    );
+  }
 
   const tFingerprint = performance.now();
   console.log(JSON.stringify({
@@ -326,6 +342,7 @@ export async function GET(req: Request) {
     match_id: id,
     competitor_ids: competitorIds,
     competitor_count: competitorIds.length,
+    mode,
     match_cache_hit: matchCachedAt !== null,
     scorecards_cache_hit: scorecardsCachedAt !== null,
     scorecard_count: rawScorecards.length,
@@ -336,6 +353,7 @@ export async function GET(req: Request) {
 
   const response: CompareResponse = {
     match_id: parseInt(id, 10),
+    mode,
     stages,
     competitors: requestedCompetitors,
     penaltyStats,
@@ -351,14 +369,17 @@ export async function GET(req: Request) {
     cacheInfo,
   };
 
-  const serverTiming = [
+  const timingParts = [
     `graphql;dur=${(tFetch - t0).toFixed(1)};desc="GraphQL fetch"`,
     `flatten;dur=${(tFlatten - tFetch).toFixed(1)};desc="Scorecard flatten"`,
     `rankings;dur=${(tRankings - tFlatten).toFixed(1)};desc="Group rankings"`,
     `per-competitor;dur=${(tPerCompetitor - tRankings).toFixed(1)};desc="Per-competitor stats"`,
-    `fingerprint;dur=${(tFingerprint - tPerCompetitor).toFixed(1)};desc="Fingerprint"`,
-    `total;dur=${(tFingerprint - t0).toFixed(1)};desc="Total"`,
-  ].join(", ");
+  ];
+  if (mode === "coaching") {
+    timingParts.push(`fingerprint;dur=${(tFingerprint - tPerCompetitor).toFixed(1)};desc="Fingerprint"`);
+  }
+  timingParts.push(`total;dur=${(tFingerprint - t0).toFixed(1)};desc="Total"`);
+  const serverTiming = timingParts.join(", ");
 
   return NextResponse.json(response, {
     headers: { "Server-Timing": serverTiming },

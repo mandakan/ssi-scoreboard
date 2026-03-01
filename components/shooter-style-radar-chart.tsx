@@ -107,6 +107,14 @@ export function ShooterStyleRadarChart({ data }: ShooterStyleRadarChartProps) {
   const colorMap = buildColorMap(competitors.map((c) => c.id));
   const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
 
+  if (!styleFingerprintStats) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Not enough scored stages to display the style profile.
+      </p>
+    );
+  }
+
   const radarData = AXES.map((axis) => {
     const row: Record<string, string | number> = { axis };
     for (const comp of competitors) {
