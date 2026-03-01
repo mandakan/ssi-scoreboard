@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computePercentileRank, assignArchetype, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computeStylePercentiles, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
-import type { CompetitorInfo } from "@/lib/types";
+import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computePercentileRank, assignArchetype, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
+import type { CompetitorInfo, StageComparison } from "@/lib/types";
 
 const competitors: CompetitorInfo[] = [
   { id: 1, name: "Alice", competitor_number: "10", club: null, division: "hg1" },
@@ -2256,4 +2256,241 @@ describe("computeStylePercentiles", () => {
     expect(result.consistencyPercentile).toBe(50);
   });
 
+});
+
+// ── classifyStageArchetype ──────────────────────────────────────────────────
+
+describe("classifyStageArchetype", () => {
+  it("high steel ratio (> 50%) → speed", () => {
+    expect(classifyStageArchetype({
+      paper_targets: 3, steel_targets: 8, min_rounds: 12, max_points: 60,
+    })).toBe("speed");
+  });
+
+  it("steel exactly 50% → mixed (not speed, needs > 50%)", () => {
+    expect(classifyStageArchetype({
+      paper_targets: 5, steel_targets: 5, min_rounds: 12, max_points: 60,
+    })).toBe("mixed");
+  });
+
+  it("paper-heavy long course (steel ≤ 30%, ≥ 25 rounds) → precision", () => {
+    expect(classifyStageArchetype({
+      paper_targets: 10, steel_targets: 3, min_rounds: 28, max_points: 140,
+    })).toBe("precision");
+  });
+
+  it("paper-heavy short course (steel ≤ 30%, < 25 rounds) → mixed", () => {
+    expect(classifyStageArchetype({
+      paper_targets: 6, steel_targets: 1, min_rounds: 14, max_points: 70,
+    })).toBe("mixed");
+  });
+
+  it("balanced targets (steel 31–50%) → mixed regardless of length", () => {
+    expect(classifyStageArchetype({
+      paper_targets: 6, steel_targets: 4, min_rounds: 30, max_points: 150,
+    })).toBe("mixed");
+  });
+
+  it("paper only, no steel, long course → precision", () => {
+    expect(classifyStageArchetype({
+      paper_targets: 12, steel_targets: null, min_rounds: 26, max_points: 130,
+    })).toBe("precision");
+  });
+
+  it("paper only, no steel, short course → mixed", () => {
+    expect(classifyStageArchetype({
+      paper_targets: 6, steel_targets: null, min_rounds: 12, max_points: 60,
+    })).toBe("mixed");
+  });
+
+  it("min_rounds only (no targets), long → precision", () => {
+    expect(classifyStageArchetype({
+      paper_targets: null, steel_targets: null, min_rounds: 30, max_points: 150,
+    })).toBe("precision");
+  });
+
+  it("min_rounds only (no targets), short → mixed", () => {
+    expect(classifyStageArchetype({
+      paper_targets: null, steel_targets: null, min_rounds: 12, max_points: 60,
+    })).toBe("mixed");
+  });
+
+  it("max_points fallback, large (implied ≥ 25 rounds) → precision", () => {
+    expect(classifyStageArchetype({
+      paper_targets: null, steel_targets: null, min_rounds: null, max_points: 125,
+    })).toBe("precision");
+  });
+
+  it("max_points fallback, small (implied < 25 rounds) → null", () => {
+    expect(classifyStageArchetype({
+      paper_targets: null, steel_targets: null, min_rounds: null, max_points: 60,
+    })).toBeNull();
+  });
+
+  it("all null/zero metadata → null", () => {
+    expect(classifyStageArchetype({
+      paper_targets: null, steel_targets: null, min_rounds: null, max_points: 0,
+    })).toBeNull();
+  });
+
+  it("zero targets, zero rounds → null (falls through to max_points)", () => {
+    expect(classifyStageArchetype({
+      paper_targets: 0, steel_targets: 0, min_rounds: 0, max_points: 0,
+    })).toBeNull();
+  });
+
+  it("steel_targets=0, paper_targets > 0 with long course → precision", () => {
+    // hasPaper=true, hasSteel=false, but totalTargets > 0 so tier 1 applies
+    // steelRatio = 0/10 = 0 ≤ 0.3 AND min_rounds ≥ 25 → precision
+    expect(classifyStageArchetype({
+      paper_targets: 10, steel_targets: 0, min_rounds: 26, max_points: 130,
+    })).toBe("precision");
+  });
+
+  it("boundary: exactly 25 rounds → precision", () => {
+    expect(classifyStageArchetype({
+      paper_targets: null, steel_targets: null, min_rounds: 25, max_points: 125,
+    })).toBe("precision");
+  });
+
+  it("boundary: 24 rounds → mixed", () => {
+    expect(classifyStageArchetype({
+      paper_targets: null, steel_targets: null, min_rounds: 24, max_points: 120,
+    })).toBe("mixed");
+  });
+});
+
+// ── computeArchetypePerformance ─────────────────────────────────────────────
+
+describe("computeArchetypePerformance", () => {
+  // Helper to build a minimal StageComparison with archetype + competitor summary
+  function makeStageComp(
+    stageId: number,
+    archetype: "speed" | "precision" | "mixed" | null,
+    competitorSummaries: Record<number, { group_percent?: number | null; div_percent?: number | null; overall_percent?: number | null; dnf?: boolean; dq?: boolean; zeroed?: boolean }>
+  ): StageComparison {
+    const comps: Record<number, StageComparison["competitors"][number]> = {};
+    for (const [id, overrides] of Object.entries(competitorSummaries)) {
+      comps[Number(id)] = {
+        competitor_id: Number(id),
+        hit_factor: 4.0,
+        points: 80,
+        time: 20,
+        dq: overrides.dq ?? false,
+        zeroed: overrides.zeroed ?? false,
+        dnf: overrides.dnf ?? false,
+        incomplete: false,
+        a_hits: 10,
+        c_hits: 2,
+        d_hits: 0,
+        miss_count: 0,
+        no_shoots: 0,
+        procedurals: 0,
+        group_rank: 1,
+        group_percent: overrides.group_percent ?? 90,
+        div_rank: 1,
+        div_percent: overrides.div_percent ?? 85,
+        overall_rank: 1,
+        overall_percent: overrides.overall_percent ?? 80,
+        overall_percentile: 0.9,
+        stageClassification: null,
+        hitLossPoints: null,
+        penaltyLossPoints: 0,
+      };
+    }
+    return {
+      stage_id: stageId,
+      stage_name: `Stage ${stageId}`,
+      stage_num: stageId,
+      max_points: 100,
+      group_leader_hf: 5.0,
+      group_leader_points: 100,
+      overall_leader_hf: 5.5,
+      field_median_hf: 3.0,
+      field_competitor_count: 10,
+      stageDifficultyLevel: 3,
+      stageDifficultyLabel: "moderate",
+      stageArchetype: archetype,
+      competitors: comps,
+    };
+  }
+
+  it("computes correct avg group % per archetype bucket", () => {
+    const stages = [
+      makeStageComp(1, "speed", { 1: { group_percent: 90 } }),
+      makeStageComp(2, "speed", { 1: { group_percent: 80 } }),
+      makeStageComp(3, "precision", { 1: { group_percent: 70 } }),
+    ];
+    const result = computeArchetypePerformance(stages, 1);
+    expect(result).toHaveLength(2);
+    const speed = result.find((r) => r.archetype === "speed");
+    expect(speed).toBeDefined();
+    expect(speed!.stageCount).toBe(2);
+    expect(speed!.avgGroupPercent).toBeCloseTo(85, 5);
+    const precision = result.find((r) => r.archetype === "precision");
+    expect(precision).toBeDefined();
+    expect(precision!.stageCount).toBe(1);
+    expect(precision!.avgGroupPercent).toBeCloseTo(70, 5);
+  });
+
+  it("excludes DNF/DQ/zeroed stages", () => {
+    const stages = [
+      makeStageComp(1, "speed", { 1: { group_percent: 90 } }),
+      makeStageComp(2, "speed", { 1: { group_percent: 50, dnf: true } }),
+      makeStageComp(3, "speed", { 1: { group_percent: 0, dq: true } }),
+      makeStageComp(4, "speed", { 1: { group_percent: 0, zeroed: true } }),
+    ];
+    const result = computeArchetypePerformance(stages, 1);
+    expect(result).toHaveLength(1);
+    expect(result[0].stageCount).toBe(1);
+    expect(result[0].avgGroupPercent).toBeCloseTo(90, 5);
+  });
+
+  it("returns only archetypes that have stages", () => {
+    const stages = [
+      makeStageComp(1, "mixed", { 1: { group_percent: 88 } }),
+    ];
+    const result = computeArchetypePerformance(stages, 1);
+    expect(result).toHaveLength(1);
+    expect(result[0].archetype).toBe("mixed");
+  });
+
+  it("returns empty when no stages are classified (archetype=null)", () => {
+    const stages = [
+      makeStageComp(1, null, { 1: { group_percent: 90 } }),
+      makeStageComp(2, null, { 1: { group_percent: 80 } }),
+    ];
+    const result = computeArchetypePerformance(stages, 1);
+    expect(result).toHaveLength(0);
+  });
+
+  it("returns empty when competitor has no data on classified stages", () => {
+    const stages = [
+      makeStageComp(1, "speed", { 2: { group_percent: 90 } }), // competitor 2 only
+    ];
+    const result = computeArchetypePerformance(stages, 1); // ask for competitor 1
+    expect(result).toHaveLength(0);
+  });
+
+  it("computes avg div and overall % correctly", () => {
+    const stages = [
+      makeStageComp(1, "precision", { 1: { group_percent: 90, div_percent: 80, overall_percent: 70 } }),
+      makeStageComp(2, "precision", { 1: { group_percent: 70, div_percent: 60, overall_percent: 50 } }),
+    ];
+    const result = computeArchetypePerformance(stages, 1);
+    expect(result).toHaveLength(1);
+    expect(result[0].avgGroupPercent).toBeCloseTo(80, 5);
+    expect(result[0].avgDivPercent).toBeCloseTo(70, 5);
+    expect(result[0].avgOverallPercent).toBeCloseTo(60, 5);
+  });
+
+  it("returns archetypes in consistent order: speed, precision, mixed", () => {
+    const stages = [
+      makeStageComp(1, "mixed", { 1: { group_percent: 80 } }),
+      makeStageComp(2, "speed", { 1: { group_percent: 90 } }),
+      makeStageComp(3, "precision", { 1: { group_percent: 70 } }),
+    ];
+    const result = computeArchetypePerformance(stages, 1);
+    expect(result.map((r) => r.archetype)).toEqual(["speed", "precision", "mixed"]);
+  });
 });

@@ -60,6 +60,13 @@ const StyleFingerprintChart = dynamic(
     ),
   { ssr: false, loading: ChartSkeleton },
 );
+const ArchetypePerformanceSummary = dynamic(
+  () =>
+    import("@/components/archetype-performance").then(
+      (m) => m.ArchetypePerformanceSummary,
+    ),
+  { ssr: false },
+);
 const ShooterStyleRadarChart = dynamic(
   () =>
     import("@/components/shooter-style-radar-chart").then(
@@ -526,6 +533,8 @@ export default function MatchPageClient() {
                     aria-labelledby="coaching-view-heading"
                     className="space-y-6 pt-2"
                   >
+
+                    <ArchetypePerformanceSummary data={compareQuery.data} />
 
                     <div className="space-y-2">
                       <div className="flex items-center gap-1.5">

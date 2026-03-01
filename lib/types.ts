@@ -138,6 +138,7 @@ export interface StageComparison {
   field_competitor_count: number;     // count of valid field competitors contributing to the median
   stageDifficultyLevel: 1 | 2 | 3 | 4 | 5; // relative difficulty on a 1–5 scale (1=easy, 5=brutal)
   stageDifficultyLabel: string;       // human-readable label: easy/moderate/hard/very hard/brutal
+  stageArchetype?: StageArchetype | null; // speed / precision / mixed — null when target data is insufficient
   competitors: Record<number, CompetitorSummary>; // keyed by competitor_id
 }
 
@@ -188,6 +189,19 @@ export interface LossBreakdownStats {
   totalLoss: number;        // totalHitLoss + totalPenaltyLoss
   stagesFired: number;      // non-DNF, non-DQ, non-zeroed stages included in the breakdown
   hasHitZoneData: boolean;  // true if at least one stage had zone data (so hit loss is meaningful)
+}
+
+// Stage archetype based on target composition: speed (steel-heavy), precision
+// (paper-heavy long course), or mixed.
+export type StageArchetype = "speed" | "precision" | "mixed";
+
+// Per-archetype performance aggregate for one competitor.
+export interface ArchetypePerformance {
+  archetype: StageArchetype;
+  stageCount: number;
+  avgGroupPercent: number | null;
+  avgDivPercent: number | null;
+  avgOverallPercent: number | null;
 }
 
 export type ShooterArchetype = "Gunslinger" | "Surgeon" | "Speed Demon" | "Grinder";
@@ -276,6 +290,7 @@ export interface CompareResponse {
   whatIfStats: Record<number, WhatIfResult | null>;     // keyed by competitor_id; null = not enough stages
   styleFingerprintStats: Record<number, StyleFingerprintStats>; // keyed by competitor_id
   fieldFingerprintPoints: FieldFingerprintPoint[]; // all match competitors (for cohort cloud)
+  archetypePerformance: Record<number, ArchetypePerformance[]>; // keyed by competitor_id
   cacheInfo: CacheInfo;
 }
 
