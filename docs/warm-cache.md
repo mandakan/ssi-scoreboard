@@ -66,6 +66,7 @@ npx tsx scripts/warm-cache.ts [options]
 | `--jitter` | off | Add ±50% random jitter to each delay (e.g. 5000ms → 2500–7500ms) |
 | `--limit <n>` | *(all)* | Stop after warming this many matches |
 | `--skip-scorecards` | off | Only warm `GetMatch`, skip `GetMatchScorecards` |
+| `--skip-fingerprint` | off | Skip computing and caching `fieldFingerprintPoints` |
 | `--dry-run` | off | Print the list of matches that would be warmed, without writing anything |
 | `--force` | off | Re-warm even if the entry is already cached at the current schema version |
 
@@ -138,6 +139,61 @@ When both `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are present th
 script uses the Upstash REST adapter (same as the Cloudflare Pages build). Otherwise
 it falls back to ioredis for Docker / local Redis. The active backend and any prefix
 are printed in the header when a live run starts.
+
+---
+
+## GitHub Actions workflow
+
+The warmer runs **automatically every night at 03:15 UTC** against production (`l2plus`, `SWE`).
+In steady state, already-cached entries are skipped in milliseconds — a typical nightly run
+takes 2–5 minutes and picks up any Swedish matches that scored since the previous night.
+
+The country filter keeps the memory footprint manageable: warming all 618 global l2plus matches
+would consume ~50 MB of the 64 MB Upstash plan limit. Limiting to Sweden keeps this well under
+10 MB. Other regions can be warmed on demand via `workflow_dispatch` with `--country` and
+`--level` overrides.
+
+It can also be triggered manually from the **Actions** tab for one-off or bulk warming.
+
+### Initial bulk warm strategy
+
+For the very first run (~600+ uncached matches), use `--limit` to split the work into
+safe batches of ~150. Each run naturally continues from where the previous left off because
+the script sorts newest-first and skips already-cached entries instantly:
+
+| Run | Limit | Expected runtime |
+|---|---|---|
+| 1 | 150 | ~22 min |
+| 2 | 150 | ~22 min (skips batch 1 in seconds) |
+| 3 | 150 | ~22 min |
+| 4 | 150 | ~22 min (warms remaining ~150) |
+
+### Manual trigger
+
+1. Go to **Actions → Warm Cache → Run workflow**
+2. Choose the target environment (`staging` or `production`)
+3. Set any filters (level, country, date range, limit) and options
+4. Leave **Dry run** checked first to preview what will be warmed
+
+### Required secrets and variables
+
+**GitHub environment secrets** (Settings → Environments → \<env\> → Secrets):
+
+| Secret | Description |
+|---|---|
+| `SSI_API_KEY` | ShootNScoreIt API key |
+| `UPSTASH_REDIS_REST_URL` | Upstash REST endpoint for the target environment |
+| `UPSTASH_REDIS_REST_TOKEN` | Upstash REST token for the target environment |
+
+**GitHub environment variable** (Settings → Environments → \<env\> → Variables):
+
+| Variable | Description |
+|---|---|
+| `CACHE_KEY_PREFIX` | Key prefix used by the app (e.g. `staging:`) — must match the app's setting |
+
+The job has a 4-hour timeout. For very large full re-warms (`--force --level l2plus`) without
+a `--limit`, all ~600 matches at 5s delay takes ~2.5 hours — safely within the limit. Add
+`--limit 150` and run in batches if you want shorter individual runs.
 
 ---
 
