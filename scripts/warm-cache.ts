@@ -23,6 +23,7 @@
  *   --jitter                             Add ±50% random jitter to each delay
  *   --limit  <n>                         Max matches to warm (default: unlimited)
  *   --skip-scorecards                    Only warm GetMatch, skip GetMatchScorecards
+ *   --skip-fingerprint                   Skip computing + caching fieldFingerprintPoints
  *   --dry-run                            List matches without writing to cache
  *   --force                              Re-warm even if already cached at current schema version
  */
@@ -31,6 +32,8 @@ import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import IORedis from "ioredis";
 import { Redis as UpstashRedis } from "@upstash/redis";
+import { parseRawScorecards } from "../lib/scorecard-data";
+import { computeAllFingerprintPoints } from "../app/api/compare/logic";
 
 // ─── Inline constants (keep in sync with lib/constants.ts) ───────────────────
 
@@ -226,6 +229,7 @@ interface CliArgs {
   jitter: boolean;
   limit: number | null;
   skipScorecards: boolean;
+  skipFingerprint: boolean;
   dryRun: boolean;
   force: boolean;
 }
@@ -253,6 +257,7 @@ function parseArgs(): CliArgs {
     jitter: has("--jitter"),
     limit: get("--limit") !== null ? parseInt(get("--limit")!, 10) : null,
     skipScorecards: has("--skip-scorecards"),
+    skipFingerprint: has("--skip-fingerprint"),
     dryRun: has("--dry-run"),
     force: has("--force"),
   };
@@ -369,6 +374,17 @@ async function isCachedAtCurrentVersion(client: SimpleCacheClient, key: string):
   }
 }
 
+async function isFingerprintCached(client: SimpleCacheClient, key: string): Promise<boolean> {
+  try {
+    const raw = await client.get(key);
+    if (!raw) return false;
+    const entry = JSON.parse(raw) as { v?: number };
+    return entry.v === 1;
+  } catch {
+    return false;
+  }
+}
+
 async function writeToCache(
   client: SimpleCacheClient,
   key: string,
@@ -463,6 +479,7 @@ async function main(): Promise<void> {
   console.log(`Date range   : ${args.after} → ${args.before}`);
   console.log(`Delay        : ${args.delay}ms between requests${args.jitter ? " ±50% jitter" : ""}`);
   console.log(`Scorecards   : ${args.skipScorecards ? "skip" : "include"}`);
+  console.log(`Fingerprint  : ${args.skipFingerprint || args.skipScorecards ? "skip" : "include"}`);
   console.log(`Mode         : ${args.dryRun ? "DRY RUN (no writes)" : args.force ? "force re-warm" : "normal (skip already cached)"}`);
   if (args.limit !== null) console.log(`Warm limit   : ${args.limit} uncached matches`);
   console.log("─".repeat(50));
@@ -529,6 +546,9 @@ async function main(): Promise<void> {
     const matchKey = gqlCacheKey("GetMatch", { ct, id });
     const matchCached = !args.force && await isCachedAtCurrentVersion(client, matchKey);
 
+    // Keep match data in memory for the fingerprint step below (needs competitor division map)
+    let matchDataForFingerprint: unknown = null;
+
     if (!matchCached) {
       const t0 = Date.now();
       try {
@@ -551,6 +571,7 @@ async function main(): Promise<void> {
         await writeToCache(client, matchKey, data, ttl);
         opLine("GetMatch", "ok", ttl === null ? "permanent" : `ttl=${ttl}s`, fetchMs);
         warmed++;
+        matchDataForFingerprint = data;
       } catch (err) {
         opLine("GetMatch", "FAIL", err instanceof Error ? err.message : String(err), Date.now() - t0);
         failed++;
@@ -562,6 +583,13 @@ async function main(): Promise<void> {
     } else {
       opLine("GetMatch", "skip", `cached v${CACHE_SCHEMA_VERSION}`);
       skipped++;
+      // Read from cache so we can build the division map for fingerprints
+      if (!args.skipFingerprint && !args.skipScorecards) {
+        try {
+          const raw = await client.get(matchKey);
+          if (raw) matchDataForFingerprint = (JSON.parse(raw) as { data?: unknown }).data ?? null;
+        } catch { /* ignore */ }
+      }
     }
 
     if (args.skipScorecards) {
@@ -575,11 +603,14 @@ async function main(): Promise<void> {
     const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct, id });
     const scorecardsCached = !args.force && await isCachedAtCurrentVersion(client, scorecardsKey);
 
+    // Keep scorecard data in memory for the fingerprint step below
+    let scorecardsData: unknown = null;
+
     if (!scorecardsCached) {
       const t0 = Date.now();
       try {
-        const data = await gqlFetch(SCORECARDS_QUERY, { ct, id }, apiKey);
-        await writeToCache(client, scorecardsKey, data, null);
+        scorecardsData = await gqlFetch(SCORECARDS_QUERY, { ct, id }, apiKey);
+        await writeToCache(client, scorecardsKey, scorecardsData, null);
         opLine("GetMatchScorecards", "ok", "permanent", Date.now() - t0);
       } catch (err) {
         opLine("GetMatchScorecards", "FAIL", err instanceof Error ? err.message : String(err), Date.now() - t0);
@@ -589,6 +620,40 @@ async function main(): Promise<void> {
       await wait(args.delay, args.jitter);
     } else {
       opLine("GetMatchScorecards", "skip", `cached v${CACHE_SCHEMA_VERSION}`);
+      // Read from cache so we can compute fingerprints without an extra GQL fetch
+      if (!args.skipFingerprint) {
+        try {
+          const raw = await client.get(scorecardsKey);
+          if (raw) scorecardsData = (JSON.parse(raw) as { data?: unknown }).data ?? null;
+        } catch { /* ignore */ }
+      }
+    }
+
+    // ── Computed: match-global fingerprints ──────────────────────────────
+
+    if (!args.skipFingerprint && scorecardsData !== null && matchDataForFingerprint !== null) {
+      const matchGlobalKey = `computed:matchglobal:${ct}:${id}`;
+      const fingerprintCached = !args.force && await isFingerprintCached(client, matchGlobalKey);
+
+      if (!fingerprintCached) {
+        const t0 = Date.now();
+        try {
+          const allCompetitors =
+            (matchDataForFingerprint as { event?: { competitors_approved_w_wo_results_not_dnf?: Array<{ id: string; get_handgun_div_display?: string | null; handgun_div?: string | null }> } }).event
+              ?.competitors_approved_w_wo_results_not_dnf ?? [];
+          const divisionMap = new Map<number, string | null>(
+            allCompetitors.map((c) => [parseInt(c.id, 10), c.get_handgun_div_display ?? c.handgun_div ?? null])
+          );
+          const rawScorecards = parseRawScorecards(scorecardsData as Parameters<typeof parseRawScorecards>[0]);
+          const ffp = computeAllFingerprintPoints(rawScorecards, divisionMap);
+          await client.set(matchGlobalKey, JSON.stringify({ v: 1, fieldFingerprintPoints: ffp }), null);
+          opLine("MatchFingerprint", "ok", `${ffp.length} pts  permanent`, Date.now() - t0);
+        } catch (err) {
+          opLine("MatchFingerprint", "FAIL", err instanceof Error ? err.message : String(err), Date.now() - t0);
+        }
+      } else {
+        opLine("MatchFingerprint", "skip", "cached v1");
+      }
     }
 
     printProgress(i + 1, filtered.length, warmed, args.limit, sessionStart);

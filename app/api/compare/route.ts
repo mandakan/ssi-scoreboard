@@ -7,7 +7,7 @@ import { computeMatchTtl } from "@/lib/match-ttl";
 import { formatDivisionDisplay } from "@/lib/divisions";
 import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance } from "@/app/api/compare/logic";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
-import type { CompareMode, CompareResponse, CompetitorInfo, StageComparison } from "@/lib/types";
+import type { CompareMode, CompareResponse, CompetitorInfo, FieldFingerprintPoint, StageComparison } from "@/lib/types";
 
 interface RawCompetitor {
   id: string;
@@ -138,6 +138,15 @@ export async function GET(req: Request) {
       await cache.expire(scorecardsKey, dataTtl);
     }
   } catch { /* ignore */ }
+
+  // Start match-global cache read early so the Redis round-trip can resolve
+  // during the synchronous computation below (computeGroupRankings, etc.)
+  const matchGlobalKey = `computed:matchglobal:${ctNum}:${id}`;
+  const matchGlobalCachePromise: Promise<string | null> = mode === "coaching"
+    ? cache.get(matchGlobalKey).catch(() => null)
+    : Promise.resolve(null);
+
+  let fingerprintCacheHit: boolean | null = null;
 
   // Report the older of the two cache timestamps (most stale data wins)
   const cacheInfo = { cachedAt: matchCachedAt ?? scorecardsCachedAt };
@@ -294,13 +303,32 @@ export async function GET(req: Request) {
   const tPerCompetitor = performance.now();
 
   if (mode === "coaching") {
-    // Build division map for the full field (used by the fingerprint cohort cloud)
-    const divisionMap = new Map<number, string | null>(
-      allCompetitors.map((c) => [parseInt(c.id, 10), c.get_handgun_div_display ?? c.handgun_div ?? null])
-    );
-    // fieldFingerprintPoints includes percentile ranks so we compute it before enriching
-    // the selected competitors' stats.
-    const ffp = computeAllFingerprintPoints(rawScorecards, divisionMap);
+    const rawGlobal = await matchGlobalCachePromise;
+    let cachedPoints: FieldFingerprintPoint[] | undefined;
+    if (rawGlobal) {
+      try {
+        const parsed = JSON.parse(rawGlobal) as { v?: number; fieldFingerprintPoints?: FieldFingerprintPoint[] };
+        if (parsed.v === 1 && Array.isArray(parsed.fieldFingerprintPoints)) {
+          cachedPoints = parsed.fieldFingerprintPoints;
+        }
+      } catch { /* ignore */ }
+    }
+
+    let ffp: FieldFingerprintPoint[];
+    if (cachedPoints) {
+      ffp = cachedPoints;
+    } else {
+      // Build division map for the full field (used by the fingerprint cohort cloud)
+      const divisionMap = new Map<number, string | null>(
+        allCompetitors.map((c) => [parseInt(c.id, 10), c.get_handgun_div_display ?? c.handgun_div ?? null])
+      );
+      ffp = computeAllFingerprintPoints(rawScorecards, divisionMap);
+      try {
+        await cache.set(matchGlobalKey, JSON.stringify({ v: 1, fieldFingerprintPoints: ffp }), dataTtl);
+      } catch { /* ignore */ }
+    }
+
+    fingerprintCacheHit = cachedPoints !== undefined;
     fieldFingerprintPoints = ffp;
 
     const fieldAlphaRatios = ffp.map((p) => p.alphaRatio);
@@ -345,6 +373,7 @@ export async function GET(req: Request) {
     mode,
     match_cache_hit: matchCachedAt !== null,
     scorecards_cache_hit: scorecardsCachedAt !== null,
+    fingerprint_cache_hit: fingerprintCacheHit,
     scorecard_count: rawScorecards.length,
     is_complete: isComplete,
     ms_graphql: Math.round(tFetch - t0),
@@ -376,7 +405,7 @@ export async function GET(req: Request) {
     `per-competitor;dur=${(tPerCompetitor - tRankings).toFixed(1)};desc="Per-competitor stats"`,
   ];
   if (mode === "coaching") {
-    timingParts.push(`fingerprint;dur=${(tFingerprint - tPerCompetitor).toFixed(1)};desc="Fingerprint"`);
+    timingParts.push(`fingerprint;dur=${(tFingerprint - tPerCompetitor).toFixed(1)};desc="${fingerprintCacheHit ? "Fingerprint (cached)" : "Fingerprint (computed)"}"`);
   }
   timingParts.push(`total;dur=${(tFingerprint - t0).toFixed(1)};desc="Total"`);
   const serverTiming = timingParts.join(", ");

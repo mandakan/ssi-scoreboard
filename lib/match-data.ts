@@ -2,8 +2,9 @@
 // Shared between the match API route handler and server-side query prefetching
 // in the match page server component.
 
+import { cache } from "react";
 import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
-import cache from "@/lib/cache-impl";
+import cacheAdapter from "@/lib/cache-impl";
 import { computeMatchTtl } from "@/lib/match-ttl";
 import { formatDivisionDisplay } from "@/lib/divisions";
 import type { MatchResponse, StageInfo, CompetitorInfo, SquadInfo } from "@/lib/types";
@@ -60,6 +61,7 @@ export interface RawMatchData {
     level?: string | null;
     stages_count?: number;
     competitors_count?: number;
+    image?: { url?: string | null; width?: number | null; height?: number | null } | null;
     stages?: RawStage[];
     competitors_approved_w_wo_results_not_dnf?: RawCompetitor[];
     squads?: RawSquad[];
@@ -73,6 +75,20 @@ export interface FetchMatchResult {
   /** Milliseconds spent in the GraphQL/cache fetch. */
   msFetch: number;
 }
+
+/**
+ * React-cache-deduplicated raw match query fetch.
+ * Within a single Next.js server render, the first caller hits Redis (or
+ * GraphQL on a cache miss). All subsequent callers in the same render receive
+ * the memoised result — so layout.tsx generateMetadata() and the page Server
+ * Component never issue two separate Redis round-trips for the same match.
+ */
+export const fetchRawMatchData = cache(
+  async (ctNum: number, id: string): Promise<{ data: RawMatchData; cachedAt: string | null }> => {
+    const matchKey = gqlCacheKey("GetMatch", { ct: ctNum, id });
+    return cachedExecuteQuery<RawMatchData>(matchKey, MATCH_QUERY, { ct: ctNum, id }, 30);
+  },
+);
 
 /**
  * Fetch, map, and TTL-correct a match from the cache/GraphQL layer.
@@ -89,21 +105,16 @@ export async function fetchMatchData(
   const ctNum = parseInt(ct, 10);
   if (isNaN(ctNum)) return null;
 
-  const matchKey = gqlCacheKey("GetMatch", { ct: ctNum, id });
   const t0 = performance.now();
   let raw: RawMatchData;
   let cachedAt: string | null;
   try {
-    ({ data: raw, cachedAt } = await cachedExecuteQuery<RawMatchData>(
-      matchKey,
-      MATCH_QUERY,
-      { ct: ctNum, id },
-      30,
-    ));
+    ({ data: raw, cachedAt } = await fetchRawMatchData(ctNum, id));
   } catch {
     return null;
   }
   const msFetch = performance.now() - t0;
+  const matchKey = gqlCacheKey("GetMatch", { ct: ctNum, id });
 
   if (!raw.event) return null;
 
@@ -122,10 +133,10 @@ export async function fetchMatchData(
 
   try {
     if (ttl === null) {
-      const cached = await cache.get(matchKey);
-      if (cached) await cache.persist(matchKey);
+      const cached = await cacheAdapter.get(matchKey);
+      if (cached) await cacheAdapter.persist(matchKey);
     } else if (!cachedAt) {
-      await cache.expire(matchKey, ttl);
+      await cacheAdapter.expire(matchKey, ttl);
     }
   } catch { /* ignore */ }
 

@@ -23,7 +23,14 @@ export async function generateMetadata({
   params,
 }: Pick<Props, "params">): Promise<Metadata> {
   const { ct, id } = await params;
+  const t0 = performance.now();
   const match = await fetchOgMatchData(ct, id);
+  console.log(JSON.stringify({
+    route: "match-layout-metadata",
+    ct, id,
+    match_found: match !== null,
+    ms_og_fetch: Math.round(performance.now() - t0),
+  }));
 
   if (!match) {
     return { title: "Match not found — SSI Scoreboard" };

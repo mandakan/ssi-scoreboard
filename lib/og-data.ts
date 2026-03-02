@@ -1,37 +1,9 @@
 // Server-only — fetches match metadata for OG image and page metadata generation.
 // Uses the same cached GraphQL path as the match API route.
 
-import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
+import { fetchRawMatchData } from "@/lib/match-data";
 import { formatDivisionDisplay } from "@/lib/divisions";
 import type { CompetitorInfo } from "@/lib/types";
-
-// ── Raw GraphQL response shapes (minimal subset for OG) ────────────────
-
-interface RawOgCompetitor {
-  id: string;
-  first_name?: string;
-  last_name?: string;
-  number?: string;
-  club?: string | null;
-  handgun_div?: string | null;
-  get_handgun_div_display?: string | null;
-  shoots_handgun_major?: boolean | null;
-}
-
-interface RawOgMatchData {
-  event: {
-    name: string;
-    venue?: string | null;
-    starts: string | null;
-    scoring_completed?: string | number | null;
-    region?: string | null;
-    level?: string | null;
-    stages_count?: number;
-    competitors_count?: number;
-    image?: { url?: string | null; width?: number | null; height?: number | null } | null;
-    competitors_approved_w_wo_results_not_dnf?: RawOgCompetitor[];
-  } | null;
-}
 
 // ── Public types ────────────────────────────────────────────────────────
 
@@ -92,13 +64,7 @@ async function fetchOgMatchDataImpl(
   if (isNaN(ctNum)) return null;
 
   try {
-    const matchKey = gqlCacheKey("GetMatch", { ct: ctNum, id });
-    const { data } = await cachedExecuteQuery<RawOgMatchData>(
-      matchKey,
-      MATCH_QUERY,
-      { ct: ctNum, id },
-      30,
-    );
+    const { data } = await fetchRawMatchData(ctNum, id);
 
     if (!data.event) return null;
     const ev = data.event;

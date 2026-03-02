@@ -54,6 +54,13 @@ export default async function MatchPage({ params }: PageProps) {
     queryKey: matchQueryKey(ct, id),
     queryFn: async () => {
       const result = await fetchMatchData(ct, id);
+      console.log(JSON.stringify({
+        route: "match-page-ssr",
+        ct, id,
+        prefetch_status: result ? "success" : "not_found",
+        cache_hit: result !== null && result.cachedAt !== null,
+        ms_fetch: result ? Math.round(result.msFetch) : null,
+      }));
       if (!result) throw new Error("Match not found");
       return result.data;
     },
