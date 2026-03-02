@@ -34,10 +34,8 @@ import IORedis from "ioredis";
 import { Redis as UpstashRedis } from "@upstash/redis";
 import { parseRawScorecards } from "../lib/scorecard-data";
 import { computeAllFingerprintPoints } from "../app/api/compare/logic";
+import { CACHE_SCHEMA_VERSION } from "../lib/constants";
 
-// ─── Inline constants (keep in sync with lib/constants.ts) ───────────────────
-
-const CACHE_SCHEMA_VERSION = 3;
 const GRAPHQL_ENDPOINT = "https://shootnscoreit.com/graphql/";
 
 // ─── Inline TTL logic (keep in sync with lib/match-ttl.ts) ───────────────────
