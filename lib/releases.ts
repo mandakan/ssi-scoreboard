@@ -17,12 +17,20 @@ export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
     date: "March 2, 2026",
-    title: "Stage Degradation Analysis",
+    title: "Stage Degradation Analysis & Stage Metrics",
     sections: [
       {
         heading: "New",
         items: [
           "Stage degradation chart (Coaching mode): see whether shooting early or late on a stage correlated with higher or lower performance across the full field. A Spearman r badge summarises the trend, and your selected competitors are highlighted against the field.",
+          "Field accuracy rate on stage tooltips: hover the HF Level bars to see the median accuracy (% of max points) the field scored on that stage — distinguishes hard-shooting stages from long-but-accurate ones.",
+          "Stage separator indicator: a ↕ icon flags stages that spread the field apart the most — prime candidates for coaching analysis.",
+        ],
+      },
+      {
+        heading: "Improved",
+        items: [
+          "Stage difficulty relabelled to HF Level with neutral labels (Very high / High / Medium / Low / Very low). A low HF can reflect long running distances or high round count, not just hard shots.",
         ],
       },
     ],

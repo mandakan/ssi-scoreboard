@@ -45,9 +45,12 @@ function makeStage(
     group_leader_points: 100,
     overall_leader_hf: 5.0,
     field_median_hf: 4.0,
+    field_median_accuracy: null,
+    field_cv: null,
     field_competitor_count: 2,
     stageDifficultyLevel: 3,
     stageDifficultyLabel: "hard",
+    stageSeparatorLevel: 2 as const,
     competitors,
   };
 }

@@ -17,7 +17,7 @@ import {
   ShootingOrderBadge,
   StageClassificationBadge,
 } from "@/components/stage-cell-parts";
-import { CheckCircle2, Crosshair, Flame, Focus, Hand, HandMetal, Layers, Shield, Timer, Zap } from "lucide-react";
+import { ArrowUpDown, CheckCircle2, Crosshair, Flame, Focus, Hand, HandMetal, Layers, Shield, Timer, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { StageClassification } from "@/lib/types";
 
@@ -122,8 +122,11 @@ function StageColumnDiagram() {
             </div>
           }
           badge="2"
-          title="Difficulty"
-          description="1–5 bar difficulty rating from SSI. More bars = harder stage. Helps contextualize a lower hit factor or percentage."
+          title="HF Level"
+          description={<>
+            1–5 bars show relative HF level across stages in this match. More bars = higher field hit factor on this stage. Lower bars may reflect long movement, high round count, or hard shots — hover for field median and accuracy.{" "}
+            A <span className="inline-flex items-center gap-0.5 text-violet-500"><ArrowUpDown className="w-3 h-3" aria-hidden="true" /> separator</span> icon appears on stages whose field spread is a genuine statistical outlier for this match — typically 0–2 stages.
+          </>}
         />
         <DiagramRow
           visual={
@@ -142,7 +145,7 @@ function StageColumnDiagram() {
           badge="3"
           title="Stage archetype"
           description={<>
-            Appears next to the difficulty bars.{" "}
+            Appears next to the HF Level bars.{" "}
             <span className="inline-flex items-center gap-0.5 text-blue-500"><Timer className="w-3 h-3" aria-hidden="true" /> Speed</span>
             {" — "}
             <span className="inline-flex items-center gap-0.5 text-purple-500"><Focus className="w-3 h-3" aria-hidden="true" /> Precision</span>

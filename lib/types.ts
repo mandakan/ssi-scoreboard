@@ -162,8 +162,14 @@ export interface StageComparison {
   overall_leader_hf: number | null;   // best HF across full field — benchmark overlay hook
   field_median_hf: number | null;     // median HF across the full field (excludes DNF/DQ/zeroed)
   field_competitor_count: number;     // count of valid field competitors contributing to the median
-  stageDifficultyLevel: 1 | 2 | 3 | 4 | 5; // relative difficulty on a 1–5 scale (1=easy, 5=brutal)
-  stageDifficultyLabel: string;       // human-readable label: easy/moderate/hard/very hard/brutal
+  /** FEATURE: accuracy-metric — median(points/max_points×100) across valid field competitors. */
+  field_median_accuracy: number | null;
+  /** FEATURE: separator-metric — field CV (stddev/mean of HF). Higher = more field spread. */
+  field_cv: number | null;
+  stageDifficultyLevel: 1 | 2 | 3 | 4 | 5; // relative HF level: 1=very high HF, 5=very low HF
+  stageDifficultyLabel: string;       // "Very high" / "High" / "Medium" / "Low" / "Very low"
+  /** FEATURE: separator-metric — 1=low separator, 2=medium, 3=high (this stage spreads the field). */
+  stageSeparatorLevel: 1 | 2 | 3;
   stageArchetype?: StageArchetype | null; // speed / precision / mixed — null when target data is insufficient
   competitors: Record<number, CompetitorSummary>; // keyed by competitor_id
   /** Per-division HF distribution (quartiles) for this stage. Keyed by competitor_division string. */
