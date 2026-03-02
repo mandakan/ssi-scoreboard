@@ -12,7 +12,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronUp, Crosshair, ExternalLink, Flame, Focus, Gauge, Hand, HandMetal, HelpCircle, Info, Layers, Shield, Target, Timer, TrendingUp, X, Zap } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, Brain, CheckCircle2, ChevronDown, ChevronUp, Crosshair, ExternalLink, Flame, Focus, Gauge, Hand, HandMetal, HelpCircle, Info, Layers, Shield, Target, Timer, TrendingUp, X, Zap } from "lucide-react";
 import { cn, formatHF, formatTime, formatPct, computePointsDelta, formatDelta } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
 import { HitZoneBar } from "@/components/hit-zone-bar";
@@ -168,6 +168,42 @@ function StageArchetypeIcon({ archetype }: { archetype: StageArchetype }) {
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs">
         {label}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+const COMPLEXITY_COLORS: Record<1 | 2 | 3 | 4 | 5, string> = {
+  1: "text-sky-400",
+  2: "text-sky-500",
+  3: "text-blue-500",
+  4: "text-indigo-500",
+  5: "text-violet-500",
+};
+
+function StageComplexityIcon({
+  level,
+  label,
+}: {
+  level: 1 | 2 | 3 | 4 | 5;
+  label: string;
+}) {
+  const color = COMPLEXITY_COLORS[level];
+  const tooltipText = `Complexity: ${label.charAt(0).toUpperCase() + label.slice(1)}`;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={cn("inline-flex cursor-help", color)}
+          aria-label={tooltipText}
+          role="img"
+        >
+          <Brain className="w-3 h-3" aria-hidden="true" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-xs">
+        {tooltipText}
       </TooltipContent>
     </Tooltip>
   );
@@ -828,11 +864,22 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                                 label={stage.stageDifficultyLabel}
                                 medianHF={stage.field_median_hf}
                               />
+                              {stage.stageComplexityLevel != null && stage.stageComplexityLabel != null && (
+                                <StageComplexityIcon
+                                  level={stage.stageComplexityLevel}
+                                  label={stage.stageComplexityLabel}
+                                />
+                              )}
                               {stage.stageArchetype && (
                                 <StageArchetypeIcon archetype={stage.stageArchetype} />
                               )}
                               <StageConstraintBadges constraints={stage.constraints} />
                             </div>
+                            {stage.stageComplexityLabel && (
+                              <span className="text-xs text-muted-foreground">
+                                Complexity: {stage.stageComplexityLabel.charAt(0).toUpperCase() + stage.stageComplexityLabel.slice(1)}
+                              </span>
+                            )}
                             {stage.stageArchetype && (
                               <span className="text-xs text-muted-foreground">
                                 Type: {stage.stageArchetype.charAt(0).toUpperCase() + stage.stageArchetype.slice(1)}
@@ -889,6 +936,12 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                           label={stage.stageDifficultyLabel}
                           medianHF={stage.field_median_hf}
                         />
+                        {stage.stageComplexityLevel != null && stage.stageComplexityLabel != null && (
+                          <StageComplexityIcon
+                            level={stage.stageComplexityLevel}
+                            label={stage.stageComplexityLabel}
+                          />
+                        )}
                         {stage.stageArchetype && (
                           <StageArchetypeIcon archetype={stage.stageArchetype} />
                         )}

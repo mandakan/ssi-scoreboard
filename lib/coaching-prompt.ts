@@ -45,7 +45,8 @@ function buildStageLines(
       const cs = s.competitors[competitorId];
       if (!cs) return null;
 
-      const stageMeta = `${s.stageDifficultyLabel}, ${courseSize(s)}`;
+      const complexityPart = s.stageComplexityLabel ? `, ${s.stageComplexityLabel} complexity` : "";
+      const stageMeta = `${s.stageDifficultyLabel}, ${courseSize(s)}${complexityPart}`;
 
       if (cs.dq)
         return `  Stage ${s.stage_num} "${s.stage_name}" [${stageMeta}]: DQ`;

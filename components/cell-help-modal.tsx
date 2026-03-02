@@ -17,7 +17,7 @@ import {
   ShootingOrderBadge,
   StageClassificationBadge,
 } from "@/components/stage-cell-parts";
-import { CheckCircle2, Crosshair, Flame, Focus, Hand, HandMetal, Layers, Shield, Timer, Zap } from "lucide-react";
+import { Brain, CheckCircle2, Crosshair, Flame, Focus, Hand, HandMetal, Layers, Shield, Timer, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { StageClassification } from "@/lib/types";
 
@@ -153,11 +153,21 @@ function StageColumnDiagram() {
         />
         <DiagramRow
           visual={
+            <span className="inline-flex text-indigo-500" aria-label="Stage complexity" role="img">
+              <Brain className="w-3.5 h-3.5" aria-hidden="true" />
+            </span>
+          }
+          badge="4"
+          title="Complexity"
+          description="Intrinsic stage complexity based on course length, target count, constraints, and target variety. Higher = more planning and memorisation required. Complements difficulty, which reflects how the field performed."
+        />
+        <DiagramRow
+          visual={
             <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
               {MOCK_STAGE_ROUNDS}r · {MOCK_STAGE_PAPER}P · {MOCK_STAGE_STEEL}S
             </span>
           }
-          badge="4"
+          badge="5"
           title="Rounds & targets"
           description="Minimum round count, paper targets (P), and steel targets (S). Indicates stage type — high round count suggests a long course."
         />
@@ -169,7 +179,7 @@ function StageColumnDiagram() {
               <HandMetal className="w-3.5 h-3.5 text-cyan-500" />
             </div>
           }
-          badge="4"
+          badge="5"
           title="Constraint badges"
           description={<>Shown when the stage brief includes a shooting restriction: <span className="inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400"><Hand className="w-3 h-3" aria-hidden="true" /> strong hand only</span>, <span className="inline-flex items-center gap-0.5 text-cyan-600 dark:text-cyan-400"><HandMetal className="w-3 h-3" aria-hidden="true" /> weak hand only</span>, or <span className="inline-flex items-center gap-0.5 text-teal-600 dark:text-teal-400"><Crosshair className="w-3 h-3" aria-hidden="true" /> moving targets</span>. Tap the icon for a tooltip. Also visible in the stage info popover on mobile.</>}
         />
@@ -180,7 +190,7 @@ function StageColumnDiagram() {
               med: {MOCK_STAGE_MEDIAN_HF.toFixed(2)}
             </span>
           }
-          badge="5"
+          badge="6"
           title="Field median HF"
           description="Median hit factor of all competitors on this stage. A useful baseline — compare it with the hit factors in the cells above."
         />

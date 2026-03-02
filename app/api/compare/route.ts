@@ -5,7 +5,7 @@ import cache from "@/lib/cache-impl";
 import { computeMatchTtl } from "@/lib/match-ttl";
 
 import { formatDivisionDisplay } from "@/lib/divisions";
-import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, computeStageDegradationData } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, computeStageDegradationData, assignComplexity } from "@/app/api/compare/logic";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
 import type { CompareMode, CompareResponse, CompetitorInfo, FieldFingerprintPoint, StageComparison } from "@/lib/types";
 
@@ -224,11 +224,28 @@ export async function GET(req: Request) {
     }
   );
 
+  // Assign intrinsic complexity levels based on stage metadata
+  if (stages.length > 0) {
+    const complexities = assignComplexity(stages.map((s) => ({
+      course_display: s.course_display,
+      min_rounds: s.min_rounds,
+      max_points: s.max_points,
+      paper_targets: s.paper_targets,
+      steel_targets: s.steel_targets,
+      constraints: s.constraints,
+    })));
+    stages = stages.map((s, i) => ({
+      ...s,
+      stageComplexityLevel: complexities[i].level,
+      stageComplexityLabel: complexities[i].label,
+    }));
+  }
+
   // Fallback for future matches: if no scorecards exist yet but stage metadata is
   // available from the match query, build placeholder rows so the comparison table
   // shows stage names and metadata. Competitor cells render "—" for undefined entries.
   if (stages.length === 0 && stageMetaMap.size > 0) {
-    stages = (matchData.event.stages ?? []).map((s) => {
+    const fallbackStages = (matchData.event.stages ?? []).map((s) => {
       const stageId = parseInt(s.id, 10);
       const meta = stageMetaMap.get(stageId);
       return {
@@ -249,6 +266,20 @@ export async function GET(req: Request) {
         ...(meta ?? {}),
       } satisfies StageComparison;
     });
+    // Assign complexity to fallback stages too
+    const fallbackComplexities = assignComplexity(fallbackStages.map((s) => ({
+      course_display: s.course_display,
+      min_rounds: s.min_rounds,
+      max_points: s.max_points,
+      paper_targets: s.paper_targets,
+      steel_targets: s.steel_targets,
+      constraints: s.constraints,
+    })));
+    stages = fallbackStages.map((s, i) => ({
+      ...s,
+      stageComplexityLevel: fallbackComplexities[i].level,
+      stageComplexityLabel: fallbackComplexities[i].label,
+    }));
   }
 
   const tRankings = performance.now();
