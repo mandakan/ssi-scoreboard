@@ -144,14 +144,36 @@ are printed in the header when a live run starts.
 
 ## GitHub Actions workflow
 
-The warmer can be triggered from the **Actions** tab without any local setup:
+The warmer runs **automatically every night at 03:15 UTC** against production (`l2plus`, all
+countries, no limit). In steady state, already-cached entries are skipped in milliseconds —
+a typical nightly run takes 2–5 minutes and picks up any matches that scored since the
+previous night.
+
+It can also be triggered manually from the **Actions** tab for one-off or bulk warming.
+
+### Initial bulk warm strategy
+
+For the very first run (~600+ uncached matches), use `--limit` to split the work into
+safe batches of ~150. Each run naturally continues from where the previous left off because
+the script sorts newest-first and skips already-cached entries instantly:
+
+| Run | Limit | Expected runtime |
+|---|---|---|
+| 1 | 150 | ~22 min |
+| 2 | 150 | ~22 min (skips batch 1 in seconds) |
+| 3 | 150 | ~22 min |
+| 4 | 150 | ~22 min (warms remaining ~150) |
+
+### Manual trigger
 
 1. Go to **Actions → Warm Cache → Run workflow**
 2. Choose the target environment (`staging` or `production`)
-3. Set any filters (level, country, date range) and options
+3. Set any filters (level, country, date range, limit) and options
 4. Leave **Dry run** checked first to preview what will be warmed
 
-**Required GitHub environment secrets** (Settings → Environments → \<env\> → Secrets):
+### Required secrets and variables
+
+**GitHub environment secrets** (Settings → Environments → \<env\> → Secrets):
 
 | Secret | Description |
 |---|---|
@@ -159,14 +181,15 @@ The warmer can be triggered from the **Actions** tab without any local setup:
 | `UPSTASH_REDIS_REST_URL` | Upstash REST endpoint for the target environment |
 | `UPSTASH_REDIS_REST_TOKEN` | Upstash REST token for the target environment |
 
-**Required GitHub environment variable** (Settings → Environments → \<env\> → Variables):
+**GitHub environment variable** (Settings → Environments → \<env\> → Variables):
 
 | Variable | Description |
 |---|---|
 | `CACHE_KEY_PREFIX` | Key prefix used by the app (e.g. `staging:`) — must match the app's setting |
 
-The job has a 4-hour timeout. For very large full re-warms (`--force --level l2plus`) consider
-narrowing the date range or running in batches with `--limit`.
+The job has a 4-hour timeout. For very large full re-warms (`--force --level l2plus`) without
+a `--limit`, all ~600 matches at 5s delay takes ~2.5 hours — safely within the limit. Add
+`--limit 150` and run in batches if you want shorter individual runs.
 
 ---
 

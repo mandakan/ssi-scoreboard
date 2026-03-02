@@ -1,6 +1,12 @@
 name: Warm Cache
 
 on:
+  # Nightly incremental warm against production (03:15 UTC).
+  # Skips already-cached entries in milliseconds — steady-state runtime is ~2-5 min.
+  # Handles newly-completed matches automatically without any manual intervention.
+  schedule:
+    - cron: '15 3 * * *'
+
   workflow_dispatch:
     inputs:
       environment:
@@ -57,7 +63,8 @@ permissions:
 jobs:
   warm:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    # schedule trigger has no inputs — default to production
+    environment: ${{ github.event_name == 'schedule' && 'production' || inputs.environment }}
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
@@ -89,10 +96,11 @@ jobs:
           [ -z "$UPSTASH_REDIS_REST_URL" ]   && missing+=("UPSTASH_REDIS_REST_URL")
           [ -z "$UPSTASH_REDIS_REST_TOKEN" ] && missing+=("UPSTASH_REDIS_REST_TOKEN")
           if [ ${#missing[@]} -gt 0 ]; then
-            echo "ERROR: Missing required secrets in the '${{ inputs.environment }}' environment:"
+            ENV="${{ github.event_name == 'schedule' && 'production' || inputs.environment }}"
+            echo "ERROR: Missing required secrets in the '${ENV}' environment:"
             printf '  - %s\n' "${missing[@]}"
             echo ""
-            echo "Add them under Settings → Environments → ${{ inputs.environment }} → Secrets."
+            echo "Add them under Settings → Environments → ${ENV} → Secrets."
             exit 1
           fi
         env:
@@ -106,17 +114,18 @@ jobs:
           UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
           UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
           CACHE_KEY_PREFIX: ${{ vars.CACHE_KEY_PREFIX }}
-          # Pass free-text inputs via env vars to prevent shell injection
-          INPUT_LEVEL: ${{ inputs.level }}
-          INPUT_COUNTRY: ${{ inputs.country }}
-          INPUT_AFTER: ${{ inputs.after }}
-          INPUT_BEFORE: ${{ inputs.before }}
-          INPUT_DELAY: ${{ inputs.delay }}
-          INPUT_JITTER: ${{ inputs.jitter }}
-          INPUT_FORCE: ${{ inputs.force }}
-          INPUT_DRY_RUN: ${{ inputs.dry_run }}
-          INPUT_SKIP_SCORECARDS: ${{ inputs.skip_scorecards }}
-          INPUT_SKIP_FINGERPRINT: ${{ inputs.skip_fingerprint }}
+          # schedule trigger: hardcoded sensible defaults (no inputs available)
+          # workflow_dispatch: use provided inputs, fall back to schedule defaults
+          INPUT_LEVEL: ${{ inputs.level || 'l2plus' }}
+          INPUT_COUNTRY: ${{ inputs.country || '' }}
+          INPUT_AFTER: ${{ inputs.after || '' }}
+          INPUT_BEFORE: ${{ inputs.before || '' }}
+          INPUT_DELAY: ${{ inputs.delay || '5000' }}
+          INPUT_JITTER: ${{ inputs.jitter || 'true' }}
+          INPUT_FORCE: ${{ inputs.force || 'false' }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          INPUT_SKIP_SCORECARDS: ${{ inputs.skip_scorecards || 'false' }}
+          INPUT_SKIP_FINGERPRINT: ${{ inputs.skip_fingerprint || 'false' }}
         run: |
           ARGS="--level $INPUT_LEVEL --delay $INPUT_DELAY"
           if [ -n "$INPUT_COUNTRY" ];                then ARGS="$ARGS --country $INPUT_COUNTRY"; fi
