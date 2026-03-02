@@ -66,6 +66,7 @@ npx tsx scripts/warm-cache.ts [options]
 | `--jitter` | off | Add ±50% random jitter to each delay (e.g. 5000ms → 2500–7500ms) |
 | `--limit <n>` | *(all)* | Stop after warming this many matches |
 | `--skip-scorecards` | off | Only warm `GetMatch`, skip `GetMatchScorecards` |
+| `--skip-fingerprint` | off | Skip computing and caching `fieldFingerprintPoints` |
 | `--dry-run` | off | Print the list of matches that would be warmed, without writing anything |
 | `--force` | off | Re-warm even if the entry is already cached at the current schema version |
 
@@ -138,6 +139,34 @@ When both `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are present th
 script uses the Upstash REST adapter (same as the Cloudflare Pages build). Otherwise
 it falls back to ioredis for Docker / local Redis. The active backend and any prefix
 are printed in the header when a live run starts.
+
+---
+
+## GitHub Actions workflow
+
+The warmer can be triggered from the **Actions** tab without any local setup:
+
+1. Go to **Actions → Warm Cache → Run workflow**
+2. Choose the target environment (`staging` or `production`)
+3. Set any filters (level, country, date range) and options
+4. Leave **Dry run** checked first to preview what will be warmed
+
+**Required GitHub environment secrets** (Settings → Environments → \<env\> → Secrets):
+
+| Secret | Description |
+|---|---|
+| `SSI_API_KEY` | ShootNScoreIt API key |
+| `UPSTASH_REDIS_REST_URL` | Upstash REST endpoint for the target environment |
+| `UPSTASH_REDIS_REST_TOKEN` | Upstash REST token for the target environment |
+
+**Required GitHub environment variable** (Settings → Environments → \<env\> → Variables):
+
+| Variable | Description |
+|---|---|
+| `CACHE_KEY_PREFIX` | Key prefix used by the app (e.g. `staging:`) — must match the app's setting |
+
+The job has a 4-hour timeout. For very large full re-warms (`--force --level l2plus`) consider
+narrowing the date range or running in batches with `--limit`.
 
 ---
 

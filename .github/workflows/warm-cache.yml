@@ -1,0 +1,131 @@
+name: Warm Cache
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        type: choice
+        options: [staging, production]
+        required: true
+        default: staging
+      level:
+        description: 'Minimum event level'
+        type: choice
+        options: [l3plus, l2plus, l4plus, all]
+        default: l3plus
+      country:
+        description: 'Country filter (ISO-3, e.g. SWE) — leave blank for all'
+        required: false
+        default: ''
+      after:
+        description: 'Start date lower bound (YYYY-MM-DD) — default: 5 years ago'
+        required: false
+        default: ''
+      before:
+        description: 'Start date upper bound (YYYY-MM-DD) — default: 4 days ago'
+        required: false
+        default: ''
+      delay:
+        description: 'Delay between GraphQL requests (ms)'
+        required: false
+        default: '5000'
+      jitter:
+        description: 'Add ±50% random jitter to each delay'
+        type: boolean
+        default: true
+      force:
+        description: 'Re-warm entries already cached at the current schema version'
+        type: boolean
+        default: false
+      dry_run:
+        description: 'Dry run — list matches without writing to cache'
+        type: boolean
+        default: false
+      skip_scorecards:
+        description: 'Skip GetMatchScorecards (only warm GetMatch)'
+        type: boolean
+        default: false
+      skip_fingerprint:
+        description: 'Skip computing and caching fieldFingerprintPoints'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Get pnpm store path
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Verify required secrets
+        run: |
+          missing=()
+          [ -z "$SSI_API_KEY" ]              && missing+=("SSI_API_KEY")
+          [ -z "$UPSTASH_REDIS_REST_URL" ]   && missing+=("UPSTASH_REDIS_REST_URL")
+          [ -z "$UPSTASH_REDIS_REST_TOKEN" ] && missing+=("UPSTASH_REDIS_REST_TOKEN")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "ERROR: Missing required secrets in the '${{ inputs.environment }}' environment:"
+            printf '  - %s\n' "${missing[@]}"
+            echo ""
+            echo "Add them under Settings → Environments → ${{ inputs.environment }} → Secrets."
+            exit 1
+          fi
+        env:
+          SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Run cache warmer
+        env:
+          SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          CACHE_KEY_PREFIX: ${{ vars.CACHE_KEY_PREFIX }}
+          # Pass free-text inputs via env vars to prevent shell injection
+          INPUT_LEVEL: ${{ inputs.level }}
+          INPUT_COUNTRY: ${{ inputs.country }}
+          INPUT_AFTER: ${{ inputs.after }}
+          INPUT_BEFORE: ${{ inputs.before }}
+          INPUT_DELAY: ${{ inputs.delay }}
+          INPUT_JITTER: ${{ inputs.jitter }}
+          INPUT_FORCE: ${{ inputs.force }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_SKIP_SCORECARDS: ${{ inputs.skip_scorecards }}
+          INPUT_SKIP_FINGERPRINT: ${{ inputs.skip_fingerprint }}
+        run: |
+          ARGS="--level $INPUT_LEVEL --delay $INPUT_DELAY"
+          if [ -n "$INPUT_COUNTRY" ];                then ARGS="$ARGS --country $INPUT_COUNTRY"; fi
+          if [ -n "$INPUT_AFTER" ];                  then ARGS="$ARGS --after $INPUT_AFTER"; fi
+          if [ -n "$INPUT_BEFORE" ];                 then ARGS="$ARGS --before $INPUT_BEFORE"; fi
+          if [ "$INPUT_JITTER" = "true" ];            then ARGS="$ARGS --jitter"; fi
+          if [ "$INPUT_FORCE" = "true" ];             then ARGS="$ARGS --force"; fi
+          if [ "$INPUT_DRY_RUN" = "true" ];           then ARGS="$ARGS --dry-run"; fi
+          if [ "$INPUT_SKIP_SCORECARDS" = "true" ];   then ARGS="$ARGS --skip-scorecards"; fi
+          if [ "$INPUT_SKIP_FINGERPRINT" = "true" ];  then ARGS="$ARGS --skip-fingerprint"; fi
+          echo "Running: pnpm tsx scripts/warm-cache.ts $ARGS"
+          pnpm tsx scripts/warm-cache.ts $ARGS
