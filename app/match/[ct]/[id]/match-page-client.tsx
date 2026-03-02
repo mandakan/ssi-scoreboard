@@ -93,6 +93,13 @@ const ShooterStyleRadarChart = dynamic(
     ),
   { ssr: false, loading: ChartSkeleton },
 );
+const StageDegradationChart = dynamic(
+  () =>
+    import("@/components/stage-degradation-chart").then(
+      (m) => m.StageDegradationChart,
+    ),
+  { ssr: false, loading: ChartSkeleton },
+);
 const StageSimulator = dynamic(
   () => import("@/components/stage-simulator").then((m) => m.StageSimulator),
   { ssr: false, loading: () => <Skeleton className="h-48 w-full rounded-lg" /> },
@@ -707,6 +714,35 @@ export default function MatchPageClient() {
                             </Popover>
                           </div>
                           <ShooterStyleRadarChart data={compareQuery.data} />
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-1.5">
+                            <h3 className="text-sm font-semibold">Stage degradation</h3>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button
+                                  className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                                  aria-label="About this chart"
+                                >
+                                  <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-80" side="bottom" align="start">
+                                <PopoverHeader>
+                                  <PopoverTitle>Stage degradation</PopoverTitle>
+                                  <PopoverDescription>Does shooting position on a stage correlate with performance?</PopoverDescription>
+                                </PopoverHeader>
+                                <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+                                  <p>X axis = the order in which each competitor shot this specific stage (1 = first to shoot, N = last). Derived from scorecard submission timestamps.</p>
+                                  <p>Y axis = HF as % of the stage overall leader (100% = best run). Faded dots = full field; colored dots = your selected competitors.</p>
+                                  <p>The dashed line is a linear trend. The Spearman r badge shows how strongly shooting position correlates with performance: negative r means earlier shooters scored higher (stage degraded over the day); positive r means later shooters benefited (e.g., learned from watching).</p>
+                                  <p>Values near 0 (|r| &lt; 0.1) mean no meaningful shooting-order effect on this stage.</p>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                          <StageDegradationChart data={compareQuery.data} />
                         </div>
                       </section>
                     )}
