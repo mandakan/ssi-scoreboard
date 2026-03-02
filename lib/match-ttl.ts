@@ -10,22 +10,38 @@
  *   pre-match, start 0–2 days away            → 30 min
  *   match started, no scoring yet (<12 h)     → 5 min
  *   fallback (unknown state)                  → 30 s
+ *
+ * All non-null results are clamped to at least MIN_CACHE_TTL_SECONDS
+ * (default 300 s / 5 min; override via the MIN_CACHE_TTL_SECONDS env var).
  */
+
+const DEFAULT_MIN_TTL = parseInt(
+  process.env.MIN_CACHE_TTL_SECONDS ?? "300",
+  10,
+);
+
 export function computeMatchTtl(
   scoringPct: number,
   daysSince: number, // negative = future match
   dateStr: string | null,
+  minTtl = DEFAULT_MIN_TTL,
 ): number | null {
   if (scoringPct >= 95 || daysSince > 3) return null; // permanent
-  if (scoringPct > 0) return 30; // active scoring
 
-  if (dateStr) {
+  let ttl: number;
+
+  if (scoringPct > 0) {
+    ttl = 30; // active scoring
+  } else if (dateStr) {
     const hoursUntil = (new Date(dateStr).getTime() - Date.now()) / 3_600_000;
-    if (hoursUntil > 7 * 24) return 4 * 60 * 60; // > 7 days
-    if (hoursUntil > 2 * 24) return 60 * 60; // 2–7 days
-    if (hoursUntil > 0) return 30 * 60; // 0–2 days
-    if (hoursUntil > -12) return 5 * 60; // just started
+    if (hoursUntil > 7 * 24) ttl = 4 * 60 * 60; // > 7 days
+    else if (hoursUntil > 2 * 24) ttl = 60 * 60; // 2–7 days
+    else if (hoursUntil > 0) ttl = 30 * 60; // 0–2 days
+    else if (hoursUntil > -12) ttl = 5 * 60; // just started
+    else ttl = 30; // fallback
+  } else {
+    ttl = 30; // fallback (no date)
   }
 
-  return 30; // fallback
+  return Math.max(minTtl, ttl);
 }

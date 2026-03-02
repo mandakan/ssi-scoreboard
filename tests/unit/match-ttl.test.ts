@@ -16,6 +16,15 @@ function isoHoursFromNow(hours: number): string {
   return new Date(NOW + hours * 3_600_000).toISOString();
 }
 
+// Shorthand: test raw tier values without the minimum floor applied
+function rawTtl(
+  scoringPct: number,
+  daysSince: number,
+  dateStr: string | null,
+) {
+  return computeMatchTtl(scoringPct, daysSince, dateStr, 0);
+}
+
 describe("computeMatchTtl", () => {
   // ── Completed matches ──────────────────────────────────────────────────────
 
@@ -35,10 +44,21 @@ describe("computeMatchTtl", () => {
 
   // ── Active scoring ─────────────────────────────────────────────────────────
 
-  it("returns 30s when scoring is between 1–94% and recent", () => {
-    expect(computeMatchTtl(1, 1, isoHoursFromNow(-24))).toBe(30);
-    expect(computeMatchTtl(50, 1, isoHoursFromNow(-24))).toBe(30);
-    expect(computeMatchTtl(94, 1, isoHoursFromNow(-24))).toBe(30);
+  it("raw tier is 30s when scoring is between 1–94% and recent", () => {
+    expect(rawTtl(1, 1, isoHoursFromNow(-24))).toBe(30);
+    expect(rawTtl(50, 1, isoHoursFromNow(-24))).toBe(30);
+    expect(rawTtl(94, 1, isoHoursFromNow(-24))).toBe(30);
+  });
+
+  it("active scoring is clamped to minTtl (default 300s)", () => {
+    // raw = 30, minTtl default = 300 → result = 300
+    expect(computeMatchTtl(1, 1, isoHoursFromNow(-24))).toBe(300);
+    expect(computeMatchTtl(50, 1, isoHoursFromNow(-24))).toBe(300);
+  });
+
+  it("active scoring respects an explicit minTtl above the raw tier", () => {
+    expect(computeMatchTtl(50, 1, isoHoursFromNow(-24), 60)).toBe(60);
+    expect(computeMatchTtl(50, 1, isoHoursFromNow(-24), 600)).toBe(600);
   });
 
   // ── Pre-match: start > 7 days away ────────────────────────────────────────
@@ -91,16 +111,31 @@ describe("computeMatchTtl", () => {
 
   // ── Fallback ───────────────────────────────────────────────────────────────
 
-  it("returns 30s fallback when dateStr is null and scoring is 0", () => {
-    expect(computeMatchTtl(0, 0, null)).toBe(30);
+  it("raw fallback is 30s when dateStr is null and scoring is 0", () => {
+    expect(rawTtl(0, 0, null)).toBe(30);
   });
 
-  it("returns 30s fallback when dateStr is null and daysSince <= 0", () => {
-    expect(computeMatchTtl(0, -1, null)).toBe(30);
+  it("fallback is clamped to minTtl (default 300s) when dateStr is null", () => {
+    expect(computeMatchTtl(0, 0, null)).toBe(300);
+    expect(computeMatchTtl(0, -1, null)).toBe(300);
+    expect(computeMatchTtl(0, 1, null)).toBe(300);
   });
 
-  it("returns 30s fallback when match started >12h ago but no scoring and no dateStr", () => {
-    expect(computeMatchTtl(0, 1, null)).toBe(30);
+  // ── Minimum TTL floor ──────────────────────────────────────────────────────
+
+  it("minTtl=0 disables the floor and returns raw tier values", () => {
+    expect(rawTtl(1, 1, isoHoursFromNow(-24))).toBe(30); // active scoring
+    expect(rawTtl(0, 0, null)).toBe(30); // fallback
+  });
+
+  it("minTtl clamps active scoring to the specified floor", () => {
+    expect(computeMatchTtl(50, 1, isoHoursFromNow(-24), 120)).toBe(120);
+  });
+
+  it("minTtl does not affect tiers already above the floor", () => {
+    const soon = isoHoursFromNow(12);
+    // 30 min tier (1800s) >> default minTtl (300s) → unchanged
+    expect(computeMatchTtl(0, -0.5, soon, 300)).toBe(30 * 60);
   });
 
   // ── Negative daysSince (future match) with dateStr ────────────────────────

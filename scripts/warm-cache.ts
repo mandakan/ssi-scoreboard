@@ -42,21 +42,35 @@ const GRAPHQL_ENDPOINT = "https://shootnscoreit.com/graphql/";
 
 // ─── Inline TTL logic (keep in sync with lib/match-ttl.ts) ───────────────────
 
+const DEFAULT_MIN_TTL = parseInt(
+  process.env.MIN_CACHE_TTL_SECONDS ?? "300",
+  10,
+);
+
 function computeMatchTtl(
   scoringPct: number,
   daysSince: number,
   dateStr: string | null,
+  minTtl = DEFAULT_MIN_TTL,
 ): number | null {
   if (scoringPct >= 95 || daysSince > 3) return null; // permanent
-  if (scoringPct > 0) return 30;
-  if (dateStr) {
+
+  let ttl: number;
+
+  if (scoringPct > 0) {
+    ttl = 30;
+  } else if (dateStr) {
     const hoursUntil = (new Date(dateStr).getTime() - Date.now()) / 3_600_000;
-    if (hoursUntil > 7 * 24) return 4 * 60 * 60;
-    if (hoursUntil > 2 * 24) return 60 * 60;
-    if (hoursUntil > 0) return 30 * 60;
-    if (hoursUntil > -12) return 5 * 60;
+    if (hoursUntil > 7 * 24) ttl = 4 * 60 * 60;
+    else if (hoursUntil > 2 * 24) ttl = 60 * 60;
+    else if (hoursUntil > 0) ttl = 30 * 60;
+    else if (hoursUntil > -12) ttl = 5 * 60;
+    else ttl = 30;
+  } else {
+    ttl = 30;
   }
-  return 30;
+
+  return Math.max(minTtl, ttl);
 }
 
 // ─── Inline level filter (keep in sync with app/api/events/route.ts) ─────────
