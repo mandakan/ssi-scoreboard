@@ -71,6 +71,7 @@ const MOCK_COMPARE: CompareResponse = {
     200: { normal: { stageCount: 2, avgGroupPercent: 99.15 }, constrained: { stageCount: 0, avgGroupPercent: null } },
     300: { normal: { stageCount: 2, avgGroupPercent: 93.55 }, constrained: { stageCount: 0, avgGroupPercent: null } },
   },
+  stageDegradationData: null,
   stages: [
     {
       stage_id: 1,

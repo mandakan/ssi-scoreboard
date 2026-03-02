@@ -31,6 +31,7 @@ const baseData: CompareResponse = {
     1: { normal: { stageCount: 1, avgGroupPercent: 89.2 }, constrained: { stageCount: 0, avgGroupPercent: null } },
     2: { normal: { stageCount: 1, avgGroupPercent: 100 }, constrained: { stageCount: 0, avgGroupPercent: null } },
   },
+  stageDegradationData: null,
   consistencyStats: {
     1: { coefficientOfVariation: null, label: null, stagesFired: 1 },
     2: { coefficientOfVariation: null, label: null, stagesFired: 1 },

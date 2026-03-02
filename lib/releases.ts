@@ -11,11 +11,24 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-03-01";
+export const LATEST_RELEASE_ID = "2026-03-02";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "March 2, 2026",
+    title: "Stage Degradation Analysis",
+    sections: [
+      {
+        heading: "New",
+        items: [
+          "Stage degradation chart (Coaching mode): see whether shooting early or late on a stage correlated with higher or lower performance across the full field. A Spearman r badge summarises the trend, and your selected competitors are highlighted against the field.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-03-01",
     date: "March 1, 2026",
     title: "Live/Coaching Mode & Stage Analytics",
     sections: [

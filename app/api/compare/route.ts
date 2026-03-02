@@ -5,7 +5,7 @@ import cache from "@/lib/cache-impl";
 import { computeMatchTtl } from "@/lib/match-ttl";
 
 import { formatDivisionDisplay } from "@/lib/divisions";
-import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, computeStageDegradationData } from "@/app/api/compare/logic";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
 import type { CompareMode, CompareResponse, CompetitorInfo, FieldFingerprintPoint, StageComparison } from "@/lib/types";
 
@@ -283,6 +283,7 @@ export async function GET(req: Request) {
   let whatIfStats: CompareResponse["whatIfStats"] = null;
   let fieldFingerprintPoints: CompareResponse["fieldFingerprintPoints"] = null;
   let styleFingerprintStats: CompareResponse["styleFingerprintStats"] = null;
+  let stageDegradationData: CompareResponse["stageDegradationData"] = null;
 
   if (mode === "coaching") {
     archetypePerformance = Object.fromEntries(
@@ -298,6 +299,7 @@ export async function GET(req: Request) {
     );
 
     whatIfStats = simulateWithoutWorstStage(stages, requestedCompetitors, rawScorecards);
+    stageDegradationData = computeStageDegradationData(rawScorecards);
   }
 
   const tPerCompetitor = performance.now();
@@ -395,6 +397,7 @@ export async function GET(req: Request) {
     archetypePerformance,
     courseLengthPerformance,
     constraintPerformance,
+    stageDegradationData,
     cacheInfo,
   };
 

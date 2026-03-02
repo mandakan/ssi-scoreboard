@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computePercentileRank, assignArchetype, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, computeQuartiles, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computePercentileRank, assignArchetype, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, computeQuartiles, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, computeStageDegradationData, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompetitorInfo, StageComparison } from "@/lib/types";
 
 const competitors: CompetitorInfo[] = [
@@ -2885,5 +2885,146 @@ describe("computeConstraintPerformance", () => {
     const result = computeConstraintPerformance(stages, 1);
     expect(result.constrained.stageCount).toBe(1);
     expect(result.constrained.avgGroupPercent).toBeCloseTo(75, 5);
+  });
+});
+
+// ── computeStageDegradationData ───────────────────────────────────────────────
+
+describe("computeStageDegradationData", () => {
+  function makeTimedCard(
+    competitorId: number,
+    stageId: number,
+    stageNumber: number,
+    hitFactor: number,
+    createdIso: string,
+    overrides: Partial<RawScorecard> = {}
+  ): RawScorecard {
+    return {
+      competitor_id: competitorId,
+      competitor_division: null,
+      stage_id: stageId,
+      stage_number: stageNumber,
+      stage_name: `Stage ${stageNumber}`,
+      max_points: 100,
+      points: hitFactor * 10,
+      hit_factor: hitFactor,
+      time: 10,
+      dq: false,
+      zeroed: false,
+      dnf: false,
+      incomplete: false,
+      a_hits: 10,
+      c_hits: 0,
+      d_hits: 0,
+      miss_count: 0,
+      no_shoots: 0,
+      procedurals: 0,
+      scorecard_created: createdIso,
+      ...overrides,
+    };
+  }
+
+  it("assigns shooting positions in timestamp order", () => {
+    const cards = [
+      makeTimedCard(1, 10, 1, 5.0, "2024-01-01T09:00:00Z"),
+      makeTimedCard(2, 10, 1, 4.0, "2024-01-01T09:05:00Z"),
+      makeTimedCard(3, 10, 1, 3.0, "2024-01-01T09:10:00Z"),
+      makeTimedCard(4, 10, 1, 6.0, "2024-01-01T08:55:00Z"), // earliest
+    ];
+    const result = computeStageDegradationData(cards);
+    expect(result).toHaveLength(1);
+    const stage = result[0];
+    // Position 1 = earliest timestamp = competitor 4
+    expect(stage.points.find((p) => p.competitorId === 4)?.shootingPosition).toBe(1);
+    expect(stage.points.find((p) => p.competitorId === 1)?.shootingPosition).toBe(2);
+    expect(stage.points.find((p) => p.competitorId === 2)?.shootingPosition).toBe(3);
+    expect(stage.points.find((p) => p.competitorId === 3)?.shootingPosition).toBe(4);
+  });
+
+  it("computes hfPercent relative to stage max HF (100 = leader)", () => {
+    const cards = [
+      makeTimedCard(1, 10, 1, 8.0, "2024-01-01T09:00:00Z"), // leader
+      makeTimedCard(2, 10, 1, 4.0, "2024-01-01T09:05:00Z"), // 50% of leader
+    ];
+    const result = computeStageDegradationData(cards);
+    const stage = result[0];
+    expect(stage.points.find((p) => p.competitorId === 1)?.hfPercent).toBeCloseTo(100, 5);
+    expect(stage.points.find((p) => p.competitorId === 2)?.hfPercent).toBeCloseTo(50, 5);
+  });
+
+  it("excludes DNF, DQ, zeroed, and cards without timestamps", () => {
+    const cards = [
+      makeTimedCard(1, 10, 1, 5.0, "2024-01-01T09:00:00Z"), // valid
+      makeTimedCard(6, 10, 1, 4.5, "2024-01-01T09:03:00Z"), // valid — needed for ≥ 2 threshold
+      makeTimedCard(2, 10, 1, 4.0, "2024-01-01T09:05:00Z", { dnf: true }),
+      makeTimedCard(3, 10, 1, 3.0, "2024-01-01T09:10:00Z", { dq: true }),
+      makeTimedCard(4, 10, 1, 2.0, "2024-01-01T09:15:00Z", { zeroed: true }),
+      makeTimedCard(5, 10, 1, 6.0, "", { scorecard_created: null }),
+    ];
+    const result = computeStageDegradationData(cards);
+    const stage = result[0];
+    // Only competitors 1 and 6 survive all filters
+    expect(stage.points).toHaveLength(2);
+    const ids = stage.points.map((p) => p.competitorId);
+    expect(ids).toContain(1);
+    expect(ids).toContain(6);
+    expect(ids).not.toContain(2);
+    expect(ids).not.toContain(3);
+    expect(ids).not.toContain(4);
+    expect(ids).not.toContain(5);
+  });
+
+  it("returns empty points and null spearmanR when fewer than 2 valid entries", () => {
+    const cards = [makeTimedCard(1, 10, 1, 5.0, "2024-01-01T09:00:00Z")];
+    const result = computeStageDegradationData(cards);
+    expect(result[0].points).toHaveLength(0);
+    expect(result[0].spearmanR).toBeNull();
+  });
+
+  it("returns null spearmanR for 2–3 valid entries", () => {
+    const cards = [
+      makeTimedCard(1, 10, 1, 5.0, "2024-01-01T09:00:00Z"),
+      makeTimedCard(2, 10, 1, 4.0, "2024-01-01T09:05:00Z"),
+      makeTimedCard(3, 10, 1, 3.0, "2024-01-01T09:10:00Z"),
+    ];
+    const result = computeStageDegradationData(cards);
+    // 3 points < 4 → no correlation
+    expect(result[0].points).toHaveLength(3);
+    expect(result[0].spearmanR).toBeNull();
+  });
+
+  it("computes spearmanR = -1 for perfect inverse: earliest shooter always wins", () => {
+    // Perfect degradation: positions 1,2,3,4 map to HF% 100,75,50,25 (inverse)
+    const cards = [
+      makeTimedCard(1, 10, 1, 4.0, "2024-01-01T09:00:00Z"), // pos 1, max HF → 100%
+      makeTimedCard(2, 10, 1, 3.0, "2024-01-01T09:05:00Z"), // pos 2 → 75%
+      makeTimedCard(3, 10, 1, 2.0, "2024-01-01T09:10:00Z"), // pos 3 → 50%
+      makeTimedCard(4, 10, 1, 1.0, "2024-01-01T09:15:00Z"), // pos 4 → 25%
+    ];
+    const result = computeStageDegradationData(cards);
+    expect(result[0].spearmanR).toBeCloseTo(-1, 5);
+  });
+
+  it("computes spearmanR = +1 for perfect positive: latest shooter always wins", () => {
+    const cards = [
+      makeTimedCard(1, 10, 1, 1.0, "2024-01-01T09:00:00Z"), // pos 1 → 25%
+      makeTimedCard(2, 10, 1, 2.0, "2024-01-01T09:05:00Z"), // pos 2 → 50%
+      makeTimedCard(3, 10, 1, 3.0, "2024-01-01T09:10:00Z"), // pos 3 → 75%
+      makeTimedCard(4, 10, 1, 4.0, "2024-01-01T09:15:00Z"), // pos 4 → 100%
+    ];
+    const result = computeStageDegradationData(cards);
+    expect(result[0].spearmanR).toBeCloseTo(1, 5);
+  });
+
+  it("sorts output by stage number", () => {
+    const cards = [
+      makeTimedCard(1, 20, 2, 5.0, "2024-01-01T09:00:00Z"),
+      makeTimedCard(2, 20, 2, 4.0, "2024-01-01T09:05:00Z"),
+      makeTimedCard(1, 10, 1, 3.0, "2024-01-01T10:00:00Z"),
+      makeTimedCard(2, 10, 1, 2.0, "2024-01-01T10:05:00Z"),
+    ];
+    const result = computeStageDegradationData(cards);
+    expect(result[0].stageNum).toBe(1);
+    expect(result[1].stageNum).toBe(2);
   });
 });

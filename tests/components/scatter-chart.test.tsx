@@ -19,6 +19,7 @@ const baseData: CompareResponse = {
   archetypePerformance: {},
   courseLengthPerformance: {},
   constraintPerformance: {},
+  stageDegradationData: null,
   consistencyStats: {
     1: { coefficientOfVariation: null, label: null, stagesFired: 1 },
     2: { coefficientOfVariation: null, label: null, stagesFired: 1 },

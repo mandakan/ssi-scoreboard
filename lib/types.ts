@@ -336,6 +336,27 @@ export interface WhatIfResult {
   secondWorstReplacement: SimResult;  // scenario 2: replace worst with second-worst (lower bound)
 }
 
+// One competitor's shooting position vs performance on a specific stage (full field).
+export interface StageDegradationPoint {
+  competitorId: number;
+  /** 1-based rank among all competitors who shot this stage, ordered by scorecard_created timestamp. */
+  shootingPosition: number;
+  /** HF as % of stage overall leader (0–100). */
+  hfPercent: number;
+}
+
+// Full-field shooting order vs performance data for one stage.
+// Used in the coaching analysis "Stage Degradation" chart.
+export interface StageDegradationData {
+  stageId: number;
+  stageNum: number;
+  stageName: string;
+  /** All field competitors with valid timestamps and positive HF, sorted by shooting position. */
+  points: StageDegradationPoint[];
+  /** Spearman rank correlation between shooting position and HF%; null when < 4 valid data points. */
+  spearmanR: number | null;
+}
+
 export interface CompareResponse {
   match_id: number;
   mode: CompareMode;
@@ -351,6 +372,7 @@ export interface CompareResponse {
   archetypePerformance: Record<number, ArchetypePerformance[]> | null; // null in live mode
   courseLengthPerformance: Record<number, CourseLengthPerformance[]> | null; // null in live mode
   constraintPerformance: Record<number, ConstraintPerformance> | null; // null in live mode
+  stageDegradationData: StageDegradationData[] | null; // null in live mode
   cacheInfo: CacheInfo;
 }
 

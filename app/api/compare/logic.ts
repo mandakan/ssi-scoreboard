@@ -21,6 +21,8 @@ import type {
   StageConstraints,
   CourseLengthPerformance,
   ConstraintPerformance,
+  StageDegradationData,
+  StageDegradationPoint,
 } from "@/lib/types";
 
 export interface RawScorecard {
@@ -1617,4 +1619,95 @@ export function computeConstraintPerformance(
     normal:      { stageCount: normalPcts.length, avgGroupPercent: avg(normalPcts) },
     constrained: { stageCount: constrainedPcts.length, avgGroupPercent: avg(constrainedPcts) },
   };
+}
+
+// ── Stage Degradation Analysis ────────────────────────────────────────────────
+
+/**
+ * Compute per-stage shooting order vs HF% for the full field.
+ *
+ * For each stage, competitors are ranked by their scorecard_created timestamp
+ * (i.e., the absolute time they shot that specific stage, not their own cross-stage
+ * sequence). This enables visualization of stage degradation: does performance
+ * correlate with being an early or late shooter on that stage?
+ *
+ * Excluded: DNF, DQ, zeroed, missing timestamp, non-positive HF.
+ * spearmanR is null when fewer than 4 valid data points exist for a stage.
+ */
+export function computeStageDegradationData(
+  allScorecards: RawScorecard[]
+): StageDegradationData[] {
+  const byStage = new Map<number, RawScorecard[]>();
+  for (const sc of allScorecards) {
+    const arr = byStage.get(sc.stage_id) ?? [];
+    arr.push(sc);
+    byStage.set(sc.stage_id, arr);
+  }
+
+  const result: StageDegradationData[] = [];
+
+  for (const [stageId, scorecards] of byStage) {
+    const first = scorecards[0];
+    const valid = scorecards.filter(
+      (sc) => !sc.dnf && !sc.dq && !sc.zeroed && sc.scorecard_created && (sc.hit_factor ?? 0) > 0
+    );
+
+    // Sort by timestamp to establish stage-level shooting position
+    const sorted = [...valid].sort((a, b) =>
+      a.scorecard_created!.localeCompare(b.scorecard_created!)
+    );
+
+    const maxHF = sorted.reduce((m, sc) => Math.max(m, sc.hit_factor ?? 0), 0);
+
+    if (maxHF <= 0 || sorted.length < 2) {
+      result.push({
+        stageId,
+        stageNum: first.stage_number,
+        stageName: first.stage_name,
+        points: [],
+        spearmanR: null,
+      });
+      continue;
+    }
+
+    const points: StageDegradationPoint[] = sorted.map((sc, i) => ({
+      competitorId: sc.competitor_id,
+      shootingPosition: i + 1,
+      hfPercent: ((sc.hit_factor ?? 0) / maxHF) * 100,
+    }));
+
+    result.push({
+      stageId,
+      stageNum: first.stage_number,
+      stageName: first.stage_name,
+      points,
+      spearmanR: points.length >= 4 ? spearmanR(points) : null,
+    });
+  }
+
+  result.sort((a, b) => a.stageNum - b.stageNum);
+  return result;
+}
+
+/**
+ * Spearman rank correlation between shooting position and HF%.
+ *
+ * Since shootingPosition is already a 1-based rank (1..N), only the HF%
+ * values need to be ranked. Ties in HF% receive sequential ranks (no average-
+ * rank adjustment) — close enough for the badge display given that identical
+ * HFs are rare in IPSC matches.
+ */
+function spearmanR(points: StageDegradationPoint[]): number {
+  const n = points.length;
+  // Rank HF% values ascending (1 = lowest HF%)
+  const sortedByHF = [...points].sort((a, b) => a.hfPercent - b.hfPercent);
+  const hfRankMap = new Map<number, number>();
+  sortedByHF.forEach((p, i) => hfRankMap.set(p.competitorId, i + 1));
+
+  let sumD2 = 0;
+  for (const p of points) {
+    const d = p.shootingPosition - hfRankMap.get(p.competitorId)!;
+    sumD2 += d * d;
+  }
+  return 1 - (6 * sumD2) / (n * (n * n - 1));
 }
