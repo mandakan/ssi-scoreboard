@@ -116,8 +116,10 @@ jobs:
           CACHE_KEY_PREFIX: ${{ vars.CACHE_KEY_PREFIX }}
           # schedule trigger: hardcoded sensible defaults (no inputs available)
           # workflow_dispatch: use provided inputs, fall back to schedule defaults
+          # Nightly default: SWE l2plus — keeps footprint manageable while covering
+          # the primary audience. Override via workflow_dispatch for other regions.
           INPUT_LEVEL: ${{ inputs.level || 'l2plus' }}
-          INPUT_COUNTRY: ${{ inputs.country || '' }}
+          INPUT_COUNTRY: ${{ inputs.country || 'SWE' }}
           INPUT_AFTER: ${{ inputs.after || '' }}
           INPUT_BEFORE: ${{ inputs.before || '' }}
           INPUT_DELAY: ${{ inputs.delay || '5000' }}

@@ -144,10 +144,14 @@ are printed in the header when a live run starts.
 
 ## GitHub Actions workflow
 
-The warmer runs **automatically every night at 03:15 UTC** against production (`l2plus`, all
-countries, no limit). In steady state, already-cached entries are skipped in milliseconds —
-a typical nightly run takes 2–5 minutes and picks up any matches that scored since the
-previous night.
+The warmer runs **automatically every night at 03:15 UTC** against production (`l2plus`, `SWE`).
+In steady state, already-cached entries are skipped in milliseconds — a typical nightly run
+takes 2–5 minutes and picks up any Swedish matches that scored since the previous night.
+
+The country filter keeps the memory footprint manageable: warming all 618 global l2plus matches
+would consume ~50 MB of the 64 MB Upstash plan limit. Limiting to Sweden keeps this well under
+10 MB. Other regions can be warmed on demand via `workflow_dispatch` with `--country` and
+`--level` overrides.
 
 It can also be triggered manually from the **Actions** tab for one-off or bulk warming.
 
