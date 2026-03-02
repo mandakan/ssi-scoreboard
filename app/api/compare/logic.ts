@@ -197,12 +197,12 @@ function medianHF(scorecards: RawScorecard[]): { median: number | null; count: n
   return { median, count: valid.length };
 }
 
-const DIFFICULTY_LABELS: Record<1 | 2 | 3 | 4 | 5, string> = {
-  1: "easy",
-  2: "moderate",
-  3: "hard",
-  4: "very hard",
-  5: "brutal",
+const HF_LEVEL_LABELS: Record<1 | 2 | 3 | 4 | 5, string> = {
+  1: "Very high",
+  2: "High",
+  3: "Medium",
+  4: "Low",
+  5: "Very low",
 };
 
 /**
@@ -306,14 +306,55 @@ function normalisedToLevel(score: number): 1 | 2 | 3 | 4 | 5 {
   return 5;
 }
 
+// FEATURE: accuracy-metric — delete this function and all references to remove
+function medianAccuracy(scorecards: RawScorecard[]): number | null {
+  const vals = scorecards
+    .filter(sc => !sc.dnf && !sc.dq && !sc.zeroed && sc.scorecard_created &&
+                  sc.points !== null && sc.max_points > 0)
+    .map(sc => (sc.points! / sc.max_points) * 100);
+  if (vals.length === 0) return null;
+  vals.sort((a, b) => a - b);
+  const mid = Math.floor(vals.length / 2);
+  return vals.length % 2 === 0 ? (vals[mid - 1] + vals[mid]) / 2 : vals[mid];
+}
+
+// FEATURE: separator-metric — delete this function and all references to remove
+function stageCV(scorecards: RawScorecard[]): number | null {
+  const hfs = scorecards
+    .filter(sc => !sc.dnf && !sc.dq && !sc.zeroed && sc.hit_factor != null && sc.hit_factor > 0)
+    .map(sc => sc.hit_factor!);
+  if (hfs.length < 4) return null;
+  const mean = hfs.reduce((a, b) => a + b, 0) / hfs.length;
+  if (mean === 0) return null;
+  const variance = hfs.reduce((sum, hf) => sum + (hf - mean) ** 2, 0) / hfs.length;
+  return Math.sqrt(variance) / mean; // coefficient of variation
+}
+
+// FEATURE: separator-metric — delete this function and all references to remove
+export function assignSeparatorLevels(cvs: (number | null)[]): (1 | 2 | 3)[] {
+  const validCVs = cvs.filter((cv): cv is number => cv !== null && cv > 0);
+  if (validCVs.length === 0) return cvs.map(() => 2);
+
+  const mean = validCVs.reduce((s, v) => s + v, 0) / validCVs.length;
+  const variance = validCVs.reduce((s, v) => s + (v - mean) ** 2, 0) / validCVs.length;
+  const stddev = Math.sqrt(variance);
+
+  return cvs.map(cv => {
+    if (cv === null || cv <= 0) return 2;
+    if (cv > mean + stddev) return 3;
+    if (cv < mean - stddev) return 1;
+    return 2;
+  });
+}
+
 /**
- * Assign difficulty levels to a set of stages based on their field median HFs.
+ * Assign HF level tiers to a set of stages based on their field median HFs.
  *
  * Formula: difficulty[s] = 1 − (field_median_hf[s] / max(field_median_hf[]))
- * Stages with a higher field median are easier (more shooters score well).
+ * Stages with a higher field median get a higher HF level (level 1 = very high HF).
  *
  * Edge case: when all stages have equal median HF (or all are null/zero),
- * every stage receives the middle difficulty level (3, "hard").
+ * every stage receives the middle level (3, "Medium").
  */
 export function assignDifficulty(
   medians: (number | null)[]
@@ -331,7 +372,7 @@ export function assignDifficulty(
       const score = 1 - median / maxMedian;
       level = normalisedToLevel(score);
     }
-    return { level, label: DIFFICULTY_LABELS[level] };
+    return { level, label: HF_LEVEL_LABELS[level] };
   });
 }
 
@@ -410,6 +451,8 @@ export function computeGroupRankings(
     // Full-field median HF (excluding DNF/DQ/zeroed)
     const { median: fieldMedianHF, count: fieldCompetitorCount } =
       medianHF(allStage);
+    const fieldMedianAccuracy = medianAccuracy(allStage); // FEATURE: accuracy-metric
+    const fieldCV = stageCV(allStage);                    // FEATURE: separator-metric
 
     // Division rankings — group by division string, rank within each
     const byDivision = new Map<string, RawScorecard[]>();
@@ -575,10 +618,12 @@ export function computeGroupRankings(
       overall_leader_hf: overallLeaderHF,
       field_median_hf: fieldMedianHF,
       field_competitor_count: fieldCompetitorCount,
-      // Difficulty is a placeholder here; overwritten in the second pass below
-      // once all stage medians are known.
+      field_median_accuracy: fieldMedianAccuracy, // FEATURE: accuracy-metric
+      field_cv: fieldCV,                          // FEATURE: separator-metric
+      // HF level and separator are placeholders; overwritten in the second pass.
       stageDifficultyLevel: 3,
-      stageDifficultyLabel: "hard",
+      stageDifficultyLabel: "Medium",
+      stageSeparatorLevel: 2 as const,            // FEATURE: separator-metric
       competitors: competitorMap,
       divisionDistributions,
     };
@@ -586,14 +631,17 @@ export function computeGroupRankings(
     return comparison;
   });
 
-  // Second pass: assign relative difficulty levels now that all stage medians are known.
+  // Second pass: assign relative HF levels and separator levels now that all stage medians are known.
   const medians = stageComparisons.map((s) => s.field_median_hf);
   const difficulties = assignDifficulty(medians);
+  const cvs = stageComparisons.map(s => s.field_cv);           // FEATURE: separator-metric
+  const separatorLevels = assignSeparatorLevels(cvs);           // FEATURE: separator-metric
 
   return stageComparisons.map((s, i) => ({
     ...s,
     stageDifficultyLevel: difficulties[i].level,
     stageDifficultyLabel: difficulties[i].label,
+    stageSeparatorLevel: separatorLevels[i],                    // FEATURE: separator-metric
   }));
 }
 

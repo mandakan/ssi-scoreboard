@@ -55,9 +55,12 @@ function makeStage(overrides: Partial<StageComparison> = {}): StageComparison {
     group_leader_points: null,
     overall_leader_hf: 7.0,
     field_median_hf: 4.5,
+    field_median_accuracy: null,
+    field_cv: null,
     field_competitor_count: 20,
     stageDifficultyLevel: 3,
     stageDifficultyLabel: "hard",
+    stageSeparatorLevel: 2 as const,
     competitors: { 1: competitor },
     ...overrides,
   };
@@ -292,15 +295,15 @@ function makeMultiStage(): { stages: StageComparison[]; comp1: CompetitorSummary
   const stage1: StageComparison = {
     stage_id: 1, stage_name: "Stage 1", stage_num: 1, max_points: 80,
     group_leader_hf: 6.67, group_leader_points: null,
-    overall_leader_hf: 6.67, field_median_hf: 5.0, field_competitor_count: 10,
-    stageDifficultyLevel: 3, stageDifficultyLabel: "hard",
+    overall_leader_hf: 6.67, field_median_hf: 5.0, field_median_accuracy: null, field_cv: null, field_competitor_count: 10,
+    stageDifficultyLevel: 3, stageDifficultyLabel: "hard", stageSeparatorLevel: 2 as const,
     competitors: { 1: comp1s1, 2: comp2s1 },
   };
   const stage2: StageComparison = {
     stage_id: 2, stage_name: "Stage 2", stage_num: 2, max_points: 100,
     group_leader_hf: 5.0, group_leader_points: null,
-    overall_leader_hf: 5.0, field_median_hf: 3.5, field_competitor_count: 10,
-    stageDifficultyLevel: 3, stageDifficultyLabel: "hard",
+    overall_leader_hf: 5.0, field_median_hf: 3.5, field_median_accuracy: null, field_cv: null, field_competitor_count: 10,
+    stageDifficultyLevel: 3, stageDifficultyLabel: "hard", stageSeparatorLevel: 2 as const,
     competitors: { 1: comp1s2, 2: comp2s2 },
   };
 

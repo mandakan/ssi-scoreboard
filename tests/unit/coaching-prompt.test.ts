@@ -73,9 +73,12 @@ function makeStage(
     group_leader_points: 100,
     overall_leader_hf: 6.0,
     field_median_hf: 3.5,
+    field_median_accuracy: null,
+    field_cv: null,
     field_competitor_count: 50,
     stageDifficultyLevel: 3,
     stageDifficultyLabel: "hard",
+    stageSeparatorLevel: 2 as const,
     competitors: competitorSummary
       ? { [competitorId]: competitorSummary }
       : {},

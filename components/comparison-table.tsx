@@ -12,7 +12,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronUp, Crosshair, ExternalLink, Flame, Focus, Gauge, Hand, HandMetal, HelpCircle, Info, Layers, Shield, Target, Timer, TrendingUp, X, Zap } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, CheckCircle2, ChevronDown, ChevronUp, Crosshair, ExternalLink, Flame, Focus, Gauge, Hand, HandMetal, HelpCircle, Info, Layers, Shield, Target, Timer, TrendingUp, X, Zap } from "lucide-react";
 import { cn, formatHF, formatTime, formatPct, computePointsDelta, formatDelta } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
 import { HitZoneBar } from "@/components/hit-zone-bar";
@@ -100,7 +100,7 @@ function FieldDistributionStrip({
   );
 }
 
-const DIFFICULTY_COLORS: Record<1 | 2 | 3 | 4 | 5, string> = {
+const HF_LEVEL_COLORS: Record<1 | 2 | 3 | 4 | 5, string> = {
   1: "text-emerald-500",
   2: "text-lime-500",
   3: "text-yellow-500",
@@ -108,26 +108,33 @@ const DIFFICULTY_COLORS: Record<1 | 2 | 3 | 4 | 5, string> = {
   5: "text-red-500",
 };
 
-function StageDifficultyIcon({
+function StageHFLevelIcon({
   level,
   label,
   medianHF,
+  medianAccuracy,
 }: {
   level: 1 | 2 | 3 | 4 | 5;
   label: string;
   medianHF: number | null;
+  medianAccuracy: number | null; // FEATURE: accuracy-metric
 }) {
-  const color = DIFFICULTY_COLORS[level];
-  const tooltipText = medianHF != null
-    ? `${label.charAt(0).toUpperCase() + label.slice(1)} — field median HF: ${formatHF(medianHF)}`
-    : `${label.charAt(0).toUpperCase() + label.slice(1)}`;
+  const color = HF_LEVEL_COLORS[level];
+  const hasDetail = medianHF != null || medianAccuracy != null;
+  const tooltipContent = hasDetail ? (
+    <div className="flex flex-col gap-0.5">
+      <div>HF Level: {label}{medianHF != null ? ` — field median: ${formatHF(medianHF)}` : ""}</div>
+      {/* FEATURE: accuracy-metric — remove this line to remove */}
+      {medianAccuracy != null && <div>Field accuracy: {medianAccuracy.toFixed(0)}%</div>}
+    </div>
+  ) : `HF Level: ${label}`;
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span
           className={cn("inline-flex items-end gap-px cursor-help leading-none", color)}
-          aria-label={`Difficulty: ${label}`}
+          aria-label={`HF Level: ${label}`}
           role="img"
         >
           {[1, 2, 3, 4, 5].map((bar) => (
@@ -144,7 +151,27 @@ function StageDifficultyIcon({
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs">
-        {tooltipText}
+        {tooltipContent}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+// FEATURE: separator-metric — delete this component and all usages to remove
+function StageSeparatorIcon() {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className="inline-flex cursor-help text-violet-500"
+          aria-label="High separator stage"
+          role="img"
+        >
+          <ArrowUpDown className="w-3 h-3" aria-hidden="true" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-xs">
+        High separator — this stage spreads the field apart
       </TooltipContent>
     </Tooltip>
   );
@@ -823,11 +850,13 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                           <div className="flex flex-col gap-1.5">
                             <div className="flex items-center gap-1.5 font-medium">
                               <span>{stage.stage_name}</span>
-                              <StageDifficultyIcon
+                              <StageHFLevelIcon
                                 level={stage.stageDifficultyLevel}
                                 label={stage.stageDifficultyLabel}
                                 medianHF={stage.field_median_hf}
+                                medianAccuracy={stage.field_median_accuracy} // FEATURE: accuracy-metric
                               />
+                              {stage.stageSeparatorLevel === 3 && <StageSeparatorIcon />}
                               {stage.stageArchetype && (
                                 <StageArchetypeIcon archetype={stage.stageArchetype} />
                               )}
@@ -859,6 +888,12 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                                 {stage.field_competitor_count != null && ` (${stage.field_competitor_count} competitors)`}
                               </span>
                             )}
+                            {/* FEATURE: accuracy-metric — delete this block to remove */}
+                            {stage.field_median_accuracy != null && (
+                              <span className="text-xs text-muted-foreground tabular-nums">
+                                Field accuracy: {stage.field_median_accuracy.toFixed(0)}%
+                              </span>
+                            )}
                           </div>
                         </PopoverContent>
                       </Popover>
@@ -884,11 +919,13 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                             Stage {stage.stage_num}
                           </span>
                         )}
-                        <StageDifficultyIcon
+                        <StageHFLevelIcon
                           level={stage.stageDifficultyLevel}
                           label={stage.stageDifficultyLabel}
                           medianHF={stage.field_median_hf}
+                          medianAccuracy={stage.field_median_accuracy} // FEATURE: accuracy-metric
                         />
+                        {stage.stageSeparatorLevel === 3 && <StageSeparatorIcon />}
                         {stage.stageArchetype && (
                           <StageArchetypeIcon archetype={stage.stageArchetype} />
                         )}

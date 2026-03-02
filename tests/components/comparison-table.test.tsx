@@ -49,9 +49,12 @@ const baseData: CompareResponse = {
       group_leader_points: 76,
       overall_leader_hf: 5.63,
       field_median_hf: 4.0,
+      field_median_accuracy: null,
+      field_cv: null,
       field_competitor_count: 50,
       stageDifficultyLevel: 3,
       stageDifficultyLabel: "hard",
+      stageSeparatorLevel: 2 as const,
       competitors: {
         1: {
           competitor_id: 1,
@@ -222,9 +225,12 @@ describe("ComparisonTable", () => {
           group_leader_points: 58,
           overall_leader_hf: 4.0,
           field_median_hf: 4.0,
+          field_median_accuracy: null,
+          field_cv: null,
           field_competitor_count: 50,
           stageDifficultyLevel: 3,
           stageDifficultyLabel: "hard",
+          stageSeparatorLevel: 2 as const,
           competitors: {
             1: { ...baseData.stages[0].competitors[1], dq: false },
             2: baseData.stages[0].competitors[2],

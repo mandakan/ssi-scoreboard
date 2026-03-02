@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computePercentileRank, assignArchetype, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, computeQuartiles, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, computeStageDegradationData, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, assignDifficulty, assignSeparatorLevels, computePercentile, computePercentileRank, assignArchetype, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, computeQuartiles, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, computeStageDegradationData, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompetitorInfo, StageComparison } from "@/lib/types";
 
 const competitors: CompetitorInfo[] = [
@@ -544,17 +544,17 @@ describe("computeGroupRankings — incomplete scorecard flag", () => {
 });
 
 describe("assignDifficulty — normalisation logic", () => {
-  it("returns level 1 (easy) for the stage with the highest median HF", () => {
+  it("returns level 1 (very high HF) for the stage with the highest median HF", () => {
     const result = assignDifficulty([10.0, 5.0, 2.0]);
     expect(result[0].level).toBe(1);
-    expect(result[0].label).toBe("easy");
+    expect(result[0].label).toBe("Very high");
   });
 
-  it("returns level 5 (brutal) for the stage with the lowest median HF when spread is large", () => {
+  it("returns level 5 (very low HF) for the stage with the lowest median HF when spread is large", () => {
     // difficulty[2] = 1 - (2.0/10.0) = 0.8 → level 5
     const result = assignDifficulty([10.0, 5.0, 2.0]);
     expect(result[2].level).toBe(5);
-    expect(result[2].label).toBe("brutal");
+    expect(result[2].label).toBe("Very low");
   });
 
   it("maps correctly across all five bands", () => {
@@ -563,23 +563,23 @@ describe("assignDifficulty — normalisation logic", () => {
     // HFs:        100, 90,  70,  50,  30,  10
     const medians = [100, 90, 70, 50, 30, 10];
     const result = assignDifficulty(medians);
-    expect(result[0].level).toBe(1); // score = 0.00 → easy
-    expect(result[1].level).toBe(1); // score = 0.10 → easy
-    expect(result[2].level).toBe(2); // score = 0.30 → moderate
-    expect(result[3].level).toBe(3); // score = 0.50 → hard
-    expect(result[4].level).toBe(4); // score = 0.70 → very hard
-    expect(result[5].level).toBe(5); // score = 0.90 → brutal
+    expect(result[0].level).toBe(1); // score = 0.00 → Very high
+    expect(result[1].level).toBe(1); // score = 0.10 → Very high
+    expect(result[2].level).toBe(2); // score = 0.30 → High
+    expect(result[3].level).toBe(3); // score = 0.50 → Medium
+    expect(result[4].level).toBe(4); // score = 0.70 → Low
+    expect(result[5].level).toBe(5); // score = 0.90 → Very low
   });
 
-  it("edge case: all stages have the same median HF → all return level 3 (hard)", () => {
+  it("edge case: all stages have the same median HF → all return level 3 (Medium)", () => {
     const result = assignDifficulty([4.0, 4.0, 4.0]);
     for (const r of result) {
       expect(r.level).toBe(3);
-      expect(r.label).toBe("hard");
+      expect(r.label).toBe("Medium");
     }
   });
 
-  it("edge case: single stage → level 3 (hard, no relative comparison possible)", () => {
+  it("edge case: single stage → level 3 (Medium, no relative comparison possible)", () => {
     const result = assignDifficulty([7.5]);
     expect(result[0].level).toBe(3);
   });
@@ -588,7 +588,7 @@ describe("assignDifficulty — normalisation logic", () => {
     const result = assignDifficulty([null, null, null]);
     for (const r of result) {
       expect(r.level).toBe(3);
-      expect(r.label).toBe("hard");
+      expect(r.label).toBe("Medium");
     }
   });
 
@@ -606,7 +606,53 @@ describe("assignDifficulty — normalisation logic", () => {
   });
 });
 
-describe("computeGroupRankings — stage difficulty integration", () => {
+describe("assignSeparatorLevels — outlier detection via z-score (mean ± 1σ)", () => {
+  it("clear outlier above mean+σ gets level 3", () => {
+    // CVs: mean ≈ 0.424, σ ≈ 0.155 → threshold ≈ 0.579; only 0.85 exceeds it
+    const result = assignSeparatorLevels([0.30, 0.33, 0.35, 0.36, 0.38, 0.40, 0.42, 0.85]);
+    expect(result[7]).toBe(3);
+    expect(result.slice(0, 7).every(l => l < 3)).toBe(true);
+  });
+
+  it("clear outlier below mean−σ gets level 1", () => {
+    // A stage with unusually low CV (field very clustered) gets level 1
+    const result = assignSeparatorLevels([0.05, 0.38, 0.40, 0.42, 0.44, 0.46, 0.48, 0.50]);
+    expect(result[0]).toBe(1);
+    expect(result.slice(1).every(l => l > 1)).toBe(true);
+  });
+
+  it("tightly-bunched CVs → at most 2 of 8 stages flagged as level 3", () => {
+    // With uniformly-spaced CVs the top value(s) sit ~1.5σ above mean,
+    // so 1–2 may be flagged — far fewer than the 5 that the old relative
+    // normalization produced for a match like this.
+    const result = assignSeparatorLevels([0.50, 0.52, 0.54, 0.56, 0.58, 0.60, 0.62, 0.64]);
+    expect(result.filter(l => l === 3).length).toBeLessThanOrEqual(2);
+  });
+
+  it("all equal CVs → all level 2 (σ = 0, no outliers)", () => {
+    const result = assignSeparatorLevels([0.3, 0.3, 0.3]);
+    expect(result).toEqual([2, 2, 2]);
+  });
+
+  it("all null CVs → all level 2", () => {
+    expect(assignSeparatorLevels([null, null, null])).toEqual([2, 2, 2]);
+  });
+
+  it("all zero CVs → all level 2", () => {
+    expect(assignSeparatorLevels([0, 0, 0])).toEqual([2, 2, 2]);
+  });
+
+  it("empty array returns empty array", () => {
+    expect(assignSeparatorLevels([])).toEqual([]);
+  });
+
+  it("null entries are treated as level 2 regardless of other CVs", () => {
+    const result = assignSeparatorLevels([0.30, null, 0.85]);
+    expect(result[1]).toBe(2);
+  });
+});
+
+describe("computeGroupRankings — stage HF level integration", () => {
   it("attaches stageDifficultyLevel and stageDifficultyLabel to each stage", () => {
     const scorecards = [
       makeCard(1, 1, { hit_factor: 5.0 }),
@@ -619,9 +665,9 @@ describe("computeGroupRankings — stage difficulty integration", () => {
     expect(result[0].stageDifficultyLabel.length).toBeGreaterThan(0);
   });
 
-  it("hardest stage (lowest field median HF) gets a higher difficulty level than easiest stage", () => {
-    // stage 1: all shoot well → high median → easy
-    // stage 2: all shoot poorly → low median → hard
+  it("stage with higher field median HF gets a lower difficulty level than stage with lower median", () => {
+    // stage 1: all shoot well → high median → level 1 (very high HF)
+    // stage 2: all shoot poorly → low median → level 5 (very low HF)
     const scorecards = [
       makeCard(1, 1, { hit_factor: 8.0, stage_number: 1 }),
       makeCard(2, 1, { hit_factor: 9.0, stage_number: 1 }),
@@ -643,7 +689,30 @@ describe("computeGroupRankings — stage difficulty integration", () => {
     const result = computeGroupRankings(scorecards, [competitors[0]]);
     for (const stage of result) {
       expect(stage.stageDifficultyLevel).toBe(3);
-      expect(stage.stageDifficultyLabel).toBe("hard");
+      expect(stage.stageDifficultyLabel).toBe("Medium");
+    }
+  });
+
+  it("attaches stageSeparatorLevel (1, 2, or 3) to each stage", () => {
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 5.0 }),
+      makeCard(2, 1, { hit_factor: 3.0 }),
+      makeCard(3, 1, { hit_factor: 4.0 }),
+    ];
+    const result = computeGroupRankings(scorecards, competitors);
+    expect([1, 2, 3]).toContain(result[0].stageSeparatorLevel);
+  });
+
+  it("field_median_accuracy is a number between 0 and 100 when valid scorecards have scorecard_created", () => {
+    const scorecards = [
+      makeCard(1, 1, { points: 90, max_points: 100, scorecard_created: "2024-01-01T10:00:00Z" }),
+      makeCard(2, 1, { points: 70, max_points: 100, scorecard_created: "2024-01-01T10:01:00Z" }),
+    ];
+    const result = computeGroupRankings(scorecards, [competitors[0], competitors[1]]);
+    const acc = result[0].field_median_accuracy;
+    if (acc !== null) {
+      expect(acc).toBeGreaterThanOrEqual(0);
+      expect(acc).toBeLessThanOrEqual(100);
     }
   });
 });
@@ -2408,8 +2477,11 @@ describe("computeArchetypePerformance", () => {
       overall_leader_hf: 5.5,
       field_median_hf: 3.0,
       field_competitor_count: 10,
+      field_median_accuracy: null,
+      field_cv: null,
       stageDifficultyLevel: 3,
-      stageDifficultyLabel: "moderate",
+      stageDifficultyLabel: "Medium",
+      stageSeparatorLevel: 2,
       stageArchetype: archetype,
       competitors: comps,
     };
@@ -2722,7 +2794,8 @@ describe("computeCourseLengthPerformance", () => {
     return {
       stage_id: stageId, stage_name: `Stage ${stageId}`, stage_num: stageId, max_points: 100,
       group_leader_hf: 5.0, group_leader_points: 100, overall_leader_hf: 5.5, field_median_hf: 3.0,
-      field_competitor_count: 10, stageDifficultyLevel: 3, stageDifficultyLabel: "moderate",
+      field_competitor_count: 10, field_median_accuracy: null, field_cv: null,
+      stageDifficultyLevel: 3, stageDifficultyLabel: "Medium", stageSeparatorLevel: 2 as const,
       stageArchetype: null, course_display: courseDisplay, competitors: comps,
     };
   }
@@ -2803,7 +2876,8 @@ describe("computeConstraintPerformance", () => {
     return {
       stage_id: stageId, stage_name: `Stage ${stageId}`, stage_num: stageId, max_points: 100,
       group_leader_hf: 5.0, group_leader_points: 100, overall_leader_hf: 5.5, field_median_hf: 3.0,
-      field_competitor_count: 10, stageDifficultyLevel: 3, stageDifficultyLabel: "moderate",
+      field_competitor_count: 10, field_median_accuracy: null, field_cv: null,
+      stageDifficultyLevel: 3, stageDifficultyLabel: "Medium", stageSeparatorLevel: 2 as const,
       stageArchetype: null,
       constraints: { strongHand, weakHand: false, movingTargets: false, unloadedStart: false },
       competitors: comps,
@@ -2848,7 +2922,9 @@ describe("computeConstraintPerformance", () => {
       stage_id: 1, stage_name: "Stage 1", stage_num: 1, max_points: 100,
       group_leader_hf: 5.0, group_leader_points: 100, overall_leader_hf: 5.5,
       field_median_hf: 3.0, field_competitor_count: 10,
-      stageDifficultyLevel: 3, stageDifficultyLabel: "moderate", stageArchetype: null,
+      field_median_accuracy: null, field_cv: null,
+      stageDifficultyLevel: 3, stageDifficultyLabel: "Medium", stageSeparatorLevel: 2 as const,
+      stageArchetype: null,
       constraints: null,
       competitors: {
         1: {
@@ -2870,7 +2946,9 @@ describe("computeConstraintPerformance", () => {
       stage_id: 1, stage_name: "Stage 1", stage_num: 1, max_points: 100,
       group_leader_hf: 5.0, group_leader_points: 100, overall_leader_hf: 5.5,
       field_median_hf: 3.0, field_competitor_count: 10,
-      stageDifficultyLevel: 3, stageDifficultyLabel: "moderate", stageArchetype: null,
+      field_median_accuracy: null, field_cv: null,
+      stageDifficultyLevel: 3, stageDifficultyLabel: "Medium", stageSeparatorLevel: 2 as const,
+      stageArchetype: null,
       constraints: { strongHand: false, weakHand: false, movingTargets: true, unloadedStart: false },
       competitors: {
         1: {

@@ -519,7 +519,7 @@ export default function MatchPageClient() {
                       <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
                         <p>Colour bands: green ≥ 95%, amber 85–95%, red &lt; 85% indicate run quality zones.</p>
                         <p>Use the reference buttons above the chart to switch from &ldquo;stage winner&rdquo; to any specific competitor to compare gaps directly.</p>
-                        <p>Percentages control for stage difficulty — a short stage and a long stage at 90% represent equal relative performance.</p>
+                        <p>Percentages control for relative HF level — a short stage and a long stage at 90% represent equal relative performance.</p>
                       </div>
                     </PopoverContent>
                   </Popover>
