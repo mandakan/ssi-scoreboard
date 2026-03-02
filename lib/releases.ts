@@ -41,6 +41,7 @@ export const RELEASES: Release[] = [
           "Archetype performance breakdown: compare your group's average stage % across Speed, Precision, and Mixed stages to spot strengths and weaknesses.",
           "Division position chart: see where each competitor sits within their division on every stage. The shaded band shows the middle 50% of the division, with median and minimum lines for context.",
           "If selected competitors span multiple divisions, use the division selector to switch between them.",
+          "Stage complexity indicator: a brain icon next to each stage rates how much planning and memorisation it demands (simple \u2192 intricate), based on course length, target count, constraints, and target variety.",
           "Constraint badges on stage headers: strong hand, weak hand, and moving target stages are flagged with coloured icons.",
           "Course length & constraint breakdowns: see how performance varies by Short / Medium / Long courses, and between constrained (e.g. strong hand only) vs standard stages.",
         ],

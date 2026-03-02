@@ -165,6 +165,8 @@ export interface StageComparison {
   stageDifficultyLevel: 1 | 2 | 3 | 4 | 5; // relative difficulty on a 1–5 scale (1=easy, 5=brutal)
   stageDifficultyLabel: string;       // human-readable label: easy/moderate/hard/very hard/brutal
   stageArchetype?: StageArchetype | null; // speed / precision / mixed — null when target data is insufficient
+  stageComplexityLevel?: 1 | 2 | 3 | 4 | 5; // intrinsic stage complexity on a 1–5 scale (1=simple, 5=intricate)
+  stageComplexityLabel?: string;              // human-readable label: simple/structured/involved/complex/intricate
   competitors: Record<number, CompetitorSummary>; // keyed by competitor_id
   /** Per-division HF distribution (quartiles) for this stage. Keyed by competitor_division string. */
   divisionDistributions?: Record<string, DivisionHFDistribution>;

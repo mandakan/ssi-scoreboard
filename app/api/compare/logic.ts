@@ -1711,3 +1711,126 @@ function spearmanR(points: StageDegradationPoint[]): number {
   }
   return 1 - (6 * sumD2) / (n * (n * n - 1));
 }
+
+// ── Stage Complexity ─────────────────────────────────────────────────────────
+
+const COMPLEXITY_LABELS: Record<1 | 2 | 3 | 4 | 5, string> = {
+  1: "simple",
+  2: "structured",
+  3: "involved",
+  4: "complex",
+  5: "intricate",
+};
+
+export interface StageComplexityInput {
+  course_display?: string | null;
+  min_rounds?: number | null;
+  max_points: number;
+  paper_targets?: number | null;
+  steel_targets?: number | null;
+  constraints?: StageConstraints | null;
+}
+
+/** Per-match normalisation context, computed once across all stages. */
+interface ComplexityNormCtx {
+  minTargets: number;
+  maxTargets: number;
+}
+
+interface ComplexityFactor {
+  weight: number;
+  compute: (stage: StageComplexityInput, ctx: ComplexityNormCtx) => number; // returns 0–1
+}
+
+const COMPLEXITY_FACTORS: ComplexityFactor[] = [
+  // Factor 1: Course length (Short=0, Medium=0.5, Long=1.0; fallback via min_rounds heuristic)
+  {
+    weight: 0.35,
+    compute: (stage) => {
+      const display = stage.course_display;
+      if (display === "Short") return 0;
+      if (display === "Medium") return 0.5;
+      if (display === "Long") return 1.0;
+      // Fallback: use min_rounds heuristic
+      const r = stage.min_rounds;
+      if (r != null) {
+        if (r <= 8) return 0;
+        if (r <= 16) return 0.5;
+        return 1.0;
+      }
+      // Second fallback: max_points → implied rounds
+      if (stage.max_points > 0) {
+        const implied = stage.max_points / 5;
+        if (implied <= 8) return 0;
+        if (implied <= 16) return 0.5;
+        return 1.0;
+      }
+      return 0.5; // unknown → middle
+    },
+  },
+  // Factor 2: Target count (per-match normalisation)
+  {
+    weight: 0.25,
+    compute: (stage, ctx) => {
+      const paper = stage.paper_targets ?? 0;
+      const steel = stage.steel_targets ?? 0;
+      const total = paper + steel;
+      if (ctx.maxTargets === ctx.minTargets) return 0.5;
+      return (total - ctx.minTargets) / (ctx.maxTargets - ctx.minTargets);
+    },
+  },
+  // Factor 3: Constraint count (active constraints / 4)
+  {
+    weight: 0.25,
+    compute: (stage) => {
+      const c = stage.constraints;
+      if (!c) return 0;
+      const active = (c.strongHand ? 1 : 0) + (c.weakHand ? 1 : 0)
+        + (c.movingTargets ? 1 : 0) + (c.unloadedStart ? 1 : 0);
+      return active / 4;
+    },
+  },
+  // Factor 4: Target variety (1.0 if both paper AND steel present; 0.0 otherwise)
+  {
+    weight: 0.15,
+    compute: (stage) => {
+      const hasPaper = (stage.paper_targets ?? 0) > 0;
+      const hasSteel = (stage.steel_targets ?? 0) > 0;
+      return (hasPaper && hasSteel) ? 1.0 : 0.0;
+    },
+  },
+];
+
+/**
+ * Assign intrinsic complexity levels to a set of stages.
+ *
+ * Uses a weighted factor array pattern — each factor produces a [0,1] score,
+ * and the weighted sum is mapped to levels 1–5 via normalisedToLevel().
+ *
+ * This measures how much planning/memorisation a stage demands before any
+ * shots are fired, using only stage metadata. Complements the results-based
+ * difficulty metric.
+ */
+export function assignComplexity(
+  stages: StageComplexityInput[],
+): { level: 1 | 2 | 3 | 4 | 5; label: string }[] {
+  if (stages.length === 0) return [];
+
+  // Build normalisation context: min/max target counts across all stages
+  const targetCounts = stages.map((s) => (s.paper_targets ?? 0) + (s.steel_targets ?? 0));
+  const ctx: ComplexityNormCtx = {
+    minTargets: Math.min(...targetCounts),
+    maxTargets: Math.max(...targetCounts),
+  };
+
+  return stages.map((stage) => {
+    let score = 0;
+    for (const factor of COMPLEXITY_FACTORS) {
+      score += factor.weight * factor.compute(stage, ctx);
+    }
+    // Clamp to [0, 1] for safety
+    score = Math.max(0, Math.min(1, score));
+    const level = normalisedToLevel(score);
+    return { level, label: COMPLEXITY_LABELS[level] };
+  });
+}

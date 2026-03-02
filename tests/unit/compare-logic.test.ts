@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computePercentileRank, assignArchetype, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, computeQuartiles, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, computeStageDegradationData, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, assignDifficulty, computePercentile, computePercentileRank, assignArchetype, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, computeQuartiles, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, computeStageDegradationData, assignComplexity, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompetitorInfo, StageComparison } from "@/lib/types";
 
 const competitors: CompetitorInfo[] = [
@@ -3026,5 +3026,162 @@ describe("computeStageDegradationData", () => {
     const result = computeStageDegradationData(cards);
     expect(result[0].stageNum).toBe(1);
     expect(result[1].stageNum).toBe(2);
+  });
+});
+
+// ── assignComplexity ─────────────────────────────────────────────────────────
+
+describe("assignComplexity", () => {
+  it("returns empty array for empty input", () => {
+    expect(assignComplexity([])).toEqual([]);
+  });
+
+  it("assigns level 1 (simple) for a short, few-target, no-constraint, paper-only stage", () => {
+    const result = assignComplexity([{
+      course_display: "Short",
+      min_rounds: 6,
+      max_points: 30,
+      paper_targets: 3,
+      steel_targets: 0,
+      constraints: { strongHand: false, weakHand: false, movingTargets: false, unloadedStart: false },
+    }]);
+    expect(result).toHaveLength(1);
+    expect(result[0].level).toBe(1);
+    expect(result[0].label).toBe("simple");
+  });
+
+  it("assigns level 5 (intricate) for a long, high-target, all-constraint, mixed-target stage", () => {
+    const result = assignComplexity([
+      // Include a minimal stage to set the low end of target normalisation
+      {
+        course_display: "Short",
+        min_rounds: 6,
+        max_points: 30,
+        paper_targets: 2,
+        steel_targets: 0,
+        constraints: { strongHand: false, weakHand: false, movingTargets: false, unloadedStart: false },
+      },
+      // The complex stage
+      {
+        course_display: "Long",
+        min_rounds: 32,
+        max_points: 160,
+        paper_targets: 12,
+        steel_targets: 6,
+        constraints: { strongHand: true, weakHand: true, movingTargets: true, unloadedStart: true },
+      },
+    ]);
+    expect(result[1].level).toBe(5);
+    expect(result[1].label).toBe("intricate");
+  });
+
+  it("handles a single stage (target normalisation edge case → factor 0.5)", () => {
+    const result = assignComplexity([{
+      course_display: "Medium",
+      min_rounds: 12,
+      max_points: 60,
+      paper_targets: 6,
+      steel_targets: 0,
+      constraints: { strongHand: false, weakHand: false, movingTargets: false, unloadedStart: false },
+    }]);
+    expect(result).toHaveLength(1);
+    // Medium course (0.5*0.35) + single stage target normalisation (0.5*0.25) + no constraints (0) + no variety (0)
+    // = 0.175 + 0.125 = 0.30 → level 2
+    expect(result[0].level).toBe(2);
+    expect(result[0].label).toBe("structured");
+  });
+
+  it("handles all-null metadata gracefully with reasonable defaults", () => {
+    const result = assignComplexity([{
+      course_display: null,
+      min_rounds: null,
+      max_points: 0,
+      paper_targets: null,
+      steel_targets: null,
+      constraints: null,
+    }]);
+    expect(result).toHaveLength(1);
+    // Unknown course (0.5*0.35) + target normalisation 0.5 (equal min/max, both 0) (0.5*0.25) + no constraints (0) + no variety (0)
+    // = 0.175 + 0.125 = 0.30 → level 2
+    expect(result[0].level).toBe(2);
+    expect(result[0].label).toBe("structured");
+  });
+
+  it("constraint factor correctly contributes to score", () => {
+    // Two identical stages except one has all constraints
+    const base = {
+      course_display: "Medium" as const,
+      min_rounds: 12,
+      max_points: 60,
+      paper_targets: 6,
+      steel_targets: 0,
+    };
+    const result = assignComplexity([
+      { ...base, constraints: { strongHand: false, weakHand: false, movingTargets: false, unloadedStart: false } },
+      { ...base, constraints: { strongHand: true, weakHand: true, movingTargets: true, unloadedStart: true } },
+    ]);
+    // Constrained stage should have a higher level
+    expect(result[1].level).toBeGreaterThan(result[0].level);
+  });
+
+  it("target variety factor increases complexity when both paper and steel are present", () => {
+    const base = {
+      course_display: "Medium" as const,
+      min_rounds: 12,
+      max_points: 60,
+      constraints: { strongHand: false, weakHand: false, movingTargets: false, unloadedStart: false },
+    };
+    const result = assignComplexity([
+      { ...base, paper_targets: 6, steel_targets: 0 },
+      { ...base, paper_targets: 4, steel_targets: 2 },
+    ]);
+    // Mixed targets stage should have higher or equal level
+    expect(result[1].level).toBeGreaterThanOrEqual(result[0].level);
+  });
+
+  it("uses min_rounds heuristic when course_display is null", () => {
+    const result = assignComplexity([
+      {
+        course_display: null,
+        min_rounds: 6,
+        max_points: 30,
+        paper_targets: 3,
+        steel_targets: 0,
+        constraints: null,
+      },
+      {
+        course_display: null,
+        min_rounds: 28,
+        max_points: 140,
+        paper_targets: 12,
+        steel_targets: 2,
+        constraints: null,
+      },
+    ]);
+    // Short (min_rounds=6) should have lower complexity than Long (min_rounds=28)
+    expect(result[0].level).toBeLessThan(result[1].level);
+  });
+
+  it("uses max_points fallback when both course_display and min_rounds are null", () => {
+    const result = assignComplexity([
+      {
+        course_display: null,
+        min_rounds: null,
+        max_points: 30,
+        paper_targets: null,
+        steel_targets: null,
+        constraints: null,
+      },
+      {
+        course_display: null,
+        min_rounds: null,
+        max_points: 160,
+        paper_targets: null,
+        steel_targets: null,
+        constraints: null,
+      },
+    ]);
+    // Low max_points should have lower complexity than high max_points
+    expect(result[0].level).toBeLessThanOrEqual(result[1].level);
   });
 });
