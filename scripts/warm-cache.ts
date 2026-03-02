@@ -263,7 +263,10 @@ function parseArgs(): CliArgs {
   };
 }
 
-// ─── GraphQL fetch ────────────────────────────────────────────────────────────
+// ─── GraphQL fetch with retry + back-off ─────────────────────────────────────
+
+const MAX_RETRIES = 3;
+const BACKOFF_BASE_MS = 10_000; // 10s → 20s → 40s
 
 async function gqlFetch<T>(
   query: string,
@@ -271,31 +274,50 @@ async function gqlFetch<T>(
   apiKey: string,
 ): Promise<T> {
   const operationName = query.match(/query\s+(\w+)/)?.[1] ?? "unknown";
-  const response = await fetch(GRAPHQL_ENDPOINT, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Api-Key ${apiKey}`,
-    },
-    body: JSON.stringify({ query, variables }),
-  });
 
-  if (!response.ok) {
-    const retryAfter = response.headers.get("Retry-After");
-    throw new Error(
-      `${operationName} HTTP ${response.status}${retryAfter ? ` (Retry-After: ${retryAfter}s)` : ""}`,
-    );
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const response = await fetch(GRAPHQL_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Api-Key ${apiKey}`,
+      },
+      body: JSON.stringify({ query, variables }),
+    });
+
+    if (!response.ok) {
+      const status = response.status;
+      const retryAfterHeader = response.headers.get("Retry-After");
+
+      // 4xx errors other than 429 are not retryable
+      const retryable = status === 429 || status >= 500;
+      if (!retryable || attempt === MAX_RETRIES) {
+        throw new Error(`${operationName} HTTP ${status}${retryAfterHeader ? ` (Retry-After: ${retryAfterHeader}s)` : ""}`);
+      }
+
+      // Determine wait: honour Retry-After if present, else exponential back-off
+      const backoffMs = retryAfterHeader
+        ? parseInt(retryAfterHeader, 10) * 1000
+        : BACKOFF_BASE_MS * Math.pow(2, attempt);
+
+      console.log(`  [retry ${attempt + 1}/${MAX_RETRIES}] ${operationName} HTTP ${status} — waiting ${formatDuration(backoffMs)}`);
+      await sleep(backoffMs);
+      continue;
+    }
+
+    const result = (await response.json()) as {
+      data?: T;
+      errors?: { message: string }[];
+    };
+    if (result.errors?.length) {
+      throw new Error(result.errors.map((e) => e.message).join("; "));
+    }
+    if (!result.data) throw new Error(`${operationName}: empty response`);
+    return result.data;
   }
 
-  const result = (await response.json()) as {
-    data?: T;
-    errors?: { message: string }[];
-  };
-  if (result.errors?.length) {
-    throw new Error(result.errors.map((e) => e.message).join("; "));
-  }
-  if (!result.data) throw new Error(`${operationName}: empty response`);
-  return result.data;
+  // Unreachable — loop always returns or throws
+  throw new Error(`${operationName}: exceeded retries`);
 }
 
 // ─── Cache helpers ────────────────────────────────────────────────────────────
