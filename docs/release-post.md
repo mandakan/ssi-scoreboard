@@ -82,6 +82,7 @@ Every scene is captured at both **mobile** (390×844) and **desktop** (1280×900
 | `hf-level-bars` | HF Level bars |
 | `archetype-chart` | Archetype performance breakdown |
 | `style-fingerprint` | Style fingerprint scatter chart |
+| `shooter-dashboard` | Shooter dashboard with match history and trend charts |
 | `whats-new-dialog` | What's New dialog open |
 
 The script writes `manifest.json` alongside the PNGs listing each scene name, description,

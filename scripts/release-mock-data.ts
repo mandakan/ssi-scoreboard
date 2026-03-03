@@ -8,7 +8,7 @@
  * All match/club details are fictional.
  */
 
-import type { MatchResponse, CompareResponse } from "../lib/types";
+import type { MatchResponse, CompareResponse, ShooterDashboardResponse } from "../lib/types";
 
 // ── Competitor IDs ────────────────────────────────────────────────────────────
 const ID_A = 1001; // A. Lindström — strong all-rounder, slight precision edge
@@ -689,4 +689,126 @@ export const MOCK_COMPARE: CompareResponse = {
 
   // ── Stage degradation data ──────────────────────────────────────────────────
   stageDegradationData: [DEGRADATION_STAGE_3, DEGRADATION_STAGE_1], // S3 first = selected by default
+};
+
+// ── Shooter dashboard mock ────────────────────────────────────────────────────
+// Realistic Production shooter showing a clear upward trend over 5 matches.
+export const MOCK_SHOOTER_ID = 12345;
+
+export const MOCK_SHOOTER: ShooterDashboardResponse = {
+  shooterId: MOCK_SHOOTER_ID,
+  profile: {
+    name: "A. Lindström",
+    club: "Pistolskytte Stockholm",
+    division: "Production",
+    lastSeen: "2026-02-20T10:00:00Z",
+  },
+  matchCount: 5,
+  matches: [
+    {
+      ct: "22",
+      matchId: "27001",
+      name: "Västra Open 2026",
+      date: "2026-02-20T08:00:00Z",
+      venue: "Skövde",
+      level: "Level III",
+      division: "Production",
+      competitorId: 50001,
+      stageCount: 18,
+      avgHF: 4.93,
+      matchPct: 79.1,
+      totalA: 318,
+      totalC: 82,
+      totalD: 18,
+      totalMiss: 4,
+      totalNoShoots: 1,
+    },
+    {
+      ct: "22",
+      matchId: "26801",
+      name: "Nordic Winter Cup 2025",
+      date: "2025-12-06T08:00:00Z",
+      venue: "Örebro",
+      level: "Level II",
+      division: "Production",
+      competitorId: 48801,
+      stageCount: 14,
+      avgHF: 4.74,
+      matchPct: 76.3,
+      totalA: 241,
+      totalC: 70,
+      totalD: 16,
+      totalMiss: 5,
+      totalNoShoots: 0,
+    },
+    {
+      ct: "22",
+      matchId: "26501",
+      name: "Höstmatch Göteborg 2025",
+      date: "2025-10-11T08:00:00Z",
+      venue: "Göteborg",
+      level: "Level II",
+      division: "Production",
+      competitorId: 47201,
+      stageCount: 12,
+      avgHF: 4.62,
+      matchPct: 74.8,
+      totalA: 196,
+      totalC: 58,
+      totalD: 14,
+      totalMiss: 5,
+      totalNoShoots: 2,
+    },
+    {
+      ct: "22",
+      matchId: "26201",
+      name: "Sommarmatch Malmö 2025",
+      date: "2025-08-09T08:00:00Z",
+      venue: "Malmö",
+      level: "Level II",
+      division: "Production",
+      competitorId: 45901,
+      stageCount: 10,
+      avgHF: 4.48,
+      matchPct: 73.5,
+      totalA: 158,
+      totalC: 47,
+      totalD: 13,
+      totalMiss: 4,
+      totalNoShoots: 1,
+    },
+    {
+      ct: "22",
+      matchId: "25901",
+      name: "Våropen Stockholm 2025",
+      date: "2025-06-07T08:00:00Z",
+      venue: "Stockholm",
+      level: "Level II",
+      division: "Production",
+      competitorId: 44601,
+      stageCount: 12,
+      avgHF: 4.31,
+      matchPct: 71.2,
+      totalA: 192,
+      totalC: 60,
+      totalD: 18,
+      totalMiss: 8,
+      totalNoShoots: 2,
+    },
+  ],
+  stats: {
+    totalStages: 66,
+    dateRange: {
+      from: "2025-06-07T08:00:00Z",
+      to: "2026-02-20T08:00:00Z",
+    },
+    overallAvgHF: 4.63,
+    overallMatchPct: 74.98,
+    aPercent: 71.4,
+    cPercent: 20.8,
+    dPercent: 5.3,
+    missPercent: 2.5,
+    consistencyCV: 0.054,
+    hfTrendSlope: 0.155,
+  },
 };

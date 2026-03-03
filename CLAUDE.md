@@ -152,7 +152,7 @@ the scenes from `scripts/screenshot-match.ts` that best showcase the new feature
 Each scene is captured at both mobile (390×844) and desktop (1280×900).
 
 Current catalogue: `comparison-table`, `degradation-chart`, `hf-level-bars`,
-`archetype-chart`, `style-fingerprint`, `whats-new-dialog`. Omit the field to capture all.
+`archetype-chart`, `style-fingerprint`, `shooter-dashboard`, `whats-new-dialog`. Omit the field to capture all.
 
 **When to add a new scene:** if a new chart or UI section isn't well-represented by any
 existing scene, add one to `scripts/screenshot-match.ts` (follow the existing `Scene`

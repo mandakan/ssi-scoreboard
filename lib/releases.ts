@@ -18,7 +18,7 @@ export const RELEASES: Release[] = [
     id: LATEST_RELEASE_ID,
     date: "March 4, 2026",
     title: "Shooter Dashboard & My Stats",
-    screenshotScenes: ["whats-new-dialog"],
+    screenshotScenes: ["shooter-dashboard", "whats-new-dialog"],
     sections: [
       {
         heading: "New",

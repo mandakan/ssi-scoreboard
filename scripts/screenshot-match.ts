@@ -24,6 +24,7 @@
  *   hf-level-bars      HF Level bars
  *   archetype-chart    Archetype performance breakdown
  *   style-fingerprint  Style fingerprint scatter chart
+ *   shooter-dashboard  Shooter dashboard with match history and trend charts
  *   whats-new-dialog   What's New dialog open
  */
 
@@ -31,7 +32,7 @@ import { chromium } from "@playwright/test";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { resolve, join, dirname } from "path";
 import { fileURLToPath } from "url";
-import { MOCK_MATCH, MOCK_COMPARE } from "./release-mock-data";
+import { MOCK_MATCH, MOCK_COMPARE, MOCK_SHOOTER, MOCK_SHOOTER_ID } from "./release-mock-data";
 import { LATEST_RELEASE_ID } from "../lib/releases";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -185,6 +186,21 @@ const SCENES: Scene[] = [
       await heading.evaluate(
         (el) => el.scrollIntoView({ block: "start", behavior: "instant" })
       ).catch(() => null);
+    },
+  },
+  {
+    name: "shooter-dashboard",
+    description: "Shooter dashboard with match history and performance trends",
+    suppressWhatsNew: true,
+    setup: async (page, _matchPath) => {
+      // Mock the shooter API — always uses mock data regardless of --match-url
+      await page.route(`/api/shooter/${MOCK_SHOOTER_ID}`, (route) =>
+        route.fulfill({ json: MOCK_SHOOTER })
+      );
+      await page.goto(`/shooter/${MOCK_SHOOTER_ID}`);
+      // Wait for the identity card (h1) and at least one match card to render
+      await page.waitForSelector("h1", { timeout: 10000 });
+      await page.waitForSelector('[aria-labelledby="history-heading"]', { timeout: 8000 }).catch(() => null);
     },
   },
   {
