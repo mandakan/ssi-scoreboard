@@ -17,14 +17,17 @@ export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
     date: "March 3, 2026",
-    title: "Stage Sort, HF Level & Field Accuracy",
+    title: "Stage Sort, Degradation Analysis & Statistical Quality",
     sections: [
       {
         heading: "New",
         items: [
           "Per-column sort in the comparison table: click any competitor's column header to reorder stages by the sequence they actually shot them — useful for spotting fatigue or consistency patterns across a competition day. Click the Stage column header to return to stage-number order.",
+          "Stage degradation chart (Coaching mode): see whether shooting early or late on a stage correlated with higher or lower performance across the full field. The Spearman r badge shows the sample size (n) and whether the trend is statistically significant at 95% confidence — non-significant trends appear in muted text so you can tell signal from noise.",
           "Field accuracy rate on stage tooltips: hover the HF Level bars to see the median accuracy (% of max points) the field scored on that stage — distinguishes hard-shooting stages from long-but-accurate ones.",
-          "Stage separator indicator: a ↕ icon appears in the comparison table's Stage column on stages that spread the field apart the most — the best places to focus coaching analysis.",
+          "Stage separator indicator: a ↕ icon flags stages that spread the field apart the most, with a tooltip showing the competitor count used for the calculation.",
+          "Division distribution chart tooltips now show the number of competitors behind each stage's Q1–Q3 band, plus an n range in the legend.",
+          "Style fingerprint archetype labels hedge to 'tends toward X style' when the field is under 25 competitors, with field size shown in the tooltip.",
         ],
       },
       {
@@ -32,19 +35,8 @@ export const RELEASES: Release[] = [
         items: [
           "Stage difficulty relabelled to HF Level with neutral labels (Very high / High / Medium / Low / Very low). A low HF can reflect long running distances or high round count, not just hard shots.",
           "What's New now shows all releases you missed since your last visit — no more skipping updates after a busy week.",
-        ],
-      },
-    ],
-  },
-  {
-    id: "2026-03-02",
-    date: "March 2, 2026",
-    title: "Stage Degradation Analysis",
-    sections: [
-      {
-        heading: "New",
-        items: [
-          "Stage degradation chart (Coaching mode): see whether shooting early or late on a stage correlated with higher or lower performance across the full field. A Spearman r badge summarises the trend, and your selected competitors are highlighted against the field.",
+          "Consistency Index badge dims below 6 stages (raised from 4) to flag when the CV is based on too few stages to be reliable.",
+          "Archetype, course-length, and constraint breakdown tables highlight stage counts of 1–2 in amber to flag averages based on very few samples.",
         ],
       },
     ],

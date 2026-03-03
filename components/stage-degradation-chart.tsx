@@ -300,15 +300,21 @@ export function StageDegradationChart({ data }: StageDegradationChartProps) {
       </div>
 
       {/* Correlation badge */}
-      {stage && stage.spearmanR !== null && (
+      {stage && stage.spearmanR !== null && stage.spearmanSignificant && (
         <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
           Spearman r ={" "}
           <strong>
             {stage.spearmanR > 0 ? "+" : ""}
             {stage.spearmanR.toFixed(2)}
           </strong>
+          {` (n=${stage.points.length})`}
           {" · "}
           {correlationLabel(stage.spearmanR)}
+        </p>
+      )}
+      {stage && stage.spearmanR !== null && stage.spearmanSignificant === false && (
+        <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+          No significant trend (n={stage.points.length}, r={stage.spearmanR > 0 ? "+" : ""}{stage.spearmanR.toFixed(2)})
         </p>
       )}
       {stage && stage.spearmanR === null && stage.points.length >= 2 && (

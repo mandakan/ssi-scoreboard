@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeGroupRankings, computePenaltyStats, assignDifficulty, assignSeparatorLevels, computePercentile, computePercentileRank, assignArchetype, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, computeQuartiles, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, computeStageDegradationData, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, computePenaltyStats, assignDifficulty, assignSeparatorLevels, computePercentile, computePercentileRank, assignArchetype, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, computeQuartiles, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, computeStageDegradationData, tCritical95, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompetitorInfo, StageComparison } from "@/lib/types";
 
 const competitors: CompetitorInfo[] = [
@@ -3104,5 +3104,70 @@ describe("computeStageDegradationData", () => {
     const result = computeStageDegradationData(cards);
     expect(result[0].stageNum).toBe(1);
     expect(result[1].stageNum).toBe(2);
+  });
+
+  it("sets spearmanSignificant=null when spearmanR is null (< 4 points)", () => {
+    const cards = [
+      makeTimedCard(1, 10, 1, 5.0, "2024-01-01T09:00:00Z"),
+      makeTimedCard(2, 10, 1, 4.0, "2024-01-01T09:05:00Z"),
+      makeTimedCard(3, 10, 1, 3.0, "2024-01-01T09:10:00Z"),
+    ];
+    const result = computeStageDegradationData(cards);
+    expect(result[0].spearmanR).toBeNull();
+    expect(result[0].spearmanSignificant).toBeNull();
+  });
+
+  it("sets spearmanSignificant=true for perfect correlation with n=4 (df=2, t→∞)", () => {
+    // r = -1, t = Infinity → always significant
+    const cards = [
+      makeTimedCard(1, 10, 1, 4.0, "2024-01-01T09:00:00Z"),
+      makeTimedCard(2, 10, 1, 3.0, "2024-01-01T09:05:00Z"),
+      makeTimedCard(3, 10, 1, 2.0, "2024-01-01T09:10:00Z"),
+      makeTimedCard(4, 10, 1, 1.0, "2024-01-01T09:15:00Z"),
+    ];
+    const result = computeStageDegradationData(cards);
+    expect(result[0].spearmanR).toBeCloseTo(-1, 5);
+    expect(result[0].spearmanSignificant).toBe(true);
+  });
+
+  it("sets spearmanSignificant=false for near-zero r with small n", () => {
+    // Alternating pattern → r ≈ 0, small n → not significant
+    const cards = [
+      makeTimedCard(1, 10, 1, 5.0, "2024-01-01T09:00:00Z"),
+      makeTimedCard(2, 10, 1, 1.0, "2024-01-01T09:05:00Z"),
+      makeTimedCard(3, 10, 1, 4.5, "2024-01-01T09:10:00Z"),
+      makeTimedCard(4, 10, 1, 0.5, "2024-01-01T09:15:00Z"),
+      makeTimedCard(5, 10, 1, 4.0, "2024-01-01T09:20:00Z"),
+      makeTimedCard(6, 10, 1, 0.1, "2024-01-01T09:25:00Z"),
+    ];
+    const result = computeStageDegradationData(cards);
+    expect(result[0].spearmanSignificant).toBe(false);
+  });
+});
+
+// ── tCritical95 ──────────────────────────────────────────────────────────────
+
+describe("tCritical95", () => {
+  it("returns exact table value for df=2", () => {
+    expect(tCritical95(2)).toBeCloseTo(4.303, 3);
+  });
+
+  it("returns exact table value for df=10", () => {
+    expect(tCritical95(10)).toBeCloseTo(2.228, 3);
+  });
+
+  it("interpolates between df=10 and df=12", () => {
+    const t11 = tCritical95(11);
+    expect(t11).toBeGreaterThan(tCritical95(12));
+    expect(t11).toBeLessThan(tCritical95(10));
+  });
+
+  it("returns 1.960 for very large df", () => {
+    expect(tCritical95(1000)).toBeCloseTo(1.96, 2);
+  });
+
+  it("returns Infinity for df <= 0", () => {
+    expect(tCritical95(0)).toBe(Infinity);
+    expect(tCritical95(-1)).toBe(Infinity);
   });
 });

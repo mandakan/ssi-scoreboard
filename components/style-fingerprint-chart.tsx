@@ -49,6 +49,7 @@ interface FingerprintPoint {
   totalPenalties: number;
   totalRounds: number;
   stagesFired: number;
+  fieldSize: number;
 }
 
 // --------------------------------------------------------------------------
@@ -64,7 +65,8 @@ function penaltyToRadius(rate: number, maxRate: number): number {
 
 function buildSelectedPoints(
   competitors: CompetitorInfo[],
-  stats: Record<number, StyleFingerprintStats>
+  stats: Record<number, StyleFingerprintStats>,
+  fieldSize: number
 ): FingerprintPoint[] {
   const valid = competitors
     .map((c) => {
@@ -90,6 +92,7 @@ function buildSelectedPoints(
         competitorName: c.name,
         archetype: s.archetype,
         dotRadius: 0,
+        fieldSize,
       };
     })
     .filter((p): p is FingerprintPoint => p !== null);
@@ -280,9 +283,12 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Toolti
       <p style={{ fontWeight: 600, marginBottom: 2 }}>{pt.competitorName}</p>
       {pt.archetype && (
         <p style={{ fontWeight: 700, marginBottom: 6, color: "var(--foreground)" }}>
-          {pt.archetype}
+          {pt.fieldSize < 25 ? `tends toward ${pt.archetype} style` : pt.archetype}
           <span style={{ fontWeight: 400, color: "var(--muted-foreground)", marginLeft: 6 }}>
             — {ARCHETYPE_DESCRIPTIONS[pt.archetype]}
+          </span>
+          <span style={{ fontWeight: 400, color: "var(--muted-foreground)", marginLeft: 6, fontSize: 11 }}>
+            (n={pt.fieldSize})
           </span>
         </p>
       )}
@@ -322,15 +328,21 @@ function FieldDot({ cx, cy }: FieldDotProps) {
 // Competitor legend
 // --------------------------------------------------------------------------
 
-interface LegendItem { id: number; label: string; color: string; archetype: string | null }
+interface LegendItem { id: number; label: string; color: string; archetype: string | null; fieldSize: number }
 
 function ToggleLegend({
   items, hiddenIds, onToggle,
 }: { items: LegendItem[]; hiddenIds: Set<number>; onToggle: (id: number) => void }) {
   return (
     <div role="group" aria-label="Toggle competitors" className="flex flex-wrap justify-center gap-2 pt-2">
-      {items.map(({ id, label, color, archetype }) => {
+      {items.map(({ id, label, color, archetype, fieldSize }) => {
         const hidden = hiddenIds.has(id);
+        const smallField = fieldSize < 25;
+        const archetypeLabel = archetype
+          ? smallField
+            ? `tends toward ${archetype} style`
+            : archetype
+          : null;
         return (
           <button
             key={id}
@@ -346,12 +358,13 @@ function ToggleLegend({
           >
             <span className="inline-block h-3 w-3 flex-none rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
             <span className={hidden ? "line-through" : ""}>{label}</span>
-            {archetype && !hidden && (
+            {archetypeLabel && !hidden && (
               <span
                 className="rounded px-1.5 py-0 text-xs font-semibold text-foreground"
                 style={{ backgroundColor: color + "28" }}
+                title={`Classified from ${fieldSize}-competitor field`}
               >
-                {archetype}
+                {archetypeLabel}
               </span>
             )}
           </button>
@@ -420,7 +433,8 @@ export function StyleFingerprintChart({ data }: StyleFingerprintChartProps) {
     );
   }
 
-  const selectedPoints = buildSelectedPoints(competitors, styleFingerprintStats);
+  const fieldSize = fieldFingerprintPoints.length;
+  const selectedPoints = buildSelectedPoints(competitors, styleFingerprintStats, fieldSize);
   const selectedIds = new Set(competitors.map((c) => c.id));
 
   const hasData = selectedPoints.length > 0;
@@ -451,12 +465,12 @@ export function StyleFingerprintChart({ data }: StyleFingerprintChartProps) {
       return next;
     });
   };
-
   const legendItems: LegendItem[] = competitors.map((comp) => ({
     id: comp.id,
     label: formatLabel(comp),
     color: colorMap[comp.id],
     archetype: styleFingerprintStats?.[comp.id]?.archetype ?? null,
+    fieldSize,
   }));
 
   return (

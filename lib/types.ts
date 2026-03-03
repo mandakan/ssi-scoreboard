@@ -361,6 +361,8 @@ export interface StageDegradationData {
   points: StageDegradationPoint[];
   /** Spearman rank correlation between shooting position and HF%; null when < 4 valid data points. */
   spearmanR: number | null;
+  /** Two-tailed t-test significance at α=0.05; null when spearmanR is null. */
+  spearmanSignificant: boolean | null;
 }
 
 export interface CompareResponse {

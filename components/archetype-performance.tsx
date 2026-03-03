@@ -103,7 +103,10 @@ export function ArchetypePerformanceSummary({ data }: ArchetypePerformanceSummar
                       <Icon className="w-3 h-3 flex-none" aria-hidden="true" />
                       <span className="hidden sm:inline">{label}</span>
                       <span className="sm:hidden">{shortLabel}</span>
-                      <span className="text-xs text-muted-foreground">({stageCount})</span>
+                      <span
+                        className={cn("text-xs", stageCount <= 2 ? "text-amber-500" : "text-muted-foreground")}
+                        title={stageCount <= 2 ? `Only ${stageCount} stage${stageCount === 1 ? "" : "s"} — interpret with caution` : undefined}
+                      >({stageCount})</span>
                     </span>
                   </td>
                   {competitors.map((comp) => {
