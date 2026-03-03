@@ -261,29 +261,36 @@ function TrendChart({ data }: { data: ShooterDashboardResponse }) {
                 />
                 <XAxis
                   dataKey="label"
-                  tick={{ fontSize: 10 }}
-                  className="text-muted-foreground"
+                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                  className="fill-muted-foreground"
                   interval="preserveStartEnd"
                 />
                 <YAxis
-                  tick={{ fontSize: 10 }}
-                  className="text-muted-foreground"
+                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                  className="fill-muted-foreground"
                   width={40}
                 />
                 <Tooltip
                   contentStyle={{
-                    fontSize: 12,
+                    backgroundColor: "var(--popover)",
+                    color: "var(--popover-foreground)",
+                    border: "1px solid var(--border)",
                     borderRadius: "0.375rem",
+                    fontSize: 12,
+                    boxShadow: "0 4px 16px rgba(0,0,0,0.14), 0 1px 4px rgba(0,0,0,0.08)",
                   }}
+                  labelStyle={{ color: "var(--popover-foreground)", fontWeight: 600 }}
+                  itemStyle={{ color: "var(--popover-foreground)" }}
+                  cursor={{ stroke: "var(--muted-foreground)", opacity: 0.2 }}
                   formatter={(value: number | undefined) => [value != null ? value.toFixed(2) : "—", "Avg HF"]}
                 />
                 <Line
                   type="monotone"
                   dataKey="avgHF"
                   name="Avg HF"
-                  stroke="hsl(var(--primary, 221 83% 53%))"
+                  stroke="var(--chart-1)"
                   strokeWidth={2}
-                  dot={{ r: 3 }}
+                  dot={{ r: 3, fill: "var(--chart-1)" }}
                   connectNulls={false}
                 />
               </LineChart>
@@ -333,30 +340,37 @@ function TrendChart({ data }: { data: ShooterDashboardResponse }) {
                 />
                 <XAxis
                   dataKey="label"
-                  tick={{ fontSize: 10 }}
-                  className="text-muted-foreground"
+                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                  className="fill-muted-foreground"
                   interval="preserveStartEnd"
                 />
                 <YAxis
-                  tick={{ fontSize: 10 }}
-                  className="text-muted-foreground"
+                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                  className="fill-muted-foreground"
                   domain={[0, 100]}
                   width={40}
                 />
                 <Tooltip
                   contentStyle={{
-                    fontSize: 12,
+                    backgroundColor: "var(--popover)",
+                    color: "var(--popover-foreground)",
+                    border: "1px solid var(--border)",
                     borderRadius: "0.375rem",
+                    fontSize: 12,
+                    boxShadow: "0 4px 16px rgba(0,0,0,0.14), 0 1px 4px rgba(0,0,0,0.08)",
                   }}
+                  labelStyle={{ color: "var(--popover-foreground)", fontWeight: 600 }}
+                  itemStyle={{ color: "var(--popover-foreground)" }}
+                  cursor={{ stroke: "var(--muted-foreground)", opacity: 0.2 }}
                   formatter={(value: number | undefined) => [value != null ? `${value.toFixed(1)}%` : "—", "Match %"]}
                 />
                 <Line
                   type="monotone"
                   dataKey="matchPct"
                   name="Match %"
-                  stroke="hsl(var(--chart-2, 160 60% 45%))"
+                  stroke="var(--chart-2)"
                   strokeWidth={2}
-                  dot={{ r: 3 }}
+                  dot={{ r: 3, fill: "var(--chart-2)" }}
                   connectNulls={false}
                 />
               </LineChart>
