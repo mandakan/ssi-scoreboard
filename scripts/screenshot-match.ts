@@ -244,6 +244,7 @@ async function main() {
 
     const context = await browser.newContext({
       viewport: scene.viewport,
+      baseURL: "http://localhost:3000",
     });
     const page = await context.newPage();
 
