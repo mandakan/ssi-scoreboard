@@ -95,6 +95,21 @@ interface Scene {
 // Mock competitor IDs from release-mock-data.ts
 const MOCK_IDS = "1001,1002,1003";
 
+/**
+ * Expand the "Coaching analysis" accordion (idempotent).
+ * The accordion starts collapsed; its content only mounts when open.
+ */
+async function openCoachingSection(page: import("@playwright/test").Page): Promise<void> {
+  const btn = page.locator('button[aria-controls="coaching-view-panel"]');
+  await btn.waitFor({ timeout: 8000 }).catch(() => null);
+  const expanded = await btn.getAttribute("aria-expanded").catch(() => null);
+  if (expanded !== "true") {
+    await btn.click().catch(() => null);
+    // Wait for the section to mount in the DOM
+    await page.locator("#coaching-view-panel").waitFor({ timeout: 5000 }).catch(() => null);
+  }
+}
+
 const SCENES: Scene[] = [
   {
     name: "comparison-table",
@@ -113,32 +128,36 @@ const SCENES: Scene[] = [
     setup: async (page, matchPath) => {
       await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
       await page.waitForSelector("text=Stage results", { timeout: 10000 });
-      const heading = page.locator("text=Stage degradation").first();
-      await heading.waitFor({ timeout: 10000 }).catch(() => null);
+      await openCoachingSection(page);
+      const heading = page.locator("h3", { hasText: "Stage degradation" }).first();
+      await heading.waitFor({ timeout: 8000 }).catch(() => null);
       await heading.scrollIntoViewIfNeeded().catch(() => null);
     },
   },
   {
     name: "hf-level-bars",
-    description: "HF Level bars",
+    description: "HF Level bars in stage rows of the comparison table",
     suppressWhatsNew: true,
     setup: async (page, matchPath) => {
       await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
-      await page.waitForSelector("text=Stage results", { timeout: 10000 });
-      const heading = page.locator("text=Hit factor by stage").first();
-      await heading.waitFor({ timeout: 10000 }).catch(() => null);
-      await heading.scrollIntoViewIfNeeded().catch(() => null);
+      await page.waitForSelector("table", { timeout: 10000 });
+      // HF Level bars are the difficulty indicators in each stage row of the comparison table.
+      // aria-label="HF Level: <label>" is set on the bar span in comparison-table.tsx.
+      const hfBar = page.locator('[aria-label^="HF Level"]').first();
+      await hfBar.waitFor({ timeout: 10000 }).catch(() => null);
+      await hfBar.scrollIntoViewIfNeeded().catch(() => null);
     },
   },
   {
     name: "archetype-chart",
-    description: "Archetype performance breakdown",
+    description: "Stage archetype breakdown (Speed / Precision / Mixed)",
     suppressWhatsNew: true,
     setup: async (page, matchPath) => {
       await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
       await page.waitForSelector("text=Stage results", { timeout: 10000 });
-      const heading = page.locator("text=Archetype").first();
-      await heading.waitFor({ timeout: 10000 }).catch(() => null);
+      await openCoachingSection(page);
+      const heading = page.locator("h3", { hasText: "Stage archetype breakdown" }).first();
+      await heading.waitFor({ timeout: 8000 }).catch(() => null);
       await heading.scrollIntoViewIfNeeded().catch(() => null);
     },
   },
@@ -149,8 +168,9 @@ const SCENES: Scene[] = [
     setup: async (page, matchPath) => {
       await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
       await page.waitForSelector("text=Stage results", { timeout: 10000 });
-      const heading = page.locator("text=Style fingerprint").first();
-      await heading.waitFor({ timeout: 10000 }).catch(() => null);
+      await openCoachingSection(page);
+      const heading = page.locator("h3", { hasText: "Shooter style fingerprint" }).first();
+      await heading.waitFor({ timeout: 8000 }).catch(() => null);
       await heading.scrollIntoViewIfNeeded().catch(() => null);
     },
   },
@@ -239,7 +259,8 @@ async function main() {
       });
       const page = await context.newPage();
 
-      // ── Suppress dev toolbar and help dialogs ────────────────────────────
+      // ── Suppress first-visit modals via localStorage ─────────────────────
+      // Must run before app scripts (addInitScript fires before page scripts).
       await page.addInitScript(
         ({
           releaseId,
@@ -248,25 +269,9 @@ async function main() {
           releaseId: string;
           suppressWhatsNew: boolean;
         }) => {
-          // Suppress first-visit modals — must run before app scripts,
-          // so do this BEFORE any DOM manipulation that could throw.
           localStorage.setItem("ssi-cell-help-seen", "1");
           if (suppressWhatsNew) {
             localStorage.setItem("whats-new-seen-id", releaseId);
-          }
-
-          // Hide Next.js dev toolbar (nextjs-portal custom element).
-          // document.head may be null this early; defer to DOMContentLoaded
-          // if necessary so a null-access never blocks the localStorage calls above.
-          const injectStyle = () => {
-            const style = document.createElement("style");
-            style.textContent = "nextjs-portal { display: none !important; }";
-            (document.head ?? document.documentElement).appendChild(style);
-          };
-          if (document.head) {
-            injectStyle();
-          } else {
-            document.addEventListener("DOMContentLoaded", injectStyle, { once: true });
           }
         },
         { releaseId: LATEST_RELEASE_ID, suppressWhatsNew: scene.suppressWhatsNew }
@@ -285,6 +290,14 @@ async function main() {
       // ── Run scene setup ──────────────────────────────────────────────────
       try {
         await scene.setup(page, matchPath);
+
+        // Remove Next.js dev overlay after the page has settled.
+        // addInitScript CSS injection fires too early (before nextjs-portal mounts),
+        // so we remove the element from the DOM here instead.
+        await page.evaluate(() => {
+          document.querySelectorAll("nextjs-portal").forEach((el) => el.remove());
+        }).catch(() => null);
+
         // Give charts a moment to finish rendering
         await page.waitForTimeout(1200);
       } catch (err) {
