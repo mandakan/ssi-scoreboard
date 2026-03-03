@@ -11,11 +11,24 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-03-02";
+export const LATEST_RELEASE_ID = "2026-03-03";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "March 3, 2026",
+    title: "Sort Stages by Shooting Order",
+    sections: [
+      {
+        heading: "New",
+        items: [
+          "Per-column sort buttons in the comparison table: click a competitor's column header to reorder stages by the sequence they actually shot them — useful for spotting fatigue or consistency patterns across a competition day. Click the Stage column to return to stage-number order.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-03-02",
     date: "March 2, 2026",
     title: "Stage Degradation Analysis & Stage Metrics",
     sections: [

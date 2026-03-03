@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, startTransition } from "react";
+import { useState, useEffect, startTransition, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
@@ -585,6 +585,18 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
   const [showWhatIf, setShowWhatIf] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
+  // Stage sort: 'stage' = natural stage-number order; number = sort by that competitor's shooting order
+  const [stageSort, setStageSort] = useState<"stage" | number>(() => {
+    if (competitors.length === 1) {
+      const comp = competitors[0];
+      const hasShootingOrder = stages.some(
+        (s) => s.competitors[comp.id]?.shooting_order != null
+      );
+      if (hasShootingOrder) return comp.id;
+    }
+    return "stage";
+  });
+
   useEffect(() => {
     if (competitors.length < 2 && mode === "group") {
       setMode("division");
@@ -593,6 +605,16 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to count changes
   }, [competitors.length]);
+
+  // Smart sort defaults: reset when sorted competitor is removed or a second competitor is added
+  useEffect(() => {
+    setStageSort((prev) => {
+      if (prev === "stage") return prev;
+      const currIds = new Set(competitors.map((c) => c.id));
+      if (!currIds.has(prev) || currIds.size > 1) return "stage";
+      return prev;
+    });
+  }, [competitors]);
 
   useEffect(() => {
     if (!localStorage.getItem("ssi-cell-help-seen")) {
@@ -609,6 +631,42 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
     return scorecards.length > 0 && scorecards.every((sc) => sc.dq);
   });
   const colorMap = buildColorMap(competitors.map((c) => c.id));
+
+  // Competitors that have at least one stage with shooting_order data (show sort button)
+  const competitorHasShootingOrder = useMemo(
+    () =>
+      new Set(
+        competitors
+          .filter((comp) =>
+            stages.some((s) => s.competitors[comp.id]?.shooting_order != null)
+          )
+          .map((c) => c.id)
+      ),
+    [competitors, stages]
+  );
+
+  // Stages sorted by the active sort column
+  const sortedStages = useMemo(() => {
+    if (stageSort === "stage") return stages;
+    const compId = stageSort;
+    return [...stages].sort((a, b) => {
+      const orderA = a.competitors[compId]?.shooting_order ?? null;
+      const orderB = b.competitors[compId]?.shooting_order ?? null;
+      if (orderA != null && orderB != null) return orderA - orderB;
+      if (orderA != null) return -1;
+      if (orderB != null) return 1;
+      return a.stage_num - b.stage_num;
+    });
+  }, [stages, stageSort]);
+
+  // Screen-reader announcement for sort changes
+  const sortAnnouncement = useMemo(() => {
+    if (stageSort === "stage") return "Stages sorted by stage number";
+    const comp = competitors.find((c) => c.id === stageSort);
+    return comp
+      ? `Stages sorted by ${comp.name.split(" ")[0]}'s shooting order`
+      : "";
+  }, [stageSort, competitors]);
 
   // Compute totals per competitor: total raw points, average %, zone/penalty sums, and clean match status
   const totals = competitors.map((comp) => {
@@ -722,12 +780,35 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
         </button>
       </div>
 
+      <div role="status" className="sr-only" aria-live="polite" aria-atomic="true">
+        {sortAnnouncement}
+      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="border-b">
-              <th className="text-left py-2 pr-4 font-medium text-muted-foreground">
-                Stage
+              <th
+                className="text-left py-2 pr-4 font-medium text-muted-foreground"
+                aria-sort={stageSort === "stage" ? "ascending" : "none"}
+              >
+                <button
+                  onClick={() => setStageSort("stage")}
+                  className={cn(
+                    "inline-flex items-center gap-1 transition-colors hover:text-foreground",
+                    stageSort === "stage"
+                      ? "text-foreground"
+                      : "text-muted-foreground"
+                  )}
+                  aria-label="Sort by stage number"
+                >
+                  Stage
+                  {stageSort === "stage" ? (
+                    <ArrowUp className="w-3 h-3" aria-hidden="true" />
+                  ) : (
+                    <ArrowUpDown className="w-3 h-3" aria-hidden="true" />
+                  )}
+                </button>
               </th>
               {competitors.map((comp) => {
                 const t = totals.find((x) => x.id === comp.id);
@@ -739,12 +820,37 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                   t.overpushCount > 0 && `${t.overpushCount} over-push`,
                   t.meltdownCount > 0 && `${t.meltdownCount} meltdown`,
                 ].filter(Boolean).join(" · ") : "";
+                const canSortByComp = competitorHasShootingOrder.has(comp.id);
+                const isSortedByComp = stageSort === comp.id;
                 return (
                   <th
                     key={comp.id}
                     className="relative py-2 px-3 text-center font-medium min-w-[5.5rem] sm:min-w-32"
                     style={{ borderBottom: `3px solid ${colorMap[comp.id]}` }}
+                    aria-sort={isSortedByComp ? "ascending" : "none"}
                   >
+                    {canSortByComp && (
+                      <button
+                        onClick={() =>
+                          setStageSort(isSortedByComp ? "stage" : comp.id)
+                        }
+                        className={cn(
+                          "absolute top-0 left-0 p-2 rounded-br text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+                          isSortedByComp && "text-foreground"
+                        )}
+                        aria-label={
+                          isSortedByComp
+                            ? `Sort by stage number`
+                            : `Sort stages by ${comp.name.split(" ")[0]}'s shooting order`
+                        }
+                      >
+                        {isSortedByComp ? (
+                          <ArrowUp className="w-3 h-3" aria-hidden="true" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3" aria-hidden="true" />
+                        )}
+                      </button>
+                    )}
                     {onRemove && (
                       <button
                         onClick={() => onRemove(comp.id)}
@@ -815,7 +921,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
             </tr>
           </thead>
           <tbody>
-            {stages.map((stage) => (
+            {sortedStages.map((stage) => (
               <tr key={stage.stage_id} className="border-b hover:bg-muted/30">
                 <td className="py-2 pr-4 font-medium">
                   <div className="flex flex-col gap-0.5">
