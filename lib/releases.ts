@@ -11,11 +11,29 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-03-03";
+export const LATEST_RELEASE_ID = "2026-03-04";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "March 4, 2026",
+    title: "Shooter Dashboard & My Stats",
+    screenshotScenes: ["whats-new-dialog"],
+    sections: [
+      {
+        heading: "New",
+        items: [
+          "Shooter dashboard — your personal cross-match stats page. Open /me or tap \"My Stats\" in the footer after claiming your identity.",
+          "Match history: every match you've competed in (that has been viewed on this app) appears in a scrollable list. Tap any entry to jump straight to that match with yourself pre-selected.",
+          "Performance trends: hit factor and match % charted over time so you can see whether your results are improving, stable, or declining across competitions.",
+          "Aggregate stats: overall average HF, mean match %, accuracy breakdown (A/C/D/miss %), consistency coefficient of variation, and a HF trend indicator.",
+          "\"My Stats\" link in the footer — appears automatically once you've set your identity.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-03-03",
     date: "March 3, 2026",
     title: "Identity, Tracked Shooters, Stage Sort & Degradation Analysis",
     screenshotScenes: [

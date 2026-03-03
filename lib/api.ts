@@ -9,6 +9,7 @@ import type {
   PopularMatch,
   CoachingTipResponse,
   CoachingAvailability,
+  ShooterDashboardResponse,
 } from "@/lib/types";
 
 export async function fetchMatch(ct: string, id: string): Promise<MatchResponse> {
@@ -75,6 +76,17 @@ export async function fetchCompare(
 export async function fetchCoachingAvailability(): Promise<CoachingAvailability> {
   const res = await fetch("/api/coaching/availability");
   if (!res.ok) return { available: false };
+  return res.json();
+}
+
+export async function fetchShooterDashboard(
+  shooterId: number,
+): Promise<ShooterDashboardResponse> {
+  const res = await fetch(`/api/shooter/${shooterId}`);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Shooter dashboard fetch failed (${res.status}): ${body}`);
+  }
   return res.json();
 }
 
