@@ -489,4 +489,10 @@ export interface Release {
   /** Optional short headline for the release, e.g. "Event Filters & More". */
   title?: string;
   sections: ReleaseSection[];
+  /**
+   * Scene names to capture when generating release screenshots.
+   * References the canonical scene catalogue in scripts/screenshot-match.ts.
+   * Omit to capture all scenes (fallback).
+   */
+  screenshotScenes?: string[];
 }
