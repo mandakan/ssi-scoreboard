@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { Download, Share, X } from "lucide-react";
 import { usePWAInstall } from "@/lib/pwa-install";
 
@@ -8,11 +8,16 @@ const DISMISSED_KEY = "pwa-install-dismissed";
 
 export function InstallBanner() {
   const { canInstall, isIos, isInstalled, triggerInstall } = usePWAInstall();
-  const [dismissed, setDismissed] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      !!localStorage.getItem(DISMISSED_KEY)
-  );
+  const [mounted, setMounted] = useState(false);
+  // Always start false to match server render; update after hydration.
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    startTransition(() => {
+      setMounted(true);
+      setDismissed(!!localStorage.getItem(DISMISSED_KEY));
+    });
+  }, []);
 
   function dismiss() {
     localStorage.setItem(DISMISSED_KEY, "1");
@@ -24,6 +29,9 @@ export function InstallBanner() {
     localStorage.setItem(DISMISSED_KEY, "1");
     setDismissed(true);
   }
+
+  // Don't render until mounted — server always returns null, client matches it.
+  if (!mounted) return null;
 
   const showAndroid = canInstall && !isInstalled && !dismissed;
   const showIos = isIos && !isInstalled && !dismissed;

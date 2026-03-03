@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useState,
+  startTransition,
 } from "react";
 
 // Non-standard browser API — not in the TypeScript DOM lib
@@ -50,11 +51,19 @@ export function PWAInstallProvider({
 }: {
   children: React.ReactNode;
 }) {
-  // Lazy initialisers read browser state once on first client render — no effect needed
-  const [isInstalled] = useState(readIsInstalled);
-  const [isIos] = useState(readIsIos);
+  // Start false on both server and client to avoid hydration mismatch.
+  // startTransition updates to real browser values after hydration.
+  const [isInstalled, setIsInstalled] = useState(false);
+  const [isIos, setIsIos] = useState(false);
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
+
+  useEffect(() => {
+    startTransition(() => {
+      setIsInstalled(readIsInstalled());
+      setIsIos(readIsIos());
+    });
+  }, []);
 
   useEffect(() => {
     // Already installed or iOS — no point listening for beforeinstallprompt
