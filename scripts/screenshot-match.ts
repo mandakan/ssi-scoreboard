@@ -248,14 +248,25 @@ async function main() {
           releaseId: string;
           suppressWhatsNew: boolean;
         }) => {
-          // Hide Next.js dev toolbar (nextjs-portal custom element)
-          const style = document.createElement("style");
-          style.textContent = "nextjs-portal { display: none !important; }";
-          document.head.appendChild(style);
-
+          // Suppress first-visit modals — must run before app scripts,
+          // so do this BEFORE any DOM manipulation that could throw.
           localStorage.setItem("ssi-cell-help-seen", "1");
           if (suppressWhatsNew) {
             localStorage.setItem("whats-new-seen-id", releaseId);
+          }
+
+          // Hide Next.js dev toolbar (nextjs-portal custom element).
+          // document.head may be null this early; defer to DOMContentLoaded
+          // if necessary so a null-access never blocks the localStorage calls above.
+          const injectStyle = () => {
+            const style = document.createElement("style");
+            style.textContent = "nextjs-portal { display: none !important; }";
+            (document.head ?? document.documentElement).appendChild(style);
+          };
+          if (document.head) {
+            injectStyle();
+          } else {
+            document.addEventListener("DOMContentLoaded", injectStyle, { once: true });
           }
         },
         { releaseId: LATEST_RELEASE_ID, suppressWhatsNew: scene.suppressWhatsNew }
