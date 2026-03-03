@@ -64,6 +64,7 @@ export function ArchetypePerformanceSummary({ data }: ArchetypePerformanceSummar
             <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
               <p>Stages are classified based on target composition: <strong>Speed</strong> stages have &gt;50% steel targets, <strong>Precision</strong> stages are long courses (&ge;25 rounds) with &le;30% steel, and <strong>Mixed</strong> stages are everything in between.</p>
               <p>Compare average group % across archetypes to spot if a shooter dominates one type but struggles on another. A large gap (&gt;5%) between archetypes suggests targeted practice opportunities.</p>
+              <p>The stage count for each row is shown in parentheses. Counts of 1–2 are highlighted in amber — averages from very few stages are less reliable and should be interpreted with caution.</p>
             </div>
           </PopoverContent>
         </Popover>
