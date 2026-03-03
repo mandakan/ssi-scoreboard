@@ -18,6 +18,12 @@ export const RELEASES: Release[] = [
     id: LATEST_RELEASE_ID,
     date: "March 3, 2026",
     title: "Stage Sort, Degradation Analysis & Statistical Quality",
+    screenshotScenes: [
+      "comparison-table-mobile",
+      "degradation-chart",
+      "hf-level-bars",
+      "whats-new-dialog",
+    ],
     sections: [
       {
         heading: "New",

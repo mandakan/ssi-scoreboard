@@ -147,6 +147,11 @@ entry has been added. It is also accessible at any time via the "What's new" lin
 **Rule of thumb:** add an entry whenever a user-visible feature ships. Skip patch/fix-only
 deploys unless the fix is prominent enough that users should know about it.
 
+**`screenshotScenes`:** new releases should include a `screenshotScenes` array referencing
+scene names from the canonical catalogue in `scripts/screenshot-match.ts`. Available scenes:
+`comparison-table-mobile`, `comparison-table-desktop`, `degradation-chart`, `hf-level-bars`,
+`archetype-chart`, `style-fingerprint`, `whats-new-dialog`. Omit the field to capture all scenes.
+
 ## Chart info popovers
 Every chart section in `app/match/[ct]/[id]/match-page-client.tsx` has a `?` (`HelpCircle`) icon button
 that opens a `<Popover>` explaining the chart. **When adding a new chart section, always add
