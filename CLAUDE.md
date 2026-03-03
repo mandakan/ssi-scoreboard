@@ -147,11 +147,18 @@ entry has been added. It is also accessible at any time via the "What's new" lin
 **Rule of thumb:** add an entry whenever a user-visible feature ships. Skip patch/fix-only
 deploys unless the fix is prominent enough that users should know about it.
 
-**`screenshotScenes`:** new releases should include a `screenshotScenes` array referencing
-scene names from the canonical catalogue in `scripts/screenshot-match.ts`. Each scene is
-captured at both mobile (390×844) and desktop (1280×900). Available scenes:
-`comparison-table`, `degradation-chart`, `hf-level-bars`, `archetype-chart`,
-`style-fingerprint`, `whats-new-dialog`. Omit the field to capture all scenes.
+**`screenshotScenes`:** new releases must include a `screenshotScenes` array. Point it at
+the scenes from `scripts/screenshot-match.ts` that best showcase the new feature.
+Each scene is captured at both mobile (390×844) and desktop (1280×900).
+
+Current catalogue: `comparison-table`, `degradation-chart`, `hf-level-bars`,
+`archetype-chart`, `style-fingerprint`, `whats-new-dialog`. Omit the field to capture all.
+
+**When to add a new scene:** if a new chart or UI section isn't well-represented by any
+existing scene, add one to `scripts/screenshot-match.ts` (follow the existing `Scene`
+pattern: `name`, `description`, `suppressWhatsNew`, `setup`). If the new section is inside
+the "Coaching analysis" accordion, call `openCoachingSection(page)` before scrolling.
+Update the catalogue list above and in `docs/release-post.md` whenever scenes are added.
 
 ## Chart info popovers
 Every chart section in `app/match/[ct]/[id]/match-page-client.tsx` has a `?` (`HelpCircle`) icon button
