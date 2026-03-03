@@ -221,6 +221,12 @@ export default function MatchPageClient() {
     });
   }, [compareQuery.data]);
 
+  // First name of the competitor whose shooting order is active, or null.
+  const sortedCompName = useMemo(() => {
+    if (stageSort === "stage" || !compareQuery.data) return null;
+    return compareQuery.data.competitors.find((c) => c.id === stageSort)?.name.split(" ")[0] ?? null;
+  }, [stageSort, compareQuery.data]);
+
   const sortedStages = useMemo(() => {
     const stages = compareQuery.data?.stages ?? [];
     if (stageSort === "stage") return stages;
@@ -517,7 +523,12 @@ export default function MatchPageClient() {
 
               <div className="rounded-lg border p-4 space-y-3">
                 <div className="flex items-center gap-1.5">
-                  <h2 className="font-semibold">Hit factor by stage</h2>
+                  <h2 className="font-semibold">
+                    Hit factor by stage
+                    {sortedCompName && (
+                      <span className="ml-1.5 text-xs font-normal text-muted-foreground">· {sortedCompName}&apos;s shooting order</span>
+                    )}
+                  </h2>
                   <Popover>
                     <PopoverTrigger asChild>
                       <button
@@ -536,6 +547,7 @@ export default function MatchPageClient() {
                         <p>The dashed line (field leader) and dotted line (field median) benchmark your group against the full match field — toggle them with the buttons above the chart.</p>
                         <p>DNF and DQ runs appear at HF 0 with reduced opacity.</p>
                         <p>Click a competitor name in the legend to show or hide their bars.</p>
+                        <p>Stages appear in the same order as the comparison table. Use the ↕ icon in a competitor&apos;s column header to sort by their shooting order — this chart will follow.</p>
                       </div>
                     </PopoverContent>
                   </Popover>
@@ -545,7 +557,12 @@ export default function MatchPageClient() {
 
               <div className="rounded-lg border p-4 space-y-3">
                 <div className="flex items-center gap-1.5">
-                  <h2 className="font-semibold">HF% vs stage winner</h2>
+                  <h2 className="font-semibold">
+                    HF% vs stage winner
+                    {sortedCompName && (
+                      <span className="ml-1.5 text-xs font-normal text-muted-foreground">· {sortedCompName}&apos;s shooting order</span>
+                    )}
+                  </h2>
                   <Popover>
                     <PopoverTrigger asChild>
                       <button
@@ -564,6 +581,7 @@ export default function MatchPageClient() {
                         <p>Colour bands: green ≥ 95%, amber 85–95%, red &lt; 85% indicate run quality zones.</p>
                         <p>Use the reference buttons above the chart to switch from &ldquo;stage winner&rdquo; to any specific competitor to compare gaps directly.</p>
                         <p>Percentages control for relative HF level — a short stage and a long stage at 90% represent equal relative performance.</p>
+                        <p>Stages appear in the same order as the comparison table. Use the ↕ icon in a competitor&apos;s column header to sort by their shooting order — this chart will follow.</p>
                       </div>
                     </PopoverContent>
                   </Popover>
@@ -576,7 +594,12 @@ export default function MatchPageClient() {
               ) && (
                 <div className="rounded-lg border p-4 space-y-3">
                   <div className="flex items-center gap-1.5">
-                    <h2 className="font-semibold">Division position</h2>
+                    <h2 className="font-semibold">
+                      Division position
+                      {sortedCompName && (
+                        <span className="ml-1.5 text-xs font-normal text-muted-foreground">· {sortedCompName}&apos;s shooting order</span>
+                      )}
+                    </h2>
                     <Popover>
                       <PopoverTrigger asChild>
                         <button
@@ -596,6 +619,7 @@ export default function MatchPageClient() {
                           <p>A competitor sitting above the band outperformed most of their division on that stage; below the band means they trailed the majority.</p>
                           <p>Compare stages where your line dips below the band — those are disproportionate opportunities relative to peers in the same division.</p>
                           <p>When competitors are in different divisions, use the selector to switch between them.</p>
+                          <p>Stages appear in the same order as the comparison table. Use the ↕ icon in a competitor&apos;s column header to sort by their shooting order — this chart will follow.</p>
                         </div>
                       </PopoverContent>
                     </Popover>
