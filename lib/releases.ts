@@ -40,6 +40,8 @@ export const RELEASES: Release[] = [
       "comparison-table",
       "degradation-chart",
       "hf-level-bars",
+      "competitor-identity",
+      "tracked-shooters-sheet",
       "whats-new-dialog",
     ],
     sections: [

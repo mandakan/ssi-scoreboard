@@ -100,7 +100,7 @@ export const MOCK_MATCH: MatchResponse = {
   competitors: [
     {
       id: ID_A,
-      shooterId: null,
+      shooterId: 12345, // matches MOCK_SHOOTER_ID — enables identity/tracking buttons
       name: "A. Lindström",
       competitor_number: "12",
       club: "Göteborgs PK",
@@ -108,7 +108,7 @@ export const MOCK_MATCH: MatchResponse = {
     },
     {
       id: ID_B,
-      shooterId: null,
+      shooterId: 12346,
       name: "B. Holm",
       competitor_number: "27",
       club: "Malmö SKF",
@@ -116,7 +116,7 @@ export const MOCK_MATCH: MatchResponse = {
     },
     {
       id: ID_C,
-      shooterId: null,
+      shooterId: 12347,
       name: "C. Berg",
       competitor_number: "44",
       club: "Stockholms PK",

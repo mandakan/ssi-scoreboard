@@ -19,13 +19,15 @@
  *   --competitors <id,id,...>   Competitor IDs to pre-select (only with --match-url)
  *
  * Scene catalogue:
- *   comparison-table   Full comparison table
- *   degradation-chart  Stage degradation chart with Spearman r badge
- *   hf-level-bars      HF Level bars
- *   archetype-chart    Archetype performance breakdown
- *   style-fingerprint  Style fingerprint scatter chart
- *   shooter-dashboard  Shooter dashboard with match history and trend charts
- *   whats-new-dialog   What's New dialog open
+ *   comparison-table      Full comparison table
+ *   degradation-chart     Stage degradation chart with Spearman r badge
+ *   hf-level-bars         HF Level bars
+ *   archetype-chart       Archetype performance breakdown
+ *   style-fingerprint     Style fingerprint scatter chart
+ *   shooter-dashboard     Shooter dashboard with match history and trend charts
+ *   competitor-identity   Competitor picker open showing identity + tracked star states
+ *   tracked-shooters-sheet  My shooters management sheet
+ *   whats-new-dialog      What's New dialog open
  */
 
 import { chromium } from "@playwright/test";
@@ -201,6 +203,67 @@ const SCENES: Scene[] = [
       // Wait for the identity card (h1) and at least one match card to render
       await page.waitForSelector("h1", { timeout: 10000 });
       await page.waitForSelector('[aria-labelledby="history-heading"]', { timeout: 8000 }).catch(() => null);
+    },
+  },
+  {
+    name: "competitor-identity",
+    description: "Competitor picker open showing 'This is me' identity and tracked star states",
+    suppressWhatsNew: true,
+    setup: async (page, matchPath) => {
+      // Pre-seed identity (A. Lindström) and one tracked competitor (B. Holm)
+      // so the picker shows the active identity/star icon states.
+      await page.addInitScript(() => {
+        localStorage.setItem(
+          "ssi-my-shooter",
+          JSON.stringify({ shooterId: 12345, name: "A. Lindström", license: null })
+        );
+        localStorage.setItem(
+          "ssi-tracked-shooters",
+          JSON.stringify([
+            { shooterId: 12346, name: "B. Holm", club: "Malmö SKF", division: "Production" },
+          ])
+        );
+      });
+      await page.goto(matchPath);
+      // Wait for the page to load, then open the competitor picker
+      const addBtn = page.locator("button", { hasText: "Add competitor" });
+      await addBtn.waitFor({ timeout: 10000 }).catch(() => null);
+      await addBtn.click().catch(() => null);
+      // Wait for identity buttons to appear in the picker rows
+      await page
+        .locator('button[aria-label*="Set as my identity"]')
+        .first()
+        .waitFor({ timeout: 8000 })
+        .catch(() => null);
+    },
+  },
+  {
+    name: "tracked-shooters-sheet",
+    description: "My shooters management sheet with identity and tracked competitors listed",
+    suppressWhatsNew: true,
+    setup: async (page, matchPath) => {
+      // Pre-seed identity (A. Lindström) and two tracked competitors (B. Holm, C. Berg)
+      await page.addInitScript(() => {
+        localStorage.setItem(
+          "ssi-my-shooter",
+          JSON.stringify({ shooterId: 12345, name: "A. Lindström", license: null })
+        );
+        localStorage.setItem(
+          "ssi-tracked-shooters",
+          JSON.stringify([
+            { shooterId: 12346, name: "B. Holm", club: "Malmö SKF", division: "Production" },
+            { shooterId: 12347, name: "C. Berg", club: "Stockholms PK", division: "Production" },
+          ])
+        );
+      });
+      await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
+      await page.waitForSelector("table", { timeout: 10000 });
+      // Open the "My shooters" sheet via the footer identity button
+      const identityBtn = page.locator('button[aria-label*="Your identity"]').first();
+      await identityBtn.waitFor({ timeout: 8000 }).catch(() => null);
+      await identityBtn.click().catch(() => null);
+      // Wait for the bottom sheet to open
+      await page.locator("text=My shooters").first().waitFor({ timeout: 5000 }).catch(() => null);
     },
   },
   {

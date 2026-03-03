@@ -83,6 +83,8 @@ Every scene is captured at both **mobile** (390×844) and **desktop** (1280×900
 | `archetype-chart` | Archetype performance breakdown |
 | `style-fingerprint` | Style fingerprint scatter chart |
 | `shooter-dashboard` | Shooter dashboard with match history and trend charts |
+| `competitor-identity` | Competitor picker open showing identity and tracked star states |
+| `tracked-shooters-sheet` | My shooters management sheet |
 | `whats-new-dialog` | What's New dialog open |
 
 The script writes `manifest.json` alongside the PNGs listing each scene name, description,
