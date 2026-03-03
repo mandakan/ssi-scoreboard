@@ -135,6 +135,9 @@ export const MATCH_QUERY = `
             handgun_div
             get_handgun_div_display
             shoots_handgun_major
+            shooter {
+              id
+            }
           }
         }
         squads {

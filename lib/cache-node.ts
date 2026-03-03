@@ -55,6 +55,22 @@ const adapter: CacheAdapter = {
     await pipeline.exec();
   },
 
+  async indexShooterMatch(shooterId, matchRef, startTimestamp) {
+    await redis.zadd(pk(`shooter:${shooterId}:matches`), startTimestamp, matchRef);
+  },
+
+  async setShooterProfile(shooterId, profile) {
+    await redis.set(pk(`shooter:${shooterId}:profile`), profile);
+  },
+
+  async getShooterMatches(shooterId) {
+    return redis.zrange(pk(`shooter:${shooterId}:matches`), 0, -1);
+  },
+
+  async getShooterProfile(shooterId) {
+    return redis.get(pk(`shooter:${shooterId}:profile`));
+  },
+
   async getPopularKeys(maxAgeSeconds, limit) {
     const cutoff = Math.floor(Date.now() / 1000) - maxAgeSeconds;
 

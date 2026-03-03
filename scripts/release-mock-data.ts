@@ -100,6 +100,7 @@ export const MOCK_MATCH: MatchResponse = {
   competitors: [
     {
       id: ID_A,
+      shooterId: null,
       name: "A. Lindström",
       competitor_number: "12",
       club: "Göteborgs PK",
@@ -107,6 +108,7 @@ export const MOCK_MATCH: MatchResponse = {
     },
     {
       id: ID_B,
+      shooterId: null,
       name: "B. Holm",
       competitor_number: "27",
       club: "Malmö SKF",
@@ -114,6 +116,7 @@ export const MOCK_MATCH: MatchResponse = {
     },
     {
       id: ID_C,
+      shooterId: null,
       name: "C. Berg",
       competitor_number: "44",
       club: "Stockholms PK",

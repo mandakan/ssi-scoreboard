@@ -35,4 +35,37 @@ export interface CacheAdapter {
     maxAgeSeconds: number,
     limit: number,
   ): Promise<{ key: string; hits: number }[]>;
+
+  // ── Shooter cross-match index ─────────────────────────────────────────────
+
+  /**
+   * Add a match reference to a shooter's match sorted set.
+   *
+   * Key: shooter:{shooterId}:matches
+   * Member: "{ct}:{matchId}" (e.g. "22:26547")
+   * Score: match start Unix timestamp (seconds)
+   *
+   * No TTL — the index is permanent. Fire-and-forget safe.
+   */
+  indexShooterMatch(
+    shooterId: number,
+    matchRef: string,
+    startTimestamp: number,
+  ): Promise<void>;
+
+  /**
+   * Persist a JSON-serialised ShooterProfile for quick display (name, club, division).
+   * Overwrites on each call so the profile always reflects the latest match data.
+   * Key: shooter:{shooterId}:profile  — no TTL (permanent).
+   */
+  setShooterProfile(shooterId: number, profile: string): Promise<void>;
+
+  /**
+   * Return all match refs for a shooter, sorted by match date ascending.
+   * Returns [] if no entries exist or on error.
+   */
+  getShooterMatches(shooterId: number): Promise<string[]>;
+
+  /** Return the raw JSON profile string, or null if not found. */
+  getShooterProfile(shooterId: number): Promise<string | null>;
 }

@@ -3,6 +3,7 @@
 
 import { fetchRawMatchData } from "@/lib/match-data";
 import { formatDivisionDisplay } from "@/lib/divisions";
+import { decodeShooterId } from "@/lib/shooter-index";
 import type { CompetitorInfo } from "@/lib/types";
 
 // ── Public types ────────────────────────────────────────────────────────
@@ -73,6 +74,7 @@ async function fetchOgMatchDataImpl(
       ev.competitors_approved_w_wo_results_not_dnf ?? []
     ).map((c) => ({
       id: parseInt(c.id, 10),
+      shooterId: decodeShooterId(c.shooter?.id),
       name: [c.first_name, c.last_name].filter(Boolean).join(" ") || "Unknown",
       competitor_number: c.number ?? "",
       club: c.club ?? null,

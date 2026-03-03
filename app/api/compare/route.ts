@@ -7,6 +7,7 @@ import { computeMatchTtl } from "@/lib/match-ttl";
 import { formatDivisionDisplay } from "@/lib/divisions";
 import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, computeStageDegradationData } from "@/app/api/compare/logic";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
+import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
 import type { CompareMode, CompareResponse, CompetitorInfo, FieldFingerprintPoint, StageComparison } from "@/lib/types";
 
 interface RawCompetitor {
@@ -19,6 +20,7 @@ interface RawCompetitor {
   handgun_div?: string | null;
   get_handgun_div_display?: string | null;
   shoots_handgun_major?: boolean | null;
+  shooter?: { id: string } | null;
 }
 
 interface RawMatchData {
@@ -164,6 +166,7 @@ export async function GET(req: Request) {
       parseInt(c.id, 10),
       {
         id: parseInt(c.id, 10),
+        shooterId: decodeShooterId(c.shooter?.id),
         name: [c.first_name, c.last_name].filter(Boolean).join(" ") || "Unknown",
         competitor_number: c.number ?? "",
         club: c.club ?? null,
@@ -172,10 +175,14 @@ export async function GET(req: Request) {
     ])
   );
 
+  // Build cross-match shooter index — fire-and-forget, non-fatal.
+  indexMatchShooters(ct, id, matchData.event?.starts ?? null, [...competitorInfoMap.values()]);
+
   const requestedCompetitors: CompetitorInfo[] = competitorIds.map((cid) => {
     return (
       competitorInfoMap.get(cid) ?? {
         id: cid,
+        shooterId: null,
         name: `Competitor ${cid}`,
         competitor_number: "",
         club: null,

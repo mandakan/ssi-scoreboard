@@ -7,6 +7,7 @@ import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
 import cacheAdapter from "@/lib/cache-impl";
 import { computeMatchTtl } from "@/lib/match-ttl";
 import { formatDivisionDisplay } from "@/lib/divisions";
+import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
 import type { MatchResponse, StageInfo, CompetitorInfo, SquadInfo } from "@/lib/types";
 
 // ── Raw GraphQL response shapes ─────────────────────────────────────────────
@@ -37,6 +38,7 @@ interface RawCompetitor {
   handgun_div?: string | null;
   get_handgun_div_display?: string | null;
   shoots_handgun_major?: boolean | null;
+  shooter?: { id: string } | null;
 }
 
 interface RawSquad {
@@ -161,6 +163,7 @@ export async function fetchMatchData(
     ev.competitors_approved_w_wo_results_not_dnf ?? []
   ).map((c) => ({
     id: parseInt(c.id, 10),
+    shooterId: decodeShooterId(c.shooter?.id),
     name: [c.first_name, c.last_name].filter(Boolean).join(" ") || "Unknown",
     competitor_number: c.number ?? "",
     club: c.club ?? null,
@@ -185,6 +188,9 @@ export async function fetchMatchData(
       };
     })
     .filter((s) => s.competitorIds.length > 0);
+
+  // Build cross-match shooter index — fire-and-forget, non-fatal.
+  indexMatchShooters(ct, id, ev.starts ?? null, competitors);
 
   const response: MatchResponse = {
     name: ev.name,

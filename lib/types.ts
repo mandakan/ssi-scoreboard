@@ -16,6 +16,8 @@ export interface StageInfo {
 
 export interface CompetitorInfo {
   id: number;
+  /** Globally stable ShooterNode primary key — same person across all matches. Null if unavailable. */
+  shooterId: number | null;
   name: string;
   competitor_number: string;
   club: string | null;

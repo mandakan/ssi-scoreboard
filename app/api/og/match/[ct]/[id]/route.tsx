@@ -174,6 +174,7 @@ async function fetchOgCompareStatsImpl(
     // computeGroupRankings to define group membership; division comes from scorecards.
     const requestedCompetitors: CompetitorInfo[] = selectedIds.map((cid) => ({
       id: cid,
+      shooterId: null,
       name: `Competitor ${String(cid)}`,
       competitor_number: "",
       club: null,

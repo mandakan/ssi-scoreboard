@@ -3,9 +3,9 @@ import { computeGroupRankings, computePenaltyStats, assignDifficulty, assignSepa
 import type { CompetitorInfo, StageComparison } from "@/lib/types";
 
 const competitors: CompetitorInfo[] = [
-  { id: 1, name: "Alice", competitor_number: "10", club: null, division: "hg1" },
-  { id: 2, name: "Bob", competitor_number: "20", club: null, division: "hg3" },
-  { id: 3, name: "Charlie", competitor_number: "30", club: null, division: "hg1" },
+  { id: 1, shooterId: null, name: "Alice", competitor_number: "10", club: null, division: "hg1" },
+  { id: 2, shooterId: null, name: "Bob", competitor_number: "20", club: null, division: "hg3" },
+  { id: 3, shooterId: null, name: "Charlie", competitor_number: "30", club: null, division: "hg1" },
 ];
 
 function makeCard(
@@ -1314,7 +1314,7 @@ describe("computeConsistencyStats", () => {
           hit_factor: pct != null ? pct / 100 * 5 : null,
           dnf: pct === null,
         })],
-        [{ id: competitorId, name: "Alice", competitor_number: "1", club: null, division: null }]
+        [{ id: competitorId, shooterId: null, name: "Alice", competitor_number: "1", club: null, division: null }]
       )[0];
       return sc;
     });
