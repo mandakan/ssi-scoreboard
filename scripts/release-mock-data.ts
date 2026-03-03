@@ -198,36 +198,44 @@ function dist(min: number, q1: number, med: number, q3: number, count: number) {
 
 // ── Stage degradation data ────────────────────────────────────────────────────
 
-// Stage 3 shows meaningful degradation (later shooters perform worse = negative r)
+// Stage 3 shows meaningful degradation (later shooters perform worse = negative r).
+// Selected competitors (1001/1002/1003) are injected at early/mid/late positions so
+// their colored dots appear on the chart against the gray field cloud.
 const DEGRADATION_STAGE_3 = {
   stageId: 103,
   stageNum: 3,
   stageName: "Stage 3 – Classique",
   spearmanR: -0.38,
   spearmanSignificant: true,
-  points: Array.from({ length: 48 }, (_, i) => ({
-    competitorId: 2000 + i,
-    shootingPosition: i + 1,
-    // Slight downward trend + noise
-    hfPercent: Math.max(
-      30,
-      Math.min(100, 92 - i * 0.9 + (Math.sin(i * 1.3) * 12)),
-    ),
-  })),
+  points: Array.from({ length: 48 }, (_, i) => {
+    if (i === 4)  return { competitorId: 1001, shootingPosition: 5,  hfPercent: 89 }; // A. early, strong
+    if (i === 22) return { competitorId: 1002, shootingPosition: 23, hfPercent: 71 }; // B. mid, on trend
+    if (i === 39) return { competitorId: 1003, shootingPosition: 40, hfPercent: 51 }; // C. late, degraded
+    return {
+      competitorId: 2000 + i,
+      shootingPosition: i + 1,
+      hfPercent: Math.max(30, Math.min(100, 92 - i * 0.9 + (Math.sin(i * 1.3) * 12))),
+    };
+  }),
 };
 
-// Stage 1 shows no significant trend (r ≈ 0)
+// Stage 1 shows no significant trend (r ≈ 0).
 const DEGRADATION_STAGE_1 = {
   stageId: 101,
   stageNum: 1,
   stageName: "Stage 1 – El Presidente",
   spearmanR: 0.07,
   spearmanSignificant: false,
-  points: Array.from({ length: 48 }, (_, i) => ({
-    competitorId: 2000 + i,
-    shootingPosition: i + 1,
-    hfPercent: Math.max(35, Math.min(100, 72 + Math.sin(i * 0.8) * 20 + Math.cos(i * 2.1) * 8)),
-  })),
+  points: Array.from({ length: 48 }, (_, i) => {
+    if (i === 7)  return { competitorId: 1001, shootingPosition: 8,  hfPercent: 79 };
+    if (i === 25) return { competitorId: 1002, shootingPosition: 26, hfPercent: 68 };
+    if (i === 41) return { competitorId: 1003, shootingPosition: 42, hfPercent: 75 };
+    return {
+      competitorId: 2000 + i,
+      shootingPosition: i + 1,
+      hfPercent: Math.max(35, Math.min(100, 72 + Math.sin(i * 0.8) * 20 + Math.cos(i * 2.1) * 8)),
+    };
+  }),
 };
 
 export const MOCK_COMPARE: CompareResponse = {
@@ -677,5 +685,5 @@ export const MOCK_COMPARE: CompareResponse = {
   },
 
   // ── Stage degradation data ──────────────────────────────────────────────────
-  stageDegradationData: [DEGRADATION_STAGE_1, DEGRADATION_STAGE_3],
+  stageDegradationData: [DEGRADATION_STAGE_3, DEGRADATION_STAGE_1], // S3 first = selected by default
 };

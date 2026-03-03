@@ -118,7 +118,9 @@ const SCENES: Scene[] = [
     setup: async (page, matchPath) => {
       await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
       await page.waitForSelector("table", { timeout: 10000 });
-      await page.locator("text=Stage results").scrollIntoViewIfNeeded();
+      await page.locator("text=Stage results").evaluate(
+        (el) => el.scrollIntoView({ block: "start", behavior: "instant" })
+      );
     },
   },
   {
@@ -131,7 +133,11 @@ const SCENES: Scene[] = [
       await openCoachingSection(page);
       const heading = page.locator("h3", { hasText: "Stage degradation" }).first();
       await heading.waitFor({ timeout: 8000 }).catch(() => null);
-      await heading.scrollIntoViewIfNeeded().catch(() => null);
+      // scrollIntoView block:start puts the heading at the viewport top so the
+      // chart renders below it rather than the heading appearing at the bottom edge.
+      await heading.evaluate(
+        (el) => el.scrollIntoView({ block: "start", behavior: "instant" })
+      ).catch(() => null);
     },
   },
   {
@@ -141,11 +147,14 @@ const SCENES: Scene[] = [
     setup: async (page, matchPath) => {
       await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
       await page.waitForSelector("table", { timeout: 10000 });
-      // HF Level bars are the difficulty indicators in each stage row of the comparison table.
-      // aria-label="HF Level: <label>" is set on the bar span in comparison-table.tsx.
+      // HF Level bars are the difficulty indicators in each stage row.
+      // Centering the first bar keeps the table column headers in view above
+      // and shows several rows with bars below — distinguishable from comparison-table.
       const hfBar = page.locator('[aria-label^="HF Level"]').first();
       await hfBar.waitFor({ timeout: 10000 }).catch(() => null);
-      await hfBar.scrollIntoViewIfNeeded().catch(() => null);
+      await hfBar.evaluate(
+        (el) => el.scrollIntoView({ block: "center", behavior: "instant" })
+      ).catch(() => null);
     },
   },
   {
@@ -158,7 +167,9 @@ const SCENES: Scene[] = [
       await openCoachingSection(page);
       const heading = page.locator("h3", { hasText: "Stage archetype breakdown" }).first();
       await heading.waitFor({ timeout: 8000 }).catch(() => null);
-      await heading.scrollIntoViewIfNeeded().catch(() => null);
+      await heading.evaluate(
+        (el) => el.scrollIntoView({ block: "start", behavior: "instant" })
+      ).catch(() => null);
     },
   },
   {
@@ -171,7 +182,9 @@ const SCENES: Scene[] = [
       await openCoachingSection(page);
       const heading = page.locator("h3", { hasText: "Shooter style fingerprint" }).first();
       await heading.waitFor({ timeout: 8000 }).catch(() => null);
-      await heading.scrollIntoViewIfNeeded().catch(() => null);
+      await heading.evaluate(
+        (el) => el.scrollIntoView({ block: "start", behavior: "instant" })
+      ).catch(() => null);
     },
   },
   {
