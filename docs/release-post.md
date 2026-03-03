@@ -72,18 +72,20 @@ second-newest release as the cutoff and warns you to use `--since` instead.
 
 ## Scene catalogue
 
-| Scene name | Viewport | What it shows |
-|---|---|---|
-| `comparison-table-mobile` | 390×844 | Full comparison table, mobile layout |
-| `comparison-table-desktop` | 1280×900 | Full comparison table, desktop layout |
-| `degradation-chart` | 1280×600 | Stage degradation chart with Spearman r badge |
-| `hf-level-bars` | 390×500 | HF Level bars (mobile) |
-| `archetype-chart` | 1280×600 | Archetype performance breakdown |
-| `style-fingerprint` | 1280×600 | Style fingerprint scatter chart |
-| `whats-new-dialog` | 390×844 | What's New dialog open |
+Every scene is captured at both **mobile** (390×844) and **desktop** (1280×900), producing
+`{scene}-mobile.png` and `{scene}-desktop.png`.
 
-The script writes `manifest.json` alongside the PNGs listing each scene name, filename,
-description, and viewport.
+| Scene name | What it shows |
+|---|---|
+| `comparison-table` | Full comparison table |
+| `degradation-chart` | Stage degradation chart with Spearman r badge |
+| `hf-level-bars` | HF Level bars |
+| `archetype-chart` | Archetype performance breakdown |
+| `style-fingerprint` | Style fingerprint scatter chart |
+| `whats-new-dialog` | What's New dialog open |
+
+The script writes `manifest.json` alongside the PNGs listing each scene name, description,
+and the filenames keyed by viewport tag (`mobile`/`desktop`).
 
 ---
 

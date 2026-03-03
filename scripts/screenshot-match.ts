@@ -5,6 +5,9 @@
  * Captures anonymized app screenshots for use in Facebook/social posts.
  * Can use real match data (--match-url) or rich mock data (default).
  *
+ * Every scene is captured at both mobile (390×844) and desktop (1280×900),
+ * producing {scene}-mobile.png and {scene}-desktop.png.
+ *
  * Usage:
  *   pnpm release:screenshots [options]
  *   tsx scripts/screenshot-match.ts [options]
@@ -16,13 +19,12 @@
  *   --competitors <id,id,...>   Competitor IDs to pre-select (only with --match-url)
  *
  * Scene catalogue:
- *   comparison-table-mobile    Full comparison table at 390×844 (mobile)
- *   comparison-table-desktop   Full comparison table at 1280×900 (desktop)
- *   degradation-chart          Stage degradation chart at 1280×600
- *   hf-level-bars              HF level bars at 390×500
- *   archetype-chart            Archetype performance at 1280×600
- *   style-fingerprint          Style fingerprint scatter at 1280×600
- *   whats-new-dialog           What's New dialog open at 390×844
+ *   comparison-table   Full comparison table
+ *   degradation-chart  Stage degradation chart with Spearman r badge
+ *   hf-level-bars      HF Level bars
+ *   archetype-chart    Archetype performance breakdown
+ *   style-fingerprint  Style fingerprint scatter chart
+ *   whats-new-dialog   What's New dialog open
  */
 
 import { chromium } from "@playwright/test";
@@ -34,6 +36,13 @@ import { LATEST_RELEASE_ID } from "../lib/releases";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
+
+// ── Standard viewports ────────────────────────────────────────────────────────
+
+const VIEWPORTS = [
+  { tag: "mobile",  width: 390,  height: 844 },
+  { tag: "desktop", width: 1280, height: 900 },
+] as const;
 
 // ── CLI argument parser ────────────────────────────────────────────────────────
 
@@ -77,8 +86,9 @@ function parseSsiUrl(url: string): { ct: string; id: string } | null {
 interface Scene {
   name: string;
   description: string;
-  viewport: { width: number; height: number };
-  /** Called after page is ready to set up the scene and wait for content. */
+  /** Whether to suppress the What's New dialog (false = let it show, for the dialog scene). */
+  suppressWhatsNew: boolean;
+  /** Called after page is ready to navigate and wait for relevant content. */
   setup: (page: import("@playwright/test").Page, matchPath: string) => Promise<void>;
 }
 
@@ -87,20 +97,9 @@ const MOCK_IDS = "1001,1002,1003";
 
 const SCENES: Scene[] = [
   {
-    name: "comparison-table-mobile",
-    description: "Full comparison table, mobile (390×844)",
-    viewport: { width: 390, height: 844 },
-    setup: async (page, matchPath) => {
-      await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
-      await page.waitForSelector("table", { timeout: 10000 });
-      // Scroll to the table
-      await page.locator("text=Stage results").scrollIntoViewIfNeeded();
-    },
-  },
-  {
-    name: "comparison-table-desktop",
-    description: "Full comparison table, desktop (1280×900)",
-    viewport: { width: 1280, height: 900 },
+    name: "comparison-table",
+    description: "Full comparison table",
+    suppressWhatsNew: true,
     setup: async (page, matchPath) => {
       await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
       await page.waitForSelector("table", { timeout: 10000 });
@@ -109,13 +108,11 @@ const SCENES: Scene[] = [
   },
   {
     name: "degradation-chart",
-    description: "Stage degradation chart with Spearman r badge (1280×600)",
-    viewport: { width: 1280, height: 600 },
+    description: "Stage degradation chart with Spearman r badge",
+    suppressWhatsNew: true,
     setup: async (page, matchPath) => {
       await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
-      // Wait for page load then scroll to degradation section
       await page.waitForSelector("text=Stage results", { timeout: 10000 });
-      // The degradation chart section
       const heading = page.locator("text=Stage degradation").first();
       await heading.waitFor({ timeout: 10000 }).catch(() => null);
       await heading.scrollIntoViewIfNeeded().catch(() => null);
@@ -123,12 +120,11 @@ const SCENES: Scene[] = [
   },
   {
     name: "hf-level-bars",
-    description: "HF level bars with field accuracy, mobile (390×500)",
-    viewport: { width: 390, height: 500 },
+    description: "HF Level bars",
+    suppressWhatsNew: true,
     setup: async (page, matchPath) => {
       await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
       await page.waitForSelector("text=Stage results", { timeout: 10000 });
-      // Scroll to the HF chart section
       const heading = page.locator("text=Hit factor by stage").first();
       await heading.waitFor({ timeout: 10000 }).catch(() => null);
       await heading.scrollIntoViewIfNeeded().catch(() => null);
@@ -136,8 +132,8 @@ const SCENES: Scene[] = [
   },
   {
     name: "archetype-chart",
-    description: "Archetype performance breakdown (1280×600)",
-    viewport: { width: 1280, height: 600 },
+    description: "Archetype performance breakdown",
+    suppressWhatsNew: true,
     setup: async (page, matchPath) => {
       await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
       await page.waitForSelector("text=Stage results", { timeout: 10000 });
@@ -148,8 +144,8 @@ const SCENES: Scene[] = [
   },
   {
     name: "style-fingerprint",
-    description: "Style fingerprint scatter chart (1280×600)",
-    viewport: { width: 1280, height: 600 },
+    description: "Style fingerprint scatter chart",
+    suppressWhatsNew: true,
     setup: async (page, matchPath) => {
       await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
       await page.waitForSelector("text=Stage results", { timeout: 10000 });
@@ -160,18 +156,16 @@ const SCENES: Scene[] = [
   },
   {
     name: "whats-new-dialog",
-    description: "What's New dialog open, mobile (390×844)",
-    viewport: { width: 390, height: 844 },
+    description: "What's New dialog open",
+    suppressWhatsNew: false, // dialog scene — let it auto-show
     setup: async (page, matchPath) => {
       void matchPath; // dialog scene navigates to home page, not match
       await page.goto("/");
-      // The What's New dialog auto-shows because we did NOT suppress it in localStorage
-      // (we only suppress the cell-help tooltip). Wait for it to appear.
+      // The What's New dialog auto-shows because we did NOT suppress it.
       const dialog = page.locator('[role="dialog"]');
       await dialog.waitFor({ timeout: 8000 }).catch(async () => {
         // Fallback: trigger via footer link
-        const link = page.locator("text=What's new").first();
-        await link.click().catch(() => null);
+        await page.locator("text=What's new").first().click().catch(() => null);
       });
       await dialog.waitFor({ timeout: 5000 }).catch(() => null);
     },
@@ -200,7 +194,6 @@ async function main() {
   }
 
   // Determine app base URL and match path
-  const baseUrl = "http://localhost:3000";
   let matchPath: string;
   let useMockData: boolean;
 
@@ -211,16 +204,12 @@ async function main() {
       console.error("Expected format: https://shootnscoreit.com/event/22/12345/");
       process.exit(1);
     }
-    matchPath = `${baseUrl}/match/${parsed.ct}/${parsed.id}`;
-    if (args.competitors) {
-      // competitors will be appended as query param in each scene's setup
-      matchPath = matchPath; // scenes add ?competitors= themselves
-    }
+    matchPath = `/match/${parsed.ct}/${parsed.id}`;
     useMockData = false;
-    console.log(`Mode: LIVE  →  ${matchPath}`);
+    console.log(`Mode: LIVE  →  http://localhost:3000${matchPath}`);
     console.log("Note: dev server must be running at http://localhost:3000");
   } else {
-    matchPath = `${baseUrl}/match/22/88888888`;
+    matchPath = `/match/22/88888888`;
     useMockData = true;
     console.log("Mode: MOCK  (rich anonymized data, no live API needed)");
     console.log("Note: dev server must be running at http://localhost:3000");
@@ -228,75 +217,79 @@ async function main() {
 
   console.log(`Output:      ${outputDir}`);
   console.log(`Scenes:      ${scenes.map((s) => s.name).join(", ")}`);
+  console.log(`Viewports:   ${VIEWPORTS.map((v) => `${v.tag} (${v.width}×${v.height})`).join(", ")}`);
   console.log("");
 
   const browser = await chromium.launch({ headless: true });
 
   const manifest: Array<{
     scene: string;
-    file: string;
     description: string;
-    viewport: { width: number; height: number };
+    files: Record<string, string>;
   }> = [];
 
   for (const scene of scenes) {
     console.log(`Capturing: ${scene.name} …`);
+    const files: Record<string, string> = {};
 
-    const context = await browser.newContext({
-      viewport: scene.viewport,
-      baseURL: "http://localhost:3000",
-    });
-    const page = await context.newPage();
+    for (const vp of VIEWPORTS) {
+      const context = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height },
+        baseURL: "http://localhost:3000",
+      });
+      const page = await context.newPage();
 
-    // ── Suppress help dialogs ──────────────────────────────────────────────
-    // Always suppress the cell-help tooltip. For the whats-new-dialog scene,
-    // do NOT suppress the What's New dialog (that IS the scene).
-    await page.addInitScript(
-      ({ releaseId, suppressWhatsNew }: { releaseId: string; suppressWhatsNew: boolean }) => {
-        localStorage.setItem("ssi-cell-help-seen", "1");
-        if (suppressWhatsNew) {
-          localStorage.setItem("whats-new-seen-id", releaseId);
-        }
-      },
-      {
-        releaseId: LATEST_RELEASE_ID,
-        suppressWhatsNew: scene.name !== "whats-new-dialog",
+      // ── Suppress dev toolbar and help dialogs ────────────────────────────
+      await page.addInitScript(
+        ({
+          releaseId,
+          suppressWhatsNew,
+        }: {
+          releaseId: string;
+          suppressWhatsNew: boolean;
+        }) => {
+          // Hide Next.js dev toolbar (nextjs-portal custom element)
+          const style = document.createElement("style");
+          style.textContent = "nextjs-portal { display: none !important; }";
+          document.head.appendChild(style);
+
+          localStorage.setItem("ssi-cell-help-seen", "1");
+          if (suppressWhatsNew) {
+            localStorage.setItem("whats-new-seen-id", releaseId);
+          }
+        },
+        { releaseId: LATEST_RELEASE_ID, suppressWhatsNew: scene.suppressWhatsNew }
+      );
+
+      // ── Mock API routes (mock mode only) ─────────────────────────────────
+      if (useMockData) {
+        await page.route("/api/match/22/88888888", (route) =>
+          route.fulfill({ json: MOCK_MATCH })
+        );
+        await page.route(/\/api\/compare/, (route) =>
+          route.fulfill({ json: MOCK_COMPARE })
+        );
       }
-    );
 
-    // ── Mock API routes (mock mode only) ──────────────────────────────────
-    if (useMockData) {
-      await page.route("/api/match/22/88888888", (route) =>
-        route.fulfill({ json: MOCK_MATCH })
-      );
-      await page.route(/\/api\/compare/, (route) =>
-        route.fulfill({ json: MOCK_COMPARE })
-      );
+      // ── Run scene setup ──────────────────────────────────────────────────
+      try {
+        await scene.setup(page, matchPath);
+        // Give charts a moment to finish rendering
+        await page.waitForTimeout(1200);
+      } catch (err) {
+        console.warn(`  Warning [${vp.tag}]: ${err instanceof Error ? err.message : err}`);
+      }
+
+      // ── Capture screenshot ───────────────────────────────────────────────
+      const filename = `${scene.name}-${vp.tag}.png`;
+      await page.screenshot({ path: join(outputDir, filename), fullPage: false });
+      files[vp.tag] = filename;
+      console.log(`  ✓ ${filename}`);
+
+      await context.close();
     }
 
-    // ── Run scene setup ────────────────────────────────────────────────────
-    try {
-      await scene.setup(page, matchPath);
-      // Give charts a moment to render
-      await page.waitForTimeout(1200);
-    } catch (err) {
-      console.warn(`  Warning during setup: ${err instanceof Error ? err.message : err}`);
-    }
-
-    // ── Capture screenshot ─────────────────────────────────────────────────
-    const filename = `${scene.name}.png`;
-    const filePath = join(outputDir, filename);
-    await page.screenshot({ path: filePath, fullPage: false });
-
-    manifest.push({
-      scene: scene.name,
-      file: filename,
-      description: scene.description,
-      viewport: scene.viewport,
-    });
-
-    console.log(`  ✓ ${filename}`);
-    await context.close();
+    manifest.push({ scene: scene.name, description: scene.description, files });
   }
 
   await browser.close();
@@ -305,7 +298,7 @@ async function main() {
   const manifestPath = join(outputDir, "manifest.json");
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
   console.log(`\n✓ manifest.json written`);
-  console.log(`\n${scenes.length} screenshot(s) saved to: ${outputDir}`);
+  console.log(`\n${scenes.length * VIEWPORTS.length} screenshot(s) saved to: ${outputDir}`);
 }
 
 main().catch((err) => {

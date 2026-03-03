@@ -19,7 +19,7 @@ export const RELEASES: Release[] = [
     date: "March 3, 2026",
     title: "Stage Sort, Degradation Analysis & Statistical Quality",
     screenshotScenes: [
-      "comparison-table-mobile",
+      "comparison-table",
       "degradation-chart",
       "hf-level-bars",
       "whats-new-dialog",
@@ -54,7 +54,7 @@ export const RELEASES: Release[] = [
     screenshotScenes: [
       "archetype-chart",
       "style-fingerprint",
-      "comparison-table-desktop",
+      "comparison-table",
       "whats-new-dialog",
     ],
     sections: [
@@ -78,7 +78,7 @@ export const RELEASES: Release[] = [
     date: "February 28, 2026",
     title: "AI Coach & Roast",
     screenshotScenes: [
-      "comparison-table-mobile",
+      "comparison-table",
       "whats-new-dialog",
     ],
     sections: [
@@ -96,7 +96,7 @@ export const RELEASES: Release[] = [
     date: "February 28, 2026",
     title: "Stage Simulator: Multi-Stage & Full-Field Rank",
     screenshotScenes: [
-      "comparison-table-desktop",
+      "comparison-table",
       "whats-new-dialog",
     ],
     sections: [
@@ -124,7 +124,7 @@ export const RELEASES: Release[] = [
     date: "February 28, 2026",
     title: "Stage Simulator",
     screenshotScenes: [
-      "comparison-table-desktop",
+      "comparison-table",
       "whats-new-dialog",
     ],
     sections: [
@@ -144,7 +144,7 @@ export const RELEASES: Release[] = [
     date: "February 27, 2026",
     title: "Benchmark Picker",
     screenshotScenes: [
-      "comparison-table-desktop",
+      "comparison-table",
       "comparison-table-mobile",
       "whats-new-dialog",
     ],
