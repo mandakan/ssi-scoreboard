@@ -22,7 +22,13 @@ export const RELEASES: Release[] = [
       {
         heading: "New",
         items: [
-          "Per-column sort buttons in the comparison table: click a competitor's column header to reorder stages by the sequence they actually shot them — useful for spotting fatigue or consistency patterns across a competition day. Click the Stage column to return to stage-number order.",
+          "Per-column sort in the comparison table: click any competitor's column header to reorder stages by the sequence they actually shot them — useful for spotting fatigue or consistency patterns across a competition day. Click the Stage column header to return to stage-number order.",
+        ],
+      },
+      {
+        heading: "Improved",
+        items: [
+          "What's New now shows all releases you missed since your last visit — no more skipping updates after a busy week.",
         ],
       },
     ],
@@ -37,7 +43,7 @@ export const RELEASES: Release[] = [
         items: [
           "Stage degradation chart (Coaching mode): see whether shooting early or late on a stage correlated with higher or lower performance across the full field. A Spearman r badge summarises the trend, and your selected competitors are highlighted against the field.",
           "Field accuracy rate on stage tooltips: hover the HF Level bars to see the median accuracy (% of max points) the field scored on that stage — distinguishes hard-shooting stages from long-but-accurate ones.",
-          "Stage separator indicator: a ↕ icon flags stages that spread the field apart the most — prime candidates for coaching analysis.",
+          "Stage separator indicator: a ↕ icon appears in the comparison table's Stage column on stages that spread the field apart the most — the best places to focus coaching analysis.",
         ],
       },
       {
