@@ -17,7 +17,7 @@ export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
     date: "March 3, 2026",
-    title: "Stage Sort, Degradation Analysis & Statistical Quality",
+    title: "Identity, Tracked Shooters, Stage Sort & Degradation Analysis",
     screenshotScenes: [
       "comparison-table",
       "degradation-chart",
@@ -28,6 +28,8 @@ export const RELEASES: Release[] = [
       {
         heading: "New",
         items: [
+          "\"This is me\" — claim your shooter identity by tapping the person icon next to your name in the competitor picker. Your identity is auto-selected whenever you open a match you competed in.",
+          "Tracked competitors — tap the star icon next to any competitor to follow them across matches. All tracked shooters are auto-selected when you visit their matches, so you never have to search again. Manage your list from the picker footer or your name in the footer.",
           "Per-column sort in the comparison table: click any competitor's column header to reorder stages by the sequence they actually shot them — useful for spotting fatigue or consistency patterns across a competition day. Click the Stage column header to return to stage-number order.",
           "Stage degradation chart (Coaching mode): see whether shooting early or late on a stage correlated with higher or lower performance across the full field. The Spearman r badge shows the sample size (n) and whether the trend is statistically significant at 95% confidence — non-significant trends appear in muted text so you can tell signal from noise.",
           "Field accuracy rate on stage tooltips: hover the HF Level bars to see the median accuracy (% of max points) the field scored on that stage — distinguishes hard-shooting stages from long-but-accurate ones.",
