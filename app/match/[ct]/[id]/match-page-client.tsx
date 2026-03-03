@@ -17,7 +17,7 @@ import { CacheInfoBadge } from "@/components/cache-info-badge";
 import { LoadingBar } from "@/components/loading-bar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, AlertCircle, ArrowLeft, RefreshCw, ChevronDown, ChevronUp, HelpCircle, ExternalLink, Info } from "lucide-react";
+import { Loader2, AlertCircle, ArrowLeft, RefreshCw, ChevronDown, ChevronUp, HelpCircle, ExternalLink, Info, ArrowUpDown } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -547,7 +547,7 @@ export default function MatchPageClient() {
                         <p>The dashed line (field leader) and dotted line (field median) benchmark your group against the full match field — toggle them with the buttons above the chart.</p>
                         <p>DNF and DQ runs appear at HF 0 with reduced opacity.</p>
                         <p>Click a competitor name in the legend to show or hide their bars.</p>
-                        <p>Stages appear in the same order as the comparison table. Use the ↕ icon in a competitor&apos;s column header to sort by their shooting order — this chart will follow.</p>
+                        <p>Stages appear in the same order as the comparison table. Use the <ArrowUpDown className="inline w-3 h-3 align-middle" aria-hidden="true" /><span className="sr-only">sort</span> button in a competitor&apos;s column header to sort by their shooting order — this chart will follow.</p>
                       </div>
                     </PopoverContent>
                   </Popover>
@@ -581,7 +581,7 @@ export default function MatchPageClient() {
                         <p>Colour bands: green ≥ 95%, amber 85–95%, red &lt; 85% indicate run quality zones.</p>
                         <p>Use the reference buttons above the chart to switch from &ldquo;stage winner&rdquo; to any specific competitor to compare gaps directly.</p>
                         <p>Percentages control for relative HF level — a short stage and a long stage at 90% represent equal relative performance.</p>
-                        <p>Stages appear in the same order as the comparison table. Use the ↕ icon in a competitor&apos;s column header to sort by their shooting order — this chart will follow.</p>
+                        <p>Stages appear in the same order as the comparison table. Use the <ArrowUpDown className="inline w-3 h-3 align-middle" aria-hidden="true" /><span className="sr-only">sort</span> button in a competitor&apos;s column header to sort by their shooting order — this chart will follow.</p>
                       </div>
                     </PopoverContent>
                   </Popover>
@@ -619,7 +619,7 @@ export default function MatchPageClient() {
                           <p>A competitor sitting above the band outperformed most of their division on that stage; below the band means they trailed the majority.</p>
                           <p>Compare stages where your line dips below the band — those are disproportionate opportunities relative to peers in the same division.</p>
                           <p>When competitors are in different divisions, use the selector to switch between them.</p>
-                          <p>Stages appear in the same order as the comparison table. Use the ↕ icon in a competitor&apos;s column header to sort by their shooting order — this chart will follow.</p>
+                          <p>Stages appear in the same order as the comparison table. Use the <ArrowUpDown className="inline w-3 h-3 align-middle" aria-hidden="true" /><span className="sr-only">sort</span> button in a competitor&apos;s column header to sort by their shooting order — this chart will follow.</p>
                         </div>
                       </PopoverContent>
                     </Popover>

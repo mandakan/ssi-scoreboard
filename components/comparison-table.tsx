@@ -807,9 +807,11 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="text-xs max-w-52 text-center">
-                    {stageSort === "stage"
-                      ? "Stages are in stage-number order. Tap ↕ on a competitor's column to sort by their shooting order."
-                      : "Reset to stage-number order"}
+                    {stageSort === "stage" ? (
+                      <>Stages are in stage-number order. Tap the <ArrowUpDown className="inline w-3 h-3 align-middle" aria-hidden="true" /><span className="sr-only">sort</span> button on a competitor&apos;s column to sort by their shooting order.</>
+                    ) : (
+                      "Reset to stage-number order"
+                    )}
                   </TooltipContent>
                 </Tooltip>
               </th>
