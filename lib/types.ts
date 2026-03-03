@@ -476,6 +476,70 @@ export interface WhatIfSimulationResponse {
   newOverallRank:            number | null;
 }
 
+// ── Shooter Dashboard ─────────────────────────────────────────────────────────
+
+// Per-match summary for the shooter dashboard.
+export interface ShooterMatchSummary {
+  ct: string;
+  matchId: string;
+  name: string;
+  date: string | null;
+  venue: string | null;
+  level: string | null;
+  /** Division the shooter competed in for this match (may differ between matches). */
+  division: string | null;
+  /** Competitor ID within this specific match. */
+  competitorId: number;
+  /** Number of stages the shooter fired (non-DNF, non-DQ). */
+  stageCount: number;
+  /** Mean hit factor across valid stages. Null if no valid stages. */
+  avgHF: number | null;
+  /** Mean division % across valid stages (0–100). Null if no scorecards cached. */
+  matchPct: number | null;
+  /** Raw hit-zone totals across all valid stages. */
+  totalA: number;
+  totalC: number;
+  totalD: number;
+  totalMiss: number;
+  totalNoShoots: number;
+}
+
+// Cross-match aggregate statistics for the shooter dashboard.
+export interface ShooterAggregateStats {
+  /** Total non-DNF stages shot across all cached matches. */
+  totalStages: number;
+  /** ISO date range of cached matches. Null edges when no dates available. */
+  dateRange: { from: string | null; to: string | null };
+  /** Weighted mean HF across all valid stages from all matches. Null when no data. */
+  overallAvgHF: number | null;
+  /** Mean of per-match matchPct values. Null when no scorecard data. */
+  overallMatchPct: number | null;
+  /** A-zone % of total shot hits (A+C+D+miss). Null when no zone data. */
+  aPercent: number | null;
+  /** C-zone %. */
+  cPercent: number | null;
+  /** D-zone %. */
+  dPercent: number | null;
+  /** Miss % of total shots. */
+  missPercent: number | null;
+  /** Coefficient of variation of per-match avg HF (σ/μ). Lower = more consistent. Null when < 2 matches with HF data. */
+  consistencyCV: number | null;
+  /** Linear regression slope on avg HF over time. Positive = improving. Null when < 3 data points. */
+  hfTrendSlope: number | null;
+}
+
+// Response from GET /api/shooter/{shooterId}.
+export interface ShooterDashboardResponse {
+  shooterId: number;
+  /** Shooter's latest known profile. Null if no profile has been indexed yet. */
+  profile: { name: string; club: string | null; division: string | null; lastSeen: string } | null;
+  /** Total number of matches in the Redis index for this shooter (may exceed matches.length). */
+  matchCount: number;
+  /** Up to 50 most recent matches, sorted newest first. */
+  matches: ShooterMatchSummary[];
+  stats: ShooterAggregateStats;
+}
+
 // ── AI Coaching Tips ─────────────────────────────────────────────────────────
 
 export interface CoachingTipResponse {

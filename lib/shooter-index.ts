@@ -74,5 +74,8 @@ export function indexMatchShooters(
     };
     void cache.indexShooterMatch(shooterId, matchRef, startTimestamp).catch(() => {});
     void cache.setShooterProfile(shooterId, JSON.stringify(profile)).catch(() => {});
+    // Invalidate the pre-computed dashboard cache so the next visit picks up
+    // this newly indexed match immediately rather than serving stale data.
+    void cache.del(`computed:shooter:${shooterId}:dashboard`).catch(() => {});
   }
 }

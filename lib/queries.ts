@@ -1,8 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { fetchMatch, fetchCompare, fetchEvents, fetchPopularMatches, fetchCoachingAvailability, fetchCoachingTip } from "@/lib/api";
-import type { CompareMode, MatchResponse, CompareResponse, EventSummary, PopularMatch, CoachingTipResponse, CoachingAvailability } from "@/lib/types";
+import { fetchMatch, fetchCompare, fetchEvents, fetchPopularMatches, fetchCoachingAvailability, fetchCoachingTip, fetchShooterDashboard } from "@/lib/api";
+import type { CompareMode, MatchResponse, CompareResponse, EventSummary, PopularMatch, CoachingTipResponse, CoachingAvailability, ShooterDashboardResponse } from "@/lib/types";
 import { matchQueryKey, compareQueryKey, coachingAvailabilityKey, coachingTipQueryKey } from "@/lib/query-keys";
 
 // Re-export so existing imports from lib/queries keep working.
@@ -60,6 +60,18 @@ export function useCoachingAvailability() {
     queryKey: coachingAvailabilityKey(),
     queryFn: fetchCoachingAvailability,
     staleTime: 300_000, // 5 minutes
+  });
+}
+
+export function useShooterDashboardQuery(shooterId: number | null) {
+  return useQuery<ShooterDashboardResponse, Error>({
+    queryKey: ["shooter-dashboard", shooterId],
+    queryFn: () => fetchShooterDashboard(shooterId!),
+    // staleTime: 0 — always refetch on mount so newly indexed matches appear
+    // immediately after visiting a match. The server caches the computed result,
+    // so refetches are cheap (usually a single Redis read).
+    staleTime: 0,
+    enabled: shooterId != null && shooterId > 0,
   });
 }
 
