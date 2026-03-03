@@ -51,6 +51,12 @@ export const RELEASES: Release[] = [
     id: "2026-03-01",
     date: "March 1, 2026",
     title: "Live/Coaching Mode & Stage Analytics",
+    screenshotScenes: [
+      "archetype-chart",
+      "style-fingerprint",
+      "comparison-table-desktop",
+      "whats-new-dialog",
+    ],
     sections: [
       {
         heading: "New",
@@ -71,6 +77,10 @@ export const RELEASES: Release[] = [
     id: "2026-02-28",
     date: "February 28, 2026",
     title: "AI Coach & Roast",
+    screenshotScenes: [
+      "comparison-table-mobile",
+      "whats-new-dialog",
+    ],
     sections: [
       {
         heading: "New",
@@ -85,6 +95,10 @@ export const RELEASES: Release[] = [
     id: "2026-02-28b",
     date: "February 28, 2026",
     title: "Stage Simulator: Multi-Stage & Full-Field Rank",
+    screenshotScenes: [
+      "comparison-table-desktop",
+      "whats-new-dialog",
+    ],
     sections: [
       {
         heading: "New",
@@ -109,6 +123,10 @@ export const RELEASES: Release[] = [
     id: "2026-02-28",
     date: "February 28, 2026",
     title: "Stage Simulator",
+    screenshotScenes: [
+      "comparison-table-desktop",
+      "whats-new-dialog",
+    ],
     sections: [
       {
         heading: "New",
@@ -125,6 +143,11 @@ export const RELEASES: Release[] = [
     id: "2026-02-27b",
     date: "February 27, 2026",
     title: "Benchmark Picker",
+    screenshotScenes: [
+      "comparison-table-desktop",
+      "comparison-table-mobile",
+      "whats-new-dialog",
+    ],
     sections: [
       {
         heading: "New",
@@ -138,6 +161,9 @@ export const RELEASES: Release[] = [
     id: "2026-02-27",
     date: "February 27, 2026",
     title: "Event Filters & More",
+    screenshotScenes: [
+      "whats-new-dialog",
+    ],
     sections: [
       {
         heading: "New",
