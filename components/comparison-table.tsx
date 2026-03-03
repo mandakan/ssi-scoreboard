@@ -161,7 +161,7 @@ function StageHFLevelIcon({
 }
 
 // FEATURE: separator-metric — delete this component and all usages to remove
-function StageSeparatorIcon() {
+function StageSeparatorIcon({ competitorCount }: { competitorCount: number }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -174,7 +174,7 @@ function StageSeparatorIcon() {
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs">
-        High separator — this stage spreads the field apart
+        {`High separator — this stage spreads the field apart (n=${competitorCount} competitors)`}
       </TooltipContent>
     </Tooltip>
   );
@@ -976,7 +976,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                                 medianHF={stage.field_median_hf}
                                 medianAccuracy={stage.field_median_accuracy} // FEATURE: accuracy-metric
                               />
-                              {stage.stageSeparatorLevel === 3 && <StageSeparatorIcon />}
+                              {stage.stageSeparatorLevel === 3 && <StageSeparatorIcon competitorCount={stage.field_competitor_count} />}
                               {stage.stageArchetype && (
                                 <StageArchetypeIcon archetype={stage.stageArchetype} />
                               )}
@@ -1045,7 +1045,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                           medianHF={stage.field_median_hf}
                           medianAccuracy={stage.field_median_accuracy} // FEATURE: accuracy-metric
                         />
-                        {stage.stageSeparatorLevel === 3 && <StageSeparatorIcon />}
+                        {stage.stageSeparatorLevel === 3 && <StageSeparatorIcon competitorCount={stage.field_competitor_count} />}
                         {stage.stageArchetype && (
                           <StageArchetypeIcon archetype={stage.stageArchetype} />
                         )}
@@ -1193,7 +1193,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                               variant="outline"
                               className={cn(
                                 "text-xs font-medium cursor-help tabular-nums",
-                                consistencyStats[t.id].stagesFired < 4 && "opacity-40"
+                                consistencyStats[t.id].stagesFired < 6 && "opacity-40"
                               )}
                               aria-label={`Consistency index: ${consistencyStats[t.id].coefficientOfVariation!.toFixed(2)} — ${consistencyStats[t.id].label}`}
                             >
@@ -1204,6 +1204,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                             <div className="font-medium">Consistency Index (CI)</div>
                             <div>Coefficient of variation of HF% across stages. Lower = more consistent.</div>
                             <div className="text-muted-foreground">{`Based on ${consistencyStats[t.id].stagesFired} stage${consistencyStats[t.id].stagesFired === 1 ? "" : "s"}`}</div>
+                            <div className="text-muted-foreground">Reliability increases with more stages — the badge dims below 6 stages to signal lower confidence.</div>
                             <div className="text-muted-foreground">{"< 0.05 very consistent · 0.05–0.10 consistent · 0.10–0.15 moderate · 0.15–0.20 variable · > 0.20 streaky"}</div>
                           </TooltipContent>
                         </Tooltip>

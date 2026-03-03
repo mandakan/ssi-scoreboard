@@ -1714,6 +1714,7 @@ export function computeStageDegradationData(
         stageName: first.stage_name,
         points: [],
         spearmanR: null,
+        spearmanSignificant: null,
       });
       continue;
     }
@@ -1724,17 +1725,70 @@ export function computeStageDegradationData(
       hfPercent: ((sc.hit_factor ?? 0) / maxHF) * 100,
     }));
 
+    const n = points.length;
+    const r = n >= 4 ? spearmanR(points) : null;
+    let significant: boolean | null = null;
+    if (r !== null) {
+      const df = n - 2;
+      const denom = 1 - r * r;
+      const tStat = denom > 0 ? Math.abs(r) * Math.sqrt(df / denom) : Infinity;
+      significant = tStat > tCritical95(df);
+    }
+
     result.push({
       stageId,
       stageNum: first.stage_number,
       stageName: first.stage_name,
       points,
-      spearmanR: points.length >= 4 ? spearmanR(points) : null,
+      spearmanR: r,
+      spearmanSignificant: significant,
     });
   }
 
   result.sort((a, b) => a.stageNum - b.stageNum);
   return result;
+}
+
+/**
+ * Two-tailed t-test critical values at α=0.05 for degrees of freedom 1–∞.
+ * Uses linear interpolation between table entries.
+ *
+ * Source: standard t-distribution table (Student's t, two-tailed, α=0.05).
+ */
+const T_CRITICAL_TABLE: [df: number, t: number][] = [
+  [2,   4.303],
+  [3,   3.182],
+  [4,   2.776],
+  [5,   2.571],
+  [6,   2.447],
+  [7,   2.365],
+  [8,   2.306],
+  [9,   2.262],
+  [10,  2.228],
+  [12,  2.179],
+  [15,  2.131],
+  [20,  2.086],
+  [30,  2.042],
+  [60,  2.000],
+  [120, 1.980],
+  [Infinity, 1.960],
+];
+
+export function tCritical95(df: number): number {
+  if (df <= 0) return Infinity;
+  for (let i = 0; i < T_CRITICAL_TABLE.length - 1; i++) {
+    const [df0, t0] = T_CRITICAL_TABLE[i];
+    const [df1, t1] = T_CRITICAL_TABLE[i + 1];
+    if (df <= df0) return t0;
+    // When df1 is Infinity, return the asymptotic value for any df beyond the last finite entry
+    if (!isFinite(df1)) return t1;
+    if (df < df1) {
+      // Linear interpolation
+      const frac = (df - df0) / (df1 - df0);
+      return t0 + frac * (t1 - t0);
+    }
+  }
+  return T_CRITICAL_TABLE[T_CRITICAL_TABLE.length - 1][1];
 }
 
 /**

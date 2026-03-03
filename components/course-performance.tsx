@@ -61,6 +61,7 @@ export function CourseLengthSummary({ data }: CoursePerformanceSummaryProps) {
             <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
               <p>IPSC match directors assign each stage an official length: <strong>Short</strong> (≤8 rounds), <strong>Medium</strong> (9–24 rounds), or <strong>Long</strong> (≥25 rounds). This uses the authoritative SSI field rather than a rounds heuristic.</p>
               <p>Compare avg group % across lengths to spot if a shooter performs differently on short quick stages vs. long technical courses. A gap &gt;5% between lengths suggests a meaningful performance pattern.</p>
+              <p>Stage counts are shown in parentheses next to each length. Counts of 1–2 are highlighted in amber — a single stage can reflect individual variation rather than a true length preference.</p>
             </div>
           </PopoverContent>
         </Popover>
@@ -97,7 +98,10 @@ export function CourseLengthSummary({ data }: CoursePerformanceSummaryProps) {
                     <span className="inline-flex items-center gap-1 text-muted-foreground">
                       <span className="hidden sm:inline">{courseDisplay}</span>
                       <span className="sm:hidden">{courseDisplay.slice(0, 3)}</span>
-                      <span className="text-xs text-muted-foreground">({stageCount})</span>
+                      <span
+                        className={cn("text-xs", stageCount <= 2 ? "text-amber-500" : "text-muted-foreground")}
+                        title={stageCount <= 2 ? `Only ${stageCount} stage${stageCount === 1 ? "" : "s"} — interpret with caution` : undefined}
+                      >({stageCount})</span>
                     </span>
                   </td>
                   {competitors.map((comp) => {
@@ -167,6 +171,7 @@ export function ConstraintSummary({ data }: CoursePerformanceSummaryProps) {
             <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
               <p>Stages are marked <strong>constrained</strong> when the stage brief includes a shooting restriction: <span className="inline-flex items-center gap-0.5"><Hand className="w-3 h-3 text-amber-500" aria-hidden="true" /> strong hand only</span>, <span className="inline-flex items-center gap-0.5"><HandMetal className="w-3 h-3 text-cyan-500" aria-hidden="true" /> weak hand only</span>, or <span className="inline-flex items-center gap-0.5"><Crosshair className="w-3 h-3 text-teal-500" aria-hidden="true" /> moving targets</span>.</p>
               <p>A large gap (&gt;5%) between normal and constrained avg group % highlights technique-specific weaknesses worth addressing in training.</p>
+              <p>Stage counts are shown in parentheses. Counts of 1–2 are highlighted in amber — a single constrained stage may not be representative of a shooter&apos;s general constrained technique.</p>
             </div>
           </PopoverContent>
         </Popover>
@@ -204,7 +209,10 @@ export function ConstraintSummary({ data }: CoursePerformanceSummaryProps) {
                       {Icon && <Icon className="w-3 h-3 flex-none" aria-hidden="true" />}
                       <span className="hidden sm:inline">{label}</span>
                       <span className="sm:hidden">{shortLabel}</span>
-                      <span className="text-xs text-muted-foreground">({stageCount})</span>
+                      <span
+                        className={cn("text-xs", stageCount <= 2 ? "text-amber-500" : "text-muted-foreground")}
+                        title={stageCount <= 2 ? `Only ${stageCount} stage${stageCount === 1 ? "" : "s"} — interpret with caution` : undefined}
+                      >({stageCount})</span>
                     </span>
                   </td>
                   {competitors.map((comp) => {

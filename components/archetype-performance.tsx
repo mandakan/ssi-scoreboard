@@ -64,6 +64,7 @@ export function ArchetypePerformanceSummary({ data }: ArchetypePerformanceSummar
             <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
               <p>Stages are classified based on target composition: <strong>Speed</strong> stages have &gt;50% steel targets, <strong>Precision</strong> stages are long courses (&ge;25 rounds) with &le;30% steel, and <strong>Mixed</strong> stages are everything in between.</p>
               <p>Compare average group % across archetypes to spot if a shooter dominates one type but struggles on another. A large gap (&gt;5%) between archetypes suggests targeted practice opportunities.</p>
+              <p>The stage count for each row is shown in parentheses. Counts of 1–2 are highlighted in amber — averages from very few stages are less reliable and should be interpreted with caution.</p>
             </div>
           </PopoverContent>
         </Popover>
@@ -103,7 +104,10 @@ export function ArchetypePerformanceSummary({ data }: ArchetypePerformanceSummar
                       <Icon className="w-3 h-3 flex-none" aria-hidden="true" />
                       <span className="hidden sm:inline">{label}</span>
                       <span className="sm:hidden">{shortLabel}</span>
-                      <span className="text-xs text-muted-foreground">({stageCount})</span>
+                      <span
+                        className={cn("text-xs", stageCount <= 2 ? "text-amber-500" : "text-muted-foreground")}
+                        title={stageCount <= 2 ? `Only ${stageCount} stage${stageCount === 1 ? "" : "s"} — interpret with caution` : undefined}
+                      >({stageCount})</span>
                     </span>
                   </td>
                   {competitors.map((comp) => {

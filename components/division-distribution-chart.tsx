@@ -79,6 +79,8 @@ export function DivisionDistributionChart({ data, stages: stagesProp }: Division
       median_pct: dist ? dist.medianPct : null,
       // Min whisker
       min_pct: dist ? dist.minPct : null,
+      // Competitor count for this division on this stage
+      div_count: dist ? dist.count : null,
     };
 
     // Add div_percent for each competitor that belongs to this division
@@ -176,6 +178,12 @@ export function DivisionDistributionChart({ data, stages: stagesProp }: Division
             cursor={{ fill: "var(--muted-foreground)", opacity: 0.06 }}
             formatter={(value: number | undefined, name: string | undefined) => {
               if (name === "q1_base") return [null, null];
+              if (name === "div_count") {
+                return [
+                  typeof value === "number" ? `${value} competitors` : "—",
+                  "Field size",
+                ];
+              }
               if (name === "iqr_height") {
                 if (value == null) return ["—", "IQR (Q1–Q3)"];
                 return [`${value.toFixed(1)}% wide`, "IQR (Q1–Q3)"];
@@ -267,6 +275,16 @@ export function DivisionDistributionChart({ data, stages: stagesProp }: Division
             legendType="none"
           />
 
+          {/* Hidden line to surface div_count in tooltip */}
+          <Line
+            dataKey="div_count"
+            stroke="none"
+            dot={false}
+            activeDot={false}
+            legendType="none"
+            connectNulls={false}
+          />
+
           {/* Competitor div_percent lines */}
           {divisionCompetitors.map((comp) => (
             <Line
@@ -286,6 +304,20 @@ export function DivisionDistributionChart({ data, stages: stagesProp }: Division
 
       {/* Legend */}
       <div className="space-y-2 pt-2">
+        {/* n range note */}
+        {(() => {
+          const counts = chartData
+            .map((row) => row.div_count)
+            .filter((c): c is number => typeof c === "number" && c > 0);
+          if (counts.length === 0) return null;
+          const minN = Math.min(...counts);
+          const maxN = Math.max(...counts);
+          return (
+            <p className="text-center text-xs text-muted-foreground">
+              {minN === maxN ? `n = ${minN} competitors per stage` : `n = ${minN}–${maxN} competitors per stage`}
+            </p>
+          );
+        })()}
         {/* Distribution legend */}
         <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
