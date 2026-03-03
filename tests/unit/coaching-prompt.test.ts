@@ -145,6 +145,7 @@ function makeInput(overrides?: Partial<CoachingPromptInput>): CoachingPromptInpu
     consistencyStats: makeConsistencyStats(),
     styleFingerprint: makeStyleFingerprint(),
     matchName: "Test Cup 2026",
+    fieldSize: 30, // >= 25 so archetype is not hedged by default
     ...overrides,
   };
 }
@@ -210,6 +211,62 @@ describe("buildCoachingPrompt", () => {
       }),
     );
     expect(prompt).not.toContain("Style archetype:");
+  });
+
+  it("hedges archetype with 'tends toward' when fieldSize < 25", () => {
+    const prompt = buildCoachingPrompt(makeInput({ fieldSize: 20 }));
+    expect(prompt).toContain("Style archetype: tends toward Surgeon (small field, n=20)");
+  });
+
+  it("does not hedge archetype when fieldSize is exactly 25", () => {
+    const prompt = buildCoachingPrompt(makeInput({ fieldSize: 25 }));
+    expect(prompt).toContain("Style archetype: Surgeon");
+    expect(prompt).not.toContain("tends toward");
+  });
+
+  it("omits consistency when stagesFired < 6 (unreliable CV)", () => {
+    const prompt = buildCoachingPrompt(
+      makeInput({
+        consistencyStats: makeConsistencyStats({ stagesFired: 5 }),
+      }),
+    );
+    expect(prompt).not.toContain("Consistency:");
+  });
+
+  it("includes consistency when stagesFired is exactly 6", () => {
+    const prompt = buildCoachingPrompt(
+      makeInput({
+        consistencyStats: makeConsistencyStats({ stagesFired: 6 }),
+      }),
+    );
+    expect(prompt).toContain("Consistency: consistent (CV 0.150)");
+  });
+
+  it("adds DQ context note when competitor has a DQ stage", () => {
+    const prompt = buildCoachingPrompt(
+      makeInput({
+        stages: [
+          makeStage(1, makeSummary()),
+          makeStage(2, makeSummary({ dq: true })),
+          makeStage(3, makeSummary({ dq: true })),
+        ],
+      }),
+    );
+    // Context header note (unique phrase only present when competitor has a DQ)
+    expect(prompt).toContain("stages from the infraction onward are also marked DQ");
+  });
+
+  it("omits DQ context note when no DQ stages", () => {
+    const prompt = buildCoachingPrompt(makeInput());
+    // The per-stage label always mentions DQ terminology, but the context header note
+    // with this phrase should only appear when the competitor actually has a DQ stage.
+    expect(prompt).not.toContain("stages from the infraction onward");
+  });
+
+  it("includes DQ/DNF terminology in per-stage section label", () => {
+    const prompt = buildCoachingPrompt(makeInput());
+    expect(prompt).toContain("DQ = safety disqualification ending the match");
+    expect(prompt).toContain("DNF = did not finish this specific stage");
   });
 
   it("includes stage classification when present", () => {

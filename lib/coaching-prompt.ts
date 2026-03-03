@@ -16,6 +16,8 @@ export interface CoachingPromptInput {
   consistencyStats: ConsistencyStats;
   styleFingerprint: StyleFingerprintStats;
   matchName: string;
+  /** Total competitors in the field — used to decide whether to hedge the archetype label. */
+  fieldSize: number;
 }
 
 /**
@@ -71,18 +73,33 @@ function buildStageLines(
 
 /** Build the shared context header used by both prompts. */
 function buildContextHeader(input: CoachingPromptInput): string[] {
-  const { competitor, penaltyStats, consistencyStats, styleFingerprint, matchName } = input;
+  const { competitor, penaltyStats, consistencyStats, styleFingerprint, matchName, fieldSize } =
+    input;
+
+  // A DQ is a match-wide safety disqualification — all stages after the infraction are also
+  // auto-DQ'd. Surface this explicitly so the AI doesn't misread a run of DQ stages as
+  // repeated individual stage failures.
+  const hasDq = input.stages.some((s) => s.competitors[competitor.id]?.dq);
 
   return [
     `Match: ${matchName}`,
     `Competitor: ${competitor.name}${competitor.division ? ` (${competitor.division})` : ""}`,
+    hasDq
+      ? `Note: Competitor received a DQ (safety disqualification) during this match — all stages from the infraction onward are also marked DQ and do not reflect shooting performance.`
+      : null,
     `Overall match average: ${penaltyStats.matchPctActual.toFixed(1)}% of group leader`,
     `Penalty rate: ${penaltyStats.penaltiesPer100Rounds.toFixed(1)} per 100 rounds (${penaltyStats.totalPenalties} total)`,
-    consistencyStats.label
+    // Omit consistency when stagesFired < 6 — CV is unreliable with a small sample (matches
+    // the UI opacity-40 dimming threshold).
+    consistencyStats.label && consistencyStats.stagesFired >= 6
       ? `Consistency: ${consistencyStats.label} (CV ${consistencyStats.coefficientOfVariation?.toFixed(3) ?? "—"})`
       : null,
+    // Hedge archetype label when the field is too small to be statistically reliable (matches
+    // the UI "tends toward X" hedging threshold of < 25 competitors).
     styleFingerprint.archetype
-      ? `Style archetype: ${styleFingerprint.archetype}`
+      ? fieldSize < 25
+        ? `Style archetype: tends toward ${styleFingerprint.archetype} (small field, n=${fieldSize})`
+        : `Style archetype: ${styleFingerprint.archetype}`
       : null,
   ].filter((l): l is string => l !== null);
 }
@@ -97,7 +114,7 @@ export function buildCoachingPrompt(input: CoachingPromptInput): string {
   const lines = [
     ...buildContextHeader(input),
     "",
-    "Per-stage breakdown (difficulty and course length in brackets):",
+    "Per-stage breakdown (difficulty and course length in brackets; DQ = safety disqualification ending the match, DNF = did not finish this specific stage):",
     ...stageLines,
     "",
     "Instructions:",
@@ -122,7 +139,7 @@ export function buildRoastPrompt(input: CoachingPromptInput): string {
   const lines = [
     ...buildContextHeader(input),
     "",
-    "Per-stage breakdown (difficulty and course length in brackets):",
+    "Per-stage breakdown (difficulty and course length in brackets; DQ = safety disqualification ending the match, DNF = did not finish this specific stage):",
     ...stageLines,
     "",
     "Instructions:",

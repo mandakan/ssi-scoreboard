@@ -226,6 +226,7 @@ export async function GET(
     consistencyStats,
     styleFingerprint,
     matchName,
+    fieldSize: fieldPoints.length,
   };
   const prompt =
     mode === "roast"
