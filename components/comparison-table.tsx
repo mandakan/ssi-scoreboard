@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, startTransition } from "react";
+import { useState, useEffect, startTransition, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
@@ -19,7 +19,7 @@ import { HitZoneBar } from "@/components/hit-zone-bar";
 import { RankBadge, PenaltyBadge, ShootingOrderBadge, StageClassificationBadge, ordinal } from "@/components/stage-cell-parts";
 import { CellHelpModal } from "@/components/cell-help-modal";
 import { CoachingTip } from "@/components/coaching-tip";
-import type { CompareResponse, CompetitorInfo, CompetitorSummary, LossBreakdownStats, PctMode, ShooterArchetype, StageArchetype, StageConstraints, ViewMode, WhatIfResult } from "@/lib/types";
+import type { CompareResponse, CompetitorInfo, CompetitorSummary, LossBreakdownStats, PctMode, ShooterArchetype, StageArchetype, StageComparison, StageConstraints, ViewMode, WhatIfResult } from "@/lib/types";
 
 interface ComparisonTableProps {
   data: CompareResponse;
@@ -29,6 +29,9 @@ interface ComparisonTableProps {
   isComplete?: boolean;
   ct?: string;
   matchId?: string;
+  stageSort?: "stage" | number;
+  onSortChange?: (sort: "stage" | number) => void;
+  sortedStages?: StageComparison[];
 }
 
 /**
@@ -573,8 +576,10 @@ function ArchetypePill({ archetype, color }: { archetype: ShooterArchetype; colo
   );
 }
 
-export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable, isComplete, ct, matchId }: ComparisonTableProps) {
+export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable, isComplete, ct, matchId, stageSort = "stage", onSortChange = () => {}, sortedStages: sortedStagesProp }: ComparisonTableProps) {
   const { stages, competitors, penaltyStats, efficiencyStats, consistencyStats, lossBreakdownStats } = data;
+  // When sortedStages is not provided by the parent, fall back to natural stage order.
+  const sortedStages = sortedStagesProp ?? stages;
   const whatIfStats = data.whatIfStats;
   const styleFingerprintStats = data.styleFingerprintStats;
   const [mode, setMode] = useState<PctMode>(
@@ -609,6 +614,28 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
     return scorecards.length > 0 && scorecards.every((sc) => sc.dq);
   });
   const colorMap = buildColorMap(competitors.map((c) => c.id));
+
+  // Competitors that have at least one stage with shooting_order data (show sort button)
+  const competitorHasShootingOrder = useMemo(
+    () =>
+      new Set(
+        competitors
+          .filter((comp) =>
+            stages.some((s) => s.competitors[comp.id]?.shooting_order != null)
+          )
+          .map((c) => c.id)
+      ),
+    [competitors, stages]
+  );
+
+  // Screen-reader announcement for sort changes
+  const sortAnnouncement = useMemo(() => {
+    if (stageSort === "stage") return "Stages sorted by stage number";
+    const comp = competitors.find((c) => c.id === stageSort);
+    return comp
+      ? `Stages sorted by ${comp.name.split(" ")[0]}'s shooting order`
+      : "";
+  }, [stageSort, competitors]);
 
   // Compute totals per competitor: total raw points, average %, zone/penalty sums, and clean match status
   const totals = competitors.map((comp) => {
@@ -722,12 +749,69 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
         </button>
       </div>
 
+      <div role="status" className="sr-only" aria-live="polite" aria-atomic="true">
+        {sortAnnouncement}
+      </div>
+
+      {/* Sort status banner — visible whenever stages are sorted by shooting order */}
+      {stageSort !== "stage" && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          <ArrowUp className="w-3 h-3 shrink-0 text-foreground" aria-hidden="true" />
+          <span>
+            Sorted by{" "}
+            <strong className="text-foreground">
+              {competitors.find((c) => c.id === stageSort)?.name.split(" ")[0]}&apos;s shooting order
+            </strong>
+            {" "}— Hit factor, HF%, and Division charts follow.
+          </span>
+          <button
+            onClick={() => onSortChange("stage")}
+            className="ml-auto shrink-0 underline underline-offset-2 hover:text-foreground transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+            aria-label="Reset to stage-number order"
+          >
+            Reset
+          </button>
+        </div>
+      )}
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="border-b">
-              <th className="text-left py-2 pr-4 font-medium text-muted-foreground">
-                Stage
+              <th
+                className="text-left py-2 pr-4 font-medium text-muted-foreground"
+                aria-sort={stageSort === "stage" ? "ascending" : "none"}
+              >
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => onSortChange("stage")}
+                      className={cn(
+                        "inline-flex items-center gap-1 transition-colors hover:text-foreground",
+                        stageSort === "stage"
+                          ? "text-foreground"
+                          : "text-muted-foreground"
+                      )}
+                      aria-label={
+                        stageSort === "stage"
+                          ? "Currently sorted by stage number"
+                          : "Reset to stage-number order"
+                      }
+                    >
+                      Stage
+                      {stageSort === "stage" ? (
+                        <ArrowUp className="w-3 h-3" aria-hidden="true" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3" aria-hidden="true" />
+                      )}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs max-w-52 text-center">
+                    {stageSort === "stage"
+                      ? "Stages are in stage-number order. Tap ↕ on a competitor's column to sort by their shooting order."
+                      : "Reset to stage-number order"}
+                  </TooltipContent>
+                </Tooltip>
               </th>
               {competitors.map((comp) => {
                 const t = totals.find((x) => x.id === comp.id);
@@ -739,12 +823,46 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                   t.overpushCount > 0 && `${t.overpushCount} over-push`,
                   t.meltdownCount > 0 && `${t.meltdownCount} meltdown`,
                 ].filter(Boolean).join(" · ") : "";
+                const canSortByComp = competitorHasShootingOrder.has(comp.id);
+                const isSortedByComp = stageSort === comp.id;
                 return (
                   <th
                     key={comp.id}
                     className="relative py-2 px-3 text-center font-medium min-w-[5.5rem] sm:min-w-32"
                     style={{ borderBottom: `3px solid ${colorMap[comp.id]}` }}
+                    aria-sort={isSortedByComp ? "ascending" : "none"}
                   >
+                    {canSortByComp && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() =>
+                              onSortChange(isSortedByComp ? "stage" : comp.id)
+                            }
+                            className={cn(
+                              "absolute top-0 left-0 p-2 rounded-br text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+                              isSortedByComp && "text-foreground"
+                            )}
+                            aria-label={
+                              isSortedByComp
+                                ? `Sort by stage number`
+                                : `Sort stages by ${comp.name.split(" ")[0]}'s shooting order`
+                            }
+                          >
+                            {isSortedByComp ? (
+                              <ArrowUp className="w-3 h-3" aria-hidden="true" />
+                            ) : (
+                              <ArrowUpDown className="w-3 h-3" aria-hidden="true" />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="text-xs max-w-52 text-center">
+                          {isSortedByComp
+                            ? "Sorted by shooting order — tap to reset to stage-number order"
+                            : `Sort stages by ${comp.name.split(" ")[0]}'s shooting order (1st shot → last). Bar and line charts follow.`}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
                     {onRemove && (
                       <button
                         onClick={() => onRemove(comp.id)}
@@ -815,7 +933,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
             </tr>
           </thead>
           <tbody>
-            {stages.map((stage) => (
+            {sortedStages.map((stage) => (
               <tr key={stage.stage_id} className="border-b hover:bg-muted/30">
                 <td className="py-2 pr-4 font-medium">
                   <div className="flex flex-col gap-0.5">

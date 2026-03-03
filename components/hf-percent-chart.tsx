@@ -13,15 +13,17 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { buildColorMap } from "@/lib/colors";
-import type { CompareResponse } from "@/lib/types";
+import type { CompareResponse, StageComparison } from "@/lib/types";
 import { computeHfPct, type RefMode } from "@/lib/hf-percent-utils";
 
 interface HfPercentChartProps {
   data: CompareResponse;
+  stages?: StageComparison[];
 }
 
-export function HfPercentChart({ data }: HfPercentChartProps) {
-  const { stages, competitors } = data;
+export function HfPercentChart({ data, stages: stagesProp }: HfPercentChartProps) {
+  const stages = stagesProp ?? data.stages;
+  const { competitors } = data;
   const colorMap = buildColorMap(competitors.map((c) => c.id));
   const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
   const [refMode, setRefMode] = useState<RefMode>("stage_winner");

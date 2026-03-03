@@ -12,15 +12,17 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { buildColorMap } from "@/lib/colors";
-import type { CompareResponse } from "@/lib/types";
+import type { CompareResponse, StageComparison } from "@/lib/types";
 
 interface ComparisonChartProps {
   data: CompareResponse;
+  stages?: StageComparison[];
   showBenchmark?: boolean;
 }
 
-export function ComparisonChart({ data, showBenchmark = false }: ComparisonChartProps) {
-  const { stages, competitors } = data;
+export function ComparisonChart({ data, stages: stagesProp, showBenchmark = false }: ComparisonChartProps) {
+  const stages = stagesProp ?? data.stages;
+  const { competitors } = data;
   const colorMap = buildColorMap(competitors.map((c) => c.id));
   const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
   const [benchmarkVisible, setBenchmarkVisible] = useState(showBenchmark);
