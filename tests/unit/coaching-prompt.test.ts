@@ -19,6 +19,7 @@ import type {
 function makeCompetitor(overrides?: Partial<CompetitorInfo>): CompetitorInfo {
   return {
     id: 100,
+    shooterId: null,
     name: "John Doe",
     competitor_number: "42",
     club: "Shooters United",

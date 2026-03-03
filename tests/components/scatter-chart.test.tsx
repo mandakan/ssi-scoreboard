@@ -27,6 +27,7 @@ const baseData: CompareResponse = {
   competitors: [
     {
       id: 1,
+      shooterId: null,
       name: "Alice Smith",
       competitor_number: "35",
       club: null,
@@ -34,6 +35,7 @@ const baseData: CompareResponse = {
     },
     {
       id: 2,
+      shooterId: null,
       name: "Bob Jones",
       competitor_number: "50",
       club: null,

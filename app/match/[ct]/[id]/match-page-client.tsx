@@ -7,6 +7,7 @@ import dynamic from "next/dynamic";
 import { MatchHeader } from "@/components/match-header";
 import { ShareButton } from "@/components/share-button";
 import { CompetitorPicker } from "@/components/competitor-picker";
+import { TrackedShootersSheet } from "@/components/tracked-shooters-sheet";
 import { SquadPicker } from "@/components/squad-picker";
 import { BenchmarkPicker } from "@/components/benchmark-picker";
 import { ComparisonTable } from "@/components/comparison-table";
@@ -35,6 +36,10 @@ import {
   getModeOverrideSnapshot,
   subscribeMode,
 } from "@/lib/competition-store";
+import { getMyIdentity, getTrackedShooters } from "@/lib/shooter-identity";
+import { useMyIdentity } from "@/lib/hooks/use-my-identity";
+import { useTrackedShooters } from "@/lib/hooks/use-tracked-shooters";
+import { MAX_COMPETITORS } from "@/lib/constants";
 
 // Stable empty array for useSyncExternalStore server snapshot — must be a
 // constant reference so React's referential equality check doesn't loop.
@@ -115,6 +120,7 @@ const DivisionDistributionChart = dynamic(
 export default function MatchPageClient() {
   const [showCoachingView, setShowCoachingView] = useState(false);
   const [showSimulator, setShowSimulator] = useState(false);
+  const [showManage, setShowManage] = useState(false);
   const params = useParams<{ ct: string; id: string }>();
   const { ct, id } = params;
   const searchParams = useSearchParams();
@@ -177,6 +183,11 @@ export default function MatchPageClient() {
   );
 
   const matchQuery = useMatchQuery(ct, id);
+
+  // Identity and tracked shooters (localStorage-backed, reactive).
+  const { identity, setIdentity } = useMyIdentity();
+  const { tracked: trackedShooters, trackedIds, add: addTracked, remove: removeTracked } =
+    useTrackedShooters();
 
   // Capture mount timestamp once to avoid impure Date.now() in render path.
   const [mountMs] = useState(() => Date.now());
@@ -247,6 +258,74 @@ export default function MatchPageClient() {
       saveRecentCompetition(ct, id, matchQuery.data);
     }
   }, [ct, id, matchQuery.data]);
+
+  // Auto-select tracked/identity competitors once per match visit (only when no existing selection).
+  const autoSelectAppliedRef = useRef(false);
+  useEffect(() => {
+    if (autoSelectAppliedRef.current || !matchQuery.data) return;
+    autoSelectAppliedRef.current = true;
+
+    // Only auto-select if no existing selection
+    const existing = getCompetitorSelectionSnapshot(ct, id);
+    if (existing.length > 0) return;
+
+    // Build shooterId → competitorId map
+    const map = new Map<number, number>();
+    for (const c of matchQuery.data.competitors) {
+      if (c.shooterId !== null) map.set(c.shooterId, c.id);
+    }
+
+    // Gather tracked + identity shooter IDs
+    const identityNow = getMyIdentity();
+    const trackedNow = getTrackedShooters();
+    const shooterIds = new Set<number>();
+    if (identityNow) shooterIds.add(identityNow.shooterId);
+    for (const t of trackedNow) shooterIds.add(t.shooterId);
+
+    // Resolve to match-specific competitor IDs
+    const autoIds: number[] = [];
+    for (const sId of shooterIds) {
+      const cId = map.get(sId);
+      if (cId !== undefined) autoIds.push(cId);
+    }
+
+    if (autoIds.length > 0) {
+      const toAdd = autoIds.slice(0, MAX_COMPETITORS);
+      saveCompetitorSelection(ct, id, toAdd);
+      router.replace(`?competitors=${toAdd.join(",")}`, { scroll: false });
+    }
+  }, [ct, id, matchQuery.data, router]);
+
+  // Tracked-in-match indicator: how many tracked/identity shooters are in this match.
+  const trackedInMatch = useMemo(() => {
+    if (!matchQuery.data) return null;
+    const map = new Map(
+      matchQuery.data.competitors
+        .filter((c) => c.shooterId !== null)
+        .map((c) => [c.shooterId!, c.id]),
+    );
+    const allTrackedIds = [
+      ...(identity ? [identity.shooterId] : []),
+      ...trackedShooters.map((t) => t.shooterId),
+    ];
+    const total = allTrackedIds.length;
+    const present = allTrackedIds.filter((sid) => map.has(sid)).length;
+    return total > 0 ? { present, total } : null;
+  }, [matchQuery.data, trackedShooters, identity]);
+
+  function handleSetMyIdentity(c: { shooterId: number | null; name: string }) {
+    if (c.shooterId === null) return;
+    setIdentity({ shooterId: c.shooterId, name: c.name, license: null });
+  }
+
+  function handleToggleTracked(c: { shooterId: number | null; name: string; club: string | null; division: string | null }) {
+    if (c.shooterId === null) return;
+    if (trackedIds.has(c.shooterId)) {
+      removeTracked(c.shooterId);
+    } else if (trackedShooters.length < MAX_COMPETITORS) {
+      addTracked({ shooterId: c.shooterId, name: c.name, club: c.club, division: c.division });
+    }
+  }
 
   function handleSelectionChange(ids: number[]) {
     saveCompetitorSelection(ct, id, ids);
@@ -427,12 +506,24 @@ export default function MatchPageClient() {
 
       {/* Competitor picker */}
       <div className="space-y-1">
-        <p className="text-sm font-medium">Compare competitors</p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <p className="text-sm font-medium">Compare competitors</p>
+          {trackedInMatch && trackedInMatch.total > 0 && (
+            <span className="text-xs text-muted-foreground">
+              {trackedInMatch.present} of {trackedInMatch.total} tracked in this match
+            </span>
+          )}
+        </div>
         <div className="flex items-start gap-2 flex-wrap">
           <CompetitorPicker
             competitors={match.competitors}
             selectedIds={selectedIds}
             onSelectionChange={handleSelectionChange}
+            myShooterId={identity?.shooterId ?? null}
+            trackedShooterIds={trackedIds}
+            onSetMyIdentity={handleSetMyIdentity}
+            onToggleTracked={handleToggleTracked}
+            onManage={() => setShowManage(true)}
           />
           {match.squads.length > 0 && (
             <SquadPicker
@@ -902,6 +993,8 @@ export default function MatchPageClient() {
           Select one or more competitors above to see the comparison.
         </p>
       )}
+
+      <TrackedShootersSheet open={showManage} onOpenChange={setShowManage} />
     </div>
   );
 }

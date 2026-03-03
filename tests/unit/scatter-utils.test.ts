@@ -70,6 +70,7 @@ describe("computeIsoHfLines", () => {
 
 const aliceInfo: CompetitorInfo = {
   id: 1,
+  shooterId: null,
   name: "Alice Smith",
   competitor_number: "10",
   club: null,
@@ -78,6 +79,7 @@ const aliceInfo: CompetitorInfo = {
 
 const bobInfo: CompetitorInfo = {
   id: 2,
+  shooterId: null,
   name: "Bob Jones",
   competitor_number: "20",
   club: null,

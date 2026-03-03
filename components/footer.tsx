@@ -1,14 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { Coffee, Crosshair, Github } from "lucide-react";
+import { Coffee, Crosshair, Github, UserCheck } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useWhatsNew } from "@/components/whats-new-provider";
 import { RELEASES } from "@/lib/releases";
+import { useMyIdentity } from "@/lib/hooks/use-my-identity";
+import { TrackedShootersSheet } from "@/components/tracked-shooters-sheet";
 
 export function Footer() {
   const { setOpen } = useWhatsNew();
   const hasReleases = RELEASES.length > 0;
+  const { identity } = useMyIdentity();
+  const [showManage, setShowManage] = useState(false);
 
   return (
     <footer className="w-full flex flex-col items-center gap-2 p-4 text-xs text-muted-foreground border-t border-border mt-auto">
@@ -53,6 +58,17 @@ export function Footer() {
         >
           <Coffee className="w-4 h-4" aria-hidden="true" />
         </a>
+        {identity && (
+          <button
+            type="button"
+            onClick={() => setShowManage(true)}
+            className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+            aria-label={`Your identity: ${identity.name}. Click to manage.`}
+          >
+            <UserCheck className="w-4 h-4" aria-hidden="true" />
+            <span>{identity.name}</span>
+          </button>
+        )}
         <Link
           href="/about#install"
           className="inline-flex items-center hover:text-foreground transition-colors"
@@ -102,6 +118,8 @@ export function Footer() {
           </a>
         </p>
       )}
+
+      <TrackedShootersSheet open={showManage} onOpenChange={setShowManage} />
     </footer>
   );
 }

@@ -1,6 +1,19 @@
 // Single source of truth for all TypeScript interfaces.
 // All fields that may be absent during an active match are nullable.
 
+export interface MyShooterIdentity {
+  shooterId: number;
+  name: string;
+  license: string | null;
+}
+
+export interface TrackedShooter {
+  shooterId: number;
+  name: string;
+  club: string | null;
+  division: string | null;
+}
+
 export interface StageInfo {
   id: number;
   name: string;
@@ -16,6 +29,8 @@ export interface StageInfo {
 
 export interface CompetitorInfo {
   id: number;
+  /** Globally stable ShooterNode primary key — same person across all matches. Null if unavailable. */
+  shooterId: number | null;
   name: string;
   competitor_number: string;
   club: string | null;

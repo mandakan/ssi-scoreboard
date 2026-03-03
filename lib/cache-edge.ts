@@ -86,6 +86,33 @@ async function getPopularKeys(
     .slice(0, limit);
 }
 
+async function indexShooterMatch(
+  shooterId: number,
+  matchRef: string,
+  startTimestamp: number,
+): Promise<void> {
+  await getRedis().zadd(pk(`shooter:${shooterId}:matches`), {
+    score: startTimestamp,
+    member: matchRef,
+  });
+}
+
+async function setShooterProfile(shooterId: number, profile: string): Promise<void> {
+  await getRedis().set(pk(`shooter:${shooterId}:profile`), profile);
+}
+
+async function getShooterMatches(shooterId: number): Promise<string[]> {
+  return (await getRedis().zrange(
+    pk(`shooter:${shooterId}:matches`),
+    0,
+    -1,
+  )) as string[];
+}
+
+async function getShooterProfile(shooterId: number): Promise<string | null> {
+  return getRedis().get<string>(pk(`shooter:${shooterId}:profile`));
+}
+
 const adapter: CacheAdapter = {
   async get(key) {
     return getRedis().get<string>(pk(key));
@@ -113,6 +140,10 @@ const adapter: CacheAdapter = {
 
   recordMatchAccess,
   getPopularKeys,
+  indexShooterMatch,
+  setShooterProfile,
+  getShooterMatches,
+  getShooterProfile,
 };
 
 export default adapter;

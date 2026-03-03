@@ -15,6 +15,7 @@ import {
 } from "@/app/api/compare/logic";
 import { computeMatchTtl } from "@/lib/match-ttl";
 import { formatDivisionDisplay } from "@/lib/divisions";
+import { decodeShooterId } from "@/lib/shooter-index";
 import cache from "@/lib/cache-impl";
 import type { CoachingTipResponse, CompetitorInfo } from "@/lib/types";
 
@@ -27,6 +28,7 @@ interface RawCompetitor {
   handgun_div?: string | null;
   get_handgun_div_display?: string | null;
   shoots_handgun_major?: boolean | null;
+  shooter?: { id: string } | null;
 }
 
 interface RawMatchData {
@@ -152,6 +154,7 @@ export async function GET(
 
   const competitorInfo: CompetitorInfo = {
     id: competitorId,
+    shooterId: decodeShooterId(rawComp.shooter?.id),
     name:
       [rawComp.first_name, rawComp.last_name].filter(Boolean).join(" ") ||
       "Unknown",
