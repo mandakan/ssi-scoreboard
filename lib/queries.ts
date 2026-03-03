@@ -67,7 +67,10 @@ export function useShooterDashboardQuery(shooterId: number | null) {
   return useQuery<ShooterDashboardResponse, Error>({
     queryKey: ["shooter-dashboard", shooterId],
     queryFn: () => fetchShooterDashboard(shooterId!),
-    staleTime: 300_000, // 5 minutes — matches server cache TTL
+    // staleTime: 0 — always refetch on mount so newly indexed matches appear
+    // immediately after visiting a match. The server caches the computed result,
+    // so refetches are cheap (usually a single Redis read).
+    staleTime: 0,
     enabled: shooterId != null && shooterId > 0,
   });
 }
