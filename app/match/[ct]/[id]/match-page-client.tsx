@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useSyncExternalStore, useEffect, useRef, useState } from "react";
+import { useCallback, useSyncExternalStore, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -193,6 +193,47 @@ export default function MatchPageClient() {
 
   const compareQuery = useCompareQuery(ct, id, selectedIds, effectiveMode);
   const coachingAvailability = useCoachingAvailability();
+
+  // ── Stage sort (shared by table + charts) ─────────────────────────────────
+  const [stageSort, setStageSort] = useState<"stage" | number>("stage");
+  const stageSortAutoAppliedRef = useRef(false);
+
+  // Smart defaults: auto-apply single competitor's shooting order on first load;
+  // reset to stage order when sorted competitor is removed or second is added.
+  useEffect(() => {
+    if (!compareQuery.data) return;
+    const { competitors, stages } = compareQuery.data;
+    setStageSort((prev) => {
+      if (!stageSortAutoAppliedRef.current) {
+        stageSortAutoAppliedRef.current = true;
+        if (competitors.length === 1) {
+          const comp = competitors[0];
+          if (stages.some((s) => s.competitors[comp.id]?.shooting_order != null)) {
+            return comp.id;
+          }
+        }
+        return prev;
+      }
+      if (prev === "stage") return prev;
+      const currIds = new Set(competitors.map((c) => c.id));
+      if (!currIds.has(prev) || currIds.size > 1) return "stage";
+      return prev;
+    });
+  }, [compareQuery.data]);
+
+  const sortedStages = useMemo(() => {
+    const stages = compareQuery.data?.stages ?? [];
+    if (stageSort === "stage") return stages;
+    return [...stages].sort((a, b) => {
+      const orderA = a.competitors[stageSort]?.shooting_order ?? null;
+      const orderB = b.competitors[stageSort]?.shooting_order ?? null;
+      if (orderA != null && orderB != null) return orderA - orderB;
+      if (orderA != null) return -1;
+      if (orderB != null) return 1;
+      return a.stage_num - b.stage_num;
+    });
+  }, [compareQuery.data?.stages, stageSort]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   // Save match to recents whenever data loads/changes (localStorage write, no setState).
   useEffect(() => {
@@ -468,6 +509,9 @@ export default function MatchPageClient() {
                   isComplete={isMatchComplete}
                   ct={ct}
                   matchId={id}
+                  stageSort={stageSort}
+                  onSortChange={setStageSort}
+                  sortedStages={sortedStages}
                 />
               </div>
 
@@ -496,7 +540,7 @@ export default function MatchPageClient() {
                     </PopoverContent>
                   </Popover>
                 </div>
-                <ComparisonChart data={compareQuery.data} />
+                <ComparisonChart data={compareQuery.data} stages={sortedStages} />
               </div>
 
               <div className="rounded-lg border p-4 space-y-3">
@@ -524,7 +568,7 @@ export default function MatchPageClient() {
                     </PopoverContent>
                   </Popover>
                 </div>
-                <HfPercentChart data={compareQuery.data} />
+                <HfPercentChart data={compareQuery.data} stages={sortedStages} />
               </div>
 
               {compareQuery.data.stages.some(
@@ -556,7 +600,7 @@ export default function MatchPageClient() {
                       </PopoverContent>
                     </Popover>
                   </div>
-                  <DivisionDistributionChart data={compareQuery.data} />
+                  <DivisionDistributionChart data={compareQuery.data} stages={sortedStages} />
                 </div>
               )}
 

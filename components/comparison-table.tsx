@@ -19,7 +19,7 @@ import { HitZoneBar } from "@/components/hit-zone-bar";
 import { RankBadge, PenaltyBadge, ShootingOrderBadge, StageClassificationBadge, ordinal } from "@/components/stage-cell-parts";
 import { CellHelpModal } from "@/components/cell-help-modal";
 import { CoachingTip } from "@/components/coaching-tip";
-import type { CompareResponse, CompetitorInfo, CompetitorSummary, LossBreakdownStats, PctMode, ShooterArchetype, StageArchetype, StageConstraints, ViewMode, WhatIfResult } from "@/lib/types";
+import type { CompareResponse, CompetitorInfo, CompetitorSummary, LossBreakdownStats, PctMode, ShooterArchetype, StageArchetype, StageComparison, StageConstraints, ViewMode, WhatIfResult } from "@/lib/types";
 
 interface ComparisonTableProps {
   data: CompareResponse;
@@ -29,6 +29,9 @@ interface ComparisonTableProps {
   isComplete?: boolean;
   ct?: string;
   matchId?: string;
+  stageSort?: "stage" | number;
+  onSortChange?: (sort: "stage" | number) => void;
+  sortedStages?: StageComparison[];
 }
 
 /**
@@ -573,8 +576,10 @@ function ArchetypePill({ archetype, color }: { archetype: ShooterArchetype; colo
   );
 }
 
-export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable, isComplete, ct, matchId }: ComparisonTableProps) {
+export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable, isComplete, ct, matchId, stageSort = "stage", onSortChange = () => {}, sortedStages: sortedStagesProp }: ComparisonTableProps) {
   const { stages, competitors, penaltyStats, efficiencyStats, consistencyStats, lossBreakdownStats } = data;
+  // When sortedStages is not provided by the parent, fall back to natural stage order.
+  const sortedStages = sortedStagesProp ?? stages;
   const whatIfStats = data.whatIfStats;
   const styleFingerprintStats = data.styleFingerprintStats;
   const [mode, setMode] = useState<PctMode>(
@@ -585,18 +590,6 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
   const [showWhatIf, setShowWhatIf] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
-  // Stage sort: 'stage' = natural stage-number order; number = sort by that competitor's shooting order
-  const [stageSort, setStageSort] = useState<"stage" | number>(() => {
-    if (competitors.length === 1) {
-      const comp = competitors[0];
-      const hasShootingOrder = stages.some(
-        (s) => s.competitors[comp.id]?.shooting_order != null
-      );
-      if (hasShootingOrder) return comp.id;
-    }
-    return "stage";
-  });
-
   useEffect(() => {
     if (competitors.length < 2 && mode === "group") {
       setMode("division");
@@ -605,16 +598,6 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to count changes
   }, [competitors.length]);
-
-  // Smart sort defaults: reset when sorted competitor is removed or a second competitor is added
-  useEffect(() => {
-    setStageSort((prev) => {
-      if (prev === "stage") return prev;
-      const currIds = new Set(competitors.map((c) => c.id));
-      if (!currIds.has(prev) || currIds.size > 1) return "stage";
-      return prev;
-    });
-  }, [competitors]);
 
   useEffect(() => {
     if (!localStorage.getItem("ssi-cell-help-seen")) {
@@ -644,20 +627,6 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
       ),
     [competitors, stages]
   );
-
-  // Stages sorted by the active sort column
-  const sortedStages = useMemo(() => {
-    if (stageSort === "stage") return stages;
-    const compId = stageSort;
-    return [...stages].sort((a, b) => {
-      const orderA = a.competitors[compId]?.shooting_order ?? null;
-      const orderB = b.competitors[compId]?.shooting_order ?? null;
-      if (orderA != null && orderB != null) return orderA - orderB;
-      if (orderA != null) return -1;
-      if (orderB != null) return 1;
-      return a.stage_num - b.stage_num;
-    });
-  }, [stages, stageSort]);
 
   // Screen-reader announcement for sort changes
   const sortAnnouncement = useMemo(() => {
@@ -793,7 +762,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                 aria-sort={stageSort === "stage" ? "ascending" : "none"}
               >
                 <button
-                  onClick={() => setStageSort("stage")}
+                  onClick={() => onSortChange("stage")}
                   className={cn(
                     "inline-flex items-center gap-1 transition-colors hover:text-foreground",
                     stageSort === "stage"
@@ -832,7 +801,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                     {canSortByComp && (
                       <button
                         onClick={() =>
-                          setStageSort(isSortedByComp ? "stage" : comp.id)
+                          onSortChange(isSortedByComp ? "stage" : comp.id)
                         }
                         className={cn(
                           "absolute top-0 left-0 p-2 rounded-br text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",

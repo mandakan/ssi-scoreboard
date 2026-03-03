@@ -13,10 +13,11 @@ import {
   ReferenceLine,
 } from "recharts";
 import { buildColorMap } from "@/lib/colors";
-import type { CompareResponse, DivisionHFDistribution } from "@/lib/types";
+import type { CompareResponse, DivisionHFDistribution, StageComparison } from "@/lib/types";
 
 interface DivisionDistributionChartProps {
   data: CompareResponse;
+  stages?: StageComparison[];
 }
 
 // Collect all division keys present in any stage across all selected competitors.
@@ -47,8 +48,9 @@ function divisionLabel(divKey: string, data: CompareResponse): string {
   return divKey;
 }
 
-export function DivisionDistributionChart({ data }: DivisionDistributionChartProps) {
-  const { stages, competitors } = data;
+export function DivisionDistributionChart({ data, stages: stagesProp }: DivisionDistributionChartProps) {
+  const stages = stagesProp ?? data.stages;
+  const { competitors } = data;
   const colorMap = buildColorMap(competitors.map((c) => c.id));
 
   const divisionKeys = collectDivisionKeys(data);
