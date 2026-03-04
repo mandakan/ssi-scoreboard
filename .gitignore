@@ -28,6 +28,7 @@ Thumbs.db
 
 # Generated assets
 /social-preview.png
+/release-assets/
 
 # MCP server build artifacts
 mcp/dist/
