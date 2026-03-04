@@ -27,7 +27,22 @@ import {
   Check,
   Plus,
   ArrowLeft,
+  Trophy,
+  Swords,
+  Crosshair,
+  ShieldCheck,
+  Ban,
+  type LucideIcon,
 } from "lucide-react";
+
+const ACHIEVEMENT_ICONS: Record<string, LucideIcon> = {
+  trophy: Trophy,
+  swords: Swords,
+  crosshair: Crosshair,
+  target: Target,
+  "shield-check": ShieldCheck,
+  ban: Ban,
+};
 import {
   Popover,
   PopoverContent,
@@ -907,6 +922,7 @@ function AchievementCard({ achievement }: { achievement: AchievementProgress }) 
     ? definition.tiers.find((t) => t.level === highestTier.level)
     : null;
   const isLocked = unlockedTiers.length === 0;
+  const Icon = ACHIEVEMENT_ICONS[definition.icon] ?? HelpCircle;
 
   return (
     <Popover>
@@ -921,7 +937,7 @@ function AchievementCard({ achievement }: { achievement: AchievementProgress }) 
           aria-label={`${definition.name}: ${highestDef ? highestDef.name : "Locked"}. ${tierSummary(achievement)}`}
         >
           <div className="flex items-center gap-2 min-w-0">
-            <definition.icon className="w-5 h-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <Icon className="w-5 h-5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-sm font-semibold truncate">
@@ -955,7 +971,7 @@ function AchievementCard({ achievement }: { achievement: AchievementProgress }) 
       </PopoverTrigger>
       <PopoverContent className="max-w-xs text-sm space-y-2" side="top">
         <p className="font-medium flex items-center gap-1.5">
-          <definition.icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+          <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
           {definition.name}
         </p>
         <p className="text-muted-foreground">{definition.description}</p>

@@ -1,6 +1,5 @@
 // Achievement definitions and evaluators.
 
-import { Trophy, Swords, Crosshair, Target, ShieldCheck, Ban } from "lucide-react";
 import type { AchievementDefinition, AchievementEvalContext } from "./types";
 
 export type Evaluator = (ctx: AchievementEvalContext) => number;
@@ -16,7 +15,7 @@ const matchCount: AchievementEntry = {
     name: "Competitor",
     description: "Compete in matches tracked on this app.",
     category: "milestone",
-    icon: Trophy,
+    icon: "trophy",
     tiers: [
       { level: 1, name: "First Match", threshold: 1, label: "1 match" },
       { level: 2, name: "Regular", threshold: 5, label: "5 matches" },
@@ -35,7 +34,7 @@ const stageCount: AchievementEntry = {
     name: "Stage Warrior",
     description: "Complete stages across all matches.",
     category: "milestone",
-    icon: Swords,
+    icon: "swords",
     tiers: [
       { level: 1, name: "Rookie", threshold: 10, label: "10 stages" },
       { level: 2, name: "Regular", threshold: 50, label: "50 stages" },
@@ -53,7 +52,7 @@ const sharpshooter: AchievementEntry = {
     name: "Sharpshooter",
     description: "Achieve a high A-zone hit percentage across all matches.",
     category: "accuracy",
-    icon: Crosshair,
+    icon: "crosshair",
     tiers: [
       { level: 1, name: "Marksman", threshold: 60, label: "60% A-zone" },
       { level: 2, name: "Sharpshooter", threshold: 70, label: "70% A-zone" },
@@ -70,7 +69,7 @@ const perfectStages: AchievementEntry = {
     name: "Bullseye",
     description: "Shoot stages with all A-zone hits and zero penalties (no C/D hits, misses, no-shoots, or procedurals).",
     category: "accuracy",
-    icon: Target,
+    icon: "target",
     tiers: [
       { level: 1, name: "First Perfect", threshold: 1, label: "1 perfect stage" },
       { level: 2, name: "Sharp Eye", threshold: 5, label: "5 perfect stages" },
@@ -88,7 +87,7 @@ const cleanMatch: AchievementEntry = {
     name: "Clean Sheet",
     description: "Complete matches with zero misses, no-shoots, and procedurals.",
     category: "accuracy",
-    icon: ShieldCheck,
+    icon: "shield-check",
     tiers: [
       { level: 1, name: "First Clean", threshold: 1, label: "1 clean match" },
       { level: 2, name: "Disciplined", threshold: 3, label: "3 clean matches" },
@@ -112,7 +111,7 @@ const dqClub: AchievementEntry = {
     name: "DQ Club",
     description: "Been there, done that.",
     category: "milestone",
-    icon: Ban,
+    icon: "ban",
     tiers: [
       { level: 1, name: "Been there, done that", threshold: 1, label: "1 DQ" },
     ],
