@@ -13,6 +13,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, CheckCircle2, ChevronDown, ChevronUp, Crosshair, ExternalLink, Flame, Focus, Gauge, Hand, HandMetal, HelpCircle, Info, Layers, Shield, Target, Timer, TrendingUp, X, Zap } from "lucide-react";
+import Link from "next/link";
 import { cn, formatHF, formatTime, formatPct, computePointsDelta, formatDelta } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
 import { HitZoneBar } from "@/components/hit-zone-bar";
@@ -878,7 +879,17 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                       <span className="font-mono text-xs text-muted-foreground">
                         #{comp.competitor_number}
                       </span>
-                      <span>{comp.name.split(" ")[0]}</span>
+                      {comp.shooterId != null ? (
+                        <Link
+                          href={`/shooter/${comp.shooterId}`}
+                          className="hover:underline"
+                          aria-label={`View ${comp.name}'s stats`}
+                        >
+                          {comp.name.split(" ")[0]}
+                        </Link>
+                      ) : (
+                        <span>{comp.name.split(" ")[0]}</span>
+                      )}
                       {comp.division && (
                         <span className="text-xs text-muted-foreground uppercase tracking-wide">
                           {comp.division}
