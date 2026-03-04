@@ -18,13 +18,14 @@ export const RELEASES: Release[] = [
     id: LATEST_RELEASE_ID,
     date: "March 4, 2026",
     title: "Match Backfill & Discovery",
-    screenshotScenes: ["shooter-dashboard", "whats-new-dialog"],
+    screenshotScenes: ["comparison-table", "shooter-dashboard", "whats-new-dialog"],
     sections: [
       {
         heading: "New",
         items: [
           "Find past matches: tap the scan button on your shooter dashboard to search through matches that have been viewed on this app. The more people use the app, the more matches you'll discover.",
           "Add match by URL: paste any ShootNScoreIt match URL to manually add a match that wasn't found by the scan.",
+          "Competitor names in the comparison table now link directly to their shooter dashboard.",
         ],
       },
     ],
