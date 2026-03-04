@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   LineChart,
@@ -21,6 +21,8 @@ import {
   AlertCircle,
   Loader2,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import {
   Popover,
@@ -392,6 +394,7 @@ export function ShooterDashboardClient({ shooterId }: Props) {
   const { data, isLoading, isError, error } = useShooterDashboardQuery(
     shooterId,
   );
+  const [historyOpen, setHistoryOpen] = useState(true);
 
   if (shooterId == null) {
     return (
@@ -566,41 +569,62 @@ export function ShooterDashboardClient({ shooterId }: Props) {
       )}
 
       {/* ── Match history ──────────────────────────────────────────────── */}
-      <section aria-labelledby="history-heading">
-        <div className="flex items-center gap-2 mb-3">
-          <h2
+      <section>
+        <h2 className="text-sm font-semibold m-0 leading-none">
+          <button
+            type="button"
             id="history-heading"
-            className="text-sm font-semibold text-muted-foreground uppercase tracking-wide"
+            onClick={() => setHistoryOpen((v) => !v)}
+            aria-expanded={historyOpen}
+            aria-controls="history-panel"
+            className="flex w-full items-center justify-between text-left gap-2 mb-3 min-h-[2.75rem]"
           >
-            Match history
-          </h2>
-          <span className="text-xs text-muted-foreground">
-            ({matches.length}
-            {matchCount > matches.length ? ` of ${matchCount}` : ""})
-          </span>
-        </div>
+            <span className="flex items-center gap-2">
+              <span className="text-muted-foreground uppercase tracking-wide">
+                Match history
+              </span>
+              <span className="text-xs font-normal text-muted-foreground">
+                ({matches.length}
+                {matchCount > matches.length ? ` of ${matchCount}` : ""})
+              </span>
+            </span>
+            {historyOpen ? (
+              <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+            ) : (
+              <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+            )}
+          </button>
+        </h2>
 
-        {matches.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-8 text-center text-muted-foreground">
-            <Target className="w-8 h-8" aria-hidden="true" />
-            <p className="text-sm">
-              No match history yet. Match data is indexed when you open a match
-              you competed in.
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {matches.map((match) => (
-              <MatchCard
-                key={`${match.ct}:${match.matchId}`}
-                match={match}
-              />
-            ))}
+        {historyOpen && (
+          <div
+            id="history-panel"
+            role="region"
+            aria-labelledby="history-heading"
+          >
+            {matches.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-8 text-center text-muted-foreground">
+                <Target className="w-8 h-8" aria-hidden="true" />
+                <p className="text-sm">
+                  No match history yet. Match data is indexed when you open a match
+                  you competed in.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {matches.map((match) => (
+                  <MatchCard
+                    key={`${match.ct}:${match.matchId}`}
+                    match={match}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </section>
 
-      {matchCount > matches.length && (
+      {historyOpen && matchCount > matches.length && (
         <p className="text-xs text-center text-muted-foreground">
           Showing the {matches.length} most recent matches.
         </p>
