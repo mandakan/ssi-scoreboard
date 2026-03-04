@@ -26,44 +26,17 @@ interface D1Result<T> {
   success: boolean;
 }
 
-let _initialized = false;
-
-async function getDb(): Promise<D1Database> {
+// Schema is managed by migrations/0001_init.sql applied via:
+//   wrangler d1 migrations apply APP_DB [--env staging]
+// No runtime schema init needed here.
+function getDb(): D1Database {
   const { env } = getCloudflareContext() as unknown as { env: { APP_DB: D1Database } };
-  const db = env.APP_DB;
-  if (!_initialized) {
-    await db.exec(`
-      CREATE TABLE IF NOT EXISTS shooter_profiles (
-        shooter_id INTEGER PRIMARY KEY,
-        name TEXT NOT NULL,
-        club TEXT,
-        division TEXT,
-        last_seen TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS shooter_matches (
-        shooter_id INTEGER NOT NULL,
-        match_ref TEXT NOT NULL,
-        start_timestamp INTEGER NOT NULL,
-        PRIMARY KEY (shooter_id, match_ref)
-      );
-      CREATE INDEX IF NOT EXISTS idx_sm_shooter_ts
-        ON shooter_matches(shooter_id, start_timestamp);
-      CREATE TABLE IF NOT EXISTS match_popularity (
-        cache_key TEXT PRIMARY KEY,
-        last_seen_at INTEGER NOT NULL,
-        hit_count INTEGER NOT NULL DEFAULT 0
-      );
-      CREATE INDEX IF NOT EXISTS idx_mp_last_seen
-        ON match_popularity(last_seen_at);
-    `);
-    _initialized = true;
-  }
-  return db;
+  return env.APP_DB;
 }
 
 const db: AppDatabase = {
   async indexShooterMatch(shooterId, matchRef, startTimestamp) {
-    const db = await getDb();
+    const db = getDb();
     await db
       .prepare(
         `INSERT INTO shooter_matches (shooter_id, match_ref, start_timestamp)
@@ -97,7 +70,7 @@ const db: AppDatabase = {
   },
 
   async setShooterProfile(shooterId, profile) {
-    const db = await getDb();
+    const db = getDb();
     await db
       .prepare(
         `INSERT INTO shooter_profiles (shooter_id, name, club, division, last_seen)
@@ -119,7 +92,7 @@ const db: AppDatabase = {
   },
 
   async getShooterMatches(shooterId) {
-    const db = await getDb();
+    const db = getDb();
     const result = await db
       .prepare(
         `SELECT match_ref FROM shooter_matches
@@ -132,7 +105,7 @@ const db: AppDatabase = {
   },
 
   async getShooterProfile(shooterId) {
-    const db = await getDb();
+    const db = getDb();
     const row = await db
       .prepare(
         `SELECT name, club, division, last_seen FROM shooter_profiles
@@ -150,7 +123,7 @@ const db: AppDatabase = {
   },
 
   async hasShooterProfile(shooterId) {
-    const db = await getDb();
+    const db = getDb();
     const row = await db
       .prepare(`SELECT 1 AS found FROM shooter_profiles WHERE shooter_id = ?`)
       .bind(shooterId)
@@ -160,7 +133,7 @@ const db: AppDatabase = {
 
   async recordMatchAccess(key) {
     const now = Math.floor(Date.now() / 1000);
-    const db = await getDb();
+    const db = getDb();
     await db
       .prepare(
         `INSERT INTO match_popularity (cache_key, last_seen_at, hit_count)
@@ -175,7 +148,7 @@ const db: AppDatabase = {
 
   async getPopularKeys(maxAgeSeconds, limit) {
     const cutoff = Math.floor(Date.now() / 1000) - maxAgeSeconds;
-    const db = await getDb();
+    const db = getDb();
 
     // Prune stale entries
     await db

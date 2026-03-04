@@ -8,6 +8,11 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 type CFContext = { ctx: { waitUntil(p: Promise<unknown>): void } };
 
 export function afterResponse(promise: Promise<void>): void {
-  const { ctx } = getCloudflareContext() as unknown as CFContext;
-  ctx.waitUntil(promise);
+  try {
+    const { ctx } = getCloudflareContext() as unknown as CFContext;
+    ctx.waitUntil(promise);
+  } catch {
+    // Context unavailable — promise is already in-flight, best-effort.
+    void promise;
+  }
 }
