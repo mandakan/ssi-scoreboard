@@ -35,6 +35,7 @@ import { Redis as UpstashRedis } from "@upstash/redis";
 import { parseRawScorecards } from "../lib/scorecard-data";
 import { computeAllFingerprintPoints } from "../app/api/compare/logic";
 import { CACHE_SCHEMA_VERSION } from "../lib/constants";
+import { decodeShooterId } from "../lib/shooter-index";
 
 const GRAPHQL_ENDPOINT = "https://shootnscoreit.com/graphql/";
 
@@ -349,6 +350,9 @@ interface SimpleCacheClient {
   get(key: string): Promise<string | null>;
   set(key: string, value: string, ttl: number | null): Promise<void>;
   quit(): Promise<void>;
+  zadd(key: string, score: number, member: string): Promise<void>;
+  del(key: string): Promise<void>;
+  exists(key: string): Promise<boolean>;
 }
 
 async function createCacheClient(): Promise<SimpleCacheClient> {
@@ -376,6 +380,9 @@ async function createCacheClient(): Promise<SimpleCacheClient> {
         else await redis.set(pk(key), value, { ex: ttl });
       },
       async quit() { /* no-op — Upstash is stateless HTTP */ },
+      async zadd(key, score, member) { await redis.zadd(pk(key), { score, member }); },
+      async del(key) { await redis.del(pk(key)); },
+      async exists(key) { return (await redis.exists(pk(key))) === 1; },
     };
   }
 
@@ -397,6 +404,9 @@ async function createCacheClient(): Promise<SimpleCacheClient> {
       else await redis.set(pk(key), value, "EX", ttl);
     },
     async quit() { await redis.quit(); },
+    async zadd(key, score, member) { await redis.zadd(pk(key), score, member); },
+    async del(key) { await redis.del(pk(key)); },
+    async exists(key) { return (await redis.exists(pk(key))) === 1; },
   };
 }
 
@@ -487,6 +497,69 @@ async function fetchEvents(
     }
   }
   return events;
+}
+
+// ─── Shooter index ──────────────────────────────────────────────────────────
+
+interface RawMatchCompetitor {
+  id: string;
+  first_name?: string;
+  last_name?: string;
+  club?: string | null;
+  handgun_div?: string | null;
+  get_handgun_div_display?: string | null;
+  shooter?: { id: string } | null;
+}
+
+interface RawMatchData {
+  event?: {
+    starts?: string | null;
+    competitors_approved_w_wo_results_not_dnf?: RawMatchCompetitor[];
+  } | null;
+}
+
+/**
+ * Index known shooters (those with existing profiles in Redis) for a match.
+ * Only touches shooters that have been seen before through normal app usage.
+ * Returns the count of shooters indexed.
+ */
+async function indexKnownShooters(
+  client: SimpleCacheClient,
+  ct: number,
+  matchId: string,
+  matchData: RawMatchData,
+): Promise<number> {
+  const competitors = matchData.event?.competitors_approved_w_wo_results_not_dnf ?? [];
+  const matchRef = `${ct}:${matchId}`;
+  const startTimestamp = matchData.event?.starts
+    ? Math.floor(new Date(matchData.event.starts).getTime() / 1000)
+    : Math.floor(Date.now() / 1000);
+  const lastSeen = new Date().toISOString();
+  let indexed = 0;
+
+  for (const c of competitors) {
+    const shooterId = decodeShooterId(c.shooter?.id);
+    if (shooterId == null) continue;
+
+    // Only index shooters who already have a profile (seen before via the app)
+    const profileKey = `shooter:${shooterId}:profile`;
+    const exists = await client.exists(profileKey);
+    if (!exists) continue;
+
+    const name = [c.first_name, c.last_name].filter(Boolean).join(" ") || "Unknown";
+    const profile = {
+      name,
+      club: c.club ?? null,
+      division: c.get_handgun_div_display ?? c.handgun_div ?? null,
+      lastSeen,
+    };
+
+    await client.zadd(`shooter:${shooterId}:matches`, startTimestamp, matchRef);
+    await client.set(`shooter:${shooterId}:profile`, JSON.stringify(profile), null);
+    await client.del(`computed:shooter:${shooterId}:dashboard`);
+    indexed++;
+  }
+  return indexed;
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -620,16 +693,21 @@ async function main(): Promise<void> {
     } else {
       opLine("GetMatch", "skip", `cached v${CACHE_SCHEMA_VERSION}`);
       skipped++;
-      // Read from cache so we can build the division map for fingerprints
-      if (!args.skipFingerprint && !args.skipScorecards) {
-        try {
-          const raw = await client.get(matchKey);
-          if (raw) matchDataForFingerprint = (JSON.parse(raw) as { data?: unknown }).data ?? null;
-        } catch { /* ignore */ }
-      }
+      // Read from cache for fingerprints and shooter indexing
+      try {
+        const raw = await client.get(matchKey);
+        if (raw) matchDataForFingerprint = (JSON.parse(raw) as { data?: unknown }).data ?? null;
+      } catch { /* ignore */ }
     }
 
     if (args.skipScorecards) {
+      // Index known shooters even when skipping scorecards
+      if (matchDataForFingerprint) {
+        try {
+          const indexCount = await indexKnownShooters(client, ct, id, matchDataForFingerprint as RawMatchData);
+          if (indexCount > 0) opLine("ShooterIndex", "ok", `${indexCount} known shooters`);
+        } catch { /* non-fatal */ }
+      }
       printProgress(i + 1, filtered.length, warmed, args.limit, sessionStart);
       if (args.limit !== null && warmed >= args.limit) break;
       continue;
@@ -691,6 +769,14 @@ async function main(): Promise<void> {
       } else {
         opLine("MatchFingerprint", "skip", "cached v1");
       }
+    }
+
+    // ── Index known shooters ─────────────────────────────────────────────
+    if (matchDataForFingerprint) {
+      try {
+        const indexCount = await indexKnownShooters(client, ct, id, matchDataForFingerprint as RawMatchData);
+        if (indexCount > 0) opLine("ShooterIndex", "ok", `${indexCount} known shooters`);
+      } catch { /* non-fatal */ }
     }
 
     printProgress(i + 1, filtered.length, warmed, args.limit, sessionStart);

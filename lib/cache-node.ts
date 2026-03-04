@@ -71,6 +71,18 @@ const adapter: CacheAdapter = {
     return redis.get(pk(`shooter:${shooterId}:profile`));
   },
 
+  async scanCachedMatchKeys() {
+    const pattern = `${PREFIX}gql:GetMatch:*`;
+    const keys: string[] = [];
+    const stream = redis.scanStream({ match: pattern, count: 200 });
+    for await (const batch of stream) {
+      for (const key of batch as string[]) {
+        keys.push(key.startsWith(PREFIX) ? key.slice(PREFIX.length) : key);
+      }
+    }
+    return keys;
+  },
+
   async getPopularKeys(maxAgeSeconds, limit) {
     const cutoff = Math.floor(Date.now() / 1000) - maxAgeSeconds;
 

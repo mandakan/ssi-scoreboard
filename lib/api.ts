@@ -10,6 +10,7 @@ import type {
   CoachingTipResponse,
   CoachingAvailability,
   ShooterDashboardResponse,
+  BackfillProgress,
 } from "@/lib/types";
 
 export async function fetchMatch(ct: string, id: string): Promise<MatchResponse> {
@@ -101,6 +102,37 @@ export async function fetchCoachingTip(
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: "Unknown error" }));
     throw new Error(body.error ?? `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function triggerBackfill(
+  shooterId: number,
+): Promise<BackfillProgress> {
+  const res = await fetch(`/api/shooter/${shooterId}/backfill`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Backfill failed (${res.status}): ${body}`);
+  }
+  return res.json();
+}
+
+export async function addMatchToShooter(
+  shooterId: number,
+  url: string,
+): Promise<{ success: boolean; message: string; matchName?: string }> {
+  const res = await fetch(`/api/shooter/${shooterId}/add-match`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ message: "Unknown error" }));
+    throw new Error(body.message ?? `HTTP ${res.status}`);
   }
   return res.json();
 }

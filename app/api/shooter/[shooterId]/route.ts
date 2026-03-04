@@ -43,6 +43,7 @@ interface RawMatchEvent {
   venue?: string | null;
   starts?: string | null;
   level?: string | null;
+  region?: string | null;
   competitors_approved_w_wo_results_not_dnf?: RawCompetitor[];
 }
 
@@ -397,6 +398,7 @@ export async function GET(
             date: ev.starts ?? null,
             venue: ev.venue ?? null,
             level: ev.level ?? null,
+            region: ev.region ?? null,
             division,
             competitorId,
             stageCount,
