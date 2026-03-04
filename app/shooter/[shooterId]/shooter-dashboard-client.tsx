@@ -408,7 +408,15 @@ function TrendChart({
   const pctDot = useMemo(() => makeDivisionDot(showDivColors, "matchPct"), [showDivColors]);
   const azDot = useMemo(() => makeDivisionDot(showDivColors, "aZonePct"), [showDivColors]);
 
-  if (chartData.length < 2) return null;
+  if (chartData.length < 2) {
+    return (
+      <p className="text-sm text-muted-foreground text-center py-4">
+        {chartData.length === 0
+          ? "No match data for this division."
+          : "Only 1 match in this division — need at least 2 to show trends."}
+      </p>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -948,8 +956,10 @@ export function ShooterDashboardClient({ shooterId }: Props) {
 
   const { profile, matchCount, matches, stats } = data;
   const displayName = profile?.name ?? `Shooter #${shooterId}`;
+  // Show trends section if ALL matches have enough data (not filtered) —
+  // so the division filter stays accessible even when a filtered division has <2 matches.
   const hasChartData =
-    filteredMatches.filter((m) => m.avgHF != null || m.matchPct != null).length >= 2;
+    matches.filter((m) => m.avgHF != null || m.matchPct != null).length >= 2;
 
   // Use filtered stats for the stat cards when a division is selected
   const displayStats = isFiltered ? filteredStats : stats;
