@@ -64,7 +64,7 @@ AI_MODEL = "@cf/meta/llama-3.1-8b-instruct"
 [[d1_databases]]
 binding = "APP_DB"
 database_name = "ssi-scoreboard-app-db"
-database_id = "PLACEHOLDER_PRODUCTION_D1_ID"  # patched by scripts/setup-d1.ts
+database_id = "4ebae388-7038-47c2-9f3c-51e6d387b266"  # patched by scripts/setup-d1.ts
 migrations_dir = "migrations"
 
 [assets]
@@ -88,5 +88,5 @@ binding = "AI"
 [[env.staging.d1_databases]]
 binding = "APP_DB"
 database_name = "ssi-scoreboard-app-db-staging"
-database_id = "PLACEHOLDER_STAGING_D1_ID"  # patched by scripts/setup-d1.ts
+database_id = "e852033b-34c1-4929-8f10-8dfaba84c990"  # patched by scripts/setup-d1.ts
 migrations_dir = "migrations"
