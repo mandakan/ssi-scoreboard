@@ -509,6 +509,8 @@ export interface ShooterMatchSummary {
   division: string | null;
   /** Competitor ID within this specific match. */
   competitorId: number;
+  /** Number of approved (non-DNF) competitors in the same division for this match. Null if unavailable. */
+  competitorsInDivision: number | null;
   /** Number of stages the shooter fired (non-DNF, non-DQ). */
   stageCount: number;
   /** Mean hit factor across valid stages. Null if no valid stages. */
