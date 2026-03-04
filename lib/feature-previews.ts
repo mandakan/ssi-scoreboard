@@ -1,7 +1,7 @@
 // Generic feature preview toggle system.
 // State stored in localStorage as a JSON array under key "ssi-preview-features".
 
-export const PREVIEW_FEATURES = ["achievements"] as const;
+export const PREVIEW_FEATURES = [] as const;
 export type PreviewFeatureId = (typeof PREVIEW_FEATURES)[number];
 
 const STORAGE_KEY = "ssi-preview-features";

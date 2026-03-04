@@ -267,11 +267,11 @@ frees Upstash storage quota since those keys are now in SQLite.
 
 Beta features are toggled per-user via localStorage under key `ssi-preview-features`.
 Activate/deactivate at runtime via URL params:
-- `?preview=achievements` — enable
-- `?preview=-achievements` — disable
-- `?preview=achievements,future-feature` — comma-separated for multiple
+- `?preview=new-id` — enable a feature
+- `?preview=-new-id` — disable
+- `?preview=a,b` — comma-separated for multiple
 
-The `usePreviewFeature("achievements")` hook (from `hooks/use-preview-feature.ts`)
+The `usePreviewFeature("new-id")` hook (from `hooks/use-preview-feature.ts`)
 provides SSR-safe access for client components. Preview-gated sections render a "Preview"
 badge next to their heading. When a feature graduates to stable, remove the preview check.
 
@@ -287,11 +287,9 @@ achievement has a progressive unlock ladder — multiple tiers from beginner mil
 elite goals. Unlocked tiers are persisted in AppDatabase (`shooter_achievements` table)
 so they survive the 200-match pruning window.
 
-**Currently behind the `achievements` feature preview.** Activate with `?preview=achievements`.
-
-**Achievement categories (5 achievements, 24 tiers):**
-- **Milestone:** Competitor (1–100 matches), Stage Warrior (10–500 stages)
-- **Accuracy:** Sharpshooter (60–90% A-zone), Bullseye (1–25 perfect stages), Clean Sheet (1–10 clean matches)
+**Achievement categories (6 achievements, 25 tiers):**
+- **Milestone:** Competitor (1–100 matches), Stage Warrior (10–500 stages), DQ Club (1 DQ)
+- **Accuracy:** Sharpshooter (60–85% A-zone), Bullseye (1–25 perfect stages), Clean Sheet (1–10 clean matches)
 
 **Evaluation flow:** on each dashboard load (cache miss), `evaluateAchievements()` compares
 computed stats against tier thresholds, diffs against stored tiers, and persists new unlocks

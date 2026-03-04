@@ -50,7 +50,6 @@ import {
 } from "@/components/ui/popover";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useShooterDashboardQuery } from "@/lib/queries";
-import { usePreviewFeature } from "@/hooks/use-preview-feature";
 import { triggerBackfill, addMatchToShooter } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
@@ -1098,7 +1097,6 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
   const { data, isLoading, isError, error } = useShooterDashboardQuery(
     shooterId,
   );
-  const showAchievements = usePreviewFeature("achievements");
   const [historyOpen, setHistoryOpen] = useState(true);
   const [divisionFilter, setDivisionFilter] = useState<string | null | "unset">("unset");
 
@@ -1245,7 +1243,7 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
       </section>
 
       {/* ── Achievements (preview) ──────────────────────────────────── */}
-      {showAchievements && data.achievements && data.achievements.length > 0 && (
+      {data.achievements && data.achievements.length > 0 && (
         <AchievementsSection achievements={data.achievements} />
       )}
 
