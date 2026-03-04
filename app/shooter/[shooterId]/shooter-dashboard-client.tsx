@@ -394,6 +394,7 @@ export function ShooterDashboardClient({ shooterId }: Props) {
   const { data, isLoading, isError, error } = useShooterDashboardQuery(
     shooterId,
   );
+  const [historyOpen, setHistoryOpen] = useState(true);
 
   if (shooterId == null) {
     return (
@@ -434,8 +435,6 @@ export function ShooterDashboardClient({ shooterId }: Props) {
   const displayName = profile?.name ?? `Shooter #${shooterId}`;
   const hasChartData =
     matches.filter((m) => m.avgHF != null || m.matchPct != null).length >= 2;
-
-  const [historyOpen, setHistoryOpen] = useState(true);
 
   return (
     <main className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-6">

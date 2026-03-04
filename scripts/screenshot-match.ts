@@ -194,7 +194,7 @@ const SCENES: Scene[] = [
     name: "shooter-dashboard",
     description: "Shooter dashboard with match history and performance trends",
     suppressWhatsNew: true,
-    setup: async (page, _matchPath) => {
+    setup: async (page) => {
       // Mock the shooter API — always uses mock data regardless of --match-url
       await page.route(`/api/shooter/${MOCK_SHOOTER_ID}`, (route) =>
         route.fulfill({ json: MOCK_SHOOTER })
