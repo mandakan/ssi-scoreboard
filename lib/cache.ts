@@ -68,4 +68,10 @@ export interface CacheAdapter {
 
   /** Return the raw JSON profile string, or null if not found. */
   getShooterProfile(shooterId: number): Promise<string | null>;
+
+  /**
+   * Scan for all cached GetMatch keys using Redis SCAN (cursor-based, non-blocking).
+   * Returns bare cache keys (without CACHE_KEY_PREFIX) matching `gql:GetMatch:*`.
+   */
+  scanCachedMatchKeys(): Promise<string[]>;
 }

@@ -476,6 +476,23 @@ export interface WhatIfSimulationResponse {
   newOverallRank:            number | null;
 }
 
+// ── Backfill ─────────────────────────────────────────────────────────────────
+
+export type BackfillStatus = "scanning" | "checking" | "complete" | "error";
+
+export interface BackfillProgress {
+  status: BackfillStatus;
+  /** Total cached match keys found via SCAN. */
+  totalCached: number;
+  /** Matches checked so far. */
+  checked: number;
+  /** Matches where shooter was found and newly indexed. */
+  discovered: number;
+  /** Matches already in shooter's index (skipped). */
+  alreadyIndexed: number;
+  errorMessage?: string;
+}
+
 // ── Shooter Dashboard ─────────────────────────────────────────────────────────
 
 // Per-match summary for the shooter dashboard.
@@ -486,6 +503,8 @@ export interface ShooterMatchSummary {
   date: string | null;
   venue: string | null;
   level: string | null;
+  /** Region/country of the match (e.g. "Sweden"). */
+  region: string | null;
   /** Division the shooter competed in for this match (may differ between matches). */
   division: string | null;
   /** Competitor ID within this specific match. */

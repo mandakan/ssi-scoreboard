@@ -113,6 +113,21 @@ async function getShooterProfile(shooterId: number): Promise<string | null> {
   return getRedis().get<string>(pk(`shooter:${shooterId}:profile`));
 }
 
+async function scanCachedMatchKeys(): Promise<string[]> {
+  const pattern = `${PREFIX}gql:GetMatch:*`;
+  const keys: string[] = [];
+  let cursor = "0";
+  do {
+    const result = await getRedis().scan(cursor, { match: pattern, count: 200 });
+    const [nextCursor, batch] = result as [string, string[]];
+    cursor = nextCursor;
+    for (const key of batch) {
+      keys.push(key.startsWith(PREFIX) ? key.slice(PREFIX.length) : key);
+    }
+  } while (cursor !== "0");
+  return keys;
+}
+
 const adapter: CacheAdapter = {
   async get(key) {
     return getRedis().get<string>(pk(key));
@@ -144,6 +159,7 @@ const adapter: CacheAdapter = {
   setShooterProfile,
   getShooterMatches,
   getShooterProfile,
+  scanCachedMatchKeys,
 };
 
 export default adapter;

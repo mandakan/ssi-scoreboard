@@ -23,14 +23,19 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
+  Search,
+  Check,
+  Plus,
 } from "lucide-react";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useShooterDashboardQuery } from "@/lib/queries";
-import type { ShooterMatchSummary, ShooterDashboardResponse } from "@/lib/types";
+import { triggerBackfill, addMatchToShooter } from "@/lib/api";
+import type { ShooterMatchSummary, ShooterDashboardResponse, BackfillProgress } from "@/lib/types";
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
 
@@ -384,6 +389,198 @@ function TrendChart({ data }: { data: ShooterDashboardResponse }) {
   );
 }
 
+// ─── Backfill section ────────────────────────────────────────────────────────
+
+function BackfillSection({ shooterId }: { shooterId: number }) {
+  const queryClient = useQueryClient();
+  const [lastResult, setLastResult] = useState<BackfillProgress | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: () => triggerBackfill(shooterId),
+    onSuccess: (data) => {
+      setLastResult(data);
+      if (data.discovered > 0) {
+        queryClient.invalidateQueries({ queryKey: ["shooter-dashboard", shooterId] });
+      }
+    },
+  });
+
+  const isRunning = mutation.isPending;
+  const isDone = lastResult?.status === "complete" && !isRunning;
+
+  return (
+    <div className="rounded-lg border border-border p-3">
+      {!isRunning && !isDone && (
+        <button
+          type="button"
+          onClick={() => mutation.mutate()}
+          className="flex items-center gap-2 w-full text-left min-h-[2.75rem]"
+          aria-label="Scan matches previously viewed on this app to find ones you competed in"
+        >
+          <Search className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
+          <div className="flex-1 min-w-0">
+            <span className="text-sm font-medium">Find past matches</span>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Searches matches previously viewed on this app. Only finds
+              competitions someone has already opened here — not all SSI
+              matches.
+            </p>
+          </div>
+        </button>
+      )}
+
+      {isRunning && (
+        <div role="status" aria-live="polite" className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground shrink-0" aria-hidden="true" />
+            <span className="text-sm font-medium">Scanning cached matches…</span>
+          </div>
+        </div>
+      )}
+
+      {isDone && lastResult && (
+        <div role="status" aria-live="polite" className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0" aria-hidden="true" />
+            <span className="text-sm font-medium">
+              {lastResult.discovered > 0
+                ? `Found ${lastResult.discovered} new match${lastResult.discovered !== 1 ? "es" : ""}`
+                : "No new matches found"}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {lastResult.totalCached} match{lastResult.totalCached !== 1 ? "es" : ""} on
+            this app were checked
+            {lastResult.alreadyIndexed > 0 && ` · ${lastResult.alreadyIndexed} already in your history`}
+          </p>
+          {lastResult.errorMessage && (
+            <p className="text-xs text-muted-foreground">{lastResult.errorMessage}</p>
+          )}
+          <button
+            type="button"
+            onClick={() => { setLastResult(null); mutation.mutate(); }}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors self-start min-h-[2.75rem] flex items-center"
+          >
+            Scan again
+          </button>
+        </div>
+      )}
+
+      {mutation.isError && (
+        <p role="alert" className="text-xs text-destructive mt-1">
+          {mutation.error instanceof Error ? mutation.error.message : "Scan failed"}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Add match by URL section ───────────────────────────────────────────────
+
+function AddMatchSection({ shooterId }: { shooterId: number }) {
+  const queryClient = useQueryClient();
+  const [urlInput, setUrlInput] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const mutation = useMutation({
+    mutationFn: (url: string) => addMatchToShooter(shooterId, url),
+    onSuccess: (data) => {
+      if (data.success) {
+        setUrlInput("");
+        queryClient.invalidateQueries({ queryKey: ["shooter-dashboard", shooterId] });
+      }
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+    mutation.mutate(trimmed);
+  };
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold m-0 leading-none">
+        <button
+          type="button"
+          id="add-match-heading"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-controls="add-match-panel"
+          className="flex w-full items-center gap-2 text-left min-h-[2.75rem]"
+        >
+          {open ? (
+            <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
+          ) : (
+            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
+          )}
+          <span className="text-muted-foreground uppercase tracking-wide text-xs">
+            Add match by URL
+          </span>
+        </button>
+      </h3>
+
+      {open && (
+        <section
+          id="add-match-panel"
+          role="region"
+          aria-labelledby="add-match-heading"
+          className="mt-1"
+        >
+          <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+            <label htmlFor="match-url-input" className="sr-only">
+              Match URL
+            </label>
+            <input
+              id="match-url-input"
+              type="url"
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              placeholder="https://shootnscoreit.com/event/22/…"
+              aria-describedby="match-url-help"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[2.75rem]"
+              disabled={mutation.isPending}
+            />
+            <p id="match-url-help" className="text-xs text-muted-foreground">
+              Paste a ShootNScoreIt match URL to add it to your history.
+              Use this for matches that weren&apos;t found by the scan above.
+            </p>
+            <button
+              type="submit"
+              disabled={!urlInput.trim() || mutation.isPending}
+              className="self-start flex items-center gap-2 rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium disabled:opacity-50 min-h-[2.75rem] hover:bg-primary/90 transition-colors"
+            >
+              {mutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Plus className="w-4 h-4" aria-hidden="true" />
+              )}
+              Add match
+            </button>
+          </form>
+
+          {mutation.isSuccess && (
+            <p
+              role="status"
+              aria-live="polite"
+              className={`text-sm mt-2 ${mutation.data.success ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}
+            >
+              {mutation.data.message}
+            </p>
+          )}
+
+          {mutation.isError && (
+            <p role="alert" className="text-sm text-destructive mt-2">
+              {mutation.error instanceof Error ? mutation.error.message : "Failed to add match"}
+            </p>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
 // ─── Main dashboard ───────────────────────────────────────────────────────────
 
 interface Props {
@@ -424,7 +621,7 @@ export function ShooterDashboardClient({ shooterId }: Props) {
         <AlertCircle className="w-6 h-6 text-destructive" aria-hidden="true" />
         <p role="alert" className="text-sm text-center">
           {error instanceof Error && error.message.includes("404")
-            ? "No match history found. Visit a match you competed in to start building your stats."
+            ? "No match history found yet. Open any match you competed in on this app, and your stats will start building automatically."
             : "Could not load shooter stats. Please try again later."}
         </p>
       </main>
@@ -601,13 +798,17 @@ export function ShooterDashboardClient({ shooterId }: Props) {
             id="history-panel"
             role="region"
             aria-labelledby="history-heading"
+            className="flex flex-col gap-3"
           >
+            <BackfillSection shooterId={shooterId} />
+
             {matches.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-8 text-center text-muted-foreground">
                 <Target className="w-8 h-8" aria-hidden="true" />
                 <p className="text-sm">
-                  No match history yet. Match data is indexed when you open a match
-                  you competed in.
+                  No match history yet. Matches appear here when you or anyone
+                  else views them on this app. Try &quot;Find past matches&quot;
+                  above, or paste a match URL below to add one directly.
                 </p>
               </div>
             ) : (
@@ -620,6 +821,8 @@ export function ShooterDashboardClient({ shooterId }: Props) {
                 ))}
               </div>
             )}
+
+            <AddMatchSection shooterId={shooterId} />
           </div>
         )}
       </section>
