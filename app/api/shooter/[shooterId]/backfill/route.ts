@@ -14,6 +14,7 @@
  */
 import { NextResponse } from "next/server";
 import cache from "@/lib/cache-impl";
+import db from "@/lib/db-impl";
 import { runBackfill } from "@/lib/backfill";
 import type { BackfillDeps } from "@/lib/backfill";
 import type { BackfillProgress } from "@/lib/types";
@@ -53,19 +54,19 @@ export async function POST(
     scanCachedMatchKeys: () => cache.scanCachedMatchKeys(),
     getCachedMatch: (key) => cache.get(key),
     async getExistingMatchRefs(sid) {
-      const refs = await cache.getShooterMatches(sid);
+      const refs = await db.getShooterMatches(sid);
       return new Set(refs);
     },
     async indexMatch({ shooterId: sid, ct, matchId, startTimestamp, competitor }) {
       const matchRef = `${ct}:${matchId}`;
       const lastSeen = new Date().toISOString();
-      await cache.indexShooterMatch(sid, matchRef, startTimestamp);
-      await cache.setShooterProfile(sid, JSON.stringify({
+      await db.indexShooterMatch(sid, matchRef, startTimestamp);
+      await db.setShooterProfile(sid, {
         name: competitor.name,
         club: competitor.club,
         division: competitor.division,
         lastSeen,
-      }));
+      });
       // Invalidate dashboard cache
       await cache.del(`computed:shooter:${sid}:dashboard`);
     },

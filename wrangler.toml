@@ -13,6 +13,11 @@
 #                wrangler secret put CACHE_PURGE_SECRET --env staging
 #                wrangler secret put CACHE_KEY_PREFIX --env staging   # value: "staging:"
 #
+# D1 databases: create once, then paste the database_id into [[d1_databases]] below:
+#   Production:  wrangler d1 create ssi-scoreboard-shooter
+#   Staging:     wrangler d1 create ssi-scoreboard-shooter-staging
+#   Migrations:  wrangler d1 migrations apply SHOOTER_DB [--env staging]
+#
 # Non-secret vars (AI coaching feature) are committed here under [vars] /
 # [env.staging.vars] so they are version-controlled alongside the binding.
 
@@ -53,6 +58,15 @@ AI_MODEL = "@cf/meta/llama-3.1-8b-instruct"
 AI_PROVIDER = "cloudflare"
 AI_MODEL = "@cf/meta/llama-3.1-8b-instruct"
 
+# D1 database for persistent shooter data (profiles, match indices, popularity).
+# Create with: wrangler d1 create ssi-scoreboard-shooter
+# Then replace the database_id below with the ID from the output.
+[[d1_databases]]
+binding = "SHOOTER_DB"
+database_name = "ssi-scoreboard-shooter"
+database_id = "PLACEHOLDER_PRODUCTION_D1_ID"  # TODO: replace after `wrangler d1 create`
+migrations_dir = "migrations"
+
 [assets]
 directory = ".open-next/assets"
 
@@ -68,3 +82,11 @@ name = "ssi-scoreboard-staging"
 # in Wrangler — declare it explicitly so the staging worker gets the AI binding.
 [env.staging.ai]
 binding = "AI"
+
+# The top-level [[d1_databases]] binding is not automatically inherited by named
+# environments in Wrangler — declare it explicitly for staging.
+[[env.staging.d1_databases]]
+binding = "SHOOTER_DB"
+database_name = "ssi-scoreboard-shooter-staging"
+database_id = "PLACEHOLDER_STAGING_D1_ID"  # TODO: replace after `wrangler d1 create`
+migrations_dir = "migrations"

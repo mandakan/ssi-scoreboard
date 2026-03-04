@@ -3,6 +3,7 @@
 // cross-match shooter → match secondary Redis index.
 
 import cache from "@/lib/cache-impl";
+import db from "@/lib/db-impl";
 
 /**
  * Decodes a Relay Global ID to extract the numeric ShooterNode primary key.
@@ -72,8 +73,8 @@ export function indexMatchShooters(
       division: c.division,
       lastSeen,
     };
-    void cache.indexShooterMatch(shooterId, matchRef, startTimestamp).catch(() => {});
-    void cache.setShooterProfile(shooterId, JSON.stringify(profile)).catch(() => {});
+    void db.indexShooterMatch(shooterId, matchRef, startTimestamp).catch(() => {});
+    void db.setShooterProfile(shooterId, profile).catch(() => {});
     // Invalidate the pre-computed dashboard cache so the next visit picks up
     // this newly indexed match immediately rather than serving stale data.
     void cache.del(`computed:shooter:${shooterId}:dashboard`).catch(() => {});

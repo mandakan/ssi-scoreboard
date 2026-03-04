@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import cache from "@/lib/cache-impl";
+import db from "@/lib/db-impl";
 import { gqlCacheKey } from "@/lib/graphql";
 import { decodeShooterId } from "@/lib/shooter-index";
+import type { ShooterProfile } from "@/lib/shooter-index";
 import { parseRawScorecards } from "@/lib/scorecard-data";
 import { formatDivisionDisplay } from "@/lib/divisions";
 import { computeAggregateStats } from "@/lib/shooter-stats";
@@ -49,13 +51,6 @@ interface RawMatchEvent {
 
 interface RawMatchData {
   event: RawMatchEvent | null;
-}
-
-interface ShooterProfile {
-  name: string;
-  club: string | null;
-  division: string | null;
-  lastSeen: string;
 }
 
 // ─── Computation helpers ──────────────────────────────────────────────────────
@@ -174,25 +169,18 @@ export async function GET(
     }
   } catch { /* ignore cache errors */ }
 
-  // ── 2. Load profile and match refs from Redis index ───────────────────────
-  let profileRaw: string | null = null;
+  // ── 2. Load profile and match refs from ShooterStore ─────────────────────
+  let profile: ShooterProfile | null = null;
   let matchRefs: string[] = [];
   try {
-    [profileRaw, matchRefs] = await Promise.all([
-      cache.getShooterProfile(shooterId),
-      cache.getShooterMatches(shooterId),
+    [profile, matchRefs] = await Promise.all([
+      db.getShooterProfile(shooterId),
+      db.getShooterMatches(shooterId),
     ]);
-  } catch { /* ignore cache errors */ }
+  } catch { /* ignore store errors */ }
 
-  if (!profileRaw && matchRefs.length === 0) {
+  if (!profile && matchRefs.length === 0) {
     return NextResponse.json({ error: "Shooter not found" }, { status: 404 });
-  }
-
-  let profile: ShooterProfile | null = null;
-  if (profileRaw) {
-    try {
-      profile = JSON.parse(profileRaw) as ShooterProfile;
-    } catch { /* ignore */ }
   }
 
   const totalMatchCount = matchRefs.length;

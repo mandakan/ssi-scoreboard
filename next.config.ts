@@ -17,6 +17,9 @@ const nextConfig: NextConfig = {
           // Replace the default Node.js cache adapter with the Upstash HTTP
           // adapter so that ioredis is never bundled into the Cloudflare Worker.
           "@/lib/cache-impl": "@/lib/cache-edge",
+          // Replace the default SQLite shooter store with the D1 adapter
+          // so that better-sqlite3 is never bundled into the Cloudflare Worker.
+          "@/lib/db-impl": "@/lib/db-d1",
         },
       }
     : {},
@@ -46,13 +49,18 @@ const nextConfig: NextConfig = {
   },
 
   // Webpack alias (fallback for build pipelines that use webpack mode).
+  // Exclude better-sqlite3 native addon from server-side bundling.
+  serverExternalPackages: ["better-sqlite3"],
+
   webpack(config) {
     if (isCF) {
       const edgeImpl = path.resolve(process.cwd(), "lib/cache-edge");
+      const d1Impl = path.resolve(process.cwd(), "lib/db-d1");
       config.resolve = {
         ...config.resolve,
         alias: {
           "@/lib/cache-impl": edgeImpl,
+          "@/lib/db-impl": d1Impl,
           ...(config.resolve?.alias as Record<string, string> | undefined ?? {}),
         },
       };

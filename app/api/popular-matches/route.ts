@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import cache from "@/lib/cache-impl";
+import db from "@/lib/db-impl";
 import type { PopularMatch } from "@/lib/types";
 
 /** Maximum age (seconds) a match access must be within to qualify. */
@@ -36,7 +37,7 @@ interface MatchCacheEntry {
  */
 export async function GET() {
   try {
-    const popular = await cache.getPopularKeys(MAX_AGE_SECONDS, MAX_RESULTS);
+    const popular = await db.getPopularKeys(MAX_AGE_SECONDS, MAX_RESULTS);
 
     if (popular.length === 0) {
       return NextResponse.json([] as PopularMatch[]);

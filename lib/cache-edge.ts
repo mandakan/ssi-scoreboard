@@ -3,7 +3,6 @@
 // Never import ioredis or any Node.js-only module from this file.
 import { Redis } from "@upstash/redis";
 import type { CacheAdapter } from "@/lib/cache";
-import { MAX_SHOOTER_MATCHES } from "@/lib/constants";
 
 // Lazily initialised so that Cloudflare secrets (injected into process.env at
 // request time by @opennextjs/cloudflare) are read on first use rather than at
@@ -37,98 +36,6 @@ const PREFIX = process.env.CACHE_KEY_PREFIX ?? "";
 const pk = (key: string) => `${PREFIX}${key}`;
 
 // Extracted as module-level functions so tsc can resolve the return type unambiguously.
-
-async function recordMatchAccess(key: string): Promise<void> {
-  const now = Math.floor(Date.now() / 1000);
-  await Promise.all([
-    getRedis().zadd(pk("popular:matches:seen"), { score: now, member: key }),
-    getRedis().zincrby(pk("popular:matches:hits"), 1, key),
-  ]);
-}
-
-async function getPopularKeys(
-  maxAgeSeconds: number,
-  limit: number,
-): Promise<{ key: string; hits: number }[]> {
-  const now = Math.floor(Date.now() / 1000);
-  const cutoff = now - maxAgeSeconds;
-
-  // Prune entries that haven't been seen within the window.
-  await getRedis().zremrangebyscore(pk("popular:matches:seen"), "-inf", cutoff - 1);
-
-  // Fetch all keys that were seen within the window.
-  // zrange with byScore: true is equivalent to ZRANGEBYSCORE.
-  // Use now + 86400 as upper bound (well beyond any valid timestamp).
-  const recentKeys = (await getRedis().zrange(
-    pk("popular:matches:seen"),
-    cutoff,
-    now + 86400,
-    { byScore: true },
-  )) as string[];
-
-  // Prune hits: remove members no longer present in seen.
-  const allHitMembers = (await getRedis().zrange(
-    pk("popular:matches:hits"),
-    0,
-    -1,
-  )) as string[];
-  if (allHitMembers.length > 0) {
-    const aliveSet = new Set(recentKeys);
-    const stale = allHitMembers.filter((m: string) => !aliveSet.has(m));
-    if (stale.length > 0) {
-      await getRedis().zrem(pk("popular:matches:hits"), ...stale);
-    }
-  }
-
-  if (recentKeys.length === 0) return [];
-
-  // Look up hit counts for each recent key in parallel.
-  // zscore always returns number | null (scores are numeric in Redis).
-  const hitScores = await Promise.all(
-    recentKeys.map((k: string) => getRedis().zscore(pk("popular:matches:hits"), k)),
-  );
-
-  const results = recentKeys.map((k: string, i: number) => ({
-    key: k,
-    hits: Math.round(hitScores[i] ?? 0),
-  }));
-
-  return results
-    .sort(
-      (a: { key: string; hits: number }, b: { key: string; hits: number }) =>
-        b.hits - a.hits,
-    )
-    .slice(0, limit);
-}
-
-async function indexShooterMatch(
-  shooterId: number,
-  matchRef: string,
-  startTimestamp: number,
-): Promise<void> {
-  const key = pk(`shooter:${shooterId}:matches`);
-  await getRedis().zadd(key, { score: startTimestamp, member: matchRef });
-  const count = await getRedis().zcard(key);
-  if (count > MAX_SHOOTER_MATCHES) {
-    await getRedis().zremrangebyrank(key, 0, count - MAX_SHOOTER_MATCHES - 1);
-  }
-}
-
-async function setShooterProfile(shooterId: number, profile: string): Promise<void> {
-  await getRedis().set(pk(`shooter:${shooterId}:profile`), profile);
-}
-
-async function getShooterMatches(shooterId: number): Promise<string[]> {
-  return (await getRedis().zrange(
-    pk(`shooter:${shooterId}:matches`),
-    0,
-    -1,
-  )) as string[];
-}
-
-async function getShooterProfile(shooterId: number): Promise<string | null> {
-  return getRedis().get<string>(pk(`shooter:${shooterId}:profile`));
-}
 
 async function scanCachedMatchKeys(): Promise<string[]> {
   const pattern = `${PREFIX}gql:GetMatch:*`;
@@ -170,12 +77,6 @@ const adapter: CacheAdapter = {
     await getRedis().expire(pk(key), ttlSeconds);
   },
 
-  recordMatchAccess,
-  getPopularKeys,
-  indexShooterMatch,
-  setShooterProfile,
-  getShooterMatches,
-  getShooterProfile,
   scanCachedMatchKeys,
 };
 

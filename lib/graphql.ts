@@ -2,6 +2,7 @@
 // SSI_API_KEY lives here and must never be sent to the browser.
 
 import cache from "@/lib/cache-impl";
+import db from "@/lib/db-impl";
 import { CACHE_SCHEMA_VERSION } from "@/lib/constants";
 
 const GRAPHQL_ENDPOINT = "https://shootnscoreit.com/graphql/";
@@ -217,7 +218,7 @@ export async function cachedExecuteQuery<T>(
       // are treated as misses. They will be overwritten on the next fetch.
       if (entry.v === CACHE_SCHEMA_VERSION) {
         if (cacheKey.startsWith("gql:GetMatch:")) {
-          void cache.recordMatchAccess(cacheKey).catch(() => {});
+          void db.recordMatchAccess(cacheKey).catch(() => {});
         }
         return { data: entry.data, cachedAt: entry.cachedAt };
       }
@@ -239,7 +240,7 @@ export async function cachedExecuteQuery<T>(
 
   // Record access for popularity tracking (fire-and-forget, non-fatal).
   if (cacheKey.startsWith("gql:GetMatch:")) {
-    void cache.recordMatchAccess(cacheKey).catch(() => {});
+    void db.recordMatchAccess(cacheKey).catch(() => {});
   }
 
   // Return null for cachedAt: freshly fetched, not served from cache

@@ -30,6 +30,9 @@ Thumbs.db
 /social-preview.png
 /release-assets/
 
+# SQLite data directory
+/data/
+
 # MCP server build artifacts
 mcp/dist/
 
