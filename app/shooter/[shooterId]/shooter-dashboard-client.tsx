@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   LineChart,
@@ -35,7 +35,15 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useShooterDashboardQuery } from "@/lib/queries";
 import { triggerBackfill, addMatchToShooter } from "@/lib/api";
-import type { ShooterMatchSummary, ShooterDashboardResponse, BackfillProgress } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import {
+  computeAggregateStats,
+  computeAZonePct,
+  computeMovingAverage,
+  getMostFrequentDivision,
+} from "@/lib/shooter-stats";
+import { divisionColor, extractDivisions } from "@/lib/division-colors";
+import type { ShooterMatchSummary, BackfillProgress } from "@/lib/types";
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
 
@@ -78,6 +86,18 @@ function levelBadge(level: string | null): string {
   if (!level) return "";
   const m = level.match(/(\d+)/);
   return m ? `L${m[1]}` : level.slice(0, 3);
+}
+
+// ─── Chip button style ───────────────────────────────────────────────────────
+
+function chipClass(active: boolean) {
+  return cn(
+    "rounded-full px-3 py-1 text-xs font-medium transition-colors min-h-[2rem]",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+    active
+      ? "bg-primary text-primary-foreground"
+      : "bg-muted text-muted-foreground hover:bg-muted/80",
+  );
 }
 
 // ─── Trend indicator ──────────────────────────────────────────────────────────
@@ -203,26 +223,200 @@ function MatchCard({ match }: { match: ShooterMatchSummary }) {
   );
 }
 
+// ─── Division filter ──────────────────────────────────────────────────────────
+
+function DivisionFilter({
+  divisions,
+  selected,
+  onChange,
+}: {
+  divisions: string[];
+  selected: string | null;
+  onChange: (div: string | null) => void;
+}) {
+  if (divisions.length < 2) return null;
+
+  return (
+    <div
+      role="group"
+      aria-label="Filter by division"
+      className="flex flex-wrap gap-1.5 mb-3"
+    >
+      <button
+        type="button"
+        aria-pressed={selected === null}
+        onClick={() => onChange(null)}
+        className={chipClass(selected === null)}
+      >
+        All
+      </button>
+      {divisions.map((div) => (
+        <button
+          key={div}
+          type="button"
+          aria-pressed={selected === div}
+          onClick={() => onChange(div)}
+          className={chipClass(selected === div)}
+        >
+          <span
+            className="inline-block w-2 h-2 rounded-full mr-1 align-middle"
+            style={{ backgroundColor: divisionColor(div) }}
+            aria-hidden="true"
+          />
+          {div}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Custom chart tooltip ────────────────────────────────────────────────────
+
+interface ChartDataPoint {
+  label: string;
+  matchName: string;
+  division: string | null;
+  level: string | null;
+  competitorsInDivision: number | null;
+  avgHF: number | null;
+  matchPct: number | null;
+  aZonePct: number | null;
+  avgHF_ma: number | null;
+  matchPct_ma: number | null;
+  aZonePct_ma: number | null;
+  divColor: string;
+}
+
+function CustomTooltip({
+  active,
+  payload,
+  metricKey,
+  metricLabel,
+  formatValue,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload: ChartDataPoint }>;
+  metricKey: "avgHF" | "matchPct" | "aZonePct";
+  metricLabel: string;
+  formatValue: (v: number | null) => string;
+}) {
+  if (!active || !payload?.[0]) return null;
+  const d = payload[0].payload;
+  const value = d[metricKey];
+
+  return (
+    <div
+      className="rounded-md border border-border bg-popover text-popover-foreground text-xs p-2.5 shadow-lg max-w-[220px]"
+    >
+      <p className="font-semibold truncate mb-1">{d.matchName}</p>
+      <div className="flex items-center gap-1.5 mb-1">
+        {d.division && (
+          <>
+            <span
+              className="inline-block w-2 h-2 rounded-full shrink-0"
+              style={{ backgroundColor: d.divColor }}
+              aria-hidden="true"
+            />
+            <span className="text-muted-foreground">{d.division}</span>
+          </>
+        )}
+        {d.level && (
+          <span className="text-[10px] font-semibold px-1 py-0.5 rounded bg-muted text-muted-foreground uppercase">
+            {levelBadge(d.level)}
+          </span>
+        )}
+      </div>
+      <p className="font-medium tabular-nums">
+        {metricLabel}: {formatValue(value)}
+      </p>
+      {d.competitorsInDivision != null && (
+        <p className="text-muted-foreground mt-0.5">
+          {d.competitorsInDivision} in division
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Custom dot for division colors ──────────────────────────────────────────
+
+function makeDivisionDot(showColors: boolean, dataKey: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return function DivDot(props: any) {
+    const { cx, cy, payload } = props;
+    if (cx == null || cy == null) return null;
+    const value = payload?.[dataKey];
+    if (value == null) return null;
+
+    const color = showColors ? (payload?.divColor ?? "var(--chart-1)") : "var(--chart-1)";
+    // Scale dot radius based on field size when showing division colors
+    const nDiv = payload?.competitorsInDivision ?? 0;
+    const r = showColors ? Math.min(5, Math.max(2.5, 2.5 + (nDiv / 50) * 2.5)) : 3;
+
+    return <circle cx={cx} cy={cy} r={r} fill={color} stroke="none" />;
+  };
+}
+
 // ─── Trend chart ──────────────────────────────────────────────────────────────
 
-function TrendChart({ data }: { data: ShooterDashboardResponse }) {
-  // Build chart data sorted oldest → newest (reverse of matches array)
+function TrendChart({
+  matches,
+  divisionFilter,
+}: {
+  matches: ShooterMatchSummary[];
+  divisionFilter: string | null;
+}) {
+  const showDivColors = divisionFilter === null;
+
   const chartData = useMemo(() => {
-    return data.matches
-      .slice()
-      .reverse()
-      .filter((m) => m.avgHF != null || m.matchPct != null)
-      .map((m) => ({
-        label: formatDateShort(m.date),
-        avgHF: m.avgHF != null ? parseFloat(m.avgHF.toFixed(2)) : null,
-        matchPct: m.matchPct != null ? parseFloat(m.matchPct.toFixed(1)) : null,
-      }));
-  }, [data.matches]);
+    const sorted = matches.slice().reverse(); // oldest → newest
+    const filtered = sorted.filter((m) => m.avgHF != null || m.matchPct != null);
+
+    const hfValues = filtered.map((m) => m.avgHF != null ? parseFloat(m.avgHF.toFixed(2)) : null);
+    const pctValues = filtered.map((m) => m.matchPct != null ? parseFloat(m.matchPct.toFixed(1)) : null);
+    const azValues = filtered.map((m) => {
+      const az = computeAZonePct(m);
+      return az != null ? parseFloat(az.toFixed(1)) : null;
+    });
+
+    const hfMa = computeMovingAverage(hfValues, 3);
+    const pctMa = computeMovingAverage(pctValues, 3);
+    const azMa = computeMovingAverage(azValues, 3);
+
+    return filtered.map((m, i): ChartDataPoint => ({
+      label: formatDateShort(m.date),
+      matchName: m.name,
+      division: m.division,
+      level: m.level,
+      competitorsInDivision: m.competitorsInDivision,
+      avgHF: hfValues[i],
+      matchPct: pctValues[i],
+      aZonePct: azValues[i],
+      avgHF_ma: hfMa[i] != null ? parseFloat(hfMa[i]!.toFixed(2)) : null,
+      matchPct_ma: pctMa[i] != null ? parseFloat(pctMa[i]!.toFixed(1)) : null,
+      aZonePct_ma: azMa[i] != null ? parseFloat(azMa[i]!.toFixed(1)) : null,
+      divColor: divisionColor(m.division),
+    }));
+  }, [matches]);
 
   const hasHF = chartData.some((d) => d.avgHF != null);
   const hasPct = chartData.some((d) => d.matchPct != null);
+  const hasAZ = chartData.some((d) => d.aZonePct != null);
+  const hasMA = chartData.length >= 3;
 
-  if (chartData.length < 2) return null;
+  const hfDot = useMemo(() => makeDivisionDot(showDivColors, "avgHF"), [showDivColors]);
+  const pctDot = useMemo(() => makeDivisionDot(showDivColors, "matchPct"), [showDivColors]);
+  const azDot = useMemo(() => makeDivisionDot(showDivColors, "aZonePct"), [showDivColors]);
+
+  if (chartData.length < 2) {
+    return (
+      <p className="text-sm text-muted-foreground text-center py-4">
+        {chartData.length === 0
+          ? "No match data for this division."
+          : "Only 1 match in this division — need at least 2 to show trends."}
+      </p>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -248,10 +442,10 @@ function TrendChart({ data }: { data: ShooterDashboardResponse }) {
                   combined.
                 </p>
                 <p className="text-muted-foreground">
-                  A rising trend means you&apos;re shooting faster or more
-                  accurately (or both) across competitions. Compare this with the
-                  match % chart to separate absolute improvement from field
-                  quality.
+                  When &quot;All&quot; divisions is selected, dots are colored by
+                  division so you can see which division each match was shot in.
+                  Dot size scales with field strength (more competitors = larger dot).
+                  The dashed line is a 3-match moving average.
                 </p>
               </PopoverContent>
             </Popover>
@@ -262,10 +456,7 @@ function TrendChart({ data }: { data: ShooterDashboardResponse }) {
                 data={chartData}
                 margin={{ top: 4, right: 8, left: -16, bottom: 0 }}
               >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  className="stroke-border"
-                />
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                 <XAxis
                   dataKey="label"
                   tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
@@ -278,18 +469,14 @@ function TrendChart({ data }: { data: ShooterDashboardResponse }) {
                   width={40}
                 />
                 <Tooltip
-                  contentStyle={{
-                    backgroundColor: "var(--popover)",
-                    color: "var(--popover-foreground)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "0.375rem",
-                    fontSize: 12,
-                    boxShadow: "0 4px 16px rgba(0,0,0,0.14), 0 1px 4px rgba(0,0,0,0.08)",
-                  }}
-                  labelStyle={{ color: "var(--popover-foreground)", fontWeight: 600 }}
-                  itemStyle={{ color: "var(--popover-foreground)" }}
+                  content={
+                    <CustomTooltip
+                      metricKey="avgHF"
+                      metricLabel="Avg HF"
+                      formatValue={(v) => v != null ? v.toFixed(2) : "—"}
+                    />
+                  }
                   cursor={{ stroke: "var(--muted-foreground)", opacity: 0.2 }}
-                  formatter={(value: number | undefined) => [value != null ? value.toFixed(2) : "—", "Avg HF"]}
                 />
                 <Line
                   type="monotone"
@@ -297,9 +484,22 @@ function TrendChart({ data }: { data: ShooterDashboardResponse }) {
                   name="Avg HF"
                   stroke="var(--chart-1)"
                   strokeWidth={2}
-                  dot={{ r: 3, fill: "var(--chart-1)" }}
+                  dot={hfDot}
                   connectNulls={false}
                 />
+                {hasMA && (
+                  <Line
+                    type="monotone"
+                    dataKey="avgHF_ma"
+                    name="3-match avg"
+                    stroke="var(--chart-1)"
+                    strokeWidth={1.5}
+                    strokeDasharray="6 3"
+                    strokeOpacity={0.5}
+                    dot={false}
+                    connectNulls={false}
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -328,9 +528,9 @@ function TrendChart({ data }: { data: ShooterDashboardResponse }) {
                   averaged across the whole match.
                 </p>
                 <p className="text-muted-foreground">
-                  This normalises for match difficulty. A consistent 75% at
-                  different level competitions means you&apos;re keeping pace
-                  with your division across varying field strengths.
+                  This normalises for match difficulty. Use the division filter to
+                  compare like-for-like across the same division. The dashed line
+                  is a 3-match moving average.
                 </p>
               </PopoverContent>
             </Popover>
@@ -341,10 +541,7 @@ function TrendChart({ data }: { data: ShooterDashboardResponse }) {
                 data={chartData}
                 margin={{ top: 4, right: 8, left: -16, bottom: 0 }}
               >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  className="stroke-border"
-                />
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                 <XAxis
                   dataKey="label"
                   tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
@@ -358,18 +555,14 @@ function TrendChart({ data }: { data: ShooterDashboardResponse }) {
                   width={40}
                 />
                 <Tooltip
-                  contentStyle={{
-                    backgroundColor: "var(--popover)",
-                    color: "var(--popover-foreground)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "0.375rem",
-                    fontSize: 12,
-                    boxShadow: "0 4px 16px rgba(0,0,0,0.14), 0 1px 4px rgba(0,0,0,0.08)",
-                  }}
-                  labelStyle={{ color: "var(--popover-foreground)", fontWeight: 600 }}
-                  itemStyle={{ color: "var(--popover-foreground)" }}
+                  content={
+                    <CustomTooltip
+                      metricKey="matchPct"
+                      metricLabel="Match %"
+                      formatValue={(v) => v != null ? `${v.toFixed(1)}%` : "—"}
+                    />
+                  }
                   cursor={{ stroke: "var(--muted-foreground)", opacity: 0.2 }}
-                  formatter={(value: number | undefined) => [value != null ? `${value.toFixed(1)}%` : "—", "Match %"]}
                 />
                 <Line
                   type="monotone"
@@ -377,9 +570,107 @@ function TrendChart({ data }: { data: ShooterDashboardResponse }) {
                   name="Match %"
                   stroke="var(--chart-2)"
                   strokeWidth={2}
-                  dot={{ r: 3, fill: "var(--chart-2)" }}
+                  dot={pctDot}
                   connectNulls={false}
                 />
+                {hasMA && (
+                  <Line
+                    type="monotone"
+                    dataKey="matchPct_ma"
+                    name="3-match avg"
+                    stroke="var(--chart-2)"
+                    strokeWidth={1.5}
+                    strokeDasharray="6 3"
+                    strokeOpacity={0.5}
+                    dot={false}
+                    connectNulls={false}
+                  />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {hasAZ && (
+        <div>
+          <div className="flex items-center gap-1 mb-2">
+            <h3 className="text-sm font-medium">A-zone % over time</h3>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="About the A-zone percentage trend chart"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="max-w-xs text-sm space-y-2" side="top">
+                <p className="font-medium">A-zone % over time</p>
+                <p className="text-muted-foreground">
+                  Percentage of scored hits that were A-zone across all stages
+                  in each match. This is the most stable cross-division metric —
+                  it measures pure accuracy regardless of division or field strength.
+                </p>
+                <p className="text-muted-foreground">
+                  Use this to track accuracy improvement over time. Unlike HF and
+                  Match %, this metric is directly comparable across divisions.
+                </p>
+              </PopoverContent>
+            </Popover>
+          </div>
+          <div className="h-48" aria-hidden="true">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={chartData}
+                margin={{ top: 4, right: 8, left: -16, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                  className="fill-muted-foreground"
+                  interval="preserveStartEnd"
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                  className="fill-muted-foreground"
+                  domain={[0, 100]}
+                  width={40}
+                />
+                <Tooltip
+                  content={
+                    <CustomTooltip
+                      metricKey="aZonePct"
+                      metricLabel="A-zone %"
+                      formatValue={(v) => v != null ? `${v.toFixed(1)}%` : "—"}
+                    />
+                  }
+                  cursor={{ stroke: "var(--muted-foreground)", opacity: 0.2 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="aZonePct"
+                  name="A-zone %"
+                  stroke="var(--chart-3)"
+                  strokeWidth={2}
+                  dot={azDot}
+                  connectNulls={false}
+                />
+                {hasMA && (
+                  <Line
+                    type="monotone"
+                    dataKey="aZonePct_ma"
+                    name="3-match avg"
+                    stroke="var(--chart-3)"
+                    strokeWidth={1.5}
+                    strokeDasharray="6 3"
+                    strokeOpacity={0.5}
+                    dot={false}
+                    connectNulls={false}
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -592,6 +883,41 @@ export function ShooterDashboardClient({ shooterId }: Props) {
     shooterId,
   );
   const [historyOpen, setHistoryOpen] = useState(true);
+  const [divisionFilter, setDivisionFilter] = useState<string | null | "unset">("unset");
+
+  // Derive divisions and default filter once data loads
+  const divisions = useMemo(
+    () => (data ? extractDivisions(data.matches) : []),
+    [data],
+  );
+  const effectiveFilter = useMemo(() => {
+    if (divisionFilter === "unset") {
+      // Auto-default to most frequent division when multiple exist
+      if (divisions.length >= 2 && data) {
+        return getMostFrequentDivision(data.matches);
+      }
+      return null;
+    }
+    return divisionFilter;
+  }, [divisionFilter, divisions, data]);
+
+  const handleFilterChange = useCallback((div: string | null) => {
+    setDivisionFilter(div);
+  }, []);
+
+  // Filtered matches & stats
+  const filteredMatches = useMemo(() => {
+    if (!data) return [];
+    if (effectiveFilter === null) return data.matches;
+    return data.matches.filter((m) => m.division === effectiveFilter);
+  }, [data, effectiveFilter]);
+
+  const filteredStats = useMemo(
+    () => computeAggregateStats(filteredMatches),
+    [filteredMatches],
+  );
+
+  const isFiltered = effectiveFilter !== null && divisions.length >= 2;
 
   if (shooterId == null) {
     return (
@@ -630,8 +956,13 @@ export function ShooterDashboardClient({ shooterId }: Props) {
 
   const { profile, matchCount, matches, stats } = data;
   const displayName = profile?.name ?? `Shooter #${shooterId}`;
+  // Show trends section if ALL matches have enough data (not filtered) —
+  // so the division filter stays accessible even when a filtered division has <2 matches.
   const hasChartData =
     matches.filter((m) => m.avgHF != null || m.matchPct != null).length >= 2;
+
+  // Use filtered stats for the stat cards when a division is selected
+  const displayStats = isFiltered ? filteredStats : stats;
 
   return (
     <main className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-6">
@@ -689,7 +1020,7 @@ export function ShooterDashboardClient({ shooterId }: Props) {
       </section>
 
       {/* ── Aggregate metrics ──────────────────────────────────────────── */}
-      {stats.totalStages > 0 && (
+      {displayStats.totalStages > 0 && (
         <section aria-labelledby="stats-heading">
           <div className="flex items-center gap-1 mb-3">
             <h2
@@ -698,51 +1029,56 @@ export function ShooterDashboardClient({ shooterId }: Props) {
             >
               Aggregate stats
             </h2>
+            {isFiltered && (
+              <span className="text-xs text-muted-foreground">
+                ({filteredMatches.length} in {effectiveFilter})
+              </span>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <StatCard
               label="Avg HF"
-              value={formatHF(stats.overallAvgHF)}
+              value={formatHF(displayStats.overallAvgHF)}
             />
             <StatCard
               label="Match %"
-              value={formatPct(stats.overallMatchPct)}
+              value={formatPct(displayStats.overallMatchPct)}
             />
             <StatCard
               label="A-zone %"
-              value={formatPct(stats.aPercent)}
+              value={formatPct(displayStats.aPercent)}
               sub={
-                stats.missPercent != null
-                  ? `Miss: ${formatPct(stats.missPercent)}`
+                displayStats.missPercent != null
+                  ? `Miss: ${formatPct(displayStats.missPercent)}`
                   : undefined
               }
             />
             <StatCard
               label="HF trend"
-              value={<TrendIndicator slope={stats.hfTrendSlope} />}
+              value={<TrendIndicator slope={displayStats.hfTrendSlope} />}
               sub={
-                stats.consistencyCV != null
-                  ? `CV: ${(stats.consistencyCV * 100).toFixed(1)}%`
+                displayStats.consistencyCV != null
+                  ? `CV: ${(displayStats.consistencyCV * 100).toFixed(1)}%`
                   : undefined
               }
             />
           </div>
 
           {/* Accuracy breakdown */}
-          {stats.aPercent != null && (
+          {displayStats.aPercent != null && (
             <div className="mt-2 flex items-center gap-1 flex-wrap">
               <span className="text-xs text-muted-foreground">Accuracy:</span>
               <span className="text-xs font-medium">
-                A&nbsp;{formatPct(stats.aPercent)}
+                A&nbsp;{formatPct(displayStats.aPercent)}
               </span>
               <span className="text-xs text-muted-foreground">
-                C&nbsp;{formatPct(stats.cPercent)}
+                C&nbsp;{formatPct(displayStats.cPercent)}
               </span>
               <span className="text-xs text-muted-foreground">
-                D&nbsp;{formatPct(stats.dPercent)}
+                D&nbsp;{formatPct(displayStats.dPercent)}
               </span>
               <span className="text-xs text-muted-foreground">
-                M&nbsp;{formatPct(stats.missPercent)}
+                M&nbsp;{formatPct(displayStats.missPercent)}
               </span>
             </div>
           )}
@@ -761,7 +1097,15 @@ export function ShooterDashboardClient({ shooterId }: Props) {
           >
             Performance trends
           </h2>
-          <TrendChart data={data} />
+          <DivisionFilter
+            divisions={divisions}
+            selected={effectiveFilter}
+            onChange={handleFilterChange}
+          />
+          <TrendChart
+            matches={filteredMatches}
+            divisionFilter={effectiveFilter}
+          />
         </section>
       )}
 

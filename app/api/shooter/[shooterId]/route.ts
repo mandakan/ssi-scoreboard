@@ -4,11 +4,11 @@ import { gqlCacheKey } from "@/lib/graphql";
 import { decodeShooterId } from "@/lib/shooter-index";
 import { parseRawScorecards } from "@/lib/scorecard-data";
 import { formatDivisionDisplay } from "@/lib/divisions";
+import { computeAggregateStats } from "@/lib/shooter-stats";
 import { CACHE_SCHEMA_VERSION } from "@/lib/constants";
 import type {
   ShooterDashboardResponse,
   ShooterMatchSummary,
-  ShooterAggregateStats,
 } from "@/lib/types";
 import type { RawScorecardsData } from "@/lib/scorecard-data";
 import type { RawScorecard } from "@/app/api/compare/logic";
@@ -152,107 +152,6 @@ function computeMatchStats(
   };
 }
 
-/**
- * Compute linear regression slope (y over x).
- * Returns null when fewer than 3 points or denominator is zero.
- */
-function linearRegressionSlope(
-  points: Array<[number, number]>,
-): number | null {
-  const n = points.length;
-  if (n < 3) return null;
-  const sumX = points.reduce((s, [x]) => s + x, 0);
-  const sumY = points.reduce((s, [, y]) => s + y, 0);
-  const sumXY = points.reduce((s, [x, y]) => s + x * y, 0);
-  const sumXX = points.reduce((s, [x]) => s + x * x, 0);
-  const denom = n * sumXX - sumX * sumX;
-  if (denom === 0) return null;
-  return (n * sumXY - sumX * sumY) / denom;
-}
-
-/**
- * Compute cross-match aggregate statistics from an array of match summaries.
- */
-function computeAggregateStats(
-  matches: ShooterMatchSummary[],
-): ShooterAggregateStats {
-  const withHF = matches.filter((m) => m.avgHF != null);
-  const withPct = matches.filter((m) => m.matchPct != null);
-
-  const totalStages = matches.reduce((s, m) => s + m.stageCount, 0);
-
-  // Date range from matches (already sorted newest first)
-  const datesWithValues = matches
-    .map((m) => m.date)
-    .filter((d): d is string => d != null);
-  const dateRange = {
-    from: datesWithValues[datesWithValues.length - 1] ?? null,
-    to: datesWithValues[0] ?? null,
-  };
-
-  // Weighted mean HF (weight = stage count per match)
-  let overallAvgHF: number | null = null;
-  if (withHF.length > 0) {
-    const totalWeightedHF = withHF.reduce(
-      (s, m) => s + (m.avgHF ?? 0) * m.stageCount,
-      0,
-    );
-    const totalWeightStages = withHF.reduce((s, m) => s + m.stageCount, 0);
-    overallAvgHF =
-      totalWeightStages > 0 ? totalWeightedHF / totalWeightStages : null;
-  }
-
-  // Mean of per-match pct values
-  const overallMatchPct =
-    withPct.length > 0
-      ? withPct.reduce((s, m) => s + (m.matchPct ?? 0), 0) / withPct.length
-      : null;
-
-  // Accuracy breakdown
-  const totalA = matches.reduce((s, m) => s + m.totalA, 0);
-  const totalC = matches.reduce((s, m) => s + m.totalC, 0);
-  const totalD = matches.reduce((s, m) => s + m.totalD, 0);
-  const totalMiss = matches.reduce((s, m) => s + m.totalMiss, 0);
-  const totalHits = totalA + totalC + totalD + totalMiss;
-  const aPercent = totalHits > 0 ? (totalA / totalHits) * 100 : null;
-  const cPercent = totalHits > 0 ? (totalC / totalHits) * 100 : null;
-  const dPercent = totalHits > 0 ? (totalD / totalHits) * 100 : null;
-  const missPercent = totalHits > 0 ? (totalMiss / totalHits) * 100 : null;
-
-  // Consistency CV = stddev(per-match avgHF) / mean(per-match avgHF)
-  let consistencyCV: number | null = null;
-  if (withHF.length >= 2) {
-    const hfValues = withHF.map((m) => m.avgHF as number);
-    const mean = hfValues.reduce((a, b) => a + b, 0) / hfValues.length;
-    if (mean > 0) {
-      const variance =
-        hfValues.reduce((s, v) => s + (v - mean) ** 2, 0) / hfValues.length;
-      consistencyCV = Math.sqrt(variance) / mean;
-    }
-  }
-
-  // HF trend slope: x = chronological index (0-based, oldest first), y = avgHF
-  // matches are sorted newest first, so reverse for the trend
-  const hfTrendPoints: Array<[number, number]> = withHF
-    .slice()
-    .reverse()
-    .map((m, i) => [i, m.avgHF as number]);
-  const hfTrendSlope = linearRegressionSlope(hfTrendPoints);
-
-  return {
-    totalStages,
-    dateRange,
-    overallAvgHF,
-    overallMatchPct,
-    aPercent,
-    cPercent,
-    dPercent,
-    missPercent,
-    consistencyCV,
-    hfTrendSlope,
-  };
-}
-
 // ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function GET(
@@ -357,6 +256,19 @@ export async function GET(
             competitor.shoots_handgun_major,
           );
 
+          // Count competitors in the same formatted division
+          const allCompetitors = ev.competitors_approved_w_wo_results_not_dnf ?? [];
+          let competitorsInDivision: number | null = null;
+          if (division) {
+            competitorsInDivision = allCompetitors.filter((c) => {
+              const cDiv = formatDivisionDisplay(
+                c.get_handgun_div_display ?? c.handgun_div,
+                c.shoots_handgun_major,
+              );
+              return cDiv === division;
+            }).length;
+          }
+
           // Compute stats from scorecards if available
           let stageCount = 0;
           let avgHF: number | null = null;
@@ -401,6 +313,7 @@ export async function GET(
             region: ev.region ?? null,
             division,
             competitorId,
+            competitorsInDivision,
             stageCount,
             avgHF,
             matchPct,

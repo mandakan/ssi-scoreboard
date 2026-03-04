@@ -11,11 +11,29 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-03-04";
+export const LATEST_RELEASE_ID = "2026-03-04b";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "March 4, 2026",
+    title: "Division-Aware Dashboard Charts",
+    screenshotScenes: ["shooter-dashboard"],
+    sections: [
+      {
+        heading: "New",
+        items: [
+          "Division filter on the shooter dashboard: filter your performance trends and aggregate stats by division. Defaults to your most frequently shot division when you compete across multiple.",
+          "Division-colored dots: when viewing all divisions, chart dots are colored by division and sized by field strength so you can spot division switches at a glance.",
+          "A-zone % trend chart: a new third chart showing your accuracy over time — the most stable cross-division metric for tracking pure accuracy improvement.",
+          "3-match moving average: dashed trend lines on all charts smooth out noise and make long-term progress easier to see.",
+          "Enhanced chart tooltips: now show match name, division with color bullet, level badge, and number of competitors in your division.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-03-04",
     date: "March 4, 2026",
     title: "Match Backfill & Discovery",
     screenshotScenes: ["comparison-table", "shooter-dashboard", "whats-new-dialog"],
