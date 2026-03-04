@@ -3,6 +3,7 @@
 
 import cache from "@/lib/cache-impl";
 import db from "@/lib/db-impl";
+import { afterResponse } from "@/lib/background-impl";
 import { CACHE_SCHEMA_VERSION } from "@/lib/constants";
 
 const GRAPHQL_ENDPOINT = "https://shootnscoreit.com/graphql/";
@@ -218,7 +219,7 @@ export async function cachedExecuteQuery<T>(
       // are treated as misses. They will be overwritten on the next fetch.
       if (entry.v === CACHE_SCHEMA_VERSION) {
         if (cacheKey.startsWith("gql:GetMatch:")) {
-          void db.recordMatchAccess(cacheKey).catch(() => {});
+          afterResponse(db.recordMatchAccess(cacheKey).catch(() => {}));
         }
         return { data: entry.data, cachedAt: entry.cachedAt };
       }

@@ -20,6 +20,9 @@ const nextConfig: NextConfig = {
           // Replace the default SQLite shooter store with the D1 adapter
           // so that better-sqlite3 is never bundled into the Cloudflare Worker.
           "@/lib/db-impl": "@/lib/db-d1",
+          // Replace the no-op background scheduler with the CF waitUntil
+          // implementation so D1 writes complete after the response is sent.
+          "@/lib/background-impl": "@/lib/background-cf",
         },
       }
     : {},
@@ -56,11 +59,13 @@ const nextConfig: NextConfig = {
     if (isCF) {
       const edgeImpl = path.resolve(process.cwd(), "lib/cache-edge");
       const d1Impl = path.resolve(process.cwd(), "lib/db-d1");
+      const bgCf = path.resolve(process.cwd(), "lib/background-cf");
       config.resolve = {
         ...config.resolve,
         alias: {
           "@/lib/cache-impl": edgeImpl,
           "@/lib/db-impl": d1Impl,
+          "@/lib/background-impl": bgCf,
           ...(config.resolve?.alias as Record<string, string> | undefined ?? {}),
         },
       };

@@ -37,15 +37,16 @@ export interface ShooterProfile {
 }
 
 /**
- * Fire-and-forget: build shooter → match secondary index in Redis.
+ * Build shooter → match secondary index in the AppDatabase.
  *
- * For each competitor with a known shooterId, writes:
- *   shooter:{shooterId}:matches  → sorted set (score = match start Unix timestamp)
- *                                   member = "{ct}:{matchId}"
- *   shooter:{shooterId}:profile  → JSON ShooterProfile (no TTL, permanent)
+ * For each competitor with a known shooterId, upserts:
+ *   shooter_profiles   — name, club, division, lastSeen
+ *   shooter_matches    — matchRef + startTimestamp
  *
- * Both operations are idempotent. Errors are silently swallowed — this is
- * non-fatal and must not affect the main request path.
+ * Both operations are idempotent. Returns a Promise so the caller can
+ * register it with ctx.waitUntil() on CF Workers (see lib/background-impl.ts),
+ * ensuring writes complete even after the HTTP response is sent. Errors are
+ * silently swallowed — this is non-fatal and must not affect the main request path.
  */
 export function indexMatchShooters(
   ct: string,
@@ -57,13 +58,14 @@ export function indexMatchShooters(
     club: string | null;
     division: string | null;
   }>,
-): void {
+): Promise<void> {
   const matchRef = `${ct}:${matchId}`;
   const startTimestamp = matchStart
     ? Math.floor(new Date(matchStart).getTime() / 1000)
     : Math.floor(Date.now() / 1000);
   const lastSeen = new Date().toISOString();
 
+  const writes: Promise<void>[] = [];
   for (const c of competitors) {
     if (c.shooterId == null) continue;
     const { shooterId } = c;
@@ -73,10 +75,13 @@ export function indexMatchShooters(
       division: c.division,
       lastSeen,
     };
-    void db.indexShooterMatch(shooterId, matchRef, startTimestamp).catch(() => {});
-    void db.setShooterProfile(shooterId, profile).catch(() => {});
-    // Invalidate the pre-computed dashboard cache so the next visit picks up
-    // this newly indexed match immediately rather than serving stale data.
-    void cache.del(`computed:shooter:${shooterId}:dashboard`).catch(() => {});
+    writes.push(
+      db.indexShooterMatch(shooterId, matchRef, startTimestamp).catch(() => {}),
+      db.setShooterProfile(shooterId, profile).catch(() => {}),
+      // Invalidate the pre-computed dashboard cache so the next visit picks up
+      // this newly indexed match immediately rather than serving stale data.
+      cache.del(`computed:shooter:${shooterId}:dashboard`).catch(() => {}),
+    );
   }
+  return Promise.allSettled(writes).then(() => {});
 }

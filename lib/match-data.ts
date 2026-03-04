@@ -8,6 +8,7 @@ import cacheAdapter from "@/lib/cache-impl";
 import { computeMatchTtl } from "@/lib/match-ttl";
 import { formatDivisionDisplay } from "@/lib/divisions";
 import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
+import { afterResponse } from "@/lib/background-impl";
 import type { MatchResponse, StageInfo, CompetitorInfo, SquadInfo } from "@/lib/types";
 
 // ── Raw GraphQL response shapes ─────────────────────────────────────────────
@@ -189,8 +190,9 @@ export async function fetchMatchData(
     })
     .filter((s) => s.competitorIds.length > 0);
 
-  // Build cross-match shooter index — fire-and-forget, non-fatal.
-  indexMatchShooters(ct, id, ev.starts ?? null, competitors);
+  // Build cross-match shooter index. Registered with afterResponse() so the
+  // promise completes even after the HTTP response is sent (required on CF Workers).
+  afterResponse(indexMatchShooters(ct, id, ev.starts ?? null, competitors));
 
   const response: MatchResponse = {
     name: ev.name,
