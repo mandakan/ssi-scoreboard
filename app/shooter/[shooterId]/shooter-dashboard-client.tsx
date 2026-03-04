@@ -1000,14 +1000,14 @@ function AchievementsSection({
 
   return (
     <section>
-      <h2 className="text-sm font-semibold m-0 leading-none">
+      <h2 className="text-sm font-semibold m-0 leading-none flex items-center">
         <button
           type="button"
           id="achievements-heading"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           aria-controls="achievements-panel"
-          className="flex w-full items-center gap-2 text-left min-h-[2.75rem]"
+          className="flex flex-1 items-center gap-2 text-left min-h-[2.75rem]"
         >
           {open ? (
             <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
@@ -1023,36 +1023,31 @@ function AchievementsSection({
           <Badge variant="outline" className="text-[10px] px-1.5 py-0">
             Preview
           </Badge>
-          <Popover>
-            <PopoverTrigger asChild>
-              <span
-                role="button"
-                tabIndex={0}
-                aria-label="About achievements"
-                className="text-muted-foreground hover:text-foreground transition-colors"
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") e.stopPropagation();
-                }}
-              >
-                <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-              </span>
-            </PopoverTrigger>
-            <PopoverContent className="max-w-xs text-sm space-y-2" side="top">
-              <p className="font-medium">Achievements</p>
-              <p className="text-muted-foreground">
-                Each achievement has multiple tiers that unlock progressively as
-                you compete. Tiers range from beginner milestones to elite goals
-                that take dozens of matches to reach.
-              </p>
-              <p className="text-muted-foreground">
-                Tap any card to see the full unlock ladder and your progress
-                through it. Unlocked tiers are permanent — they persist even if
-                old match data is pruned.
-              </p>
-            </PopoverContent>
-          </Popover>
         </button>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              aria-label="About achievements"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="max-w-xs text-sm space-y-2" side="top">
+            <p className="font-medium">Achievements</p>
+            <p className="text-muted-foreground">
+              Each achievement has multiple tiers that unlock progressively as
+              you compete. Tiers range from beginner milestones to elite goals
+              that take dozens of matches to reach.
+            </p>
+            <p className="text-muted-foreground">
+              Tap any card to see the full unlock ladder and your progress
+              through it. Unlocked tiers are permanent — they persist even if
+              old match data is pruned.
+            </p>
+          </PopoverContent>
+        </Popover>
       </h2>
 
       {open && (
