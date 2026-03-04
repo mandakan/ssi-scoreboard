@@ -34,6 +34,12 @@ function run(cmd: string): string {
   return execSync(cmd, { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
 }
 
+function runMerged(cmd: string): string {
+  // Merge stderr into stdout — wrangler writes its output to stderr on some
+  // commands, so we need both streams to reliably parse the result.
+  return execSync(`${cmd} 2>&1`, { encoding: "utf-8", shell: "/bin/sh" });
+}
+
 interface D1Database {
   name: string;
   uuid: string;
@@ -54,10 +60,16 @@ function findOrCreate(dbName: string): string {
   }
 
   console.log(`  Creating database: ${dbName}`);
-  const output = run(`npx wrangler d1 create ${dbName} --json`);
-  const created = JSON.parse(output) as D1Database;
-  console.log(`  Created: ${dbName} (${created.uuid})`);
-  return created.uuid;
+  // d1 create does not support --json; parse UUID from plain-text output.
+  // Use runMerged so we capture wrangler's stderr output (where it prints the ID).
+  const output = runMerged(`npx wrangler d1 create ${dbName}`);
+  const uuidMatch = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(output);
+  if (!uuidMatch) {
+    throw new Error(`Could not parse database_id from wrangler output:\n${output}`);
+  }
+  const uuid = uuidMatch[1];
+  console.log(`  Created: ${dbName} (${uuid})`);
+  return uuid;
 }
 
 function patchWranglerToml(placeholder: string, realId: string): void {
@@ -79,7 +91,7 @@ function applyMigrations(binding: string, env?: string): void {
   const envFlag = env ? ` --env ${env}` : "";
   console.log(`  Applying migrations for ${binding}${env ? ` (${env})` : ""}...`);
   try {
-    const output = run(`npx wrangler d1 migrations apply ${binding}${envFlag} --remote`);
+    const output = runMerged(`npx wrangler d1 migrations apply ${binding}${envFlag} --remote`);
     // Print only the last meaningful line to avoid noise
     const lines = output.trim().split("\n").filter(Boolean);
     if (lines.length > 0) console.log(`    ${lines[lines.length - 1]}`);
