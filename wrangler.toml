@@ -13,10 +13,11 @@
 #                wrangler secret put CACHE_PURGE_SECRET --env staging
 #                wrangler secret put CACHE_KEY_PREFIX --env staging   # value: "staging:"
 #
-# D1 databases: create once, then paste the database_id into [[d1_databases]] below:
-#   Production:  wrangler d1 create ssi-scoreboard-shooter
-#   Staging:     wrangler d1 create ssi-scoreboard-shooter-staging
-#   Migrations:  wrangler d1 migrations apply SHOOTER_DB [--env staging]
+# D1 databases: run `pnpm tsx scripts/setup-d1.ts` to provision automatically.
+# Or manually:
+#   Production:  wrangler d1 create ssi-scoreboard-app-db
+#   Staging:     wrangler d1 create ssi-scoreboard-app-db-staging
+#   Migrations:  wrangler d1 migrations apply APP_DB [--env staging]
 #
 # Non-secret vars (AI coaching feature) are committed here under [vars] /
 # [env.staging.vars] so they are version-controlled alongside the binding.
@@ -58,13 +59,12 @@ AI_MODEL = "@cf/meta/llama-3.1-8b-instruct"
 AI_PROVIDER = "cloudflare"
 AI_MODEL = "@cf/meta/llama-3.1-8b-instruct"
 
-# D1 database for persistent shooter data (profiles, match indices, popularity).
-# Create with: wrangler d1 create ssi-scoreboard-shooter
-# Then replace the database_id below with the ID from the output.
+# D1 database for persistent app data (shooter profiles, match indices, popularity).
+# Run `pnpm tsx scripts/setup-d1.ts` to create and patch this ID automatically.
 [[d1_databases]]
-binding = "SHOOTER_DB"
-database_name = "ssi-scoreboard-shooter"
-database_id = "PLACEHOLDER_PRODUCTION_D1_ID"  # TODO: replace after `wrangler d1 create`
+binding = "APP_DB"
+database_name = "ssi-scoreboard-app-db"
+database_id = "PLACEHOLDER_PRODUCTION_D1_ID"  # patched by scripts/setup-d1.ts
 migrations_dir = "migrations"
 
 [assets]
@@ -86,7 +86,7 @@ binding = "AI"
 # The top-level [[d1_databases]] binding is not automatically inherited by named
 # environments in Wrangler — declare it explicitly for staging.
 [[env.staging.d1_databases]]
-binding = "SHOOTER_DB"
-database_name = "ssi-scoreboard-shooter-staging"
-database_id = "PLACEHOLDER_STAGING_D1_ID"  # TODO: replace after `wrangler d1 create`
+binding = "APP_DB"
+database_name = "ssi-scoreboard-app-db-staging"
+database_id = "PLACEHOLDER_STAGING_D1_ID"  # patched by scripts/setup-d1.ts
 migrations_dir = "migrations"

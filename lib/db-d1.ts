@@ -29,8 +29,8 @@ interface D1Result<T> {
 let _initialized = false;
 
 async function getDb(): Promise<D1Database> {
-  const { env } = getCloudflareContext() as unknown as { env: { SHOOTER_DB: D1Database } };
-  const db = env.SHOOTER_DB;
+  const { env } = getCloudflareContext() as unknown as { env: { APP_DB: D1Database } };
+  const db = env.APP_DB;
   if (!_initialized) {
     await db.exec(`
       CREATE TABLE IF NOT EXISTS shooter_profiles (

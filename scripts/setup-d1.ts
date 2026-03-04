@@ -22,8 +22,8 @@ import { join } from "path";
 
 const WRANGLER_TOML = join(process.cwd(), "wrangler.toml");
 
-const PROD_DB_NAME = "ssi-scoreboard-shooter";
-const STAGING_DB_NAME = "ssi-scoreboard-shooter-staging";
+const PROD_DB_NAME = "ssi-scoreboard-app-db";
+const STAGING_DB_NAME = "ssi-scoreboard-app-db-staging";
 
 const PROD_PLACEHOLDER = "PLACEHOLDER_PRODUCTION_D1_ID";
 const STAGING_PLACEHOLDER = "PLACEHOLDER_STAGING_D1_ID";
@@ -121,7 +121,7 @@ async function main(): Promise<void> {
     console.log("── Production ───────────────────────────────────────────");
     const prodId = findOrCreate(PROD_DB_NAME);
     patchWranglerToml(PROD_PLACEHOLDER, prodId);
-    applyMigrations("SHOOTER_DB");
+    applyMigrations("APP_DB");
     console.log();
   }
 
@@ -129,7 +129,7 @@ async function main(): Promise<void> {
     console.log("── Staging ──────────────────────────────────────────────");
     const stagingId = findOrCreate(STAGING_DB_NAME);
     patchWranglerToml(STAGING_PLACEHOLDER, stagingId);
-    applyMigrations("SHOOTER_DB", "staging");
+    applyMigrations("APP_DB", "staging");
     console.log();
   }
 

@@ -261,7 +261,7 @@ frees Upstash storage quota since those keys are now in SQLite.
 | `MIN_CACHE_TTL_SECONDS` | `lib/match-ttl.ts` (server-only) | Both | Minimum TTL floor for all non-permanent cache entries. Default `300` (5 min). Set to `0` to disable. Never `NEXT_PUBLIC_`. |
 | `NEXT_PUBLIC_BUILD_ID` | `components/update-banner.tsx`, `app/api/version/route.ts` | Both | Git SHA baked into the client bundle at Docker build time; powers new-version detection. Auto-injected by `pnpm docker:build`. Unset in `pnpm dev` — version check is skipped. |
 | `REDIS_URL` | `lib/cache-node.ts` | Docker only | `redis://localhost:6379` locally, `rediss://...` for managed Redis. Not needed for CF builds. |
-| `SHOOTER_DB_PATH` | `lib/db-sqlite.ts` | Docker only | Path to SQLite database file. Defaults to `./data/shooter-index.db`. Not needed for CF builds. |
+| `APP_DB_PATH` | `lib/db-sqlite.ts` | Docker only | Path to SQLite database file. Defaults to `./data/shooter-index.db`. Not needed for CF builds. |
 | `UPSTASH_REDIS_REST_URL` | `lib/cache-edge.ts` | Cloudflare only | REST URL from Upstash console. Set via `wrangler secret put` in production. |
 | `UPSTASH_REDIS_REST_TOKEN` | `lib/cache-edge.ts` | Cloudflare only | REST token from Upstash console. Set via `wrangler secret put` in production. |
 | `MCP_SECRET` | `app/api/mcp/route.ts` | Both | Optional. If set, `POST /api/mcp` requires `Authorization: Bearer <MCP_SECRET>`. Omit for public access. |
@@ -397,13 +397,13 @@ handles the Workers bundling without requiring `export const runtime = "edge"` o
 `automaticDeserialization: false` is set on the Upstash client so values are returned as raw
 strings, consistent with the ioredis adapter — callers always do their own `JSON.parse`.
 
-**Shooter store:** the CF build uses Cloudflare D1 via the `SHOOTER_DB` binding declared in
+**Shooter store:** the CF build uses Cloudflare D1 via the `APP_DB` binding declared in
 `wrangler.toml`. The schema auto-creates on first request via `CREATE TABLE IF NOT EXISTS`.
 Formal migrations live in `migrations/` and are applied with `wrangler d1 migrations apply`.
 
 **Bindings** (configured in `wrangler.toml`, not secrets):
 - `AI` — Workers AI binding for coaching tips
-- `SHOOTER_DB` — D1 database for persistent shooter data
+- `APP_DB` — D1 database for persistent shooter data
 
 **One-time D1 setup** — use the idempotent setup script (creates databases if missing,
 patches `wrangler.toml` with real IDs, applies migrations):
@@ -416,12 +416,12 @@ Or manually:
 # Production
 wrangler d1 create ssi-scoreboard-shooter
 # Copy database_id into wrangler.toml [[d1_databases]]
-wrangler d1 migrations apply SHOOTER_DB
+wrangler d1 migrations apply APP_DB
 
 # Staging
 wrangler d1 create ssi-scoreboard-shooter-staging
 # Copy database_id into wrangler.toml [[env.staging.d1_databases]]
-wrangler d1 migrations apply SHOOTER_DB --env staging
+wrangler d1 migrations apply APP_DB --env staging
 ```
 
 **Secrets** (set via `wrangler secret put` or the Cloudflare dashboard):
