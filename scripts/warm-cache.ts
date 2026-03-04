@@ -10,6 +10,15 @@
  * completed matches so the first real user request is served from cache.
  * Only targets historical matches (started ≥ 4 days ago).
  *
+ * **Shooter indexing (self-healing):**
+ * After processing each match (whether freshly warmed or already cached),
+ * the script indexes "known shooters" — competitors whose
+ * `shooter:{id}:profile` key already exists in Redis (i.e. the app has
+ * seen them before through normal usage). This means re-running the script
+ * progressively fills the shooter dashboard for anyone who has claimed
+ * their identity, without any extra API calls. Shooters who have never
+ * been seen by the app are skipped.
+ *
  * Usage (from repo root):
  *   npx tsx scripts/warm-cache.ts [options]
  *   pnpm tsx scripts/warm-cache.ts [options]

@@ -53,6 +53,12 @@ Key directories:
 - `app/match/[ct]/[id]/layout.tsx` — match layout with `generateMetadata()` for dynamic page titles + OG meta tags
 - `app/match/[ct]/[id]/match-page-client.tsx` — `"use client"` match page component (extracted from page.tsx to allow server-side metadata generation)
 - `lib/og-data.ts` — server-only helper that fetches match data for OG images and page metadata (1500ms timeout via `Promise.race`)
+- `lib/shooter-index.ts` — `decodeShooterId()` + `indexMatchShooters()` — builds `shooter:{id}:matches` sorted set and `shooter:{id}:profile` in Redis
+- `lib/backfill.ts` — pure `runBackfill()` — scans cached matches for a shooter, dependency-injected, fully unit-tested
+- `app/api/shooter/[shooterId]/route.ts` — GET shooter dashboard (aggregates from Redis index)
+- `app/api/shooter/[shooterId]/backfill/route.ts` — POST cache-scan backfill (zero GraphQL calls)
+- `app/api/shooter/[shooterId]/add-match/route.ts` — POST manual match URL (may hit GraphQL)
+- `scripts/warm-cache.ts` — CLI cache warming script; also indexes known shooters as a side effect
 - `mcp/` — pnpm workspace package; stdio MCP server (`mcp/src/index.ts`) using `tsx` from root `node_modules`
 
 ## GraphQL Patterns
@@ -199,6 +205,36 @@ with the current version on the first request, so the cache self-heals within on
 
 **Rule of thumb:** bump whenever you add or remove a field on `MatchResponse`, `CompareResponse`,
 or any other type that is serialised into Redis via `cachedExecuteQuery`.
+
+## Shooter Index & Match Backfill
+
+The shooter dashboard (`/shooter/{id}`) shows cross-competition stats. It relies on a
+secondary Redis index that maps `shooterId → [match references]`. This index is populated
+through several paths:
+
+| Path | Indexes who? | When? | GraphQL calls? |
+|------|-------------|-------|----------------|
+| Match page view (`fetchMatchData`) | ALL competitors | On every match page visit | Only on cache miss |
+| Compare API (`/api/compare`) | ALL competitors | On every comparison | Only on cache miss |
+| `warm-cache.ts` | **Known shooters only** | During scheduled/manual warming | Zero (data already fetched) |
+| Backfill endpoint (`POST /api/shooter/{id}/backfill`) | **One specific shooter** | On-demand from dashboard | Zero (reads cached data) |
+| Add-match endpoint (`POST /api/shooter/{id}/add-match`) | ALL competitors | When user submits a URL | Only if match not cached |
+
+**"Known shooter"** = a shooterId that already has a `shooter:{id}:profile` key in Redis
+(i.e. the app has seen them before through normal usage or `warm-cache.ts`).
+
+**Important scope limitation:** the backfill scan and warm-cache indexing can only discover
+matches that are already in the Redis cache. Matches never viewed by anyone on the app are
+invisible. The add-match endpoint is the only path that can reach an arbitrary SSI match.
+
+**Redis keys per shooter:**
+- `shooter:{id}:matches` — sorted set, score = match start timestamp, member = `{ct}:{matchId}`
+- `shooter:{id}:profile` — JSON `{ name, club, division, lastSeen }`, no TTL
+- `computed:shooter:{id}:dashboard` — pre-computed dashboard JSON, 5min TTL
+
+`lib/backfill.ts` is the core scan logic — dependency-injected (no direct cache/graphql
+imports) so it can be unit-tested with mocked deps. `lib/shooter-index.ts` handles the
+actual Redis writes via the `CacheAdapter` interface.
 
 ## Environment Variables
 | Variable | Where used | Target | Notes |

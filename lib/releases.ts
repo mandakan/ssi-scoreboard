@@ -23,9 +23,8 @@ export const RELEASES: Release[] = [
       {
         heading: "New",
         items: [
-          "Find past matches: tap the new scan button on your shooter dashboard to discover competitions from cached data — no API calls needed.",
-          "Add match by URL: paste any ShootNScoreIt match URL to manually add it to your match history.",
-          "Warm-cache shooter indexing: the cache warming script now indexes known shooters automatically, so your dashboard builds itself over time.",
+          "Find past matches: tap the scan button on your shooter dashboard to search through matches that have been viewed on this app. The more people use the app, the more matches you'll discover.",
+          "Add match by URL: paste any ShootNScoreIt match URL to manually add a match that wasn't found by the scan.",
         ],
       },
     ],

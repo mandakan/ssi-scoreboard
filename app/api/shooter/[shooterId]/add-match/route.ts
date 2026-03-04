@@ -1,3 +1,14 @@
+/**
+ * POST /api/shooter/{shooterId}/add-match
+ *
+ * Accepts { url: string } where url is a ShootNScoreIt match page URL.
+ * Fetches the match data (from cache or GraphQL if not cached), indexes
+ * ALL competitors in the match (not just the target shooter), and
+ * verifies that the target shooterId is among them.
+ *
+ * Use this when the backfill scan didn't find a specific match — this
+ * endpoint can reach any match on SSI, not just cached ones.
+ */
 import { NextResponse } from "next/server";
 import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY, SCORECARDS_QUERY } from "@/lib/graphql";
 import { computeMatchTtl } from "@/lib/match-ttl";

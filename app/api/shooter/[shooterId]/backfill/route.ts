@@ -1,3 +1,17 @@
+/**
+ * POST /api/shooter/{shooterId}/backfill
+ *
+ * Scans all cached match data in Redis to find matches the shooter competed
+ * in but that haven't been indexed yet. This is a pure cache read — no
+ * GraphQL API calls are made. Returns a BackfillProgress summary.
+ *
+ * Scope: only matches that have been viewed by someone on this app (and are
+ * therefore in Redis) can be discovered. Matches never opened by any user
+ * are invisible to this endpoint. For those, use the add-match endpoint or
+ * run warm-cache.ts to populate the cache first.
+ *
+ * Rate limited: 60s cooldown per shooter.
+ */
 import { NextResponse } from "next/server";
 import cache from "@/lib/cache-impl";
 import { runBackfill } from "@/lib/backfill";

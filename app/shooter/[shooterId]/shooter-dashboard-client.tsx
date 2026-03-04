@@ -415,13 +415,15 @@ function BackfillSection({ shooterId }: { shooterId: number }) {
           type="button"
           onClick={() => mutation.mutate()}
           className="flex items-center gap-2 w-full text-left min-h-[2.75rem]"
-          aria-label="Scan cached matches to find your past competitions"
+          aria-label="Scan matches previously viewed on this app to find ones you competed in"
         >
           <Search className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
           <div className="flex-1 min-w-0">
             <span className="text-sm font-medium">Find past matches</span>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Scans cached data to find competitions you entered.
+              Searches matches previously viewed on this app. Only finds
+              competitions someone has already opened here — not all SSI
+              matches.
             </p>
           </div>
         </button>
@@ -447,8 +449,9 @@ function BackfillSection({ shooterId }: { shooterId: number }) {
             </span>
           </div>
           <p className="text-xs text-muted-foreground">
-            {lastResult.totalCached} cached match{lastResult.totalCached !== 1 ? "es" : ""} scanned
-            {lastResult.alreadyIndexed > 0 && ` · ${lastResult.alreadyIndexed} already indexed`}
+            {lastResult.totalCached} match{lastResult.totalCached !== 1 ? "es" : ""} on
+            this app were checked
+            {lastResult.alreadyIndexed > 0 && ` · ${lastResult.alreadyIndexed} already in your history`}
           </p>
           {lastResult.errorMessage && (
             <p className="text-xs text-muted-foreground">{lastResult.errorMessage}</p>
@@ -541,6 +544,7 @@ function AddMatchSection({ shooterId }: { shooterId: number }) {
             />
             <p id="match-url-help" className="text-xs text-muted-foreground">
               Paste a ShootNScoreIt match URL to add it to your history.
+              Use this for matches that weren&apos;t found by the scan above.
             </p>
             <button
               type="submit"
@@ -617,7 +621,7 @@ export function ShooterDashboardClient({ shooterId }: Props) {
         <AlertCircle className="w-6 h-6 text-destructive" aria-hidden="true" />
         <p role="alert" className="text-sm text-center">
           {error instanceof Error && error.message.includes("404")
-            ? "No match history found. Visit a match you competed in to start building your stats."
+            ? "No match history found yet. Open any match you competed in on this app, and your stats will start building automatically."
             : "Could not load shooter stats. Please try again later."}
         </p>
       </main>
@@ -802,8 +806,9 @@ export function ShooterDashboardClient({ shooterId }: Props) {
               <div className="flex flex-col items-center gap-2 py-8 text-center text-muted-foreground">
                 <Target className="w-8 h-8" aria-hidden="true" />
                 <p className="text-sm">
-                  No match history yet. Tap &quot;Find past matches&quot; above, or visit
-                  a match you competed in.
+                  No match history yet. Matches appear here when you or anyone
+                  else views them on this app. Try &quot;Find past matches&quot;
+                  above, or paste a match URL below to add one directly.
                 </p>
               </div>
             ) : (
