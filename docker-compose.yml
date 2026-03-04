@@ -2,7 +2,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: redis-server --maxmemory 100mb --maxmemory-policy allkeys-lru
+    command: redis-server --maxmemory 100mb --maxmemory-policy volatile-lru --appendonly yes
     volumes:
       - redis_data:/data
     deploy:
