@@ -891,6 +891,15 @@ const TIER_COLORS: Record<number, string> = {
   6: "bg-rose-400/20 text-rose-700 dark:text-rose-400",
 };
 
+function tierSummary(achievement: AchievementProgress): string {
+  const { definition, unlockedTiers } = achievement;
+  const total = definition.tiers.length;
+  const unlocked = unlockedTiers.length;
+  if (unlocked === 0) return `0 of ${total} tiers unlocked`;
+  if (unlocked === total) return `All ${total} tiers unlocked`;
+  return `${unlocked} of ${total} tiers unlocked`;
+}
+
 function AchievementCard({ achievement }: { achievement: AchievementProgress }) {
   const { definition, unlockedTiers, nextTier, progressToNext } = achievement;
   const highestTier = unlockedTiers.length > 0 ? unlockedTiers[unlockedTiers.length - 1] : null;
@@ -900,47 +909,77 @@ function AchievementCard({ achievement }: { achievement: AchievementProgress }) 
   const isLocked = unlockedTiers.length === 0;
 
   return (
-    <div
-      className={cn(
-        "flex flex-col gap-1.5 rounded-lg border border-border p-3",
-        isLocked && "opacity-50",
-      )}
-      aria-label={`${definition.name}: ${highestDef ? highestDef.name : "Locked"}`}
-    >
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="text-lg shrink-0" aria-hidden="true">
-          {definition.icon}
-        </span>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-sm font-semibold truncate">
-              {definition.name}
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "flex flex-col gap-1.5 rounded-lg border border-border p-3 text-left transition-colors hover:bg-muted/50 min-h-[44px]",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            isLocked && "opacity-50",
+          )}
+          aria-label={`${definition.name}: ${highestDef ? highestDef.name : "Locked"}. ${tierSummary(achievement)}`}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-lg shrink-0" aria-hidden="true">
+              {definition.icon}
             </span>
-            {highestDef && (
-              <Badge
-                variant="secondary"
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-sm font-semibold truncate">
+                  {definition.name}
+                </span>
+                {highestDef && (
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      "text-[10px] px-1.5 py-0",
+                      TIER_COLORS[highestTier!.level] ?? TIER_COLORS[1],
+                    )}
+                  >
+                    {highestDef.name}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Progress
+              value={nextTier ? progressToNext * 100 : 100}
+              className="h-1.5 flex-1"
+              aria-label={nextTier ? `${Math.round(progressToNext * 100)}% to ${nextTier.name}` : "Complete"}
+            />
+            <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+              {nextTier ? nextTier.label : "Complete"}
+            </span>
+          </div>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="max-w-xs text-sm space-y-2" side="top">
+        <p className="font-medium">
+          {definition.icon} {definition.name}
+        </p>
+        <p className="text-muted-foreground">{definition.description}</p>
+        <div className="space-y-1">
+          {definition.tiers.map((tier) => {
+            const unlocked = unlockedTiers.some((u) => u.level === tier.level);
+            return (
+              <div
+                key={tier.level}
                 className={cn(
-                  "text-[10px] px-1.5 py-0",
-                  TIER_COLORS[highestTier!.level] ?? TIER_COLORS[1],
+                  "flex items-center gap-2 text-xs",
+                  unlocked ? "text-foreground" : "text-muted-foreground",
                 )}
               >
-                {highestDef.name}
-              </Badge>
-            )}
-          </div>
+                <span aria-hidden="true">{unlocked ? "\u2713" : "\u25CB"}</span>
+                <span className="font-medium">{tier.name}</span>
+                <span className="text-muted-foreground">{tier.label}</span>
+              </div>
+            );
+          })}
         </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <Progress
-          value={nextTier ? progressToNext * 100 : 100}
-          className="h-1.5 flex-1"
-          aria-label={nextTier ? `${Math.round(progressToNext * 100)}% to ${nextTier.name}` : "Complete"}
-        />
-        <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
-          {nextTier ? nextTier.label : "Complete"}
-        </span>
-      </div>
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -949,24 +988,91 @@ function AchievementsSection({
 }: {
   achievements: AchievementProgress[];
 }) {
+  const [open, setOpen] = useState(true);
+  const totalTiers = achievements.reduce(
+    (s, a) => s + a.definition.tiers.length,
+    0,
+  );
+  const unlockedCount = achievements.reduce(
+    (s, a) => s + a.unlockedTiers.length,
+    0,
+  );
+
   return (
-    <section aria-labelledby="achievements-heading">
-      <div className="flex items-center gap-2 mb-3">
-        <h2
+    <section>
+      <h2 className="text-sm font-semibold m-0 leading-none">
+        <button
+          type="button"
           id="achievements-heading"
-          className="text-sm font-semibold text-muted-foreground uppercase tracking-wide"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-controls="achievements-panel"
+          className="flex w-full items-center gap-2 text-left min-h-[2.75rem]"
         >
-          Achievements
-        </h2>
-        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-          Preview
-        </Badge>
-      </div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {achievements.map((a) => (
-          <AchievementCard key={a.definition.id} achievement={a} />
-        ))}
-      </div>
+          {open ? (
+            <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
+          ) : (
+            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
+          )}
+          <span className="text-muted-foreground uppercase tracking-wide text-xs">
+            Achievements
+          </span>
+          <span className="text-xs font-normal text-muted-foreground">
+            ({unlockedCount}/{totalTiers})
+          </span>
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+            Preview
+          </Badge>
+          <Popover>
+            <PopoverTrigger asChild>
+              <span
+                role="button"
+                tabIndex={0}
+                aria-label="About achievements"
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") e.stopPropagation();
+                }}
+              >
+                <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+              </span>
+            </PopoverTrigger>
+            <PopoverContent className="max-w-xs text-sm space-y-2" side="top">
+              <p className="font-medium">Achievements</p>
+              <p className="text-muted-foreground">
+                Each achievement has multiple tiers that unlock progressively as
+                you compete. Tiers range from beginner milestones to elite goals
+                that take dozens of matches to reach.
+              </p>
+              <p className="text-muted-foreground">
+                Tap any card to see the full unlock ladder and your progress
+                through it. Unlocked tiers are permanent — they persist even if
+                old match data is pruned.
+              </p>
+            </PopoverContent>
+          </Popover>
+        </button>
+      </h2>
+
+      {open && (
+        <section
+          id="achievements-panel"
+          role="region"
+          aria-labelledby="achievements-heading"
+          className="mt-1"
+        >
+          <p className="text-xs text-muted-foreground mb-3">
+            {unlockedCount} of {totalTiers} tiers unlocked. Tap a card to see
+            the full ladder.
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {achievements.map((a) => (
+              <AchievementCard key={a.definition.id} achievement={a} />
+            ))}
+          </div>
+        </section>
+      )}
     </section>
   );
 }
