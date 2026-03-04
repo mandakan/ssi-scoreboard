@@ -26,6 +26,7 @@ import {
   Search,
   Check,
   Plus,
+  ArrowLeft,
 } from "lucide-react";
 import {
   Popover,
@@ -876,9 +877,10 @@ function AddMatchSection({ shooterId }: { shooterId: number }) {
 
 interface Props {
   shooterId: number | null;
+  from?: string;
 }
 
-export function ShooterDashboardClient({ shooterId }: Props) {
+export function ShooterDashboardClient({ shooterId, from }: Props) {
   const { data, isLoading, isError, error } = useShooterDashboardQuery(
     shooterId,
   );
@@ -966,6 +968,14 @@ export function ShooterDashboardClient({ shooterId }: Props) {
 
   return (
     <main className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-6">
+      {/* ── Back navigation ───────────────────────────────────────────── */}
+      <Link
+        href={from ?? "/"}
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground self-start"
+      >
+        <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
+        {from ? "Back to match" : "All matches"}
+      </Link>
       {/* ── Identity card ─────────────────────────────────────────────── */}
       <section
         aria-labelledby="identity-heading"

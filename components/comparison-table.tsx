@@ -881,7 +881,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                       </span>
                       {comp.shooterId != null ? (
                         <Link
-                          href={`/shooter/${comp.shooterId}`}
+                          href={`/shooter/${comp.shooterId}${ct && matchId ? `?from=/match/${ct}/${matchId}` : ""}`}
                           className="inline underline decoration-muted-foreground/50 underline-offset-2 hover:decoration-foreground min-h-0"
                           aria-label={`View ${comp.name}'s stats`}
                         >

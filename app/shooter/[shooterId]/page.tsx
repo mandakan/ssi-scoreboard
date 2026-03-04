@@ -5,6 +5,7 @@ import { ShooterDashboardClient } from "./shooter-dashboard-client";
 
 interface Props {
   params: Promise<{ shooterId: string }>;
+  searchParams: Promise<{ from?: string }>;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -54,9 +55,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function ShooterPage({ params }: Props) {
+export default async function ShooterPage({ params, searchParams }: Props) {
   const { shooterId } = await params;
+  const { from } = await searchParams;
   const id = parseInt(shooterId, 10);
 
-  return <ShooterDashboardClient shooterId={isNaN(id) ? null : id} />;
+  // Validate `from` — only accept internal match paths to avoid open redirect
+  const fromPath =
+    from && /^\/match\/\d+\/\d+$/.test(from) ? from : undefined;
+
+  return (
+    <ShooterDashboardClient
+      shooterId={isNaN(id) ? null : id}
+      from={fromPath}
+    />
+  );
 }
