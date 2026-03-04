@@ -1,19 +1,12 @@
 import { ImageResponse } from "next/og";
-
-// ── Design tokens (same as match OG images) ─────────────────────────────
-
-const C = {
-  bg: "#0a0a0a",
-  cardBg: "#18181b",
-  border: "#27272a",
-  text: "#fafafa",
-  muted: "#a1a1aa",
-  dim: "#52525b",
-  accent: "#f97316",
-} as const;
-
-const OG_W = 1200;
-const OG_H = 630;
+import {
+  C,
+  OG_W,
+  OG_H,
+  brandIcon,
+  topAccent,
+  targetBgLayers,
+} from "@/lib/og-helpers";
 
 // ── Route handler ────────────────────────────────────────────────────────
 
@@ -44,15 +37,7 @@ export async function GET() {
             flexDirection: "column",
           }}
         >
-          {/* Top accent bar */}
-          <div
-            style={{
-              display: "flex",
-              width: "100%",
-              height: "4px",
-              backgroundColor: C.accent,
-            }}
-          />
+          {topAccent()}
 
           <div
             style={{
@@ -66,16 +51,7 @@ export async function GET() {
             }}
           >
             {/* App icon — concentric-circles target */}
-            <svg
-              width={96}
-              height={96}
-              viewBox="0 0 100 100"
-              style={{ display: "flex" }}
-            >
-              <circle cx="50" cy="50" r="44" fill="none" stroke={C.dim} strokeWidth="4" />
-              <circle cx="50" cy="50" r="28" fill="none" stroke={C.muted} strokeWidth="4" />
-              <circle cx="50" cy="50" r="12" fill="none" stroke={C.accent} strokeWidth="6" />
-            </svg>
+            {brandIcon(96)}
 
             {/* Title */}
             <div
@@ -144,62 +120,5 @@ export async function GET() {
       height: OG_H,
       headers: { "Cache-Control": "public, max-age=86400, s-maxage=604800" },
     },
-  );
-}
-
-/** Decorative target background — faded half-target on the right side. */
-function targetBgLayers() {
-  const displayW = Math.round(OG_W / 3);
-  const containerLeft = OG_W - displayW;
-  const targetSize = OG_H;
-
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left: containerLeft,
-        top: 0,
-        width: displayW,
-        height: OG_H,
-        display: "flex",
-      }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          left: displayW * 0.15,
-          top: 0,
-          width: targetSize,
-          height: targetSize,
-          display: "flex",
-          opacity: 0.1,
-        }}
-      >
-        <svg
-          width={targetSize}
-          height={targetSize}
-          viewBox="0 0 200 200"
-          style={{ display: "flex" }}
-        >
-          <circle cx="100" cy="100" r="96" fill="none" stroke={C.muted} strokeWidth="2" />
-          <circle cx="100" cy="100" r="72" fill="none" stroke={C.muted} strokeWidth="2" />
-          <circle cx="100" cy="100" r="48" fill="none" stroke={C.muted} strokeWidth="2" />
-          <circle cx="100" cy="100" r="24" fill="none" stroke={C.muted} strokeWidth="2" />
-          <line x1="100" y1="4" x2="100" y2="196" stroke={C.muted} strokeWidth="1" />
-          <line x1="4" y1="100" x2="196" y2="100" stroke={C.muted} strokeWidth="1" />
-        </svg>
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          left: 0,
-          top: 0,
-          width: displayW,
-          height: OG_H,
-          backgroundImage: `linear-gradient(to right, ${C.bg}, transparent)`,
-          display: "flex",
-        }}
-      />
-    </div>
   );
 }

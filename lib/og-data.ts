@@ -1,10 +1,11 @@
-// Server-only — fetches match metadata for OG image and page metadata generation.
-// Uses the same cached GraphQL path as the match API route.
+// Server-only — fetches match/shooter metadata for OG images and page metadata.
+// Uses cached data (GraphQL cache for matches, Redis index for shooters).
 
 import { fetchRawMatchData } from "@/lib/match-data";
 import { formatDivisionDisplay } from "@/lib/divisions";
 import { decodeShooterId } from "@/lib/shooter-index";
-import type { CompetitorInfo } from "@/lib/types";
+import cache from "@/lib/cache-impl";
+import type { CompetitorInfo, ShooterDashboardResponse } from "@/lib/types";
 
 // ── Public types ────────────────────────────────────────────────────────
 
@@ -108,6 +109,103 @@ async function fetchOgMatchDataImpl(
     };
   } catch (err) {
     console.error("[og] Failed to fetch match data:", err);
+    return null;
+  }
+}
+
+// ── Shooter OG data ──────────────────────────────────────────────────────
+
+export interface OgShooterData {
+  name: string;
+  club: string | null;
+  division: string | null;
+  matchCount: number;
+  totalStages: number;
+  overallAvgHF: number | null;
+  overallMatchPct: number | null;
+  aPercent: number | null;
+  hfTrendSlope: number | null;
+  dateRange: { from: string | null; to: string | null };
+}
+
+/**
+ * Fetch shooter data needed for OG images and page metadata.
+ * Reads from the pre-computed dashboard cache (same key the shooter API uses,
+ * 5min TTL). Falls back to profile + match count from the Redis index.
+ *
+ * Returns null if the shooter is not found in Redis at all.
+ */
+export async function fetchOgShooterData(
+  shooterId: number,
+  timeoutMs: number = METADATA_FETCH_TIMEOUT_MS,
+): Promise<OgShooterData | null> {
+  return Promise.race([
+    fetchOgShooterDataImpl(shooterId),
+    new Promise<null>((resolve) =>
+      setTimeout(() => resolve(null), timeoutMs),
+    ),
+  ]);
+}
+
+interface ShooterProfile {
+  name: string;
+  club: string | null;
+  division: string | null;
+  lastSeen: string;
+}
+
+async function fetchOgShooterDataImpl(
+  shooterId: number,
+): Promise<OgShooterData | null> {
+  try {
+    // Try pre-computed dashboard first (has full aggregate stats)
+    const dashboardKey = `computed:shooter:${String(shooterId)}:dashboard`;
+    const dashboardRaw = await cache.get(dashboardKey);
+    if (dashboardRaw) {
+      const dashboard = JSON.parse(dashboardRaw) as ShooterDashboardResponse;
+      return {
+        name: dashboard.profile?.name ?? `Shooter #${String(shooterId)}`,
+        club: dashboard.profile?.club ?? null,
+        division: dashboard.profile?.division ?? null,
+        matchCount: dashboard.matchCount,
+        totalStages: dashboard.stats.totalStages,
+        overallAvgHF: dashboard.stats.overallAvgHF,
+        overallMatchPct: dashboard.stats.overallMatchPct,
+        aPercent: dashboard.stats.aPercent,
+        hfTrendSlope: dashboard.stats.hfTrendSlope,
+        dateRange: dashboard.stats.dateRange,
+      };
+    }
+
+    // Fall back to profile + match count from the Redis index
+    const [profileRaw, matchRefs] = await Promise.all([
+      cache.getShooterProfile(shooterId),
+      cache.getShooterMatches(shooterId),
+    ]);
+
+    if (!profileRaw && matchRefs.length === 0) return null;
+
+    let profile: ShooterProfile | null = null;
+    if (profileRaw) {
+      try {
+        profile = JSON.parse(profileRaw) as ShooterProfile;
+      } catch { /* ignore */ }
+    }
+
+    return {
+      name: profile?.name ?? `Shooter #${String(shooterId)}`,
+      club: profile?.club ?? null,
+      division: profile?.division ?? null,
+      matchCount: matchRefs.length,
+      totalStages: 0,
+      overallAvgHF: null,
+      overallMatchPct: null,
+      aPercent: null,
+      hfTrendSlope: null,
+      dateRange: { from: null, to: null },
+    };
+  } catch (err) {
+    console.error("[og] Failed to fetch shooter data:", err);
     return null;
   }
 }
