@@ -2,6 +2,7 @@
 // Never import from client components or files with "use client".
 import Redis from "ioredis";
 import type { CacheAdapter } from "@/lib/cache";
+import { MAX_SHOOTER_MATCHES } from "@/lib/constants";
 
 const redis = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
   maxRetriesPerRequest: 1,
@@ -56,7 +57,15 @@ const adapter: CacheAdapter = {
   },
 
   async indexShooterMatch(shooterId, matchRef, startTimestamp) {
-    await redis.zadd(pk(`shooter:${shooterId}:matches`), startTimestamp, matchRef);
+    const key = pk(`shooter:${shooterId}:matches`);
+    const p = redis.pipeline();
+    p.zadd(key, startTimestamp, matchRef);
+    p.zcard(key);
+    const res = await p.exec();
+    const count = (res?.[1]?.[1] as number) ?? 0;
+    if (count > MAX_SHOOTER_MATCHES) {
+      await redis.zremrangebyrank(key, 0, count - MAX_SHOOTER_MATCHES - 1);
+    }
   },
 
   async setShooterProfile(shooterId, profile) {
@@ -95,6 +104,16 @@ const adapter: CacheAdapter = {
       cutoff,
       "+inf",
     );
+
+    // Prune hits: remove members no longer present in seen.
+    const allHitMembers = await redis.zrange(pk("popular:matches:hits"), 0, -1);
+    if (allHitMembers.length > 0) {
+      const aliveSet = new Set(recentKeys);
+      const stale = allHitMembers.filter((m) => !aliveSet.has(m));
+      if (stale.length > 0) {
+        await redis.zrem(pk("popular:matches:hits"), ...stale);
+      }
+    }
 
     if (recentKeys.length === 0) return [];
 

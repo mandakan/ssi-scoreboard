@@ -3,6 +3,7 @@
 // Never import ioredis or any Node.js-only module from this file.
 import { Redis } from "@upstash/redis";
 import type { CacheAdapter } from "@/lib/cache";
+import { MAX_SHOOTER_MATCHES } from "@/lib/constants";
 
 // Lazily initialised so that Cloudflare secrets (injected into process.env at
 // request time by @opennextjs/cloudflare) are read on first use rather than at
@@ -65,6 +66,20 @@ async function getPopularKeys(
     { byScore: true },
   )) as string[];
 
+  // Prune hits: remove members no longer present in seen.
+  const allHitMembers = (await getRedis().zrange(
+    pk("popular:matches:hits"),
+    0,
+    -1,
+  )) as string[];
+  if (allHitMembers.length > 0) {
+    const aliveSet = new Set(recentKeys);
+    const stale = allHitMembers.filter((m: string) => !aliveSet.has(m));
+    if (stale.length > 0) {
+      await getRedis().zrem(pk("popular:matches:hits"), ...stale);
+    }
+  }
+
   if (recentKeys.length === 0) return [];
 
   // Look up hit counts for each recent key in parallel.
@@ -91,10 +106,12 @@ async function indexShooterMatch(
   matchRef: string,
   startTimestamp: number,
 ): Promise<void> {
-  await getRedis().zadd(pk(`shooter:${shooterId}:matches`), {
-    score: startTimestamp,
-    member: matchRef,
-  });
+  const key = pk(`shooter:${shooterId}:matches`);
+  await getRedis().zadd(key, { score: startTimestamp, member: matchRef });
+  const count = await getRedis().zcard(key);
+  if (count > MAX_SHOOTER_MATCHES) {
+    await getRedis().zremrangebyrank(key, 0, count - MAX_SHOOTER_MATCHES - 1);
+  }
 }
 
 async function setShooterProfile(shooterId: number, profile: string): Promise<void> {
