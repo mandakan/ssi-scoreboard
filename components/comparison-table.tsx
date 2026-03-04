@@ -882,7 +882,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                       {comp.shooterId != null ? (
                         <Link
                           href={`/shooter/${comp.shooterId}`}
-                          className="hover:underline"
+                          className="inline underline decoration-muted-foreground/50 underline-offset-2 hover:decoration-foreground"
                           aria-label={`View ${comp.name}'s stats`}
                         >
                           {comp.name.split(" ")[0]}
