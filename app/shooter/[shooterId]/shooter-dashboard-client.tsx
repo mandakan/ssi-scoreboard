@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/popover";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useShooterDashboardQuery } from "@/lib/queries";
+import { usePreviewFeature } from "@/hooks/use-preview-feature";
 import { triggerBackfill, addMatchToShooter } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
@@ -44,7 +45,13 @@ import {
   getMostFrequentDivision,
 } from "@/lib/shooter-stats";
 import { divisionColor, extractDivisions } from "@/lib/division-colors";
-import type { ShooterMatchSummary, BackfillProgress } from "@/lib/types";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import type {
+  ShooterMatchSummary,
+  BackfillProgress,
+  AchievementProgress,
+} from "@/lib/types";
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
 
@@ -873,6 +880,97 @@ function AddMatchSection({ shooterId }: { shooterId: number }) {
   );
 }
 
+// ─── Achievement card ────────────────────────────────────────────────────
+
+const TIER_COLORS: Record<number, string> = {
+  1: "bg-zinc-400/20 text-zinc-600 dark:text-zinc-400",
+  2: "bg-green-400/20 text-green-700 dark:text-green-400",
+  3: "bg-blue-400/20 text-blue-700 dark:text-blue-400",
+  4: "bg-purple-400/20 text-purple-700 dark:text-purple-400",
+  5: "bg-amber-400/20 text-amber-700 dark:text-amber-400",
+  6: "bg-rose-400/20 text-rose-700 dark:text-rose-400",
+};
+
+function AchievementCard({ achievement }: { achievement: AchievementProgress }) {
+  const { definition, unlockedTiers, nextTier, progressToNext } = achievement;
+  const highestTier = unlockedTiers.length > 0 ? unlockedTiers[unlockedTiers.length - 1] : null;
+  const highestDef = highestTier
+    ? definition.tiers.find((t) => t.level === highestTier.level)
+    : null;
+  const isLocked = unlockedTiers.length === 0;
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-1.5 rounded-lg border border-border p-3",
+        isLocked && "opacity-50",
+      )}
+      aria-label={`${definition.name}: ${highestDef ? highestDef.name : "Locked"}`}
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-lg shrink-0" aria-hidden="true">
+          {definition.icon}
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-sm font-semibold truncate">
+              {definition.name}
+            </span>
+            {highestDef && (
+              <Badge
+                variant="secondary"
+                className={cn(
+                  "text-[10px] px-1.5 py-0",
+                  TIER_COLORS[highestTier!.level] ?? TIER_COLORS[1],
+                )}
+              >
+                {highestDef.name}
+              </Badge>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <Progress
+          value={nextTier ? progressToNext * 100 : 100}
+          className="h-1.5 flex-1"
+          aria-label={nextTier ? `${Math.round(progressToNext * 100)}% to ${nextTier.name}` : "Complete"}
+        />
+        <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+          {nextTier ? nextTier.label : "Complete"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function AchievementsSection({
+  achievements,
+}: {
+  achievements: AchievementProgress[];
+}) {
+  return (
+    <section aria-labelledby="achievements-heading">
+      <div className="flex items-center gap-2 mb-3">
+        <h2
+          id="achievements-heading"
+          className="text-sm font-semibold text-muted-foreground uppercase tracking-wide"
+        >
+          Achievements
+        </h2>
+        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+          Preview
+        </Badge>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {achievements.map((a) => (
+          <AchievementCard key={a.definition.id} achievement={a} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // ─── Main dashboard ───────────────────────────────────────────────────────────
 
 interface Props {
@@ -884,6 +982,7 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
   const { data, isLoading, isError, error } = useShooterDashboardQuery(
     shooterId,
   );
+  const showAchievements = usePreviewFeature("achievements");
   const [historyOpen, setHistoryOpen] = useState(true);
   const [divisionFilter, setDivisionFilter] = useState<string | null | "unset">("unset");
 
@@ -1028,6 +1127,11 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
           </div>
         </div>
       </section>
+
+      {/* ── Achievements (preview) ──────────────────────────────────── */}
+      {showAchievements && data.achievements && data.achievements.length > 0 && (
+        <AchievementsSection achievements={data.achievements} />
+      )}
 
       {/* ── Aggregate metrics ──────────────────────────────────────────── */}
       {displayStats.totalStages > 0 && (

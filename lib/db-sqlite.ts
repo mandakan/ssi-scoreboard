@@ -24,6 +24,18 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_sm_shooter_ts
     ON shooter_matches(shooter_id, start_timestamp);
 
+  CREATE TABLE IF NOT EXISTS shooter_achievements (
+    shooter_id INTEGER NOT NULL,
+    achievement_id TEXT NOT NULL,
+    tier INTEGER NOT NULL DEFAULT 1,
+    unlocked_at TEXT NOT NULL,
+    match_ref TEXT,
+    value REAL,
+    PRIMARY KEY (shooter_id, achievement_id, tier)
+  );
+  CREATE INDEX IF NOT EXISTS idx_sa_shooter
+    ON shooter_achievements(shooter_id);
+
   CREATE TABLE IF NOT EXISTS match_popularity (
     cache_key TEXT PRIMARY KEY,
     last_seen_at INTEGER NOT NULL,
@@ -167,6 +179,53 @@ export function createSqliteDatabase(
                          hit_count = hit_count + 1`,
         )
         .run(key, now);
+    },
+
+    async getShooterAchievements(shooterId) {
+      const rows = getDb()
+        .prepare(
+          `SELECT achievement_id, tier, unlocked_at, match_ref, value
+           FROM shooter_achievements
+           WHERE shooter_id = ?
+           ORDER BY achievement_id, tier`,
+        )
+        .all(shooterId) as {
+        achievement_id: string;
+        tier: number;
+        unlocked_at: string;
+        match_ref: string | null;
+        value: number | null;
+      }[];
+      return rows.map((r) => ({
+        achievementId: r.achievement_id,
+        tier: r.tier,
+        unlockedAt: r.unlocked_at,
+        matchRef: r.match_ref,
+        value: r.value,
+      }));
+    },
+
+    async saveShooterAchievements(shooterId, achievements) {
+      if (achievements.length === 0) return;
+      const d = getDb();
+      const stmt = d.prepare(
+        `INSERT OR IGNORE INTO shooter_achievements
+           (shooter_id, achievement_id, tier, unlocked_at, match_ref, value)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      );
+      const tx = d.transaction(() => {
+        for (const a of achievements) {
+          stmt.run(
+            shooterId,
+            a.achievementId,
+            a.tier,
+            a.unlockedAt,
+            a.matchRef ?? null,
+            a.value ?? null,
+          );
+        }
+      });
+      tx();
     },
 
     async getPopularKeys(maxAgeSeconds, limit) {

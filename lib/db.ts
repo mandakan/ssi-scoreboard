@@ -9,6 +9,7 @@
 // the corresponding tables to the SQL schema in db-sqlite.ts / db-d1.ts.
 
 import type { ShooterProfile } from "@/lib/shooter-index";
+import type { StoredAchievement } from "@/lib/achievements/types";
 
 export interface AppDatabase {
   // ── Shooter cross-match index ────────────────────────────────────────────
@@ -48,4 +49,15 @@ export interface AppDatabase {
     maxAgeSeconds: number,
     limit: number,
   ): Promise<{ key: string; hits: number }[]>;
+
+  // ── Achievements ───────────────────────────────────────────────────────
+
+  /** Return all stored achievement tiers for a shooter. */
+  getShooterAchievements(shooterId: number): Promise<StoredAchievement[]>;
+
+  /** Persist newly unlocked achievement tiers. Idempotent (INSERT OR IGNORE). */
+  saveShooterAchievements(
+    shooterId: number,
+    achievements: StoredAchievement[],
+  ): Promise<void>;
 }

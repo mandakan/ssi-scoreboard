@@ -1,6 +1,9 @@
 // Single source of truth for all TypeScript interfaces.
 // All fields that may be absent during an active match are nullable.
 
+// Achievement types — imported here and re-exported at the bottom for convenience.
+import type { AchievementProgress as _AchievementProgress } from "@/lib/achievements/types";
+
 export interface MyShooterIdentity {
   shooterId: number;
   name: string;
@@ -523,6 +526,8 @@ export interface ShooterMatchSummary {
   totalD: number;
   totalMiss: number;
   totalNoShoots: number;
+  /** Number of stages with all A-hits and no penalties. */
+  perfectStages?: number;
 }
 
 // Cross-match aggregate statistics for the shooter dashboard.
@@ -559,7 +564,19 @@ export interface ShooterDashboardResponse {
   /** Up to 50 most recent matches, sorted newest first. */
   matches: ShooterMatchSummary[];
   stats: ShooterAggregateStats;
+  /** Achievement progress (preview feature). */
+  achievements?: _AchievementProgress[];
 }
+
+// Re-export achievement types for convenience.
+export type {
+  AchievementProgress,
+  AchievementTier,
+  AchievementDefinition,
+  AchievementCategory,
+  UnlockedTier,
+  StoredAchievement,
+} from "@/lib/achievements/types";
 
 // ── AI Coaching Tips ─────────────────────────────────────────────────────────
 
