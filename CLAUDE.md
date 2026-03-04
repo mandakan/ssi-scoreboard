@@ -38,10 +38,14 @@ Key directories:
 - `app/api/compare/logic.ts` — **pure function** `computeGroupRankings()`, no I/O, fully unit-tested
 - `app/api/mcp/route.ts` — MCP HTTP endpoint (JSON-RPC, single-shot transport); optional `MCP_SECRET` bearer auth
 - `lib/graphql.ts` — GQL query strings + `executeQuery()`, server-only (no NEXT_PUBLIC_ prefix)
-- `lib/cache.ts` — `CacheAdapter` interface (get/set/persist/del/expire/scanRecentKeys)
+- `lib/cache.ts` — `CacheAdapter` interface (get/set/persist/del/expire/scanCachedMatchKeys)
 - `lib/cache-node.ts` — ioredis implementation (Docker / Node.js target)
 - `lib/cache-edge.ts` — @upstash/redis HTTP implementation (Cloudflare Pages target)
 - `lib/cache-impl.ts` — re-exports node adapter by default; CF builds override via webpack alias
+- `lib/db.ts` — `AppDatabase` interface (persistent shooter profiles, match indices, popularity tracking)
+- `lib/db-sqlite.ts` — better-sqlite3 implementation (Docker / Node.js target)
+- `lib/db-d1.ts` — Cloudflare D1 implementation (Cloudflare Pages target)
+- `lib/db-impl.ts` — re-exports SQLite adapter by default; CF builds override via webpack/turbopack alias
 - `lib/match-ttl.ts` — pure `computeMatchTtl()` — smart TTL tiers for pre/active/complete matches
 - `lib/mcp-tools.ts` — shared MCP tool registration (server-only, used by HTTP route + stdio server)
 - `lib/types.ts` — single source of truth for all TypeScript interfaces
@@ -53,9 +57,9 @@ Key directories:
 - `app/match/[ct]/[id]/layout.tsx` — match layout with `generateMetadata()` for dynamic page titles + OG meta tags
 - `app/match/[ct]/[id]/match-page-client.tsx` — `"use client"` match page component (extracted from page.tsx to allow server-side metadata generation)
 - `lib/og-data.ts` — server-only helper that fetches match data for OG images and page metadata (1500ms timeout via `Promise.race`)
-- `lib/shooter-index.ts` — `decodeShooterId()` + `indexMatchShooters()` — builds `shooter:{id}:matches` sorted set and `shooter:{id}:profile` in Redis
+- `lib/shooter-index.ts` — `decodeShooterId()` + `indexMatchShooters()` — writes shooter profiles and match refs into AppDatabase (SQLite/D1)
 - `lib/backfill.ts` — pure `runBackfill()` — scans cached matches for a shooter, dependency-injected, fully unit-tested
-- `app/api/shooter/[shooterId]/route.ts` — GET shooter dashboard (aggregates from Redis index)
+- `app/api/shooter/[shooterId]/route.ts` — GET shooter dashboard (aggregates from AppDatabase + Redis match cache)
 - `app/api/shooter/[shooterId]/backfill/route.ts` — POST cache-scan backfill (zero GraphQL calls)
 - `app/api/shooter/[shooterId]/add-match/route.ts` — POST manual match URL (may hit GraphQL)
 - `scripts/warm-cache.ts` — CLI cache warming script; also indexes known shooters as a side effect
@@ -204,12 +208,15 @@ automatically — no manual `CACHE_PURGE_SECRET` flush is needed. The new entry 
 with the current version on the first request, so the cache self-heals within one TTL cycle.
 
 **Rule of thumb:** bump whenever you add or remove a field on `MatchResponse`, `CompareResponse`,
-or any other type that is serialised into Redis via `cachedExecuteQuery`.
+or any other type that is serialised into the **match cache** (Redis) via `cachedExecuteQuery`.
+This does **not** apply to AppDatabase schema changes — those are managed independently by
+the SQLite/D1 adapters via `CREATE TABLE IF NOT EXISTS`.
 
 ## Shooter Index & Match Backfill
 
-The shooter dashboard (`/shooter/{id}`) shows cross-competition stats. It relies on a
-secondary Redis index that maps `shooterId → [match references]`. This index is populated
+The shooter dashboard (`/shooter/{id}`) shows cross-competition stats. It relies on
+persistent **AppDatabase** (SQLite on Docker, D1 on Cloudflare) to track which matches
+each shooter has appeared in. This data survives Redis flushes. The database is populated
 through several paths:
 
 | Path | Indexes who? | When? | GraphQL calls? |
@@ -220,21 +227,31 @@ through several paths:
 | Backfill endpoint (`POST /api/shooter/{id}/backfill`) | **One specific shooter** | On-demand from dashboard | Zero (reads cached data) |
 | Add-match endpoint (`POST /api/shooter/{id}/add-match`) | ALL competitors | When user submits a URL | Only if match not cached |
 
-**"Known shooter"** = a shooterId that already has a `shooter:{id}:profile` key in Redis
-(i.e. the app has seen them before through normal usage or `warm-cache.ts`).
+**"Known shooter"** = a shooterId that has a row in the `shooter_profiles` table
+(i.e. the app has seen them before through normal usage, warm-cache, or backfill).
 
 **Important scope limitation:** the backfill scan and warm-cache indexing can only discover
-matches that are already in the Redis cache. Matches never viewed by anyone on the app are
-invisible. The add-match endpoint is the only path that can reach an arbitrary SSI match.
+matches that are already in the Redis **match cache**. Matches never viewed by anyone on the
+app are invisible. The add-match endpoint is the only path that can reach an arbitrary SSI match.
 
-**Redis keys per shooter:**
-- `shooter:{id}:matches` — sorted set, score = match start timestamp, member = `{ct}:{matchId}`
-- `shooter:{id}:profile` — JSON `{ name, club, division, lastSeen }`, no TTL
+**AppDatabase tables (same schema on SQLite and D1):**
+- `shooter_profiles` — `{ shooter_id PK, name, club, division, last_seen }` — permanent
+- `shooter_matches` — `{ shooter_id, match_ref, start_timestamp }` — composite PK, capped at 200 per shooter
+- `match_popularity` — `{ cache_key PK, last_seen_at, hit_count }` — tracks popular `gql:GetMatch:*` keys
+
+**Still in Redis (ephemeral cache):**
 - `computed:shooter:{id}:dashboard` — pre-computed dashboard JSON, 5min TTL
+- `backfill:lock:{id}` — 60s cooldown lock
 
-`lib/backfill.ts` is the core scan logic — dependency-injected (no direct cache/graphql
+`lib/backfill.ts` is the core scan logic — dependency-injected (no direct cache/db
 imports) so it can be unit-tested with mocked deps. `lib/shooter-index.ts` handles the
-actual Redis writes via the `CacheAdapter` interface.
+actual AppDatabase writes via the `AppDatabase` interface.
+
+**Migration:** `scripts/migrate-shooter-data.ts` is a one-time script that reads existing
+shooter data from Redis sorted sets and writes it to SQLite. Run after deploying the
+AppDatabase change to preserve historical data. Use `--cleanup` to delete permanent
+Redis keys (shooter profiles, match sorted sets, popularity sets) after migration — this
+frees Upstash storage quota since those keys are now in SQLite.
 
 ## Environment Variables
 | Variable | Where used | Target | Notes |
@@ -244,6 +261,7 @@ actual Redis writes via the `CacheAdapter` interface.
 | `MIN_CACHE_TTL_SECONDS` | `lib/match-ttl.ts` (server-only) | Both | Minimum TTL floor for all non-permanent cache entries. Default `300` (5 min). Set to `0` to disable. Never `NEXT_PUBLIC_`. |
 | `NEXT_PUBLIC_BUILD_ID` | `components/update-banner.tsx`, `app/api/version/route.ts` | Both | Git SHA baked into the client bundle at Docker build time; powers new-version detection. Auto-injected by `pnpm docker:build`. Unset in `pnpm dev` — version check is skipped. |
 | `REDIS_URL` | `lib/cache-node.ts` | Docker only | `redis://localhost:6379` locally, `rediss://...` for managed Redis. Not needed for CF builds. |
+| `APP_DB_PATH` | `lib/db-sqlite.ts` | Docker only | Path to SQLite database file. Defaults to `./data/shooter-index.db`. Not needed for CF builds. |
 | `UPSTASH_REDIS_REST_URL` | `lib/cache-edge.ts` | Cloudflare only | REST URL from Upstash console. Set via `wrangler secret put` in production. |
 | `UPSTASH_REDIS_REST_TOKEN` | `lib/cache-edge.ts` | Cloudflare only | REST token from Upstash console. Set via `wrangler secret put` in production. |
 | `MCP_SECRET` | `app/api/mcp/route.ts` | Both | Optional. If set, `POST /api/mcp` requires `Authorization: Bearer <MCP_SECRET>`. Omit for public access. |
@@ -352,7 +370,9 @@ available at runtime. `REDIS_URL` is set automatically via the compose service n
 (`redis://redis:6379`) — no manual entry needed.
 The Dockerfile uses multi-stage builds (deps → builder → runner) with a non-root user.
 `output: "standalone"` in `next.config.ts` is set automatically when `DEPLOY_TARGET` is unset.
-The `redis_data` volume persists the cache across container restarts.
+Two named volumes persist state across container restarts:
+- `redis_data` — Redis match cache (ephemeral, can be flushed safely)
+- `shooter_data` → `/app/data` — SQLite shooter store (profiles, match indices, popularity)
 
 #### Deploying without Docker Compose (bare server, Kubernetes, Fly.io)
 Run a Redis instance (managed or self-hosted) and set `REDIS_URL` to its connection string.
@@ -363,19 +383,48 @@ requests will fall back to direct GraphQL fetches until Redis is reachable.
 ### Cloudflare Pages
 ```bash
 pnpm cf:build    # DEPLOY_TARGET=cloudflare @opennextjs/cloudflare build (runs next build internally)
-pnpm cf:deploy   # cf:build + wrangler pages deploy
+pnpm cf:deploy   # cf:build + wrangler deploy
 ```
-`DEPLOY_TARGET=cloudflare` triggers a webpack/Turbopack alias that swaps `lib/cache-impl.ts`
-for the Upstash HTTP adapter (`lib/cache-edge.ts`) so `ioredis` is never bundled into the
-Worker. Route handlers use the default Node.js runtime — `@opennextjs/cloudflare` handles
-the Workers bundling without requiring `export const runtime = "edge"` on each route.
-The `popular-matches` endpoint returns `[]` on CF (OBJECT IDLETIME not available via HTTP).
+`DEPLOY_TARGET=cloudflare` triggers turbopack/webpack aliases that swap two adapters:
+- `lib/cache-impl` → `lib/cache-edge` (Upstash HTTP instead of ioredis)
+- `lib/db-impl` → `lib/db-d1` (Cloudflare D1 instead of SQLite)
+
+This prevents Node.js-only native modules (`ioredis`, `better-sqlite3`) from being bundled
+into the Worker. Route handlers use the default Node.js runtime — `@opennextjs/cloudflare`
+handles the Workers bundling without requiring `export const runtime = "edge"` on each route.
 
 **Cache adapter:** the CF build uses `@upstash/redis` (HTTP-based) instead of ioredis.
 `automaticDeserialization: false` is set on the Upstash client so values are returned as raw
 strings, consistent with the ioredis adapter — callers always do their own `JSON.parse`.
 
-Set secrets in production via `wrangler secret put` or the Cloudflare Pages dashboard:
+**Shooter store:** the CF build uses Cloudflare D1 via the `APP_DB` binding declared in
+`wrangler.toml`. The schema auto-creates on first request via `CREATE TABLE IF NOT EXISTS`.
+Formal migrations live in `migrations/` and are applied with `wrangler d1 migrations apply`.
+
+**Bindings** (configured in `wrangler.toml`, not secrets):
+- `AI` — Workers AI binding for coaching tips
+- `APP_DB` — D1 database for persistent shooter data
+
+**One-time D1 setup** — use the idempotent setup script (creates databases if missing,
+patches `wrangler.toml` with real IDs, applies migrations):
+```bash
+pnpm tsx scripts/setup-d1.ts           # production + staging
+pnpm tsx scripts/setup-d1.ts --staging # staging only
+```
+Or manually:
+```bash
+# Production
+wrangler d1 create ssi-scoreboard-shooter
+# Copy database_id into wrangler.toml [[d1_databases]]
+wrangler d1 migrations apply APP_DB
+
+# Staging
+wrangler d1 create ssi-scoreboard-shooter-staging
+# Copy database_id into wrangler.toml [[env.staging.d1_databases]]
+wrangler d1 migrations apply APP_DB --env staging
+```
+
+**Secrets** (set via `wrangler secret put` or the Cloudflare dashboard):
 ```bash
 wrangler secret put SSI_API_KEY
 wrangler secret put CACHE_PURGE_SECRET

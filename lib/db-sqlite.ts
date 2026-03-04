@@ -1,0 +1,197 @@
+// Server-only — SQLite-backed AppDatabase (Node.js / Docker target).
+// Never import from client components or files with "use client".
+
+import Database from "better-sqlite3";
+import path from "path";
+import type { AppDatabase } from "@/lib/db";
+import { MAX_SHOOTER_MATCHES } from "@/lib/constants";
+
+const SCHEMA_SQL = `
+  CREATE TABLE IF NOT EXISTS shooter_profiles (
+    shooter_id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    club TEXT,
+    division TEXT,
+    last_seen TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS shooter_matches (
+    shooter_id INTEGER NOT NULL,
+    match_ref TEXT NOT NULL,
+    start_timestamp INTEGER NOT NULL,
+    PRIMARY KEY (shooter_id, match_ref)
+  );
+  CREATE INDEX IF NOT EXISTS idx_sm_shooter_ts
+    ON shooter_matches(shooter_id, start_timestamp);
+
+  CREATE TABLE IF NOT EXISTS match_popularity (
+    cache_key TEXT PRIMARY KEY,
+    last_seen_at INTEGER NOT NULL,
+    hit_count INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_mp_last_seen
+    ON match_popularity(last_seen_at);
+`;
+
+function openDb(dbPath: string): Database.Database {
+  const db = new Database(dbPath);
+  db.pragma("journal_mode = WAL");
+  db.pragma("busy_timeout = 5000");
+  db.exec(SCHEMA_SQL);
+  return db;
+}
+
+export function createSqliteDatabase(
+  dbPath?: string,
+): AppDatabase {
+  let db: Database.Database | null = null;
+
+  function getDb(): Database.Database {
+    if (!db) {
+      const resolved =
+        dbPath ??
+        (process.env.SHOOTER_DB_PATH ||
+          path.join(process.cwd(), "data", "shooter-index.db"));
+
+      // Ensure the directory exists (skip for :memory:)
+      if (resolved !== ":memory:") {
+        const dir = path.dirname(resolved);
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const fs = require("fs") as typeof import("fs");
+        fs.mkdirSync(dir, { recursive: true });
+      }
+
+      db = openDb(resolved);
+    }
+    return db;
+  }
+
+  return {
+    async indexShooterMatch(shooterId, matchRef, startTimestamp) {
+      const d = getDb();
+      d.prepare(
+        `INSERT INTO shooter_matches (shooter_id, match_ref, start_timestamp)
+         VALUES (?, ?, ?)
+         ON CONFLICT(shooter_id, match_ref)
+         DO UPDATE SET start_timestamp = excluded.start_timestamp`,
+      ).run(shooterId, matchRef, startTimestamp);
+
+      // Trim to MAX_SHOOTER_MATCHES oldest entries per shooter
+      const count = (
+        d
+          .prepare(
+            `SELECT COUNT(*) AS cnt FROM shooter_matches WHERE shooter_id = ?`,
+          )
+          .get(shooterId) as { cnt: number }
+      ).cnt;
+
+      if (count > MAX_SHOOTER_MATCHES) {
+        d.prepare(
+          `DELETE FROM shooter_matches
+           WHERE shooter_id = ? AND match_ref IN (
+             SELECT match_ref FROM shooter_matches
+             WHERE shooter_id = ?
+             ORDER BY start_timestamp ASC
+             LIMIT ?
+           )`,
+        ).run(shooterId, shooterId, count - MAX_SHOOTER_MATCHES);
+      }
+    },
+
+    async setShooterProfile(shooterId, profile) {
+      getDb()
+        .prepare(
+          `INSERT INTO shooter_profiles (shooter_id, name, club, division, last_seen)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(shooter_id)
+           DO UPDATE SET name = excluded.name,
+                         club = excluded.club,
+                         division = excluded.division,
+                         last_seen = excluded.last_seen`,
+        )
+        .run(
+          shooterId,
+          profile.name,
+          profile.club ?? null,
+          profile.division ?? null,
+          profile.lastSeen,
+        );
+    },
+
+    async getShooterMatches(shooterId) {
+      const rows = getDb()
+        .prepare(
+          `SELECT match_ref FROM shooter_matches
+           WHERE shooter_id = ?
+           ORDER BY start_timestamp ASC`,
+        )
+        .all(shooterId) as { match_ref: string }[];
+      return rows.map((r) => r.match_ref);
+    },
+
+    async getShooterProfile(shooterId) {
+      const row = getDb()
+        .prepare(
+          `SELECT name, club, division, last_seen FROM shooter_profiles
+           WHERE shooter_id = ?`,
+        )
+        .get(shooterId) as
+        | { name: string; club: string | null; division: string | null; last_seen: string }
+        | undefined;
+      if (!row) return null;
+      return {
+        name: row.name,
+        club: row.club,
+        division: row.division,
+        lastSeen: row.last_seen,
+      };
+    },
+
+    async hasShooterProfile(shooterId) {
+      const row = getDb()
+        .prepare(
+          `SELECT 1 FROM shooter_profiles WHERE shooter_id = ?`,
+        )
+        .get(shooterId);
+      return row !== undefined;
+    },
+
+    async recordMatchAccess(key) {
+      const now = Math.floor(Date.now() / 1000);
+      getDb()
+        .prepare(
+          `INSERT INTO match_popularity (cache_key, last_seen_at, hit_count)
+           VALUES (?, ?, 1)
+           ON CONFLICT(cache_key)
+           DO UPDATE SET last_seen_at = excluded.last_seen_at,
+                         hit_count = hit_count + 1`,
+        )
+        .run(key, now);
+    },
+
+    async getPopularKeys(maxAgeSeconds, limit) {
+      const cutoff = Math.floor(Date.now() / 1000) - maxAgeSeconds;
+      const d = getDb();
+
+      // Prune stale entries
+      d.prepare(`DELETE FROM match_popularity WHERE last_seen_at < ?`).run(
+        cutoff,
+      );
+
+      // Fetch top by hit count
+      const rows = d
+        .prepare(
+          `SELECT cache_key, hit_count FROM match_popularity
+           WHERE last_seen_at >= ?
+           ORDER BY hit_count DESC
+           LIMIT ?`,
+        )
+        .all(cutoff, limit) as { cache_key: string; hit_count: number }[];
+
+      return rows.map((r) => ({ key: r.cache_key, hits: r.hit_count }));
+    },
+  };
+}
+
+const defaultDb = createSqliteDatabase();
+export default defaultDb;

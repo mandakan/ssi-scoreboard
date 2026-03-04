@@ -26,6 +26,8 @@ services:
       # Soft V8 heap ceiling — Node throws a catchable JS error before the
       # kernel OOM-kills the container. Set to ~75% of the Docker memory limit.
       NODE_OPTIONS: "--max-old-space-size=768"
+    volumes:
+      - shooter_data:/app/data
     depends_on: [redis]
     restart: unless-stopped
     healthcheck:
@@ -44,3 +46,4 @@ services:
 
 volumes:
   redis_data:
+  shooter_data:

@@ -45,6 +45,7 @@ import { parseRawScorecards } from "../lib/scorecard-data";
 import { computeAllFingerprintPoints } from "../app/api/compare/logic";
 import { CACHE_SCHEMA_VERSION } from "../lib/constants";
 import { decodeShooterId } from "../lib/shooter-index";
+import { createSqliteDatabase } from "../lib/db-sqlite";
 
 const GRAPHQL_ENDPOINT = "https://shootnscoreit.com/graphql/";
 
@@ -359,9 +360,7 @@ interface SimpleCacheClient {
   get(key: string): Promise<string | null>;
   set(key: string, value: string, ttl: number | null): Promise<void>;
   quit(): Promise<void>;
-  zadd(key: string, score: number, member: string): Promise<void>;
   del(key: string): Promise<void>;
-  exists(key: string): Promise<boolean>;
 }
 
 async function createCacheClient(): Promise<SimpleCacheClient> {
@@ -389,9 +388,7 @@ async function createCacheClient(): Promise<SimpleCacheClient> {
         else await redis.set(pk(key), value, { ex: ttl });
       },
       async quit() { /* no-op — Upstash is stateless HTTP */ },
-      async zadd(key, score, member) { await redis.zadd(pk(key), { score, member }); },
       async del(key) { await redis.del(pk(key)); },
-      async exists(key) { return (await redis.exists(pk(key))) === 1; },
     };
   }
 
@@ -413,9 +410,7 @@ async function createCacheClient(): Promise<SimpleCacheClient> {
       else await redis.set(pk(key), value, "EX", ttl);
     },
     async quit() { await redis.quit(); },
-    async zadd(key, score, member) { await redis.zadd(pk(key), score, member); },
     async del(key) { await redis.del(pk(key)); },
-    async exists(key) { return (await redis.exists(pk(key))) === 1; },
   };
 }
 
@@ -528,12 +523,13 @@ interface RawMatchData {
 }
 
 /**
- * Index known shooters (those with existing profiles in Redis) for a match.
+ * Index known shooters (those with existing profiles) for a match.
  * Only touches shooters that have been seen before through normal app usage.
  * Returns the count of shooters indexed.
  */
 async function indexKnownShooters(
   client: SimpleCacheClient,
+  shooterStore: ReturnType<typeof createSqliteDatabase>,
   ct: number,
   matchId: string,
   matchData: RawMatchData,
@@ -551,20 +547,18 @@ async function indexKnownShooters(
     if (shooterId == null) continue;
 
     // Only index shooters who already have a profile (seen before via the app)
-    const profileKey = `shooter:${shooterId}:profile`;
-    const exists = await client.exists(profileKey);
+    const exists = await shooterStore.hasShooterProfile(shooterId);
     if (!exists) continue;
 
     const name = [c.first_name, c.last_name].filter(Boolean).join(" ") || "Unknown";
-    const profile = {
+
+    await shooterStore.indexShooterMatch(shooterId, matchRef, startTimestamp);
+    await shooterStore.setShooterProfile(shooterId, {
       name,
       club: c.club ?? null,
       division: c.get_handgun_div_display ?? c.handgun_div ?? null,
       lastSeen,
-    };
-
-    await client.zadd(`shooter:${shooterId}:matches`, startTimestamp, matchRef);
-    await client.set(`shooter:${shooterId}:profile`, JSON.stringify(profile), null);
+    });
     await client.del(`computed:shooter:${shooterId}:dashboard`);
     indexed++;
   }
@@ -644,6 +638,7 @@ async function main(): Promise<void> {
   // ── Connect to Redis ──────────────────────────────────────────────────────
 
   const client = await createCacheClient();
+  const shooterStore = createSqliteDatabase();
 
   // ── Warm each match ───────────────────────────────────────────────────────
 
@@ -713,7 +708,7 @@ async function main(): Promise<void> {
       // Index known shooters even when skipping scorecards
       if (matchDataForFingerprint) {
         try {
-          const indexCount = await indexKnownShooters(client, ct, id, matchDataForFingerprint as RawMatchData);
+          const indexCount = await indexKnownShooters(client, shooterStore, ct, id, matchDataForFingerprint as RawMatchData);
           if (indexCount > 0) opLine("ShooterIndex", "ok", `${indexCount} known shooters`);
         } catch { /* non-fatal */ }
       }
@@ -783,7 +778,7 @@ async function main(): Promise<void> {
     // ── Index known shooters ─────────────────────────────────────────────
     if (matchDataForFingerprint) {
       try {
-        const indexCount = await indexKnownShooters(client, ct, id, matchDataForFingerprint as RawMatchData);
+        const indexCount = await indexKnownShooters(client, shooterStore, ct, id, matchDataForFingerprint as RawMatchData);
         if (indexCount > 0) opLine("ShooterIndex", "ok", `${indexCount} known shooters`);
       } catch { /* non-fatal */ }
     }

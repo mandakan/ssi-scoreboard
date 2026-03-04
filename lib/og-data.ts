@@ -5,6 +5,7 @@ import { fetchRawMatchData } from "@/lib/match-data";
 import { formatDivisionDisplay } from "@/lib/divisions";
 import { decodeShooterId } from "@/lib/shooter-index";
 import cache from "@/lib/cache-impl";
+import db from "@/lib/db-impl";
 import type { CompetitorInfo, ShooterDashboardResponse } from "@/lib/types";
 
 // ── Public types ────────────────────────────────────────────────────────
@@ -147,13 +148,6 @@ export async function fetchOgShooterData(
   ]);
 }
 
-interface ShooterProfile {
-  name: string;
-  club: string | null;
-  division: string | null;
-  lastSeen: string;
-}
-
 async function fetchOgShooterDataImpl(
   shooterId: number,
 ): Promise<OgShooterData | null> {
@@ -177,20 +171,13 @@ async function fetchOgShooterDataImpl(
       };
     }
 
-    // Fall back to profile + match count from the Redis index
-    const [profileRaw, matchRefs] = await Promise.all([
-      cache.getShooterProfile(shooterId),
-      cache.getShooterMatches(shooterId),
+    // Fall back to profile + match count from the ShooterStore
+    const [profile, matchRefs] = await Promise.all([
+      db.getShooterProfile(shooterId),
+      db.getShooterMatches(shooterId),
     ]);
 
-    if (!profileRaw && matchRefs.length === 0) return null;
-
-    let profile: ShooterProfile | null = null;
-    if (profileRaw) {
-      try {
-        profile = JSON.parse(profileRaw) as ShooterProfile;
-      } catch { /* ignore */ }
-    }
+    if (!profile && matchRefs.length === 0) return null;
 
     return {
       name: profile?.name ?? `Shooter #${String(shooterId)}`,
