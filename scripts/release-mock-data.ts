@@ -722,7 +722,7 @@ export const MOCK_SHOOTER: ShooterDashboardResponse = {
       totalA: 318,
       totalC: 82,
       totalD: 18,
-      totalMiss: 4,
+      totalMiss: 0,
       totalNoShoots: 1,
     },
     {
@@ -742,7 +742,7 @@ export const MOCK_SHOOTER: ShooterDashboardResponse = {
       totalA: 241,
       totalC: 70,
       totalD: 16,
-      totalMiss: 5,
+      totalMiss: 0,
       totalNoShoots: 0,
     },
     {
@@ -762,7 +762,7 @@ export const MOCK_SHOOTER: ShooterDashboardResponse = {
       totalA: 196,
       totalC: 58,
       totalD: 14,
-      totalMiss: 5,
+      totalMiss: 0,
       totalNoShoots: 2,
     },
     {
@@ -782,7 +782,7 @@ export const MOCK_SHOOTER: ShooterDashboardResponse = {
       totalA: 158,
       totalC: 47,
       totalD: 13,
-      totalMiss: 4,
+      totalMiss: 0,
       totalNoShoots: 1,
     },
     {
@@ -802,7 +802,7 @@ export const MOCK_SHOOTER: ShooterDashboardResponse = {
       totalA: 192,
       totalC: 60,
       totalD: 18,
-      totalMiss: 8,
+      totalMiss: 0,
       totalNoShoots: 2,
     },
   ],

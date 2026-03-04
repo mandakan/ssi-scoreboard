@@ -42,7 +42,7 @@ Key directories:
 - `lib/cache-node.ts` — ioredis implementation (Docker / Node.js target)
 - `lib/cache-edge.ts` — @upstash/redis HTTP implementation (Cloudflare Pages target)
 - `lib/cache-impl.ts` — re-exports node adapter by default; CF builds override via webpack alias
-- `lib/db.ts` — `AppDatabase` interface (persistent shooter profiles, match indices, popularity tracking)
+- `lib/db.ts` — `AppDatabase` interface (persistent shooter profiles, match indices, popularity tracking, achievements)
 - `lib/db-sqlite.ts` — better-sqlite3 implementation (Docker / Node.js target)
 - `lib/db-d1.ts` — Cloudflare D1 implementation (Cloudflare Pages target)
 - `lib/db-impl.ts` — re-exports SQLite adapter by default; CF builds override via webpack/turbopack alias
@@ -62,6 +62,11 @@ Key directories:
 - `app/api/shooter/[shooterId]/route.ts` — GET shooter dashboard (aggregates from AppDatabase + Redis match cache)
 - `app/api/shooter/[shooterId]/backfill/route.ts` — POST cache-scan backfill (zero GraphQL calls)
 - `app/api/shooter/[shooterId]/add-match/route.ts` — POST manual match URL (may hit GraphQL)
+- `lib/achievements/types.ts` — achievement type definitions (AchievementDefinition, AchievementProgress, StoredAchievement)
+- `lib/achievements/definitions.ts` — ACHIEVEMENT_ENTRIES array (5 achievements) with pure evaluator functions
+- `lib/achievements/evaluate.ts` — **pure function** `evaluateAchievements()`, no I/O, fully unit-tested
+- `lib/feature-previews.ts` — generic feature preview toggle system (localStorage + URL params)
+- `hooks/use-preview-feature.ts` — SSR-safe `usePreviewFeature()` hook for client components
 - `scripts/warm-cache.ts` — CLI cache warming script; also indexes known shooters as a side effect
 - `mcp/` — pnpm workspace package; stdio MCP server (`mcp/src/index.ts`) using `tsx` from root `node_modules`
 
@@ -178,6 +183,10 @@ a matching info popover.** When modifying what a chart shows, update its popover
 The popover should include: what the axes/axes represent, how to read the visual, and 1–2
 actionable interpretation tips. Keep language concise — max ~4 short paragraphs.
 
+The same pattern applies to sections on the shooter dashboard. The Achievements section
+has a section-level info popover explaining the tier ladder concept, and each achievement
+card is tappable to reveal its full unlock ladder with progress indicators.
+
 ## Design System & Tailwind v4
 - Use **Tailwind v4** utility classes everywhere — no inline styles.
 - All colors, spacing, and radii come from **CSS custom property design tokens** defined
@@ -238,6 +247,7 @@ app are invisible. The add-match endpoint is the only path that can reach an arb
 - `shooter_profiles` — `{ shooter_id PK, name, club, division, last_seen }` — permanent
 - `shooter_matches` — `{ shooter_id, match_ref, start_timestamp }` — composite PK, capped at 200 per shooter
 - `match_popularity` — `{ cache_key PK, last_seen_at, hit_count }` — tracks popular `gql:GetMatch:*` keys
+- `shooter_achievements` — `{ shooter_id, achievement_id, tier }` — composite PK, persists unlocked tiers with `unlocked_at`, `match_ref`, `value`
 
 **Still in Redis (ephemeral cache):**
 - `computed:shooter:{id}:dashboard` — pre-computed dashboard JSON, 5min TTL
@@ -252,6 +262,51 @@ shooter data from Redis sorted sets and writes it to SQLite. Run after deploying
 AppDatabase change to preserve historical data. Use `--cleanup` to delete permanent
 Redis keys (shooter profiles, match sorted sets, popularity sets) after migration — this
 frees Upstash storage quota since those keys are now in SQLite.
+
+## Feature Previews
+
+Beta features are toggled per-user via localStorage under key `ssi-preview-features`.
+Activate/deactivate at runtime via URL params:
+- `?preview=new-id` — enable a feature
+- `?preview=-new-id` — disable
+- `?preview=a,b` — comma-separated for multiple
+
+The `usePreviewFeature("new-id")` hook (from `hooks/use-preview-feature.ts`)
+provides SSR-safe access for client components. Preview-gated sections render a "Preview"
+badge next to their heading. When a feature graduates to stable, remove the preview check.
+
+**Adding a new preview feature:**
+1. Add the string ID to `PREVIEW_FEATURES` in `lib/feature-previews.ts`
+2. Use `usePreviewFeature("new-id")` in the relevant component
+3. Share `?preview=new-id` URLs with testers
+
+## Achievement System
+
+The shooter dashboard shows tiered achievements that track cross-match progress. Each
+achievement has a progressive unlock ladder — multiple tiers from beginner milestones to
+elite goals. Unlocked tiers are persisted in AppDatabase (`shooter_achievements` table)
+so they survive the 200-match pruning window.
+
+**Achievement categories (6 achievements, 25 tiers):**
+- **Milestone:** Competitor (1–100 matches), Stage Warrior (10–500 stages), DQ Club (1 DQ)
+- **Accuracy:** Sharpshooter (60–85% A-zone), Bullseye (1–25 perfect stages), Clean Sheet (1–10 clean matches)
+
+**Evaluation flow:** on each dashboard load (cache miss), `evaluateAchievements()` compares
+computed stats against tier thresholds, diffs against stored tiers, and persists new unlocks
+(fire-and-forget). The function is pure (no I/O) and fully unit-tested.
+
+**Adding a new achievement:** add one `AchievementEntry` object to `ACHIEVEMENT_ENTRIES` in
+`lib/achievements/definitions.ts` (id, name, description, category, icon, tiers, evaluator).
+No schema changes or migrations needed — the composite PK `(shooter_id, achievement_id, tier)`
+handles new achievements and tiers automatically.
+
+**Key files:**
+- `lib/achievements/definitions.ts` — define achievements here
+- `lib/achievements/evaluate.ts` — pure evaluation logic
+- `lib/achievements/types.ts` — interfaces
+- `app/api/shooter/[shooterId]/route.ts` — calls evaluator, persists unlocks
+- `app/shooter/[shooterId]/shooter-dashboard-client.tsx` — `AchievementsSection` UI
+- `tests/unit/achievements.test.ts` — unit tests
 
 ## Environment Variables
 | Variable | Where used | Target | Notes |

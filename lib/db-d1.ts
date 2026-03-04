@@ -131,6 +131,54 @@ const db: AppDatabase = {
     return row !== null;
   },
 
+  async getShooterAchievements(shooterId) {
+    const db = getDb();
+    const result = await db
+      .prepare(
+        `SELECT achievement_id, tier, unlocked_at, match_ref, value
+         FROM shooter_achievements
+         WHERE shooter_id = ?
+         ORDER BY achievement_id, tier`,
+      )
+      .bind(shooterId)
+      .all<{
+        achievement_id: string;
+        tier: number;
+        unlocked_at: string;
+        match_ref: string | null;
+        value: number | null;
+      }>();
+    return result.results.map((r) => ({
+      achievementId: r.achievement_id,
+      tier: r.tier,
+      unlockedAt: r.unlocked_at,
+      matchRef: r.match_ref,
+      value: r.value,
+    }));
+  },
+
+  async saveShooterAchievements(shooterId, achievements) {
+    if (achievements.length === 0) return;
+    const db = getDb();
+    const stmts = achievements.map((a) =>
+      db
+        .prepare(
+          `INSERT OR IGNORE INTO shooter_achievements
+             (shooter_id, achievement_id, tier, unlocked_at, match_ref, value)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(
+          shooterId,
+          a.achievementId,
+          a.tier,
+          a.unlockedAt,
+          a.matchRef ?? null,
+          a.value ?? null,
+        ),
+    );
+    await db.batch(stmts);
+  },
+
   async recordMatchAccess(key) {
     const now = Math.floor(Date.now() / 1000);
     const db = getDb();

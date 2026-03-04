@@ -8,6 +8,7 @@ import { parseRawScorecards } from "@/lib/scorecard-data";
 import { formatDivisionDisplay } from "@/lib/divisions";
 import { computeAggregateStats } from "@/lib/shooter-stats";
 import { CACHE_SCHEMA_VERSION } from "@/lib/constants";
+import { evaluateAchievements } from "@/lib/achievements/evaluate";
 import type {
   ShooterDashboardResponse,
   ShooterMatchSummary,
@@ -72,6 +73,9 @@ function computeMatchStats(
   totalD: number;
   totalMiss: number;
   totalNoShoots: number;
+  totalProcedurals: number;
+  dq: boolean;
+  perfectStages: number;
 } {
   const myCards = rawScorecards.filter(
     (sc) =>
@@ -94,6 +98,9 @@ function computeMatchStats(
       totalD: 0,
       totalMiss: 0,
       totalNoShoots: 0,
+      totalProcedurals: 0,
+      dq: false,
+      perfectStages: 0,
     };
   }
 
@@ -134,6 +141,21 @@ function computeMatchStats(
   const totalD = myCards.reduce((s, sc) => s + (sc.d_hits ?? 0), 0);
   const totalMiss = myCards.reduce((s, sc) => s + (sc.miss_count ?? 0), 0);
   const totalNoShoots = myCards.reduce((s, sc) => s + (sc.no_shoots ?? 0), 0);
+  const totalProcedurals = myCards.reduce((s, sc) => s + (sc.procedurals ?? 0), 0);
+  const dq = rawScorecards.some(
+    (sc) => sc.competitor_id === competitorId && sc.dq,
+  );
+
+  // Perfect stages: all A-hits, no C/D/miss/no-shoot/procedural, and at least one A-hit
+  const perfectStages = myCards.filter(
+    (sc) =>
+      (sc.a_hits ?? 0) > 0 &&
+      (sc.c_hits ?? 0) === 0 &&
+      (sc.d_hits ?? 0) === 0 &&
+      (sc.miss_count ?? 0) === 0 &&
+      (sc.no_shoots ?? 0) === 0 &&
+      (sc.procedurals ?? 0) === 0,
+  ).length;
 
   return {
     stageCount,
@@ -144,6 +166,9 @@ function computeMatchStats(
     totalD,
     totalMiss,
     totalNoShoots,
+    totalProcedurals,
+    dq,
+    perfectStages,
   };
 }
 
@@ -266,6 +291,9 @@ export async function GET(
           let totalD = 0;
           let totalMiss = 0;
           let totalNoShoots = 0;
+          let totalProcedurals = 0;
+          let wasDQ = false;
+          let perfectStagesCount = 0;
 
           if (scorecardsRaw) {
             try {
@@ -275,19 +303,22 @@ export async function GET(
               const rawScorecards = parseRawScorecards(
                 scEntry.data ?? { event: null },
               );
-              const stats = computeMatchStats(
+              const mStats = computeMatchStats(
                 competitorId,
                 division,
                 rawScorecards,
               );
-              stageCount = stats.stageCount;
-              avgHF = stats.avgHF;
-              matchPct = stats.matchPct;
-              totalA = stats.totalA;
-              totalC = stats.totalC;
-              totalD = stats.totalD;
-              totalMiss = stats.totalMiss;
-              totalNoShoots = stats.totalNoShoots;
+              stageCount = mStats.stageCount;
+              avgHF = mStats.avgHF;
+              matchPct = mStats.matchPct;
+              totalA = mStats.totalA;
+              totalC = mStats.totalC;
+              totalD = mStats.totalD;
+              totalMiss = mStats.totalMiss;
+              totalNoShoots = mStats.totalNoShoots;
+              totalProcedurals = mStats.totalProcedurals;
+              wasDQ = mStats.dq;
+              perfectStagesCount = mStats.perfectStages;
             } catch { /* skip scorecard stats on parse error */ }
           }
 
@@ -310,6 +341,9 @@ export async function GET(
             totalD,
             totalMiss,
             totalNoShoots,
+            totalProcedurals,
+            dq: wasDQ,
+            perfectStages: perfectStagesCount,
           };
           return summary;
         } catch { return null; }
@@ -324,15 +358,32 @@ export async function GET(
   // ── 4. Compute cross-match aggregates ─────────────────────────────────────
   const stats = computeAggregateStats(matchSummaries);
 
+  // ── 5. Evaluate achievements ───────────────────────────────────────────────
+  let storedAchievements: import("@/lib/achievements/types").StoredAchievement[] = [];
+  try {
+    storedAchievements = await db.getShooterAchievements(shooterId);
+  } catch { /* ignore DB errors */ }
+
+  const { achievements, newUnlocks } = evaluateAchievements(
+    { matchCount: totalMatchCount, matches: matchSummaries, stats },
+    storedAchievements,
+  );
+
+  // Persist new unlocks (fire-and-forget)
+  if (newUnlocks.length > 0) {
+    db.saveShooterAchievements(shooterId, newUnlocks).catch(() => {});
+  }
+
   const response: ShooterDashboardResponse = {
     shooterId,
     profile,
     matchCount: totalMatchCount,
     matches: matchSummaries,
     stats,
+    achievements,
   };
 
-  // ── 5. Cache the result ───────────────────────────────────────────────────
+  // ── 6. Cache the result ───────────────────────────────────────────────────
   try {
     await cache.set(dashboardKey, JSON.stringify(response), DASHBOARD_TTL);
   } catch { /* ignore */ }
