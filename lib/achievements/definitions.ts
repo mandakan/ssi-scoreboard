@@ -1,5 +1,6 @@
 // Achievement definitions and evaluators.
 
+import { Trophy, Swords, Crosshair, Target, ShieldCheck, Ban } from "lucide-react";
 import type { AchievementDefinition, AchievementEvalContext } from "./types";
 
 export type Evaluator = (ctx: AchievementEvalContext) => number;
@@ -15,7 +16,7 @@ const matchCount: AchievementEntry = {
     name: "Competitor",
     description: "Compete in matches tracked on this app.",
     category: "milestone",
-    icon: "\uD83C\uDFAF", // target emoji
+    icon: Trophy,
     tiers: [
       { level: 1, name: "First Match", threshold: 1, label: "1 match" },
       { level: 2, name: "Regular", threshold: 5, label: "5 matches" },
@@ -34,7 +35,7 @@ const stageCount: AchievementEntry = {
     name: "Stage Warrior",
     description: "Complete stages across all matches.",
     category: "milestone",
-    icon: "\u2694\uFE0F", // crossed swords
+    icon: Swords,
     tiers: [
       { level: 1, name: "Rookie", threshold: 10, label: "10 stages" },
       { level: 2, name: "Regular", threshold: 50, label: "50 stages" },
@@ -52,12 +53,12 @@ const sharpshooter: AchievementEntry = {
     name: "Sharpshooter",
     description: "Achieve a high A-zone hit percentage across all matches.",
     category: "accuracy",
-    icon: "\uD83D\uDD2B", // pistol
+    icon: Crosshair,
     tiers: [
       { level: 1, name: "Marksman", threshold: 60, label: "60% A-zone" },
       { level: 2, name: "Sharpshooter", threshold: 70, label: "70% A-zone" },
       { level: 3, name: "Expert", threshold: 80, label: "80% A-zone" },
-      { level: 4, name: "Master", threshold: 90, label: "90% A-zone" },
+      { level: 4, name: "Master", threshold: 85, label: "85% A-zone" },
     ],
   },
   evaluate: (ctx) => ctx.stats.aPercent ?? 0,
@@ -67,9 +68,9 @@ const perfectStages: AchievementEntry = {
   definition: {
     id: "perfect-stages",
     name: "Bullseye",
-    description: "Shoot stages with all A-zone hits and no penalties.",
+    description: "Shoot stages with all A-zone hits and zero penalties (no C/D hits, misses, no-shoots, or procedurals).",
     category: "accuracy",
-    icon: "\uD83C\uDFAF", // bullseye
+    icon: Target,
     tiers: [
       { level: 1, name: "First Perfect", threshold: 1, label: "1 perfect stage" },
       { level: 2, name: "Sharp Eye", threshold: 5, label: "5 perfect stages" },
@@ -85,9 +86,9 @@ const cleanMatch: AchievementEntry = {
   definition: {
     id: "clean-match",
     name: "Clean Sheet",
-    description: "Complete matches with zero misses and zero no-shoots.",
+    description: "Complete matches with zero misses, no-shoots, and procedurals.",
     category: "accuracy",
-    icon: "\u2728", // sparkles
+    icon: ShieldCheck,
     tiers: [
       { level: 1, name: "First Clean", threshold: 1, label: "1 clean match" },
       { level: 2, name: "Disciplined", threshold: 3, label: "3 clean matches" },
@@ -97,8 +98,26 @@ const cleanMatch: AchievementEntry = {
   },
   evaluate: (ctx) =>
     ctx.matches.filter(
-      (m) => m.stageCount > 0 && m.totalMiss === 0 && m.totalNoShoots === 0,
+      (m) =>
+        m.stageCount > 0 &&
+        m.totalMiss === 0 &&
+        m.totalNoShoots === 0 &&
+        (m.totalProcedurals ?? 0) === 0,
     ).length,
+};
+
+const dqClub: AchievementEntry = {
+  definition: {
+    id: "dq-club",
+    name: "DQ Club",
+    description: "Been there, done that.",
+    category: "milestone",
+    icon: Ban,
+    tiers: [
+      { level: 1, name: "Been there, done that", threshold: 1, label: "1 DQ" },
+    ],
+  },
+  evaluate: (ctx) => ctx.matches.filter((m) => m.dq).length,
 };
 
 export const ACHIEVEMENT_ENTRIES: AchievementEntry[] = [
@@ -107,6 +126,7 @@ export const ACHIEVEMENT_ENTRIES: AchievementEntry[] = [
   sharpshooter,
   perfectStages,
   cleanMatch,
+  dqClub,
 ];
 
 export const ACHIEVEMENT_DEFINITIONS: AchievementDefinition[] =

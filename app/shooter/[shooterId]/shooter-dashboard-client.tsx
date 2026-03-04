@@ -921,9 +921,7 @@ function AchievementCard({ achievement }: { achievement: AchievementProgress }) 
           aria-label={`${definition.name}: ${highestDef ? highestDef.name : "Locked"}. ${tierSummary(achievement)}`}
         >
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-lg shrink-0" aria-hidden="true">
-              {definition.icon}
-            </span>
+            <definition.icon className="w-5 h-5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-sm font-semibold truncate">
@@ -956,8 +954,9 @@ function AchievementCard({ achievement }: { achievement: AchievementProgress }) 
         </button>
       </PopoverTrigger>
       <PopoverContent className="max-w-xs text-sm space-y-2" side="top">
-        <p className="font-medium">
-          {definition.icon} {definition.name}
+        <p className="font-medium flex items-center gap-1.5">
+          <definition.icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+          {definition.name}
         </p>
         <p className="text-muted-foreground">{definition.description}</p>
         <div className="space-y-1">

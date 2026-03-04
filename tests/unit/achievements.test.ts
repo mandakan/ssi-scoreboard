@@ -66,7 +66,7 @@ describe("evaluateAchievements", () => {
     const { achievements, newUnlocks } = evaluateAchievements(ctx, []);
 
     // All achievements should exist but none should have unlocked tiers
-    expect(achievements.length).toBe(5);
+    expect(achievements.length).toBe(6);
     expect(newUnlocks.length).toBe(0);
     for (const a of achievements) {
       expect(a.unlockedTiers).toHaveLength(0);

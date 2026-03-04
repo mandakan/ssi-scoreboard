@@ -526,7 +526,9 @@ export interface ShooterMatchSummary {
   totalD: number;
   totalMiss: number;
   totalNoShoots: number;
-  /** Number of stages with all A-hits and no penalties. */
+  totalProcedurals?: number;
+  dq?: boolean;
+  /** Number of stages with all A-hits and no penalties (C/D/miss/no-shoot/procedural). */
   perfectStages?: number;
 }
 

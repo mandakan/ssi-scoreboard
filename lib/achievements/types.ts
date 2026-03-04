@@ -1,5 +1,6 @@
 // Achievement system types.
 
+import type { LucideIcon } from "lucide-react";
 import type { ShooterMatchSummary, ShooterAggregateStats } from "@/lib/types";
 
 export interface AchievementTier {
@@ -21,7 +22,7 @@ export interface AchievementDefinition {
   name: string;
   description: string;
   category: AchievementCategory;
-  icon: string;
+  icon: LucideIcon;
   tiers: AchievementTier[];
 }
 
