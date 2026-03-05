@@ -3,7 +3,6 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import db from "@/lib/db-impl";
-import { getMatchDataWithFallback } from "@/lib/match-data-store";
 import { CACHE_SCHEMA_VERSION } from "@/lib/constants";
 
 interface MatchMeta {
@@ -30,9 +29,10 @@ export async function GET(req: NextRequest) {
   const since = req.nextUrl.searchParams.get("since") ?? undefined;
   const wantScorecards = req.nextUrl.searchParams.get("hasScorecard") === "true";
 
-  // Load match entries and scorecard index in parallel
+  // Load match entries (with data) and scorecard index in parallel.
+  // includeData avoids N+1 queries — all data comes from a single D1/SQLite query.
   const [matchEntries, scorecardEntries] = await Promise.all([
-    db.listMatchCacheEntries({ keyType: "match", since }),
+    db.listMatchCacheEntries({ keyType: "match", since, includeData: true }),
     db.listMatchCacheEntries({ keyType: "scorecards" }),
   ]);
 
@@ -46,16 +46,11 @@ export async function GET(req: NextRequest) {
     const matchKey = `${entry.ct}:${entry.matchId}`;
     const hasScorecards = scorecardSet.has(matchKey);
 
-    // If filtering by scorecard availability, skip matches without scorecards
     if (wantScorecards && !hasScorecards) continue;
-
-    // Load the cached match data to extract metadata
-    const cacheKey = `gql:GetMatch:${JSON.stringify({ ct: entry.ct, id: entry.matchId })}`;
-    const raw = await getMatchDataWithFallback(cacheKey);
-    if (!raw) continue;
+    if (!entry.data) continue;
 
     try {
-      const parsed = JSON.parse(raw) as {
+      const parsed = JSON.parse(entry.data) as {
         v?: number;
         data?: {
           event?: {

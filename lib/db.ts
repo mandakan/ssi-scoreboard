@@ -98,11 +98,13 @@ export interface AppDatabase {
   /** Return all cache keys in match_data_cache, optionally filtered by key_type. */
   scanMatchDataCacheKeys(keyType?: string): Promise<string[]>;
 
-  /** List match_data_cache entries with metadata, optionally filtered by key_type and/or stored_at. */
+  /** List match_data_cache entries with metadata, optionally filtered by key_type and/or stored_at.
+   *  Pass includeData: true to also return the raw JSON blob (avoids N+1 queries). */
   listMatchCacheEntries(options?: {
     keyType?: string;
     since?: string;
+    includeData?: boolean;
   }): Promise<
-    Array<{ cacheKey: string; keyType: string; ct: number; matchId: string; storedAt: string }>
+    Array<{ cacheKey: string; keyType: string; ct: number; matchId: string; storedAt: string; data?: string }>
   >;
 }
