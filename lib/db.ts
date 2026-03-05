@@ -97,4 +97,12 @@ export interface AppDatabase {
 
   /** Return all cache keys in match_data_cache, optionally filtered by key_type. */
   scanMatchDataCacheKeys(keyType?: string): Promise<string[]>;
+
+  /** List match_data_cache entries with metadata, optionally filtered by key_type and/or stored_at. */
+  listMatchCacheEntries(options?: {
+    keyType?: string;
+    since?: string;
+  }): Promise<
+    Array<{ cacheKey: string; keyType: string; ct: number; matchId: string; storedAt: string }>
+  >;
 }

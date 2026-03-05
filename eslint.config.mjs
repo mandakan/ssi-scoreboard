@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Cloudflare / opennextjs build artifacts:
     ".open-next/**",
+    // Python data science lab (not a JS/TS project):
+    "lab/**",
   ]),
 ]);
 

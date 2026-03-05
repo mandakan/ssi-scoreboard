@@ -1,0 +1,63 @@
+[project]
+name = "ssi-lab"
+version = "0.1.0"
+description = "Data science lab for SSI Scoreboard — skill rating algorithms and analytics"
+requires-python = ">=3.13"
+dependencies = [
+  "openskill>=6.2,<7",
+  "duckdb>=1.4",
+  "httpx>=0.28",
+  "pydantic>=2.12",
+  "typer>=0.24",
+  "pandas>=3.0",
+  "scipy>=1.17",
+  "matplotlib>=3.10",
+  "rich>=14.0",
+  "fastapi>=0.135",
+  "uvicorn>=0.41",
+  "apscheduler>=3.11,<4",
+]
+
+[project.scripts]
+rating = "src.cli:app"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=9.0",
+  "ruff>=0.15",
+  "mypy>=1.19",
+  "jupyterlab>=4.5",
+  "pandas-stubs>=2.2",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[[tool.mypy.overrides]]
+module = ["openskill.*", "duckdb.*", "apscheduler.*", "scipy", "scipy.*"]
+ignore_missing_imports = true
+follow_untyped_imports = true
+
+[[tool.mypy.overrides]]
+module = ["src.engine.scheduler"]
+disallow_untyped_calls = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

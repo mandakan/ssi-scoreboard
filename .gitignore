@@ -39,3 +39,12 @@ mcp/dist/
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Python lab
+lab/data/*.duckdb
+lab/data/*.duckdb.wal
+lab/.venv/
+lab/__pycache__/
+lab/src/__pycache__/
+lab/**/__pycache__/
+lab/**/*.pyc
