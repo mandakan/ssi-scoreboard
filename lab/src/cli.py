@@ -18,6 +18,7 @@ def sync(
     url: str = typer.Option("http://localhost:3000", help="Base URL of the SSI Scoreboard app"),
     token: str = typer.Option(..., envvar="CACHE_PURGE_SECRET", help="Bearer token for auth"),
     full: bool = typer.Option(False, help="Full sync (ignore watermark)"),
+    delay: float = typer.Option(2.0, help="Delay between requests in seconds (0 for no delay)"),
     db_path: Path = DB_PATH_OPTION,
 ) -> None:
     """Sync match data from the app into the local DuckDB store."""
@@ -25,7 +26,8 @@ def sync(
     from src.data.sync import SyncClient
 
     store = Store(db_path)
-    client = SyncClient(url, token, store)
+    jitter = min(delay * 0.5, 1.0) if delay > 0 else 0.0
+    client = SyncClient(url, token, store, delay=delay, jitter=jitter)
     try:
         client.sync(full=full)
     finally:

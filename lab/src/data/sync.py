@@ -21,17 +21,27 @@ from src.data.store import Store
 
 console = Console()
 
-# Delay between individual match fetches (seconds) to be polite
-FETCH_DELAY_BASE = 2.0
-FETCH_DELAY_JITTER = 1.0
+# Default delay between individual match fetches (seconds)
+DEFAULT_FETCH_DELAY = 2.0
+DEFAULT_FETCH_JITTER = 1.0
 
 
 class SyncClient:
     """Incremental sync client for pulling match data from the app."""
 
-    def __init__(self, base_url: str, token: str, store: Store) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        token: str,
+        store: Store,
+        *,
+        delay: float = DEFAULT_FETCH_DELAY,
+        jitter: float = DEFAULT_FETCH_JITTER,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.store = store
+        self.delay = delay
+        self.jitter = jitter
         self.client = httpx.Client(
             base_url=self.base_url,
             headers={"Authorization": f"Bearer {token}"},
@@ -177,9 +187,10 @@ class SyncClient:
                     console.print(f"  [red]Error processing {m.name}: {e}[/red]")
                     progress.update(task, advance=1)
 
-                # Be polite — delay between requests
-                delay = FETCH_DELAY_BASE + random.uniform(0, FETCH_DELAY_JITTER)
-                time.sleep(delay)
+                # Delay between requests (configurable via --delay)
+                if self.delay > 0:
+                    pause = self.delay + random.uniform(0, self.jitter)
+                    time.sleep(pause)
 
         # Update watermark to the latest stored_at we saw
         if listing.matches:
