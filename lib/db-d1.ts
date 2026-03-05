@@ -104,6 +104,20 @@ const db: AppDatabase = {
     return result.results.map((r) => r.match_ref);
   },
 
+  async getUpcomingMatches(shooterId) {
+    const now = Math.floor(Date.now() / 1000);
+    const db = getDb();
+    const result = await db
+      .prepare(
+        `SELECT match_ref FROM shooter_matches
+         WHERE shooter_id = ? AND start_timestamp > ?
+         ORDER BY start_timestamp ASC`,
+      )
+      .bind(shooterId, now)
+      .all<{ match_ref: string }>();
+    return result.results.map((r) => r.match_ref);
+  },
+
   async getShooterProfile(shooterId) {
     const db = getDb();
     const row = await db

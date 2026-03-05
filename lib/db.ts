@@ -31,6 +31,9 @@ export interface AppDatabase {
   /** Return all match refs for a shooter, sorted by match date ascending. */
   getShooterMatches(shooterId: number): Promise<string[]>;
 
+  /** Return match refs where start_timestamp > now(), sorted ascending. */
+  getUpcomingMatches(shooterId: number): Promise<string[]>;
+
   /** Return the shooter profile, or null if not found. */
   getShooterProfile(shooterId: number): Promise<ShooterProfile | null>;
 

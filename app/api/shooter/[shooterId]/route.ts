@@ -12,6 +12,7 @@ import { evaluateAchievements } from "@/lib/achievements/evaluate";
 import type {
   ShooterDashboardResponse,
   ShooterMatchSummary,
+  UpcomingMatch,
 } from "@/lib/types";
 import type { RawScorecardsData } from "@/lib/scorecard-data";
 import type { RawScorecard } from "@/app/api/compare/logic";
@@ -194,13 +195,15 @@ export async function GET(
     }
   } catch { /* ignore cache errors */ }
 
-  // ── 2. Load profile and match refs from ShooterStore ─────────────────────
+  // ── 2. Load profile, match refs, and upcoming refs from ShooterStore ────
   let profile: ShooterProfile | null = null;
   let matchRefs: string[] = [];
+  let upcomingRefs: string[] = [];
   try {
-    [profile, matchRefs] = await Promise.all([
+    [profile, matchRefs, upcomingRefs] = await Promise.all([
       db.getShooterProfile(shooterId),
       db.getShooterMatches(shooterId),
+      db.getUpcomingMatches(shooterId),
     ]);
   } catch { /* ignore store errors */ }
 
@@ -208,11 +211,15 @@ export async function GET(
     return NextResponse.json({ error: "Shooter not found" }, { status: 404 });
   }
 
-  const totalMatchCount = matchRefs.length;
+  // Exclude upcoming refs from regular match processing
+  const upcomingSet = new Set(upcomingRefs);
+  const pastRefs = matchRefs.filter((ref) => !upcomingSet.has(ref));
+
+  const totalMatchCount = pastRefs.length;
 
   // ── 3. Process most recent N matches ─────────────────────────────────────
-  // matchRefs is sorted ascending by timestamp; take the last MAX_MATCHES
-  const recentRefs = matchRefs.slice(-MAX_MATCHES).reverse(); // newest first
+  // pastRefs is sorted ascending by timestamp; take the last MAX_MATCHES
+  const recentRefs = pastRefs.slice(-MAX_MATCHES).reverse(); // newest first
 
   // Load match + scorecard cache entries in parallel (batched to avoid flood)
   const BATCH = 10;
@@ -355,6 +362,51 @@ export async function GET(
     }
   }
 
+  // ── 3b. Resolve upcoming match metadata ──────────────────────────────────
+  const upcomingMatches: UpcomingMatch[] = [];
+  for (const ref of upcomingRefs) {
+    const parts = ref.split(":");
+    if (parts.length < 2) continue;
+    const [ct, ...idParts] = parts;
+    const matchId = idParts.join(":");
+    if (!ct || !matchId) continue;
+    const ctNum = parseInt(ct, 10);
+    if (isNaN(ctNum)) continue;
+
+    const matchKey = gqlCacheKey("GetMatch", { ct: ctNum, id: matchId });
+    let matchRaw: string | null = null;
+    try {
+      matchRaw = await cache.get(matchKey);
+    } catch { continue; }
+    if (!matchRaw) continue;
+
+    try {
+      const matchEntry = JSON.parse(matchRaw) as CacheEntry<RawMatchData>;
+      if (matchEntry.v !== CACHE_SCHEMA_VERSION) continue;
+      if (!matchEntry.data?.event) continue;
+
+      const ev = matchEntry.data.event;
+      const competitor = (
+        ev.competitors_approved_w_wo_results_not_dnf ?? []
+      ).find((c) => decodeShooterId(c.shooter?.id) === shooterId);
+      if (!competitor) continue;
+
+      upcomingMatches.push({
+        ct,
+        matchId,
+        name: ev.name,
+        date: ev.starts ?? null,
+        venue: ev.venue ?? null,
+        level: ev.level ?? null,
+        division: formatDivisionDisplay(
+          competitor.get_handgun_div_display ?? competitor.handgun_div,
+          competitor.shoots_handgun_major,
+        ),
+        competitorId: parseInt(competitor.id, 10),
+      });
+    } catch { /* skip on parse error */ }
+  }
+
   // ── 4. Compute cross-match aggregates ─────────────────────────────────────
   const stats = computeAggregateStats(matchSummaries);
 
@@ -381,6 +433,7 @@ export async function GET(
     matches: matchSummaries,
     stats,
     achievements,
+    ...(upcomingMatches.length > 0 ? { upcomingMatches } : {}),
   };
 
   // ── 6. Cache the result ───────────────────────────────────────────────────
