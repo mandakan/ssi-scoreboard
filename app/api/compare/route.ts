@@ -4,6 +4,7 @@ import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY, MATCH_QUERY } from "
 import cache from "@/lib/cache-impl";
 import { computeMatchTtl } from "@/lib/match-ttl";
 import { persistToMatchStore } from "@/lib/match-data-store";
+import { afterResponse } from "@/lib/background-impl";
 
 import { formatDivisionDisplay } from "@/lib/divisions";
 import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, computeStageDegradationData } from "@/app/api/compare/logic";
@@ -116,7 +117,7 @@ export async function GET(req: Request) {
       if (raw) {
         await cache.persist(matchKey); // remove TTL → permanent
         // Persist completed match data to D1/SQLite for durable storage
-        void persistToMatchStore(matchKey, raw);
+        afterResponse(persistToMatchStore(matchKey, raw));
       }
     } else if (!matchCachedAt) {
       // Cache miss: correct the initial 30s write TTL
@@ -148,7 +149,7 @@ export async function GET(req: Request) {
       if (raw) {
         await cache.persist(scorecardsKey);
         // Persist completed scorecard data to D1/SQLite for durable storage
-        void persistToMatchStore(scorecardsKey, raw);
+        afterResponse(persistToMatchStore(scorecardsKey, raw));
       }
     } else if (!scorecardsCachedAt) {
       await cache.expire(scorecardsKey, dataTtl);
@@ -364,7 +365,7 @@ export async function GET(req: Request) {
         await cache.set(matchGlobalKey, globalPayload, dataTtl);
         // Persist matchglobal to D1/SQLite if this is a completed match
         if (dataTtl === null) {
-          void persistToMatchStore(matchGlobalKey, globalPayload);
+          afterResponse(persistToMatchStore(matchGlobalKey, globalPayload));
         }
       } catch { /* ignore */ }
     }
