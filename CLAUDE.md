@@ -42,10 +42,11 @@ Key directories:
 - `lib/cache-node.ts` — ioredis implementation (Docker / Node.js target)
 - `lib/cache-edge.ts` — @upstash/redis HTTP implementation (Cloudflare Pages target)
 - `lib/cache-impl.ts` — re-exports node adapter by default; CF builds override via webpack alias
-- `lib/db.ts` — `AppDatabase` interface (persistent shooter profiles, match indices, popularity tracking, achievements)
+- `lib/db.ts` — `AppDatabase` interface (persistent shooter profiles, match indices, popularity tracking, achievements, match data cache)
 - `lib/db-sqlite.ts` — better-sqlite3 implementation (Docker / Node.js target)
 - `lib/db-d1.ts` — Cloudflare D1 implementation (Cloudflare Pages target)
 - `lib/db-impl.ts` — re-exports SQLite adapter by default; CF builds override via webpack/turbopack alias
+- `lib/match-data-store.ts` — tiered match data read/write helpers: `getMatchDataWithFallback()` (Redis → D1 → null), `persistToMatchStore()` (D1 write + Redis 24h drain), `parseMatchCacheKey()`
 - `lib/match-ttl.ts` — pure `computeMatchTtl()` — smart TTL tiers for pre/active/complete matches
 - `lib/mcp-tools.ts` — shared MCP tool registration (server-only, used by HTTP route + stdio server)
 - `lib/types.ts` — single source of truth for all TypeScript interfaces
@@ -59,7 +60,7 @@ Key directories:
 - `lib/og-data.ts` — server-only helper that fetches match data for OG images and page metadata (1500ms timeout via `Promise.race`)
 - `lib/shooter-index.ts` — `decodeShooterId()` + `indexMatchShooters()` — writes shooter profiles and match refs into AppDatabase (SQLite/D1)
 - `lib/backfill.ts` — pure `runBackfill()` — scans cached matches for a shooter, dependency-injected, fully unit-tested
-- `app/api/shooter/[shooterId]/route.ts` — GET shooter dashboard (aggregates from AppDatabase + Redis match cache)
+- `app/api/shooter/[shooterId]/route.ts` — GET shooter dashboard (aggregates from AppDatabase + match data cache)
 - `app/api/shooter/[shooterId]/backfill/route.ts` — POST cache-scan backfill (zero GraphQL calls)
 - `app/api/shooter/[shooterId]/add-match/route.ts` — POST manual match URL (may hit GraphQL)
 - `app/api/shooter/search/route.ts` — GET name search over `shooter_profiles` (`?q=&limit=`); returns `ShooterSearchResult[]`
@@ -69,7 +70,8 @@ Key directories:
 - `lib/achievements/evaluate.ts` — **pure function** `evaluateAchievements()`, no I/O, fully unit-tested
 - `lib/feature-previews.ts` — generic feature preview toggle system (localStorage + URL params)
 - `hooks/use-preview-feature.ts` — SSR-safe `usePreviewFeature()` hook for client components
-- `scripts/warm-cache.ts` — CLI cache warming script; also indexes known shooters as a side effect
+- `scripts/warm-cache.ts` — CLI cache warming script; writes permanent entries to both Redis and D1/SQLite; indexes known shooters as a side effect
+- `scripts/migrate-match-cache.ts` — one-time migration: moves permanent match data from Redis to D1/SQLite (`--drain` sets 24h Redis TTL, `--dry-run`, `--limit`)
 - `mcp/` — pnpm workspace package; stdio MCP server (`mcp/src/index.ts`) using `tsx` from root `node_modules`
 
 ## GraphQL Patterns
@@ -210,16 +212,18 @@ card is tappable to reveal its full unlock ladder with progress indicators.
 - shadcn components live in `components/ui/` — do not modify generated files directly
 
 ## Cache Schema Versioning
-`CACHE_SCHEMA_VERSION` in `lib/constants.ts` is embedded in every Redis cache entry as `v`.
+`CACHE_SCHEMA_VERSION` in `lib/constants.ts` is embedded in every cache entry as `v` — in
+both Redis and the D1/SQLite `match_data_cache` table (`schema_version` column).
 Whenever the **shape** of a cached GraphQL response changes (new fields, removed fields,
 renamed fields), bump `CACHE_SCHEMA_VERSION` by 1 and add a one-line history comment.
 
 Entries missing `v` or carrying an older version are treated as cache misses and re-fetched
 automatically — no manual `CACHE_PURGE_SECRET` flush is needed. The new entry is written
 with the current version on the first request, so the cache self-heals within one TTL cycle.
+This applies to both Redis entries and D1/SQLite entries read via `getMatchDataWithFallback()`.
 
 **Rule of thumb:** bump whenever you add or remove a field on `MatchResponse`, `CompareResponse`,
-or any other type that is serialised into the **match cache** (Redis) via `cachedExecuteQuery`.
+or any other type that is serialised into the **match cache** (Redis/D1) via `cachedExecuteQuery`.
 This does **not** apply to AppDatabase schema changes — those are managed independently by
 the SQLite/D1 adapters via `CREATE TABLE IF NOT EXISTS`.
 
@@ -241,17 +245,27 @@ through several paths:
 **"Known shooter"** = a shooterId that has a row in the `shooter_profiles` table
 (i.e. the app has seen them before through normal usage, warm-cache, or backfill).
 
-**Important scope limitation:** the backfill scan and warm-cache indexing can only discover
-matches that are already in the Redis **match cache**. Matches never viewed by anyone on the
-app are invisible. The add-match endpoint is the only path that can reach an arbitrary SSI match.
+**Important scope limitation:** the backfill scan can discover matches in both the Redis cache
+**and** the D1/SQLite `match_data_cache` table (keys are unioned). Matches never viewed by anyone
+on the app are invisible to both. The add-match endpoint is the only path that can reach an
+arbitrary SSI match.
 
 **AppDatabase tables (same schema on SQLite and D1):**
 - `shooter_profiles` — `{ shooter_id PK, name, club, division, last_seen }` — permanent; searchable via `db.searchShooterProfiles(query, { limit })` (case-insensitive LIKE, empty query returns recently active)
 - `shooter_matches` — `{ shooter_id, match_ref, start_timestamp }` — composite PK, capped at 200 per shooter
 - `match_popularity` — `{ cache_key PK, last_seen_at, hit_count }` — tracks popular `gql:GetMatch:*` keys
 - `shooter_achievements` — `{ shooter_id, achievement_id, tier }` — composite PK, persists unlocked tiers with `unlocked_at`, `match_ref`, `value`
+- `match_data_cache` — `{ cache_key PK, key_type, ct, match_id, data (JSON blob), schema_version, stored_at }` — durable store for historical match data offloaded from Redis (GetMatch, GetMatchScorecards, matchglobal)
 
-**Still in Redis (ephemeral cache):**
+**Tiered match data read path:**
+```
+Redis (hot cache) → D1/SQLite match_data_cache → GraphQL API
+```
+When a completed match is persisted to D1 (`persistToMatchStore()`), its Redis key gets a
+24h drain TTL. Historical match data thus self-drains from Redis, freeing storage. Active
+and recent matches remain in Redis at their normal TTLs.
+
+**Still in Redis only (ephemeral):**
 - `computed:shooter:{id}:dashboard` — pre-computed dashboard JSON, 5min TTL
 - `backfill:lock:{id}` — 60s cooldown lock
 
@@ -259,11 +273,28 @@ app are invisible. The add-match endpoint is the only path that can reach an arb
 imports) so it can be unit-tested with mocked deps. `lib/shooter-index.ts` handles the
 actual AppDatabase writes via the `AppDatabase` interface.
 
-**Migration:** `scripts/migrate-shooter-data.ts` is a one-time script that reads existing
-shooter data from Redis sorted sets and writes it to SQLite. Run after deploying the
-AppDatabase change to preserve historical data. Use `--cleanup` to delete permanent
-Redis keys (shooter profiles, match sorted sets, popularity sets) after migration — this
-frees Upstash storage quota since those keys are now in SQLite.
+**Migrations:**
+- `scripts/migrate-shooter-data.ts` — one-time script that reads existing shooter data from
+  Redis sorted sets and writes it to SQLite. Run after deploying the AppDatabase change to
+  preserve historical data. Use `--cleanup` to delete permanent Redis keys (shooter profiles,
+  match sorted sets, popularity sets) after migration — this frees Upstash storage quota since
+  those keys are now in SQLite.
+- `scripts/migrate-match-cache.ts` — one-time script that moves permanent match data from Redis
+  to D1/SQLite. Run after deploying migration 0003 (`match_data_cache` table). Scans all
+  permanent `gql:GetMatch:*`, `gql:GetMatchScorecards:*`, and `computed:matchglobal:*` keys.
+  Use `--drain` to set a 24h TTL on migrated Redis keys (freeing Redis storage over 24h).
+  Use `--dry-run` to preview, `--limit N` to cap the number of keys migrated.
+
+**Match cache migration steps (Cloudflare):**
+1. Deploy the code (creates `match_data_cache` table via migration 0003)
+2. Run: `wrangler d1 migrations apply APP_DB` (if not auto-applied)
+3. Run: `pnpm tsx scripts/migrate-match-cache.ts --drain` to move permanent Redis keys to D1
+4. Verify: Upstash storage drops over 24h as drained keys expire
+
+**Match cache migration steps (Docker):**
+1. Deploy the code (SQLite table auto-created via `CREATE TABLE IF NOT EXISTS`)
+2. Run: `pnpm tsx scripts/migrate-match-cache.ts --drain` to move permanent Redis keys to SQLite
+3. Verify: Redis `DBSIZE` drops over 24h as drained keys expire
 
 ## Feature Previews
 
@@ -428,8 +459,8 @@ available at runtime. `REDIS_URL` is set automatically via the compose service n
 The Dockerfile uses multi-stage builds (deps → builder → runner) with a non-root user.
 `output: "standalone"` in `next.config.ts` is set automatically when `DEPLOY_TARGET` is unset.
 Two named volumes persist state across container restarts:
-- `redis_data` — Redis match cache (ephemeral, can be flushed safely)
-- `shooter_data` → `/app/data` — SQLite shooter store (profiles, match indices, popularity)
+- `redis_data` — Redis hot cache (active/recent matches only; can be flushed safely — D1/SQLite has historical data)
+- `shooter_data` → `/app/data` — SQLite persistent store (shooter profiles, match indices, popularity, achievements, and historical match data cache)
 
 #### Deploying without Docker Compose (bare server, Kubernetes, Fly.io)
 Run a Redis instance (managed or self-hosted) and set `REDIS_URL` to its connection string.
@@ -454,9 +485,13 @@ handles the Workers bundling without requiring `export const runtime = "edge"` o
 `automaticDeserialization: false` is set on the Upstash client so values are returned as raw
 strings, consistent with the ioredis adapter — callers always do their own `JSON.parse`.
 
-**Shooter store:** the CF build uses Cloudflare D1 via the `APP_DB` binding declared in
-`wrangler.toml`. The schema auto-creates on first request via `CREATE TABLE IF NOT EXISTS`.
-Formal migrations live in `migrations/` and are applied with `wrangler d1 migrations apply`.
+**Persistent store:** the CF build uses Cloudflare D1 via the `APP_DB` binding declared in
+`wrangler.toml`. D1 holds shooter profiles, match indices, achievements, and the historical
+match data cache (offloaded from Upstash Redis). Formal migrations live in `migrations/`
+and are applied with `wrangler d1 migrations apply`. Current migrations:
+- `0001_init.sql` — shooter profiles, matches, popularity
+- `0002_achievements.sql` — shooter achievements
+- `0003_match_data_cache.sql` — historical match data cache
 
 **Bindings** (configured in `wrangler.toml`, not secrets):
 - `AI` — Workers AI binding for coaching tips
