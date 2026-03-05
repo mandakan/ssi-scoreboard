@@ -21,6 +21,11 @@ interface RawCompetitor {
   handgun_div?: string | null;
   get_handgun_div_display?: string | null;
   shoots_handgun_major?: boolean | null;
+  region?: string | null;
+  get_region_display?: string | null;
+  category?: string | null;
+  ics_alias?: string | null;
+  license?: string | null;
   shooter?: { id: string } | null;
 }
 
@@ -180,6 +185,11 @@ export async function GET(req: Request) {
         competitor_number: c.number ?? "",
         club: c.club ?? null,
         division: formatDivisionDisplay(c.get_handgun_div_display ?? c.handgun_div, c.shoots_handgun_major),
+        region: c.region || null,
+        region_display: c.get_region_display || null,
+        category: c.category || null,
+        ics_alias: c.ics_alias || null,
+        license: c.license || null,
       },
     ])
   );
@@ -196,6 +206,11 @@ export async function GET(req: Request) {
         competitor_number: "",
         club: null,
         division: null,
+        region: null,
+        region_display: null,
+        category: null,
+        ics_alias: null,
+        license: null,
       }
     );
   });

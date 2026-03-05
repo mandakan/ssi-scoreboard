@@ -154,6 +154,11 @@ export const MATCH_QUERY = `
             handgun_div
             get_handgun_div_display
             shoots_handgun_major
+            region
+            get_region_display
+            category
+            ics_alias
+            license
             shooter {
               id
             }
@@ -326,6 +331,11 @@ export const SCORECARDS_QUERY = `
                   club
                   handgun_div
                   get_handgun_div_display
+                  region
+                  get_region_display
+                  category
+                  ics_alias
+                  license
                 }
               }
             }

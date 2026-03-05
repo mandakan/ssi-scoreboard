@@ -22,9 +22,9 @@ const MOCK_MATCH: MatchResponse = {
     { id: 3, name: "Stage 3", stage_number: 3, max_points: 100, min_rounds: null, paper_targets: null, steel_targets: null, ssi_url: null, course_display: null },
   ],
   competitors: [
-    { id: 100, shooterId: null, name: "Alice Archer", competitor_number: "35", club: "Test Club", division: "Standard" },
-    { id: 200, shooterId: null, name: "Bob Shooter", competitor_number: "50", club: "Test Club", division: "Standard" },
-    { id: 300, shooterId: null, name: "Charlie Marksman", competitor_number: "116", club: null, division: null },
+    { id: 100, shooterId: null, name: "Alice Archer", competitor_number: "35", club: "Test Club", division: "Standard", region: null, region_display: null, category: null, ics_alias: null, license: null },
+    { id: 200, shooterId: null, name: "Bob Shooter", competitor_number: "50", club: "Test Club", division: "Standard", region: null, region_display: null, category: null, ics_alias: null, license: null },
+    { id: 300, shooterId: null, name: "Charlie Marksman", competitor_number: "116", club: null, division: null, region: null, region_display: null, category: null, ics_alias: null, license: null },
   ],
   squads: [
     { id: 1, number: 1, name: "Squad 1", competitorIds: [100, 200] },

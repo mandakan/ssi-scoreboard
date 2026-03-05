@@ -4,8 +4,8 @@ import { ComparisonChart } from "@/components/comparison-chart";
 import type { CompareResponse } from "@/lib/types";
 
 const baseCompetitors = [
-  { id: 1, shooterId: null, name: "Alice Smith", competitor_number: "35", club: null, division: "Open Major" },
-  { id: 2, shooterId: null, name: "Bob Jones", competitor_number: "50", club: null, division: "Production Minor" },
+  { id: 1, shooterId: null, name: "Alice Smith", competitor_number: "35", club: null, division: "Open Major", region: null, region_display: null, category: null, ics_alias: null, license: null },
+  { id: 2, shooterId: null, name: "Bob Jones", competitor_number: "50", club: null, division: "Production Minor", region: null, region_display: null, category: null, ics_alias: null, license: null },
 ];
 
 const baseStageCompetitors = {

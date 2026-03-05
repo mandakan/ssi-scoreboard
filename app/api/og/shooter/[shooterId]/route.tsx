@@ -14,6 +14,7 @@ import {
   targetBgLayers,
   fallbackImage,
 } from "@/lib/og-helpers";
+import { CATEGORY_DISPLAY, regionToFlagEmoji } from "@/lib/ipsc-categories";
 
 // ── Route handler ──────────────────────────────────────────────────────
 
@@ -79,9 +80,14 @@ export async function GET(
 
 /** Full stats card — shown when dashboard cache is populated. */
 function shooterWithStatsImage(shooter: OgShooterData) {
-  const details = [shooter.division, shooter.club]
+  const flag = regionToFlagEmoji(shooter.region);
+  const categoryLabel = shooter.category ? (CATEGORY_DISPLAY[shooter.category] ?? "") : "";
+  const details = [shooter.division, shooter.club, categoryLabel || null]
     .filter(Boolean)
     .join("  \u00b7  ");
+  const locationLine = flag
+    ? `${flag}  ${shooter.region_display ?? shooter.region ?? ""}`
+    : null;
 
   const matchPct = shooter.overallMatchPct ?? 0;
 
@@ -177,6 +183,11 @@ function shooterWithStatsImage(shooter: OgShooterData) {
                   {details}
                 </div>
               ) : null}
+              {locationLine ? (
+                <div style={{ display: "flex", fontSize: "22px", color: C.dim }}>
+                  {locationLine}
+                </div>
+              ) : null}
             </div>
 
             {/* Match % + bar */}
@@ -270,9 +281,14 @@ function shooterWithStatsImage(shooter: OgShooterData) {
 
 /** Profile-only card — shown when no dashboard cache is available. */
 function shooterProfileImage(shooter: OgShooterData) {
-  const details = [shooter.division, shooter.club]
+  const flag = regionToFlagEmoji(shooter.region);
+  const categoryLabel = shooter.category ? (CATEGORY_DISPLAY[shooter.category] ?? "") : "";
+  const details = [shooter.division, shooter.club, categoryLabel || null]
     .filter(Boolean)
     .join("  \u00b7  ");
+  const locationLine = flag
+    ? `${flag}  ${shooter.region_display ?? shooter.region ?? ""}`
+    : null;
 
   return (
     <div
@@ -326,6 +342,11 @@ function shooterProfileImage(shooter: OgShooterData) {
             {details !== "" ? (
               <div style={{ display: "flex", fontSize: "28px", color: C.muted }}>
                 {details}
+              </div>
+            ) : null}
+            {locationLine ? (
+              <div style={{ display: "flex", fontSize: "24px", color: C.dim }}>
+                {locationLine}
               </div>
             ) : null}
           </div>

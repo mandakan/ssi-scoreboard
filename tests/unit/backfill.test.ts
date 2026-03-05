@@ -110,7 +110,16 @@ describe("runBackfill", () => {
       ct: "22",
       matchId: "999",
       startTimestamp: Math.floor(new Date("2025-03-15T08:00:00Z").getTime() / 1000),
-      competitor: { name: "John Doe", club: "IPSC Club", division: "Production" },
+      competitor: {
+        name: "John Doe",
+        club: "IPSC Club",
+        division: "Production",
+        region: null,
+        region_display: null,
+        category: null,
+        ics_alias: null,
+        license: null,
+      },
     });
   });
 

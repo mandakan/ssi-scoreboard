@@ -13,8 +13,8 @@ const baseData: CompareResponse = {
   mode: "coaching",
   cacheInfo: { cachedAt: null },
   competitors: [
-    { id: 1, shooterId: null, name: "Alice Smith", competitor_number: "35", club: null, division: "Open Major" },
-    { id: 2, shooterId: null, name: "Bob Jones", competitor_number: "50", club: null, division: "Production Minor" },
+    { id: 1, shooterId: null, name: "Alice Smith", competitor_number: "35", club: null, division: "Open Major", region: null, region_display: null, category: null, ics_alias: null, license: null },
+    { id: 2, shooterId: null, name: "Bob Jones", competitor_number: "50", club: null, division: "Production Minor", region: null, region_display: null, category: null, ics_alias: null, license: null },
   ],
   penaltyStats: {
     1: { totalPenalties: 0, penaltyCostPercent: 0, matchPctActual: 89.2, matchPctClean: 89.2, penaltiesPerStage: 0, penaltiesPer100Rounds: 0 },

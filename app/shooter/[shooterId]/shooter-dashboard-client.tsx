@@ -68,6 +68,7 @@ import type {
   AchievementProgress,
   UpcomingMatch,
 } from "@/lib/types";
+import { CATEGORY_DISPLAY, regionToFlagEmoji } from "@/lib/ipsc-categories";
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
 
@@ -1262,6 +1263,20 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
           <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5 text-sm text-muted-foreground">
             {profile?.club && <span>{profile.club}</span>}
             {profile?.division && <span>{profile.division}</span>}
+            {(() => {
+              const flag = regionToFlagEmoji(profile?.region ?? null);
+              const label = profile?.region_display ?? null;
+              if (!flag && !label) return null;
+              return (
+                <span aria-label={label ?? undefined}>
+                  {flag}{label ? ` ${label}` : ""}
+                </span>
+              );
+            })()}
+            {(() => {
+              const cat = profile?.category ? CATEGORY_DISPLAY[profile.category] : "";
+              return cat ? <span>{cat}</span> : null;
+            })()}
           </div>
           <div className="flex gap-4 mt-3">
             <div>

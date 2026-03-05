@@ -38,6 +38,16 @@ export interface CompetitorInfo {
   competitor_number: string;
   club: string | null;
   division: string | null;
+  /** ISO 3166-1 alpha-3 nationality code for this match registration, e.g. "SWE". Null if unavailable. */
+  region: string | null;
+  /** Human-readable country name, e.g. "Sweden". Null if unavailable. */
+  region_display: string | null;
+  /** IPSC competition category code, e.g. "S" (Senior), "L" (Lady), "-" (Standard). Null if unavailable. */
+  category: string | null;
+  /** IPSC alias / ICS alias (member alias or numeric ID). Null if empty. */
+  ics_alias: string | null;
+  /** IPSC license / membership number. Null if empty. */
+  license: string | null;
 }
 
 export interface SquadInfo {
@@ -573,7 +583,17 @@ export interface ShooterAggregateStats {
 export interface ShooterDashboardResponse {
   shooterId: number;
   /** Shooter's latest known profile. Null if no profile has been indexed yet. */
-  profile: { name: string; club: string | null; division: string | null; lastSeen: string } | null;
+  profile: {
+    name: string;
+    club: string | null;
+    division: string | null;
+    lastSeen: string;
+    region: string | null;
+    region_display: string | null;
+    category: string | null;
+    ics_alias: string | null;
+    license: string | null;
+  } | null;
   /** Total number of matches in the Redis index for this shooter (may exceed matches.length). */
   matchCount: number;
   /** Up to 50 most recent matches, sorted newest first. */

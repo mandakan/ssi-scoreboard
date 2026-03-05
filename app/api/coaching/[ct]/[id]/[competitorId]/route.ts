@@ -164,6 +164,11 @@ export async function GET(
       rawComp.get_handgun_div_display ?? rawComp.handgun_div,
       rawComp.shoots_handgun_major,
     ),
+    region: null,
+    region_display: null,
+    category: null,
+    ics_alias: null,
+    license: null,
   };
 
   // 6. Parse scorecards and compute stage rankings

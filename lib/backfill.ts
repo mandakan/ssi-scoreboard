@@ -17,7 +17,16 @@ export interface BackfillDeps {
     ct: string;
     matchId: string;
     startTimestamp: number;
-    competitor: { name: string; club: string | null; division: string | null };
+    competitor: {
+      name: string;
+      club: string | null;
+      division: string | null;
+      region: string | null;
+      region_display: string | null;
+      category: string | null;
+      ics_alias: string | null;
+      license: string | null;
+    };
   }): Promise<void>;
 }
 
@@ -34,6 +43,11 @@ interface RawCompetitor {
   club?: string | null;
   handgun_div?: string | null;
   get_handgun_div_display?: string | null;
+  region?: string | null;
+  get_region_display?: string | null;
+  category?: string | null;
+  ics_alias?: string | null;
+  license?: string | null;
   shooter?: { id: string } | null;
 }
 
@@ -153,6 +167,11 @@ export async function runBackfill(
                 name,
                 club: c.club ?? null,
                 division: c.get_handgun_div_display ?? c.handgun_div ?? null,
+                region: c.region || null,
+                region_display: c.get_region_display || null,
+                category: c.category || null,
+                ics_alias: c.ics_alias || null,
+                license: c.license || null,
               },
             });
             progress.discovered++;

@@ -84,6 +84,11 @@ async function fetchOgMatchDataImpl(
         c.get_handgun_div_display ?? c.handgun_div,
         c.shoots_handgun_major,
       ),
+      region: c.region || null,
+      region_display: c.get_region_display || null,
+      category: c.category || null,
+      ics_alias: c.ics_alias || null,
+      license: c.license || null,
     }));
 
     // Only use the image URL if it's non-empty (API returns "" for unset images)
@@ -120,6 +125,9 @@ export interface OgShooterData {
   name: string;
   club: string | null;
   division: string | null;
+  region: string | null;
+  region_display: string | null;
+  category: string | null;
   matchCount: number;
   totalStages: number;
   overallAvgHF: number | null;
@@ -161,6 +169,9 @@ async function fetchOgShooterDataImpl(
         name: dashboard.profile?.name ?? `Shooter #${String(shooterId)}`,
         club: dashboard.profile?.club ?? null,
         division: dashboard.profile?.division ?? null,
+        region: dashboard.profile?.region ?? null,
+        region_display: dashboard.profile?.region_display ?? null,
+        category: dashboard.profile?.category ?? null,
         matchCount: dashboard.matchCount,
         totalStages: dashboard.stats.totalStages,
         overallAvgHF: dashboard.stats.overallAvgHF,
@@ -183,6 +194,9 @@ async function fetchOgShooterDataImpl(
       name: profile?.name ?? `Shooter #${String(shooterId)}`,
       club: profile?.club ?? null,
       division: profile?.division ?? null,
+      region: profile?.region ?? null,
+      region_display: profile?.region_display ?? null,
+      category: profile?.category ?? null,
       matchCount: matchRefs.length,
       totalStages: 0,
       overallAvgHF: null,

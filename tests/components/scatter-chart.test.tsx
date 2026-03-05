@@ -32,6 +32,11 @@ const baseData: CompareResponse = {
       competitor_number: "35",
       club: null,
       division: "Open Major",
+      region: null,
+      region_display: null,
+      category: null,
+      ics_alias: null,
+      license: null,
     },
     {
       id: 2,
@@ -40,6 +45,11 @@ const baseData: CompareResponse = {
       competitor_number: "50",
       club: null,
       division: "Production Minor",
+      region: null,
+      region_display: null,
+      category: null,
+      ics_alias: null,
+      license: null,
     },
   ],
   stages: [

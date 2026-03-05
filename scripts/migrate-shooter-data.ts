@@ -351,6 +351,11 @@ async function main(): Promise<void> {
         club: p.club,
         division: p.division,
         lastSeen: p.lastSeen,
+        region: null,
+        region_display: null,
+        category: null,
+        ics_alias: null,
+        license: null,
       });
     }
 
