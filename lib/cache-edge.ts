@@ -42,7 +42,9 @@ async function scanCachedMatchKeys(): Promise<string[]> {
   const keys: string[] = [];
   let cursor = "0";
   do {
-    const result = await getRedis().scan(cursor, { match: pattern, count: 200 });
+    // Upstash SCAN scans at most `count` keyspace entries per call and may
+    // return cursor "0" before the full keyspace is covered. Use a large count.
+    const result = await getRedis().scan(cursor, { match: pattern, count: 10_000 });
     const [nextCursor, batch] = result as [string, string[]];
     cursor = nextCursor;
     for (const key of batch) {
