@@ -254,6 +254,57 @@ const db: AppDatabase = {
 
     return result.results.map((r) => ({ key: r.cache_key, hits: r.hit_count }));
   },
+
+  // ── Match data cache ──────────────────────────────────────────────────
+
+  async getMatchDataCache(cacheKey) {
+    const db = getDb();
+    const row = await db
+      .prepare(`SELECT data FROM match_data_cache WHERE cache_key = ?`)
+      .bind(cacheKey)
+      .first<{ data: string }>();
+    return row?.data ?? null;
+  },
+
+  async setMatchDataCache(cacheKey, data, meta) {
+    const db = getDb();
+    await db
+      .prepare(
+        `INSERT INTO match_data_cache (cache_key, key_type, ct, match_id, data, schema_version, stored_at)
+         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+         ON CONFLICT(cache_key)
+         DO UPDATE SET data = excluded.data,
+                       schema_version = excluded.schema_version,
+                       stored_at = excluded.stored_at`,
+      )
+      .bind(cacheKey, meta.keyType, meta.ct, meta.matchId, data, meta.schemaVersion)
+      .run();
+  },
+
+  async deleteMatchDataCache(...cacheKeys) {
+    if (cacheKeys.length === 0) return;
+    const db = getDb();
+    // D1 doesn't support variadic bind — delete one at a time
+    const stmts = cacheKeys.map((key) =>
+      db.prepare(`DELETE FROM match_data_cache WHERE cache_key = ?`).bind(key),
+    );
+    await db.batch(stmts);
+  },
+
+  async scanMatchDataCacheKeys(keyType?) {
+    const db = getDb();
+    if (keyType) {
+      const result = await db
+        .prepare(`SELECT cache_key FROM match_data_cache WHERE key_type = ?`)
+        .bind(keyType)
+        .all<{ cache_key: string }>();
+      return result.results.map((r) => r.cache_key);
+    }
+    const result = await db
+      .prepare(`SELECT cache_key FROM match_data_cache`)
+      .all<{ cache_key: string }>();
+    return result.results.map((r) => r.cache_key);
+  },
 };
 
 export default db;

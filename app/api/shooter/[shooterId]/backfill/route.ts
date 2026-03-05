@@ -16,6 +16,7 @@ import { NextResponse } from "next/server";
 import cache from "@/lib/cache-impl";
 import db from "@/lib/db-impl";
 import { runBackfill } from "@/lib/backfill";
+import { getMatchDataWithFallback } from "@/lib/match-data-store";
 import type { BackfillDeps } from "@/lib/backfill";
 import type { BackfillProgress } from "@/lib/types";
 
@@ -49,10 +50,19 @@ export async function POST(
     }
   } catch { /* ignore cache errors */ }
 
-  // Wire up dependencies to real cache adapter
+  // Wire up dependencies to real cache adapter + D1 fallback
   const deps: BackfillDeps = {
-    scanCachedMatchKeys: () => cache.scanCachedMatchKeys(),
-    getCachedMatch: (key) => cache.get(key),
+    async scanCachedMatchKeys() {
+      // Union of Redis keys and D1 keys for maximum coverage
+      const [redisKeys, d1Keys] = await Promise.all([
+        cache.scanCachedMatchKeys(),
+        db.scanMatchDataCacheKeys("match"),
+      ]);
+      const allKeys = new Set(redisKeys);
+      for (const k of d1Keys) allKeys.add(k);
+      return [...allKeys];
+    },
+    getCachedMatch: (key) => getMatchDataWithFallback(key),
     async getExistingMatchRefs(sid) {
       const refs = await db.getShooterMatches(sid);
       return new Set(refs);

@@ -74,4 +74,27 @@ export interface AppDatabase {
     shooterId: number,
     achievements: StoredAchievement[],
   ): Promise<void>;
+
+  // ── Match data cache (historical match data offloaded from Redis) ────────
+
+  /** Retrieve a cached match data entry by its cache key. Returns the raw JSON string or null. */
+  getMatchDataCache(cacheKey: string): Promise<string | null>;
+
+  /** Store a match data entry. Upserts on cache_key. */
+  setMatchDataCache(
+    cacheKey: string,
+    data: string,
+    meta: {
+      keyType: string;
+      ct: number;
+      matchId: string;
+      schemaVersion: number;
+    },
+  ): Promise<void>;
+
+  /** Delete one or more match data cache entries by cache key. */
+  deleteMatchDataCache(...cacheKeys: string[]): Promise<void>;
+
+  /** Return all cache keys in match_data_cache, optionally filtered by key_type. */
+  scanMatchDataCacheKeys(keyType?: string): Promise<string[]>;
 }

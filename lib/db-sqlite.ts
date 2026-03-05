@@ -43,6 +43,18 @@ const SCHEMA_SQL = `
   );
   CREATE INDEX IF NOT EXISTS idx_mp_last_seen
     ON match_popularity(last_seen_at);
+
+  CREATE TABLE IF NOT EXISTS match_data_cache (
+    cache_key      TEXT PRIMARY KEY,
+    key_type       TEXT NOT NULL,
+    ct             INTEGER NOT NULL,
+    match_id       TEXT NOT NULL,
+    data           TEXT NOT NULL,
+    schema_version INTEGER NOT NULL,
+    stored_at      TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_mdc_match ON match_data_cache(ct, match_id);
+  CREATE INDEX IF NOT EXISTS idx_mdc_key_type ON match_data_cache(key_type);
 `;
 
 function openDb(dbPath: string): Database.Database {
@@ -281,6 +293,51 @@ export function createSqliteDatabase(
         .all(cutoff, limit) as { cache_key: string; hit_count: number }[];
 
       return rows.map((r) => ({ key: r.cache_key, hits: r.hit_count }));
+    },
+
+    // ── Match data cache ──────────────────────────────────────────────────
+
+    async getMatchDataCache(cacheKey) {
+      const row = getDb()
+        .prepare(`SELECT data FROM match_data_cache WHERE cache_key = ?`)
+        .get(cacheKey) as { data: string } | undefined;
+      return row?.data ?? null;
+    },
+
+    async setMatchDataCache(cacheKey, data, meta) {
+      getDb()
+        .prepare(
+          `INSERT INTO match_data_cache (cache_key, key_type, ct, match_id, data, schema_version, stored_at)
+           VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+           ON CONFLICT(cache_key)
+           DO UPDATE SET data = excluded.data,
+                         schema_version = excluded.schema_version,
+                         stored_at = excluded.stored_at`,
+        )
+        .run(cacheKey, meta.keyType, meta.ct, meta.matchId, data, meta.schemaVersion);
+    },
+
+    async deleteMatchDataCache(...cacheKeys) {
+      if (cacheKeys.length === 0) return;
+      const d = getDb();
+      const placeholders = cacheKeys.map(() => "?").join(",");
+      d.prepare(`DELETE FROM match_data_cache WHERE cache_key IN (${placeholders})`).run(
+        ...cacheKeys,
+      );
+    },
+
+    async scanMatchDataCacheKeys(keyType?) {
+      const d = getDb();
+      if (keyType) {
+        const rows = d
+          .prepare(`SELECT cache_key FROM match_data_cache WHERE key_type = ?`)
+          .all(keyType) as { cache_key: string }[];
+        return rows.map((r) => r.cache_key);
+      }
+      const rows = d
+        .prepare(`SELECT cache_key FROM match_data_cache`)
+        .all() as { cache_key: string }[];
+      return rows.map((r) => r.cache_key);
     },
   };
 }

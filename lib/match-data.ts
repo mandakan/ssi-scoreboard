@@ -9,6 +9,7 @@ import { computeMatchTtl } from "@/lib/match-ttl";
 import { formatDivisionDisplay } from "@/lib/divisions";
 import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
 import { afterResponse } from "@/lib/background-impl";
+import { persistToMatchStore } from "@/lib/match-data-store";
 import type { MatchResponse, StageInfo, CompetitorInfo, SquadInfo } from "@/lib/types";
 
 // ── Raw GraphQL response shapes ─────────────────────────────────────────────
@@ -137,7 +138,11 @@ export async function fetchMatchData(
   try {
     if (ttl === null) {
       const cached = await cacheAdapter.get(matchKey);
-      if (cached) await cacheAdapter.persist(matchKey);
+      if (cached) {
+        await cacheAdapter.persist(matchKey);
+        // Persist completed match data to D1/SQLite for durable storage
+        afterResponse(persistToMatchStore(matchKey, cached));
+      }
     } else if (!cachedAt) {
       await cacheAdapter.expire(matchKey, ttl);
     }

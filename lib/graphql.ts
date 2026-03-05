@@ -5,6 +5,7 @@ import cache from "@/lib/cache-impl";
 import db from "@/lib/db-impl";
 import { afterResponse } from "@/lib/background-impl";
 import { CACHE_SCHEMA_VERSION } from "@/lib/constants";
+import { parseMatchCacheKey } from "@/lib/match-data-store";
 
 const GRAPHQL_ENDPOINT = "https://shootnscoreit.com/graphql/";
 
@@ -226,6 +227,25 @@ export async function cachedExecuteQuery<T>(
     }
   } catch (err) {
     console.error("[cache] read error for key:", cacheKey, err);
+  }
+
+  // D1/SQLite fallback — check durable store before hitting GraphQL.
+  // Only for match-related keys (GetMatch, GetMatchScorecards, matchglobal).
+  if (parseMatchCacheKey(cacheKey)) {
+    try {
+      const d1Raw = await db.getMatchDataCache(cacheKey);
+      if (d1Raw) {
+        const entry = JSON.parse(d1Raw) as CacheEntry<T>;
+        if (entry.v === CACHE_SCHEMA_VERSION) {
+          if (cacheKey.startsWith("gql:GetMatch:")) {
+            afterResponse(db.recordMatchAccess(cacheKey).catch(() => {}));
+          }
+          return { data: entry.data, cachedAt: entry.cachedAt };
+        }
+      }
+    } catch (err) {
+      console.error("[cache] D1 fallback error for key:", cacheKey, err);
+    }
   }
 
   const data = await executeQuery<T>(query, variables);
