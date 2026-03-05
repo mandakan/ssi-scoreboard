@@ -164,7 +164,14 @@ class SyncClient:
                     synced += 1
                     progress.update(task, advance=1, description=f"[green]{m.name}[/green]")
                 except httpx.HTTPStatusError as e:
-                    console.print(f"  [red]Error fetching {m.name}: {e.response.status_code}[/red]")
+                    if e.response.status_code == 404:
+                        # No scorecard data on SSI — record as known so we don't retry
+                        self.store.skip_match(m.ct, m.match_id, m.name)
+                        console.print(f"  [yellow]Skipped {m.name} (no data on SSI)[/yellow]")
+                    else:
+                        console.print(
+                            f"  [red]Error fetching {m.name}: {e.response.status_code}[/red]"
+                        )
                     progress.update(task, advance=1)
                 except Exception as e:
                     console.print(f"  [red]Error processing {m.name}: {e}[/red]")
