@@ -496,6 +496,19 @@ export interface BackfillProgress {
   errorMessage?: string;
 }
 
+// ── Upcoming Matches ──────────────────────────────────────────────────────────
+
+export interface UpcomingMatch {
+  ct: string;
+  matchId: string;
+  name: string;
+  date: string | null;
+  venue: string | null;
+  level: string | null;
+  division: string | null;
+  competitorId: number;
+}
+
 // ── Shooter Dashboard ─────────────────────────────────────────────────────────
 
 // Per-match summary for the shooter dashboard.
@@ -566,6 +579,8 @@ export interface ShooterDashboardResponse {
   /** Up to 50 most recent matches, sorted newest first. */
   matches: ShooterMatchSummary[];
   stats: ShooterAggregateStats;
+  /** Matches with start_timestamp in the future. Only present when non-empty. */
+  upcomingMatches?: UpcomingMatch[];
   /** Achievement progress (preview feature). */
   achievements?: _AchievementProgress[];
 }

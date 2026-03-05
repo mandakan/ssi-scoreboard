@@ -141,6 +141,18 @@ export function createSqliteDatabase(
       return rows.map((r) => r.match_ref);
     },
 
+    async getUpcomingMatches(shooterId) {
+      const now = Math.floor(Date.now() / 1000);
+      const rows = getDb()
+        .prepare(
+          `SELECT match_ref FROM shooter_matches
+           WHERE shooter_id = ? AND start_timestamp > ?
+           ORDER BY start_timestamp ASC`,
+        )
+        .all(shooterId, now) as { match_ref: string }[];
+      return rows.map((r) => r.match_ref);
+    },
+
     async getShooterProfile(shooterId) {
       const row = getDb()
         .prepare(
