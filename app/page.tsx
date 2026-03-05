@@ -1,6 +1,7 @@
 import { RecentCompetitions } from "@/components/recent-competitions";
 import { PopularMatches } from "@/components/popular-matches";
 import { EventSearch } from "@/components/event-search";
+import { MyShootersButton } from "@/components/my-shooters-button";
 import { AppLogo } from "@/components/app-logo";
 
 export default function HomePage() {
@@ -23,8 +24,9 @@ export default function HomePage() {
         </p>
       </div>
 
-      <div className="w-full max-w-2xl">
+      <div className="w-full max-w-2xl flex flex-col gap-2">
         <EventSearch />
+        <MyShootersButton />
       </div>
 
       <RecentCompetitions />

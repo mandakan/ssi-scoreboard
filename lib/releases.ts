@@ -11,11 +11,34 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-03-04b";
+export const LATEST_RELEASE_ID = "2026-03-05";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "March 5, 2026",
+    title: "Find Shooter & My Shooters",
+    screenshotScenes: ["tracked-shooters-sheet", "shooter-dashboard"],
+    sections: [
+      {
+        heading: "New",
+        items: [
+          "Find shooter by name: search for any competitor directly from the \"My shooters\" sheet — no need to open a match first.",
+          "Track from search: tap the star on any search result to add them to your tracked competitors list.",
+          "Set your identity from search: tap the user-check icon on your own name to claim it as \"this is me\".",
+          "Dashboard shortcut: tap the arrow icon on any search result or tracked competitor to jump straight to their career dashboard.",
+        ],
+      },
+      {
+        heading: "Improved",
+        items: [
+          "\"My shooters\" is now always visible — on the homepage below the match search, and in the footer on every page. No longer hidden behind setting an identity first.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-03-04b",
     date: "March 4, 2026",
     title: "Division-Aware Dashboard Charts",
     screenshotScenes: ["shooter-dashboard"],

@@ -1,8 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { fetchMatch, fetchCompare, fetchEvents, fetchPopularMatches, fetchCoachingAvailability, fetchCoachingTip, fetchShooterDashboard } from "@/lib/api";
-import type { CompareMode, MatchResponse, CompareResponse, EventSummary, PopularMatch, CoachingTipResponse, CoachingAvailability, ShooterDashboardResponse } from "@/lib/types";
+import { fetchMatch, fetchCompare, fetchEvents, fetchPopularMatches, fetchCoachingAvailability, fetchCoachingTip, fetchShooterDashboard, fetchShooterSearch } from "@/lib/api";
+import type { CompareMode, MatchResponse, CompareResponse, EventSummary, PopularMatch, CoachingTipResponse, CoachingAvailability, ShooterDashboardResponse, ShooterSearchResult } from "@/lib/types";
 import { matchQueryKey, compareQueryKey, coachingAvailabilityKey, coachingTipQueryKey } from "@/lib/query-keys";
 
 // Re-export so existing imports from lib/queries keep working.
@@ -72,6 +72,15 @@ export function useShooterDashboardQuery(shooterId: number | null) {
     // so refetches are cheap (usually a single Redis read).
     staleTime: 0,
     enabled: shooterId != null && shooterId > 0,
+  });
+}
+
+export function useShooterSearchQuery(query: string, limit = 20, enabled = true) {
+  return useQuery<ShooterSearchResult[], Error>({
+    queryKey: ["shooter-search", query, limit],
+    queryFn: () => fetchShooterSearch(query, limit),
+    staleTime: 60_000,
+    enabled,
   });
 }
 

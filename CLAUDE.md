@@ -62,6 +62,8 @@ Key directories:
 - `app/api/shooter/[shooterId]/route.ts` — GET shooter dashboard (aggregates from AppDatabase + Redis match cache)
 - `app/api/shooter/[shooterId]/backfill/route.ts` — POST cache-scan backfill (zero GraphQL calls)
 - `app/api/shooter/[shooterId]/add-match/route.ts` — POST manual match URL (may hit GraphQL)
+- `app/api/shooter/search/route.ts` — GET name search over `shooter_profiles` (`?q=&limit=`); returns `ShooterSearchResult[]`
+- `components/my-shooters-button.tsx` — homepage entry point button that opens `TrackedShootersSheet`
 - `lib/achievements/types.ts` — achievement type definitions (AchievementDefinition, AchievementProgress, StoredAchievement)
 - `lib/achievements/definitions.ts` — ACHIEVEMENT_ENTRIES array (5 achievements) with pure evaluator functions
 - `lib/achievements/evaluate.ts` — **pure function** `evaluateAchievements()`, no I/O, fully unit-tested
@@ -244,7 +246,7 @@ matches that are already in the Redis **match cache**. Matches never viewed by a
 app are invisible. The add-match endpoint is the only path that can reach an arbitrary SSI match.
 
 **AppDatabase tables (same schema on SQLite and D1):**
-- `shooter_profiles` — `{ shooter_id PK, name, club, division, last_seen }` — permanent
+- `shooter_profiles` — `{ shooter_id PK, name, club, division, last_seen }` — permanent; searchable via `db.searchShooterProfiles(query, { limit })` (case-insensitive LIKE, empty query returns recently active)
 - `shooter_matches` — `{ shooter_id, match_ref, start_timestamp }` — composite PK, capped at 200 per shooter
 - `match_popularity` — `{ cache_key PK, last_seen_at, hit_count }` — tracks popular `gql:GetMatch:*` keys
 - `shooter_achievements` — `{ shooter_id, achievement_id, tier }` — composite PK, persists unlocked tiers with `unlocked_at`, `match_ref`, `value`
@@ -361,8 +363,8 @@ curl -s http://localhost:3000/match/22/{match_id} | grep 'og:image'
 
 ## MCP Server
 
-The app exposes a [Model Context Protocol](https://modelcontextprotocol.io) server with four tools:
-`search_events`, `get_match`, `compare_competitors`, `get_popular_matches`.
+The app exposes a [Model Context Protocol](https://modelcontextprotocol.io) server with six tools:
+`search_events`, `get_match`, `compare_competitors`, `get_popular_matches`, `get_shooter_dashboard`, `find_shooter`.
 
 Two transport modes share the same tool logic via `lib/mcp-tools.ts`:
 - **HTTP** (`app/api/mcp/route.ts`) — stateless JSON-RPC, single-shot transport; used by the Smithery

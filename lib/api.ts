@@ -10,6 +10,7 @@ import type {
   CoachingTipResponse,
   CoachingAvailability,
   ShooterDashboardResponse,
+  ShooterSearchResult,
   BackfillProgress,
 } from "@/lib/types";
 
@@ -103,6 +104,16 @@ export async function fetchCoachingTip(
     const body = await res.json().catch(() => ({ error: "Unknown error" }));
     throw new Error(body.error ?? `HTTP ${res.status}`);
   }
+  return res.json();
+}
+
+export async function fetchShooterSearch(
+  query: string,
+  limit = 20,
+): Promise<ShooterSearchResult[]> {
+  const p = new URLSearchParams({ q: query, limit: String(limit) });
+  const res = await fetch(`/api/shooter/search?${p}`);
+  if (!res.ok) return [];
   return res.json();
 }
 

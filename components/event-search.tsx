@@ -92,9 +92,6 @@ function guessCountry(): string {
 }
 
 // ── Filter store (useSyncExternalStore pattern) ───────────────────────────────
-// Avoids setState-in-effect by treating localStorage as an external store.
-// The server snapshot always returns safe defaults (no localStorage on server),
-// preventing SSR hydration mismatches.
 
 const _filterListeners = new Set<() => void>();
 let _filterCache: StoredFilters | null = null;

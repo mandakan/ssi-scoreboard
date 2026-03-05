@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { BarChart2, Coffee, Crosshair, Github, UserCheck } from "lucide-react";
+import { BarChart2, Coffee, Crosshair, Github, UserCheck, Users } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useWhatsNew } from "@/components/whats-new-provider";
 import { RELEASES } from "@/lib/releases";
@@ -59,26 +59,33 @@ export function Footer() {
           <Coffee className="w-4 h-4" aria-hidden="true" />
         </a>
         {identity && (
-          <>
-            <Link
-              href={`/shooter/${identity.shooterId}`}
-              className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
-              aria-label="My stats — view your personal match history"
-            >
-              <BarChart2 className="w-4 h-4" aria-hidden="true" />
-              <span>My Stats</span>
-            </Link>
-            <button
-              type="button"
-              onClick={() => setShowManage(true)}
-              className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
-              aria-label={`Your identity: ${identity.name}. Click to manage.`}
-            >
+          <Link
+            href={`/shooter/${identity.shooterId}`}
+            className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+            aria-label="My stats — view your personal match history"
+          >
+            <BarChart2 className="w-4 h-4" aria-hidden="true" />
+            <span>My Stats</span>
+          </Link>
+        )}
+        <button
+          type="button"
+          onClick={() => setShowManage(true)}
+          className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+          aria-label={identity ? `Your identity: ${identity.name}. Click to manage.` : "My shooters — track competitors and manage your identity"}
+        >
+          {identity ? (
+            <>
               <UserCheck className="w-4 h-4" aria-hidden="true" />
               <span>{identity.name}</span>
-            </button>
-          </>
-        )}
+            </>
+          ) : (
+            <>
+              <Users className="w-4 h-4" aria-hidden="true" />
+              <span>My shooters</span>
+            </>
+          )}
+        </button>
         <Link
           href="/about#install"
           className="inline-flex items-center hover:text-foreground transition-colors"

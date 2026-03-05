@@ -10,6 +10,7 @@
 
 import type { ShooterProfile } from "@/lib/shooter-index";
 import type { StoredAchievement } from "@/lib/achievements/types";
+import type { ShooterSearchResult } from "@/lib/types";
 
 export interface AppDatabase {
   // ── Shooter cross-match index ────────────────────────────────────────────
@@ -38,6 +39,16 @@ export interface AppDatabase {
 
   /** Check whether a shooter profile exists. */
   hasShooterProfile(shooterId: number): Promise<boolean>;
+
+  /**
+   * Search shooter profiles by name (case-insensitive substring match).
+   * An empty query returns the most recently seen shooters.
+   * Results are sorted by last_seen descending. Limit defaults to 20, max 100.
+   */
+  searchShooterProfiles(
+    query: string,
+    options?: { limit?: number },
+  ): Promise<ShooterSearchResult[]>;
 
   // ── Match popularity tracking ────────────────────────────────────────────
 
