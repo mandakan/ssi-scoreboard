@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * One-time migration: move permanent match data from Redis to D1/SQLite.
+ * Migration: move permanent match data from Redis to D1/SQLite.
  *
  * Scans all `gql:GetMatch:*`, `gql:GetMatchScorecards:*`, and
  * `computed:matchglobal:*` keys from Redis. For each permanent key (TTL -1),
- * writes the raw JSON blob to the `match_data_cache` table in SQLite.
+ * writes the raw JSON blob to the `match_data_cache` table.
  *
  * With --drain: sets a 24h TTL on migrated Redis keys so they self-expire,
  * freeing Redis storage over the next day.
@@ -13,9 +13,15 @@
  *   pnpm tsx scripts/migrate-match-cache.ts [options]
  *
  * Options:
- *   --drain      Set 24h Redis TTL on migrated keys (default: leave untouched)
- *   --dry-run    Show what would be migrated without writing
- *   --limit <n>  Max keys to migrate (default: unlimited)
+ *   --target <sqlite|d1>   Write target (default: sqlite)
+ *   --drain                Set 24h Redis TTL on migrated keys
+ *   --dry-run              Show what would be migrated without writing
+ *   --limit <n>            Max keys to migrate (default: unlimited)
+ *
+ * D1 target requires:
+ *   CLOUDFLARE_ACCOUNT_ID  — your Cloudflare account ID
+ *   CLOUDFLARE_API_TOKEN   — API token with D1 write permission
+ *   D1 database ID is read from wrangler.toml automatically.
  */
 
 import { readFileSync, existsSync } from "fs";
@@ -46,6 +52,75 @@ function loadEnvFile(filePath: string): void {
       process.env[key] = value;
     }
   }
+}
+
+// ─── Database writer abstraction ─────────────────────────────────────────────
+
+interface DbWriter {
+  setMatchDataCache(
+    cacheKey: string,
+    data: string,
+    meta: { keyType: string; ct: number; matchId: string; schemaVersion: number },
+  ): Promise<void>;
+}
+
+function getD1DatabaseId(): string {
+  const tomlPath = join(process.cwd(), "wrangler.toml");
+  if (!existsSync(tomlPath)) {
+    throw new Error("wrangler.toml not found — run from the repo root");
+  }
+  const content = readFileSync(tomlPath, "utf-8");
+  // Match the production d1_databases block (not env.staging)
+  const match = content.match(/^\[\[d1_databases\]\][\s\S]*?database_id\s*=\s*"([^"]+)"/m);
+  if (!match) {
+    throw new Error("Could not find [[d1_databases]] database_id in wrangler.toml");
+  }
+  return match[1];
+}
+
+function createD1Writer(): DbWriter {
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+  if (!accountId || !apiToken) {
+    throw new Error(
+      "D1 target requires CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN env vars.\n" +
+      "Set them in .env.local or export them before running.",
+    );
+  }
+  const dbId = getD1DatabaseId();
+  const baseUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${dbId}/query`;
+
+  console.log(`D1: account=${accountId.slice(0, 8)}…  db=${dbId.slice(0, 8)}…`);
+
+  return {
+    async setMatchDataCache(cacheKey, data, meta) {
+      const sql = `INSERT INTO match_data_cache (cache_key, key_type, ct, match_id, data, schema_version, stored_at)
+                   VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+                   ON CONFLICT(cache_key)
+                   DO UPDATE SET data = excluded.data,
+                                 schema_version = excluded.schema_version,
+                                 stored_at = excluded.stored_at`;
+      const resp = await fetch(baseUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          sql,
+          params: [cacheKey, meta.keyType, meta.ct, meta.matchId, data, meta.schemaVersion],
+        }),
+      });
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => "");
+        throw new Error(`D1 API ${resp.status}: ${body.slice(0, 200)}`);
+      }
+      const result = await resp.json() as { success: boolean; errors?: Array<{ message: string }> };
+      if (!result.success) {
+        throw new Error(`D1 query failed: ${result.errors?.[0]?.message ?? "unknown"}`);
+      }
+    },
+  };
 }
 
 // ─── Redis client abstraction ────────────────────────────────────────────────
@@ -123,6 +198,7 @@ async function createClient(): Promise<MigrationClient> {
 // ─── CLI ─────────────────────────────────────────────────────────────────────
 
 interface CliArgs {
+  target: "sqlite" | "d1";
   drain: boolean;
   dryRun: boolean;
   limit: number | null;
@@ -135,7 +211,13 @@ function parseArgs(): CliArgs {
     const i = args.indexOf(flag);
     return i !== -1 && i + 1 < args.length ? args[i + 1] : null;
   };
+  const target = get("--target") ?? "sqlite";
+  if (target !== "sqlite" && target !== "d1") {
+    console.error(`Error: --target must be "sqlite" or "d1", got "${target}"`);
+    process.exit(1);
+  }
   return {
+    target,
     drain: has("--drain"),
     dryRun: has("--dry-run"),
     limit: get("--limit") !== null ? parseInt(get("--limit")!, 10) : null,
@@ -152,12 +234,17 @@ async function main(): Promise<void> {
 
   console.log("Match cache → D1/SQLite migration");
   console.log("─".repeat(50));
+  console.log(`Target : ${args.target}`);
   console.log(`Mode   : ${args.dryRun ? "DRY RUN" : args.drain ? "migrate + drain (24h TTL)" : "migrate only (keep Redis keys)"}`);
   if (args.limit) console.log(`Limit  : ${args.limit} keys`);
   console.log("─".repeat(50));
 
   const client = await createClient();
-  const db = createSqliteDatabase();
+  const db: DbWriter | null = args.dryRun
+    ? null
+    : args.target === "d1"
+      ? createD1Writer()
+      : createSqliteDatabase();
 
   // Scan all three key patterns
   console.log("\nScanning Redis keys...");
@@ -213,7 +300,7 @@ async function main(): Promise<void> {
         if (meta.v != null) schemaVersion = meta.v;
       } catch { /* use default */ }
 
-      await db.setMatchDataCache(key, raw, {
+      await db!.setMatchDataCache(key, raw, {
         keyType: parsed.keyType,
         ct: parsed.ct,
         matchId: parsed.matchId,
