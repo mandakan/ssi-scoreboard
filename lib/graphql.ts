@@ -1,11 +1,27 @@
 // Server-only — never import from client components or files with "use client".
 // SSI_API_KEY lives here and must never be sent to the browser.
 
+import { headers } from "next/headers";
 import cache from "@/lib/cache-impl";
 import db from "@/lib/db-impl";
 import { afterResponse } from "@/lib/background-impl";
 import { CACHE_SCHEMA_VERSION } from "@/lib/constants";
 import { parseMatchCacheKey } from "@/lib/match-data-store";
+
+/**
+ * Check if the current request is an admin-authenticated request
+ * (Authorization: Bearer <CACHE_PURGE_SECRET>). Used to skip popularity
+ * tracking (recordMatchAccess) during cache warming.
+ */
+async function isAdminRequest(): Promise<boolean> {
+  try {
+    const h = await headers();
+    const secret = process.env.CACHE_PURGE_SECRET;
+    return !!secret && h.get("authorization") === `Bearer ${secret}`;
+  } catch {
+    return false; // Not in a request context (e.g. build time)
+  }
+}
 
 const GRAPHQL_ENDPOINT = "https://shootnscoreit.com/graphql/";
 
@@ -219,7 +235,7 @@ export async function cachedExecuteQuery<T>(
       // Schema version gate: entries without a version or with an older version
       // are treated as misses. They will be overwritten on the next fetch.
       if (entry.v === CACHE_SCHEMA_VERSION) {
-        if (cacheKey.startsWith("gql:GetMatch:")) {
+        if (cacheKey.startsWith("gql:GetMatch:") && !(await isAdminRequest())) {
           afterResponse(db.recordMatchAccess(cacheKey).catch(() => {}));
         }
         return { data: entry.data, cachedAt: entry.cachedAt };
@@ -237,7 +253,7 @@ export async function cachedExecuteQuery<T>(
       if (d1Raw) {
         const entry = JSON.parse(d1Raw) as CacheEntry<T>;
         if (entry.v === CACHE_SCHEMA_VERSION) {
-          if (cacheKey.startsWith("gql:GetMatch:")) {
+          if (cacheKey.startsWith("gql:GetMatch:") && !(await isAdminRequest())) {
             afterResponse(db.recordMatchAccess(cacheKey).catch(() => {}));
           }
           return { data: entry.data, cachedAt: entry.cachedAt };
@@ -260,7 +276,7 @@ export async function cachedExecuteQuery<T>(
   }
 
   // Record access for popularity tracking (fire-and-forget, non-fatal).
-  if (cacheKey.startsWith("gql:GetMatch:")) {
+  if (cacheKey.startsWith("gql:GetMatch:") && !(await isAdminRequest())) {
     void db.recordMatchAccess(cacheKey).catch(() => {});
   }
 

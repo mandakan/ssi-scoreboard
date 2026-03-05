@@ -33,27 +33,27 @@ on:
         required: false
         default: ''
       delay:
-        description: 'Delay between GraphQL requests (ms)'
+        description: 'Delay between API requests (ms)'
         required: false
-        default: '5000'
+        default: '2000'
       jitter:
         description: 'Add ±50% random jitter to each delay'
         type: boolean
         default: true
+      limit:
+        description: 'Max matches to warm (blank = unlimited)'
+        required: false
+        default: ''
       force:
-        description: 'Re-warm entries already cached at the current schema version'
+        description: 'Purge + re-warm entries already cached'
         type: boolean
         default: false
       dry_run:
-        description: 'Dry run — list matches without writing to cache'
+        description: 'Dry run — list matches without warming'
         type: boolean
         default: false
       skip_scorecards:
-        description: 'Skip GetMatchScorecards (only warm GetMatch)'
-        type: boolean
-        default: false
-      skip_fingerprint:
-        description: 'Skip computing and caching fieldFingerprintPoints'
+        description: 'Skip scorecards + fingerprints (only warm GetMatch)'
         type: boolean
         default: false
 
@@ -92,51 +92,48 @@ jobs:
       - name: Verify required secrets
         run: |
           missing=()
-          [ -z "$SSI_API_KEY" ]              && missing+=("SSI_API_KEY")
-          [ -z "$UPSTASH_REDIS_REST_URL" ]   && missing+=("UPSTASH_REDIS_REST_URL")
-          [ -z "$UPSTASH_REDIS_REST_TOKEN" ] && missing+=("UPSTASH_REDIS_REST_TOKEN")
+          [ -z "$CACHE_PURGE_SECRET" ] && missing+=("CACHE_PURGE_SECRET")
+          [ -z "$APP_URL" ]            && missing+=("APP_URL (environment variable)")
           if [ ${#missing[@]} -gt 0 ]; then
             ENV="${{ github.event_name == 'schedule' && 'production' || inputs.environment }}"
-            echo "ERROR: Missing required secrets in the '${ENV}' environment:"
+            echo "ERROR: Missing required configuration in the '${ENV}' environment:"
             printf '  - %s\n' "${missing[@]}"
             echo ""
-            echo "Add them under Settings → Environments → ${ENV} → Secrets."
+            echo "Add secrets under Settings → Environments → ${ENV} → Secrets."
+            echo "Add APP_URL under Settings → Environments → ${ENV} → Variables."
             exit 1
           fi
         env:
-          SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
-          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
-          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          CACHE_PURGE_SECRET: ${{ secrets.CACHE_PURGE_SECRET }}
+          APP_URL: ${{ vars.APP_URL }}
 
       - name: Run cache warmer
         env:
-          SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
-          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
-          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
-          CACHE_KEY_PREFIX: ${{ vars.CACHE_KEY_PREFIX }}
+          CACHE_PURGE_SECRET: ${{ secrets.CACHE_PURGE_SECRET }}
           # schedule trigger: hardcoded sensible defaults (no inputs available)
           # workflow_dispatch: use provided inputs, fall back to schedule defaults
           # Nightly default: SWE l2plus — keeps footprint manageable while covering
           # the primary audience. Override via workflow_dispatch for other regions.
+          INPUT_URL: ${{ vars.APP_URL }}
           INPUT_LEVEL: ${{ inputs.level || 'l2plus' }}
           INPUT_COUNTRY: ${{ inputs.country || 'SWE' }}
           INPUT_AFTER: ${{ inputs.after || '' }}
           INPUT_BEFORE: ${{ inputs.before || '' }}
-          INPUT_DELAY: ${{ inputs.delay || '5000' }}
+          INPUT_DELAY: ${{ inputs.delay || '2000' }}
           INPUT_JITTER: ${{ inputs.jitter || 'true' }}
+          INPUT_LIMIT: ${{ inputs.limit || '' }}
           INPUT_FORCE: ${{ inputs.force || 'false' }}
           INPUT_DRY_RUN: ${{ inputs.dry_run || 'false' }}
           INPUT_SKIP_SCORECARDS: ${{ inputs.skip_scorecards || 'false' }}
-          INPUT_SKIP_FINGERPRINT: ${{ inputs.skip_fingerprint || 'false' }}
         run: |
-          ARGS="--level $INPUT_LEVEL --delay $INPUT_DELAY"
+          ARGS="--url $INPUT_URL --level $INPUT_LEVEL --delay $INPUT_DELAY"
           if [ -n "$INPUT_COUNTRY" ];                then ARGS="$ARGS --country $INPUT_COUNTRY"; fi
           if [ -n "$INPUT_AFTER" ];                  then ARGS="$ARGS --after $INPUT_AFTER"; fi
           if [ -n "$INPUT_BEFORE" ];                 then ARGS="$ARGS --before $INPUT_BEFORE"; fi
+          if [ -n "$INPUT_LIMIT" ];                  then ARGS="$ARGS --limit $INPUT_LIMIT"; fi
           if [ "$INPUT_JITTER" = "true" ];            then ARGS="$ARGS --jitter"; fi
           if [ "$INPUT_FORCE" = "true" ];             then ARGS="$ARGS --force"; fi
           if [ "$INPUT_DRY_RUN" = "true" ];           then ARGS="$ARGS --dry-run"; fi
           if [ "$INPUT_SKIP_SCORECARDS" = "true" ];   then ARGS="$ARGS --skip-scorecards"; fi
-          if [ "$INPUT_SKIP_FINGERPRINT" = "true" ];  then ARGS="$ARGS --skip-fingerprint"; fi
           echo "Running: pnpm tsx scripts/warm-cache.ts $ARGS"
           pnpm tsx scripts/warm-cache.ts $ARGS
