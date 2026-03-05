@@ -46,6 +46,7 @@ import { computeAllFingerprintPoints } from "../app/api/compare/logic";
 import { CACHE_SCHEMA_VERSION } from "../lib/constants";
 import { decodeShooterId } from "../lib/shooter-index";
 import { createSqliteDatabase } from "../lib/db-sqlite";
+import { parseMatchCacheKey } from "../lib/match-data-store";
 
 const GRAPHQL_ENDPOINT = "https://shootnscoreit.com/graphql/";
 
@@ -436,18 +437,24 @@ async function isFingerprintCached(client: SimpleCacheClient, key: string): Prom
   }
 }
 
-async function writeToCache(
-  client: SimpleCacheClient,
-  key: string,
-  data: unknown,
-  ttl: number | null,
+/**
+ * Write a cache entry to D1/SQLite for durable storage.
+ * Only writes entries that have a recognizable match cache key format.
+ */
+async function writeToDb(
+  shooterStore: ReturnType<typeof createSqliteDatabase>,
+  cacheKey: string,
+  rawJson: string,
+  schemaVersion: number = CACHE_SCHEMA_VERSION,
 ): Promise<void> {
-  const entry = {
-    data,
-    cachedAt: new Date().toISOString(),
-    v: CACHE_SCHEMA_VERSION,
-  };
-  await client.set(key, JSON.stringify(entry), ttl);
+  const parsed = parseMatchCacheKey(cacheKey);
+  if (!parsed) return;
+  await shooterStore.setMatchDataCache(cacheKey, rawJson, {
+    keyType: parsed.keyType,
+    ct: parsed.ct,
+    matchId: parsed.matchId,
+    schemaVersion,
+  });
 }
 
 // ─── Event fetching with sub-window strategy ──────────────────────────────────
@@ -682,7 +689,12 @@ async function main(): Promise<void> {
           continue;
         }
 
-        await writeToCache(client, matchKey, data, ttl);
+        const matchPayload = JSON.stringify({ data, cachedAt: new Date().toISOString(), v: CACHE_SCHEMA_VERSION });
+        await client.set(matchKey, matchPayload, ttl);
+        // Persist permanent matches to D1/SQLite
+        if (ttl === null) {
+          try { await writeToDb(shooterStore, matchKey, matchPayload); } catch { /* non-fatal */ }
+        }
         opLine("GetMatch", "ok", ttl === null ? "permanent" : `ttl=${ttl}s`, fetchMs);
         warmed++;
         matchDataForFingerprint = data;
@@ -729,7 +741,10 @@ async function main(): Promise<void> {
       const t0 = Date.now();
       try {
         scorecardsData = await gqlFetch(SCORECARDS_QUERY, { ct, id }, apiKey);
-        await writeToCache(client, scorecardsKey, scorecardsData, null);
+        const scPayload = JSON.stringify({ data: scorecardsData, cachedAt: new Date().toISOString(), v: CACHE_SCHEMA_VERSION });
+        await client.set(scorecardsKey, scPayload, null);
+        // Persist to D1/SQLite
+        try { await writeToDb(shooterStore, scorecardsKey, scPayload); } catch { /* non-fatal */ }
         opLine("GetMatchScorecards", "ok", "permanent", Date.now() - t0);
       } catch (err) {
         opLine("GetMatchScorecards", "FAIL", err instanceof Error ? err.message : String(err), Date.now() - t0);
@@ -765,7 +780,10 @@ async function main(): Promise<void> {
           );
           const rawScorecards = parseRawScorecards(scorecardsData as Parameters<typeof parseRawScorecards>[0]);
           const ffp = computeAllFingerprintPoints(rawScorecards, divisionMap);
-          await client.set(matchGlobalKey, JSON.stringify({ v: 1, fieldFingerprintPoints: ffp }), null);
+          const globalPayload = JSON.stringify({ v: 1, fieldFingerprintPoints: ffp });
+          await client.set(matchGlobalKey, globalPayload, null);
+          // Persist to D1/SQLite
+          try { await writeToDb(shooterStore, matchGlobalKey, globalPayload, 1); } catch { /* non-fatal */ }
           opLine("MatchFingerprint", "ok", `${ffp.length} pts  permanent`, Date.now() - t0);
         } catch (err) {
           opLine("MatchFingerprint", "FAIL", err instanceof Error ? err.message : String(err), Date.now() - t0);

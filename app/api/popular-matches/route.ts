@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import cache from "@/lib/cache-impl";
 import db from "@/lib/db-impl";
+import { getMatchDataWithFallback } from "@/lib/match-data-store";
 import type { PopularMatch } from "@/lib/types";
 
 /** Maximum age (seconds) a match access must be within to qualify. */
@@ -47,7 +47,7 @@ export async function GET() {
     for (const { key } of popular) {
       if (results.length >= MAX_RESULTS) break;
       try {
-        const raw = await cache.get(key);
+        const raw = await getMatchDataWithFallback(key);
         if (!raw) continue;
 
         const entry = JSON.parse(raw) as MatchCacheEntry;

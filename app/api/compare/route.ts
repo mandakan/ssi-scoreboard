@@ -3,6 +3,7 @@ import { MAX_COMPETITORS } from "@/lib/constants";
 import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY, MATCH_QUERY } from "@/lib/graphql";
 import cache from "@/lib/cache-impl";
 import { computeMatchTtl } from "@/lib/match-ttl";
+import { persistToMatchStore } from "@/lib/match-data-store";
 
 import { formatDivisionDisplay } from "@/lib/divisions";
 import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, computeStageDegradationData } from "@/app/api/compare/logic";
@@ -107,7 +108,11 @@ export async function GET(req: Request) {
   try {
     if (dataTtl === null) {
       const raw = await cache.get(matchKey);
-      if (raw) await cache.persist(matchKey); // remove TTL → permanent
+      if (raw) {
+        await cache.persist(matchKey); // remove TTL → permanent
+        // Persist completed match data to D1/SQLite for durable storage
+        void persistToMatchStore(matchKey, raw);
+      }
     } else if (!matchCachedAt) {
       // Cache miss: correct the initial 30s write TTL
       await cache.expire(matchKey, dataTtl);
@@ -135,7 +140,11 @@ export async function GET(req: Request) {
   try {
     if (dataTtl === null) {
       const raw = await cache.get(scorecardsKey);
-      if (raw) await cache.persist(scorecardsKey);
+      if (raw) {
+        await cache.persist(scorecardsKey);
+        // Persist completed scorecard data to D1/SQLite for durable storage
+        void persistToMatchStore(scorecardsKey, raw);
+      }
     } else if (!scorecardsCachedAt) {
       await cache.expire(scorecardsKey, dataTtl);
     }
@@ -336,7 +345,12 @@ export async function GET(req: Request) {
       );
       ffp = computeAllFingerprintPoints(rawScorecards, divisionMap);
       try {
-        await cache.set(matchGlobalKey, JSON.stringify({ v: 1, fieldFingerprintPoints: ffp }), dataTtl);
+        const globalPayload = JSON.stringify({ v: 1, fieldFingerprintPoints: ffp });
+        await cache.set(matchGlobalKey, globalPayload, dataTtl);
+        // Persist matchglobal to D1/SQLite if this is a completed match
+        if (dataTtl === null) {
+          void persistToMatchStore(matchGlobalKey, globalPayload);
+        }
       } catch { /* ignore */ }
     }
 

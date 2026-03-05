@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import cache from "@/lib/cache-impl";
+import db from "@/lib/db-impl";
 import { gqlCacheKey } from "@/lib/graphql";
 
 
@@ -26,8 +27,13 @@ export async function DELETE(req: Request) {
 
   const matchKey = gqlCacheKey("GetMatch", { ct: ctNum, id });
   const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
+  const matchGlobalKey = `computed:matchglobal:${ctNum}:${id}`;
 
-  await cache.del(matchKey, scorecardsKey);
+  // Delete from both Redis and D1/SQLite
+  await Promise.all([
+    cache.del(matchKey, scorecardsKey, matchGlobalKey),
+    db.deleteMatchDataCache(matchKey, scorecardsKey, matchGlobalKey),
+  ]);
 
-  return NextResponse.json({ purged: [matchKey, scorecardsKey] });
+  return NextResponse.json({ purged: [matchKey, scorecardsKey, matchGlobalKey] });
 }

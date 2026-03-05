@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import cache from "@/lib/cache-impl";
 import db from "@/lib/db-impl";
 import { gqlCacheKey } from "@/lib/graphql";
+import { getMatchDataWithFallback } from "@/lib/match-data-store";
 import { decodeShooterId } from "@/lib/shooter-index";
 import type { ShooterProfile } from "@/lib/shooter-index";
 import { parseRawScorecards } from "@/lib/scorecard-data";
@@ -248,8 +249,8 @@ export async function GET(
         let scorecardsRaw: string | null = null;
         try {
           [matchRaw, scorecardsRaw] = await Promise.all([
-            cache.get(matchKey),
-            cache.get(scorecardsKey),
+            getMatchDataWithFallback(matchKey),
+            getMatchDataWithFallback(scorecardsKey),
           ]);
         } catch { return null; }
 
@@ -376,7 +377,7 @@ export async function GET(
     const matchKey = gqlCacheKey("GetMatch", { ct: ctNum, id: matchId });
     let matchRaw: string | null = null;
     try {
-      matchRaw = await cache.get(matchKey);
+      matchRaw = await getMatchDataWithFallback(matchKey);
     } catch { continue; }
     if (!matchRaw) continue;
 
