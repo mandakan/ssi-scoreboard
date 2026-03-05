@@ -2,7 +2,7 @@
 // Called by both the HTTP route handler and the stdio server.
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { EventSummary, MatchResponse, CompareResponse, PopularMatch } from "./types";
+import type { EventSummary, MatchResponse, CompareResponse, PopularMatch, ShooterDashboardResponse, ShooterSearchResult } from "./types";
 
 // ---------------------------------------------------------------------------
 // Static resource content
@@ -18,7 +18,7 @@ ShootNScoreIt (SSI) via the public scoreboard at https://scoreboard.urdr.dev.
 TYPICAL WORKFLOWS
 -----------------
 
-1. Analyse one competitor's performance:
+1. Analyse one competitor's performance at a single match:
    search_events(query="<match name>")
    → get_match(ct, id)
    → compare_competitors(ct, id, [competitor_id])
@@ -31,6 +31,11 @@ TYPICAL WORKFLOWS
 3. Browse currently popular / active matches:
    get_popular_matches()    ← returns [] when cache cold
    → (if empty) search_events(starts_after="<today>")
+
+4. Cross-competition profile for a shooter:
+   search_events(...) → get_match(ct, id)
+   → note competitors[n].shooterId (global, stable integer)
+   → get_shooter_dashboard(shooter_id)
 
 TOOL SUMMARY
 ------------
@@ -47,6 +52,7 @@ get_match
   • Always call this before compare_competitors to resolve names → numeric IDs.
   • squads[n].competitorIds lists every approved competitor in that squad.
   • scoring_completed (0–100 %) shows how much of the match has been scored.
+  • competitors[n].shooterId is the GLOBAL stable shooter ID (use with get_shooter_dashboard).
 
 compare_competitors
   Deep stage-by-stage analysis for 1–12 competitors.
@@ -59,6 +65,21 @@ get_popular_matches
   Returns recently-viewed matches from the server cache.
   • Call first when the user has not named a specific match.
   • Falls back to search_events when the cache is cold (returns []).
+
+get_shooter_dashboard
+  Cross-competition career profile for a single shooter.
+  • Input: shooter_id from get_match competitors[n].shooterId (global ID, not per-match id).
+  • Returns: profile (name, club, division), up to 50 recent matches with per-match stats,
+    aggregate stats (overall match %, avg HF, A-zone %, consistency CV, HF trend slope),
+    and achievement progress.
+  • Returns 404 if the shooter has not been seen in any cached match on this server.
+
+find_shooter
+  Search for shooters by name in the local database.
+  • Returns shooter_id values that can be passed directly to get_shooter_dashboard.
+  • Only searches shooters already indexed on this server (i.e. seen in a cached match).
+  • Empty query returns the most recently active shooters (useful for browsing).
+  • openWorldHint: false — local data only, not a live SSI search.
 
 DATA QUALITY NOTES
 ------------------
@@ -187,8 +208,20 @@ WORKFLOW — always follow these steps in order:
 2. get_match(ct, id)                        → load competitors; resolve names to numeric IDs
 3. compare_competitors(ct, id, [ids])       → deep stage-by-stage analysis
 
+For cross-competition career stats (when you have a match open):
+2b. From get_match, note competitors[n].shooterId (global stable integer, NOT the per-match id)
+3b. get_shooter_dashboard(shooter_id)       → career history, aggregate stats, achievements
+
+For finding a shooter by name (without a specific match):
+find_shooter(query="<name>")               → list of matching shooters with shooter_id
+→ get_shooter_dashboard(shooter_id)        → full career profile
+
 RULES:
 • competitor_ids are INTEGERS from get_match — never guess or invent them.
+• shooter_id for get_shooter_dashboard / find_shooter comes from get_match
+  competitors[n].shooterId (global, stable) — NOT competitors[n].id (per-match only).
+• find_shooter searches local data only — it will not find shooters who have never
+  appeared in a cached match on this server.
 • min_level: omit (defaults to l2plus = Regional+). Use "all" ONLY when the user
   explicitly asks about club matches or Level I events.
 • get_popular_matches: call first when the user has NOT named a specific match.
@@ -246,6 +279,8 @@ export interface DataProviders {
   getMatch: (ct: string, id: string) => Promise<MatchResponse>;
   compareCompetitors: (ct: string, id: string, ids: number[]) => Promise<CompareResponse>;
   getPopularMatches: () => Promise<PopularMatch[]>;
+  getShooterDashboard: (shooterId: number) => Promise<ShooterDashboardResponse>;
+  searchShooterProfiles: (params: { query: string; limit?: number }) => Promise<ShooterSearchResult[]>;
 }
 
 async function apiFetch<T>(baseUrl: string, path: string): Promise<T> {
@@ -271,6 +306,12 @@ function createHttpProviders(baseUrl: string): DataProviders {
       return apiFetch<CompareResponse>(baseUrl, `/api/compare?${p}`);
     },
     getPopularMatches: () => apiFetch<PopularMatch[]>(baseUrl, "/api/popular-matches"),
+    getShooterDashboard: (shooterId) => apiFetch<ShooterDashboardResponse>(baseUrl, `/api/shooter/${shooterId}`),
+    searchShooterProfiles: async (params) => {
+      const p = new URLSearchParams({ q: params.query });
+      if (params.limit) p.set("limit", String(params.limit));
+      return apiFetch<ShooterSearchResult[]>(baseUrl, `/api/shooter/search?${p}`);
+    },
   };
 }
 
@@ -356,6 +397,51 @@ export function registerMcpTools(server: McpServer, arg: string | DataProviders)
     { readOnlyHint: true, openWorldHint: true },
     async () => {
       const data = await providers.getPopularMatches();
+      return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    "get_shooter_dashboard",
+    "Fetch a shooter's cross-competition profile and career statistics. " +
+    "Returns: profile (name, club, division), match history (up to 50 recent matches with per-match stats), " +
+    "aggregate stats (overall match %, average hit factor, A-zone %, consistency CV, HF trend slope), " +
+    "and achievement progress (tiered milestones). " +
+    "Use this to answer questions about a shooter's performance across multiple matches, their consistency over time, " +
+    "or how their accuracy has been trending. " +
+    "The `shooter_id` is the globally stable SSI ShooterNode ID — obtain it from `get_match`'s " +
+    "`competitors[n].shooterId` field (an integer, distinct from the per-match `competitors[n].id`). " +
+    "Returns 404 if the shooter has not been seen in any cached match on this server. " +
+    "Each match in `matches[]` includes `ct` and `matchId` so you can call `get_match` or `compare_competitors` " +
+    "to drill into a specific competition.",
+    {
+      shooter_id: z.number().int().positive()
+        .describe("Globally stable SSI shooter ID — from get_match competitors[n].shooterId (not the per-match competitor id)"),
+    },
+    { readOnlyHint: true, openWorldHint: true },
+    async ({ shooter_id }) => {
+      const data = await providers.getShooterDashboard(shooter_id);
+      return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    "find_shooter",
+    "Search for shooter profiles by name. " +
+    "Returns a list of matching shooters with their shooter_id — pass that ID to " +
+    "get_shooter_dashboard to load their full career history. " +
+    "Only shooters who have appeared in at least one cached match on this server are searchable. " +
+    "Pass an empty query to browse the most recently active shooters. " +
+    "Use this when you know a shooter's name but not their shooter_id, as an alternative to " +
+    "browsing get_match competitor lists.",
+    {
+      query: z.string().default("").describe("Name to search for (case-insensitive substring match). Empty string returns recently seen shooters."),
+      limit: z.number().int().min(1).max(100).optional().default(20)
+        .describe("Maximum number of results to return. Defaults to 20."),
+    },
+    { readOnlyHint: true, openWorldHint: false },
+    async ({ query, limit }) => {
+      const data = await providers.searchShooterProfiles({ query, limit });
       return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
     },
   );

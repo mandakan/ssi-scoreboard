@@ -570,6 +570,16 @@ export interface ShooterDashboardResponse {
   achievements?: _AchievementProgress[];
 }
 
+// Response from GET /api/shooter/search.
+export interface ShooterSearchResult {
+  shooterId: number;
+  name: string;
+  club: string | null;
+  division: string | null;
+  /** ISO timestamp of the last match this shooter was seen in. */
+  lastSeen: string;
+}
+
 // Re-export achievement types for convenience.
 export type {
   AchievementProgress,

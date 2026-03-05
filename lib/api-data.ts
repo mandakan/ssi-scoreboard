@@ -20,7 +20,9 @@ import { GET as eventsGET } from "@/app/api/events/route";
 import { GET as matchGET } from "@/app/api/match/[ct]/[id]/route";
 import { GET as compareGET } from "@/app/api/compare/route";
 import { GET as popularGET } from "@/app/api/popular-matches/route";
-import type { EventSummary, MatchResponse, CompareResponse, PopularMatch } from "./types";
+import { GET as shooterGET } from "@/app/api/shooter/[shooterId]/route";
+import { GET as shooterSearchGET } from "@/app/api/shooter/search/route";
+import type { EventSummary, MatchResponse, CompareResponse, PopularMatch, ShooterDashboardResponse, ShooterSearchResult } from "./types";
 
 async function extractJson<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -76,4 +78,22 @@ export async function compareCompetitors(
 export async function getPopularMatches(): Promise<PopularMatch[]> {
   const res = await popularGET();
   return extractJson<PopularMatch[]>(res);
+}
+
+export async function searchShooterProfiles(params: {
+  query: string;
+  limit?: number;
+}): Promise<ShooterSearchResult[]> {
+  const p = new URLSearchParams({ q: params.query });
+  if (params.limit) p.set("limit", String(params.limit));
+  const res = await shooterSearchGET(new Request(`http://localhost/api/shooter/search?${p}`));
+  return extractJson<ShooterSearchResult[]>(res);
+}
+
+export async function getShooterDashboard(shooterId: number): Promise<ShooterDashboardResponse> {
+  const res = await shooterGET(
+    new Request(`http://localhost/api/shooter/${shooterId}`),
+    { params: Promise.resolve({ shooterId: String(shooterId) }) },
+  );
+  return extractJson<ShooterDashboardResponse>(res);
 }

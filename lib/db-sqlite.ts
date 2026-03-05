@@ -228,6 +228,27 @@ export function createSqliteDatabase(
       tx();
     },
 
+    async searchShooterProfiles(query, options) {
+      const limit = Math.min(options?.limit ?? 20, 100);
+      const d = getDb();
+      type Row = { shooter_id: number; name: string; club: string | null; division: string | null; last_seen: string };
+      const toResult = (r: Row) => ({ shooterId: r.shooter_id, name: r.name, club: r.club, division: r.division, lastSeen: r.last_seen });
+      if (!query) {
+        const rows = d.prepare(
+          `SELECT shooter_id, name, club, division, last_seen FROM shooter_profiles ORDER BY last_seen DESC LIMIT ?`,
+        ).all(limit) as Row[];
+        return rows.map(toResult);
+      }
+      // Escape LIKE wildcards so user input is treated literally.
+      const escaped = query.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+      const rows = d.prepare(
+        `SELECT shooter_id, name, club, division, last_seen FROM shooter_profiles
+         WHERE name LIKE '%' || ? || '%' ESCAPE '\\'
+         ORDER BY last_seen DESC LIMIT ?`,
+      ).all(escaped, limit) as Row[];
+      return rows.map(toResult);
+    },
+
     async getPopularKeys(maxAgeSeconds, limit) {
       const cutoff = Math.floor(Date.now() / 1000) - maxAgeSeconds;
       const d = getDb();

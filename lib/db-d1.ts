@@ -179,6 +179,30 @@ const db: AppDatabase = {
     await db.batch(stmts);
   },
 
+  async searchShooterProfiles(query, options) {
+    const limit = Math.min(options?.limit ?? 20, 100);
+    const db = getDb();
+    type Row = { shooter_id: number; name: string; club: string | null; division: string | null; last_seen: string };
+    const toResult = (r: Row) => ({ shooterId: r.shooter_id, name: r.name, club: r.club, division: r.division, lastSeen: r.last_seen });
+    if (!query) {
+      const result = await db
+        .prepare(`SELECT shooter_id, name, club, division, last_seen FROM shooter_profiles ORDER BY last_seen DESC LIMIT ?`)
+        .bind(limit)
+        .all<Row>();
+      return result.results.map(toResult);
+    }
+    const escaped = query.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+    const result = await db
+      .prepare(
+        `SELECT shooter_id, name, club, division, last_seen FROM shooter_profiles
+         WHERE name LIKE '%' || ? || '%' ESCAPE '\\'
+         ORDER BY last_seen DESC LIMIT ?`,
+      )
+      .bind(escaped, limit)
+      .all<Row>();
+    return result.results.map(toResult);
+  },
+
   async recordMatchAccess(key) {
     const now = Math.floor(Date.now() / 1000);
     const db = getDb();

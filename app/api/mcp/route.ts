@@ -80,7 +80,7 @@ export async function GET(request: Request) {
           "MCP server for SSI Scoreboard — query IPSC competition data via Claude or any MCP-compatible client.",
         transport: "streamable-http",
         endpoint: "/api/mcp",
-        tools: ["search_events", "get_match", "compare_competitors", "get_popular_matches"],
+        tools: ["search_events", "get_match", "compare_competitors", "get_popular_matches", "get_shooter_dashboard", "find_shooter"],
       },
       { headers: CORS },
     );
