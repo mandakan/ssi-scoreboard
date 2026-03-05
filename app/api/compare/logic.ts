@@ -376,6 +376,100 @@ export function assignDifficulty(
   });
 }
 
+/** Per-competitor per-stage ranking result for the full field. */
+export interface FullFieldStageResult {
+  competitorId: number;
+  stageId: number;
+  hitFactor: number | null;
+  points: number | null;
+  time: number | null;
+  maxPoints: number;
+  aHits: number | null;
+  cHits: number | null;
+  dHits: number | null;
+  missCount: number | null;
+  noShoots: number | null;
+  procedurals: number | null;
+  dq: boolean;
+  dnf: boolean;
+  zeroed: boolean;
+  overallRank: number | null;
+  overallPercent: number | null;
+  divisionRank: number | null;
+  divisionPercent: number | null;
+}
+
+/**
+ * Compute per-stage overall and division rankings for ALL competitors.
+ * Returns a flat array of results — one entry per competitor per stage.
+ * Used by the data export API for the data science lab.
+ */
+export function computeFullFieldRankings(
+  allScorecards: RawScorecard[],
+): FullFieldStageResult[] {
+  // Group scorecards by stage
+  const byStage = new Map<number, RawScorecard[]>();
+  for (const sc of allScorecards) {
+    const existing = byStage.get(sc.stage_id) ?? [];
+    existing.push(sc);
+    byStage.set(sc.stage_id, existing);
+  }
+
+  const results: FullFieldStageResult[] = [];
+
+  for (const [stageId, stageScorecards] of byStage) {
+    // Overall rankings — all competitors
+    const { rankMap: overallRankMap, leaderHF: overallLeaderHF } =
+      rankByHF(stageScorecards);
+
+    // Division rankings
+    const byDivision = new Map<string, RawScorecard[]>();
+    for (const sc of stageScorecards) {
+      const key = sc.competitor_division ?? "__none__";
+      const existing = byDivision.get(key) ?? [];
+      existing.push(sc);
+      byDivision.set(key, existing);
+    }
+    const divResults = new Map<
+      string,
+      { rankMap: Map<number, number>; leaderHF: number | null }
+    >();
+    for (const [div, divCards] of byDivision) {
+      divResults.set(div, rankByHF(divCards));
+    }
+
+    for (const sc of stageScorecards) {
+      const hf = effectiveHF(sc);
+      const divKey = sc.competitor_division ?? "__none__";
+      const divInfo = divResults.get(divKey);
+
+      results.push({
+        competitorId: sc.competitor_id,
+        stageId,
+        hitFactor: hf,
+        points: sc.dq || sc.zeroed ? 0 : (sc.points ?? null),
+        time: sc.time,
+        maxPoints: sc.max_points,
+        aHits: sc.a_hits,
+        cHits: sc.c_hits,
+        dHits: sc.d_hits,
+        missCount: sc.miss_count,
+        noShoots: sc.no_shoots,
+        procedurals: sc.procedurals,
+        dq: sc.dq,
+        dnf: sc.dnf,
+        zeroed: sc.zeroed,
+        overallRank: sc.dnf ? null : (overallRankMap.get(sc.competitor_id) ?? null),
+        overallPercent: sc.dnf ? null : pct(hf, overallLeaderHF),
+        divisionRank: sc.dnf ? null : (divInfo?.rankMap.get(sc.competitor_id) ?? null),
+        divisionPercent: sc.dnf ? null : (divInfo ? pct(hf, divInfo.leaderHF) : null),
+      });
+    }
+  }
+
+  return results;
+}
+
 /**
  * Given ALL scorecards for a match and the selected competitors, compute:
  *   - Group rankings (rank/% within selected competitors)
