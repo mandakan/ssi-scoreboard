@@ -27,6 +27,7 @@ import {
   Check,
   Plus,
   ArrowLeft,
+  Calendar,
   Trophy,
   Swords,
   Crosshair,
@@ -65,6 +66,7 @@ import type {
   ShooterMatchSummary,
   BackfillProgress,
   AchievementProgress,
+  UpcomingMatch,
 } from "@/lib/types";
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
@@ -236,6 +238,55 @@ function MatchCard({ match }: { match: ShooterMatchSummary }) {
             {formatHF(match.avgHF)} HF
           </span>
         )}
+      </div>
+      <ChevronRight
+        className="w-4 h-4 text-muted-foreground shrink-0 group-hover:text-foreground transition-colors"
+        aria-hidden="true"
+      />
+    </Link>
+  );
+}
+
+// ─── Upcoming match card ─────────────────────────────────────────────────────
+
+function UpcomingMatchCard({ match }: { match: UpcomingMatch }) {
+  const href = `/match/${match.ct}/${match.matchId}?competitors=${match.competitorId}`;
+  const badge = levelBadge(match.level);
+
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors group min-h-[44px]"
+      aria-label={`Upcoming: ${match.name}${match.date ? `, ${formatDate(match.date)}` : ""}`}
+    >
+      <Calendar
+        className="w-4 h-4 text-muted-foreground shrink-0"
+        aria-hidden="true"
+      />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-medium text-sm truncate">{match.name}</span>
+          {badge && (
+            <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-wide">
+              {badge}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          <span className="text-xs text-muted-foreground">
+            {formatDate(match.date)}
+          </span>
+          {match.venue && (
+            <span className="text-xs text-muted-foreground">
+              · {match.venue}
+            </span>
+          )}
+          {match.division && (
+            <span className="text-xs text-muted-foreground">
+              · {match.division}
+            </span>
+          )}
+        </div>
       </div>
       <ChevronRight
         className="w-4 h-4 text-muted-foreground shrink-0 group-hover:text-foreground transition-colors"
@@ -1098,6 +1149,7 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
     shooterId,
   );
   const [historyOpen, setHistoryOpen] = useState(true);
+  const [upcomingOpen, setUpcomingOpen] = useState(false);
   const [divisionFilter, setDivisionFilter] = useState<string | null | "unset">("unset");
 
   // Derive divisions and default filter once data loads
@@ -1334,6 +1386,52 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
             matches={filteredMatches}
             divisionFilter={effectiveFilter}
           />
+        </section>
+      )}
+
+      {/* ── Upcoming matches ──────────────────────────────────────────── */}
+      {data.upcomingMatches && data.upcomingMatches.length > 0 && (
+        <section>
+          <h2 className="text-sm font-semibold m-0 leading-none">
+            <button
+              type="button"
+              id="upcoming-heading"
+              onClick={() => setUpcomingOpen((v) => !v)}
+              aria-expanded={upcomingOpen}
+              aria-controls="upcoming-panel"
+              className="flex w-full items-center justify-between text-left gap-2 mb-3 min-h-[2.75rem]"
+            >
+              <span className="flex items-center gap-2">
+                <span className="text-muted-foreground uppercase tracking-wide">
+                  Upcoming
+                </span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  ({data.upcomingMatches.length})
+                </span>
+              </span>
+              {upcomingOpen ? (
+                <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+              ) : (
+                <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+              )}
+            </button>
+          </h2>
+
+          {upcomingOpen && (
+            <div
+              id="upcoming-panel"
+              role="region"
+              aria-labelledby="upcoming-heading"
+              className="flex flex-col gap-2"
+            >
+              {data.upcomingMatches.map((match) => (
+                <UpcomingMatchCard
+                  key={`${match.ct}:${match.matchId}`}
+                  match={match}
+                />
+              ))}
+            </div>
+          )}
         </section>
       )}
 
