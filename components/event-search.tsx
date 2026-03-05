@@ -9,7 +9,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  User,
 } from "lucide-react";
 import {
   Command,
@@ -19,8 +18,8 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { useEventsQuery, useShooterSearchQuery } from "@/lib/queries";
-import type { EventSummary, ShooterSearchResult } from "@/lib/types";
+import { useEventsQuery } from "@/lib/queries";
+import type { EventSummary } from "@/lib/types";
 import { parseMatchUrl, cn } from "@/lib/utils";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -93,9 +92,6 @@ function guessCountry(): string {
 }
 
 // ── Filter store (useSyncExternalStore pattern) ───────────────────────────────
-// Avoids setState-in-effect by treating localStorage as an external store.
-// The server snapshot always returns safe defaults (no localStorage on server),
-// preventing SSR hydration mismatches.
 
 const _filterListeners = new Set<() => void>();
 let _filterCache: StoredFilters | null = null;
@@ -172,17 +168,6 @@ function chipClass(active: boolean) {
   );
 }
 
-// ── Relative date helper for shooter search results ──────────────────────────
-
-function formatRelativeDate(iso: string): string {
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
-  if (days <= 0) return "today";
-  if (days === 1) return "yesterday";
-  if (days < 30) return `${days}d ago`;
-  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
-  return `${Math.floor(days / 365)}y ago`;
-}
-
 // ── Wide date range used in search mode ─────────────────────────────────────
 
 const WIDE_AFTER = "2010-01-01";
@@ -192,7 +177,6 @@ const WIDE_BEFORE = toISODate(addMonths(new Date(), 60));
 
 export function EventSearch() {
   const router = useRouter();
-  const [mode, setMode] = useState<"matches" | "shooters">("matches");
   const [inputValue, setInputValue] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [browseMonth, setBrowseMonth] = useState<Date>(() => startOfMonth(new Date()));
@@ -211,32 +195,24 @@ export function EventSearch() {
     return () => clearTimeout(timer);
   }, [inputValue]);
 
-  function handleModeChange(newMode: "matches" | "shooters") {
-    setMode(newMode);
-    setInputValue("");
-    setDebouncedQuery("");
-  }
-
   function handleInputChange(value: string) {
-    if (mode === "matches") {
-      const trimmed = value.trim();
-      if (trimmed.startsWith("http")) {
-        const parsed = parseMatchUrl(trimmed);
-        if (parsed) {
-          router.push(`/match/${parsed.ct}/${parsed.id}`);
-          return;
-        }
+    const trimmed = value.trim();
+    if (trimmed.startsWith("http")) {
+      const parsed = parseMatchUrl(trimmed);
+      if (parsed) {
+        router.push(`/match/${parsed.ct}/${parsed.id}`);
+        return;
       }
     }
     setInputValue(value);
   }
 
-  const isBrowseMode = mode === "matches" && debouncedQuery.trim() === "";
+  const isBrowseMode = debouncedQuery.trim() === "";
 
   const starts_after  = isBrowseMode ? toISODate(startOfMonth(browseMonth)) : WIDE_AFTER;
   const starts_before = isBrowseMode ? toISODate(endOfMonth(browseMonth))   : WIDE_BEFORE;
 
-  const { data: events = [], isLoading: eventsLoading } = useEventsQuery(
+  const { data: events = [], isLoading } = useEventsQuery(
     debouncedQuery,
     starts_after,
     starts_before,
@@ -245,20 +221,8 @@ export function EventSearch() {
     level,
   );
 
-  const { data: shooters = [], isLoading: shootersLoading } = useShooterSearchQuery(
-    debouncedQuery,
-    20,
-    mode === "shooters",
-  );
-
-  const isLoading = mode === "matches" ? eventsLoading : shootersLoading;
-
-  function handleSelectEvent(event: EventSummary) {
+  function handleSelect(event: EventSummary) {
     router.push(`/match/${event.content_type}/${event.id}`);
-  }
-
-  function handleSelectShooter(shooter: ShooterSearchResult) {
-    router.push(`/shooter/${shooter.shooterId}`);
   }
 
   // Active filter summary shown in collapsed filter button — omit "all" values
@@ -274,37 +238,16 @@ export function EventSearch() {
   const nextMonth = addMonths(browseMonth, 1);
 
   return (
-    <div>
-      {/* Mode toggle */}
-      <div role="group" aria-label="Search mode" className="flex gap-1 mb-2">
-        <button
-          type="button"
-          aria-pressed={mode === "matches"}
-          onClick={() => handleModeChange("matches")}
-          className={cn(chipClass(mode === "matches"), "flex-1 justify-center")}
-        >
-          Matches
-        </button>
-        <button
-          type="button"
-          aria-pressed={mode === "shooters"}
-          onClick={() => handleModeChange("shooters")}
-          className={cn(chipClass(mode === "shooters"), "flex-1 justify-center")}
-        >
-          Shooters
-        </button>
-      </div>
-
-      <section aria-label={mode === "shooters" ? "Find shooters" : "Find competitions"}>
+    <section aria-label="Find competitions">
       <Command shouldFilter={false} className="rounded-lg border shadow-sm">
         <CommandInput
-          placeholder={mode === "shooters" ? "Search by name…" : "Search by name or paste a match URL…"}
+          placeholder="Search by name or paste a match URL…"
           value={inputValue}
           onValueChange={handleInputChange}
         />
 
-        {/* ── Collapsible filter panel (matches mode only) ── */}
-        {mode === "matches" && <div className="border-t px-3 py-2">
+        {/* ── Collapsible filter panel ── */}
+        <div className="border-t px-3 py-2">
           <button
             type="button"
             aria-expanded={filtersOpen}
@@ -384,82 +327,81 @@ export function EventSearch() {
               </div>
             </div>
           )}
-        </div>}
+        </div>
 
-        {/* ── Mode callout + month navigator (matches mode only) ── */}
-        {mode === "matches" && <>
-          <div
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-            className={cn(
-              "flex flex-col gap-0.5 border-t px-3 py-2 text-sm",
-              isBrowseMode ? "bg-muted/50" : "bg-primary/5",
-            )}
-          >
-            {isBrowseMode ? (
-              <>
-                <div className="flex items-center gap-1.5">
-                  <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                  <span>
-                    Browsing <strong>{formatMonthYear(browseMonth)}</strong>
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground pl-5">
-                  Showing matches in this month · use the arrows to navigate
-                </p>
-              </>
-            ) : (
-              <>
-                <div className="flex items-center gap-1.5">
-                  <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                  <span>
-                    Searching <strong>all dates</strong>
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground pl-5">
-                  Month filter paused ·{" "}
-                  <button
-                    type="button"
-                    onClick={() => setInputValue("")}
-                    className="underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
-                  >
-                    Clear search to browse
-                  </button>
-                </p>
-              </>
-            )}
-          </div>
+        {/* ── Mode callout ── */}
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className={cn(
+            "flex flex-col gap-0.5 border-t px-3 py-2 text-sm",
+            isBrowseMode ? "bg-muted/50" : "bg-primary/5",
+          )}
+        >
+          {isBrowseMode ? (
+            <>
+              <div className="flex items-center gap-1.5">
+                <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span>
+                  Browsing <strong>{formatMonthYear(browseMonth)}</strong>
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground pl-5">
+                Showing matches in this month · use the arrows to navigate
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-1.5">
+                <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span>
+                  Searching <strong>all dates</strong>
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground pl-5">
+                Month filter paused ·{" "}
+                <button
+                  type="button"
+                  onClick={() => setInputValue("")}
+                  className="underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                >
+                  Clear search to browse
+                </button>
+              </p>
+            </>
+          )}
+        </div>
 
-          <div
-            aria-label="Browse by month"
-            aria-disabled={!isBrowseMode}
-            className={cn(
-              "flex items-center justify-between border-t px-4 py-2",
-              !isBrowseMode && "pointer-events-none opacity-40",
-            )}
+        {/* ── Month navigator ── */}
+        <div
+          aria-label="Browse by month"
+          aria-disabled={!isBrowseMode}
+          className={cn(
+            "flex items-center justify-between border-t px-4 py-2",
+            !isBrowseMode && "pointer-events-none opacity-40",
+          )}
+        >
+          <button
+            type="button"
+            aria-label={`Previous month: ${formatMonthYear(prevMonth)}`}
+            tabIndex={isBrowseMode ? 0 : -1}
+            onClick={() => setBrowseMonth((m) => startOfMonth(addMonths(m, -1)))}
+            className="rounded p-1 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <button
-              type="button"
-              aria-label={`Previous month: ${formatMonthYear(prevMonth)}`}
-              tabIndex={isBrowseMode ? 0 : -1}
-              onClick={() => setBrowseMonth((m) => startOfMonth(addMonths(m, -1)))}
-              className="rounded p-1 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-            </button>
-            <span className="text-sm font-medium">{formatMonthYear(browseMonth)}</span>
-            <button
-              type="button"
-              aria-label={`Next month: ${formatMonthYear(nextMonth)}`}
-              tabIndex={isBrowseMode ? 0 : -1}
-              onClick={() => setBrowseMonth((m) => startOfMonth(addMonths(m, 1)))}
-              className="rounded p-1 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </div>
-        </>}
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          </button>
+          <span className="text-sm font-medium">{formatMonthYear(browseMonth)}</span>
+          <button
+            type="button"
+            aria-label={`Next month: ${formatMonthYear(nextMonth)}`}
+            tabIndex={isBrowseMode ? 0 : -1}
+            onClick={() => setBrowseMonth((m) => startOfMonth(addMonths(m, 1)))}
+            className="rounded p-1 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
 
         {/* ── Results ── */}
         <CommandList className="max-h-[50vh]">
@@ -467,38 +409,10 @@ export function EventSearch() {
             <div
               className="flex items-center justify-center py-6"
               aria-live="polite"
-              aria-label={mode === "shooters" ? "Loading shooters" : "Loading competitions"}
+              aria-label="Loading competitions"
             >
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             </div>
-          ) : mode === "shooters" ? (
-            shooters.length === 0 ? (
-              <CommandEmpty>
-                {debouncedQuery
-                  ? "No shooters found. They may not have appeared in any cached match."
-                  : "No shooters indexed yet."}
-              </CommandEmpty>
-            ) : (
-              <CommandGroup>
-                {shooters.map((shooter) => (
-                  <CommandItem
-                    key={shooter.shooterId}
-                    value={String(shooter.shooterId)}
-                    onSelect={() => handleSelectShooter(shooter)}
-                    className="flex items-center gap-2.5 py-2.5"
-                  >
-                    <User className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                    <div className="flex flex-col gap-0.5 min-w-0">
-                      <span className="font-medium leading-snug">{shooter.name}</span>
-                      <span className="text-xs text-muted-foreground leading-snug truncate">
-                        {[shooter.division, shooter.club].filter(Boolean).join(" · ")}
-                        {shooter.lastSeen && ` · ${formatRelativeDate(shooter.lastSeen)}`}
-                      </span>
-                    </div>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            )
           ) : events.length === 0 ? (
             <CommandEmpty>No competitions found.</CommandEmpty>
           ) : (
@@ -507,7 +421,7 @@ export function EventSearch() {
                 <CommandItem
                   key={event.id}
                   value={String(event.id)}
-                  onSelect={() => handleSelectEvent(event)}
+                  onSelect={() => handleSelect(event)}
                   className="flex flex-col items-start gap-0.5 py-2.5"
                 >
                   <span className="font-medium leading-snug">{event.name}</span>
@@ -528,7 +442,6 @@ export function EventSearch() {
           )}
         </CommandList>
       </Command>
-      </section>
-    </div>
+    </section>
   );
 }
