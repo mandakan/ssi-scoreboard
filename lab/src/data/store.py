@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import contextlib
 from datetime import UTC, datetime
 from pathlib import Path
 
 import duckdb
 
 from src.data.models import MatchResults
+
+# (name, division, region, category, mu, sigma, matches_played, last_match_date)
+RatingRow = tuple[str, str | None, str | None, str | None, float, float, int, str | None]
 
 DEFAULT_DB_PATH = Path("data/lab.duckdb")
 
@@ -27,6 +31,7 @@ CREATE TABLE IF NOT EXISTS matches (
 CREATE TABLE IF NOT EXISTS competitors (
   ct INTEGER, match_id TEXT, competitor_id INTEGER,
   shooter_id INTEGER, name TEXT, club TEXT, division TEXT,
+  region TEXT, region_display TEXT, category TEXT,
   PRIMARY KEY (ct, match_id, competitor_id)
 );
 
@@ -52,6 +57,7 @@ CREATE TABLE IF NOT EXISTS stage_results (
 -- Rating results per algorithm
 CREATE TABLE IF NOT EXISTS shooter_ratings (
   algorithm TEXT, shooter_id INTEGER, name TEXT, division TEXT,
+  region TEXT, category TEXT,
   mu DOUBLE, sigma DOUBLE, matches_played INTEGER,
   last_match_date TIMESTAMP, updated_at TIMESTAMP,
   PRIMARY KEY (algorithm, shooter_id)
@@ -73,6 +79,13 @@ class Store:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         self.db = duckdb.connect(str(db_path))
         self.db.execute(SCHEMA_SQL)
+        # Migrate existing databases to add new columns
+        for col in ["region TEXT", "region_display TEXT", "category TEXT"]:
+            with contextlib.suppress(Exception):
+                self.db.execute(f"ALTER TABLE competitors ADD COLUMN IF NOT EXISTS {col}")
+        for col in ["region TEXT", "category TEXT"]:
+            with contextlib.suppress(Exception):
+                self.db.execute(f"ALTER TABLE shooter_ratings ADD COLUMN IF NOT EXISTS {col}")
 
     def close(self) -> None:
         self.db.close()
@@ -136,9 +149,11 @@ class Store:
         for c in results.competitors:
             self.db.execute(
                 """INSERT OR REPLACE INTO competitors
-                   (ct, match_id, competitor_id, shooter_id, name, club, division)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                [meta.ct, meta.match_id, c.competitor_id, c.shooter_id, c.name, c.club, c.division],
+                   (ct, match_id, competitor_id, shooter_id, name, club, division,
+                    region, region_display, category)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                [meta.ct, meta.match_id, c.competitor_id, c.shooter_id, c.name, c.club, c.division,
+                 c.region, c.region_display, c.category],
             )
 
         # Upsert stages
@@ -212,23 +227,44 @@ class Store:
         ).fetchall()
         return {r[0]: r[1] for r in rows}
 
-    def save_ratings(
-        self,
-        algorithm: str,
-        ratings: dict[int, tuple[str, str | None, float, float, int, str | None]],
-    ) -> None:
+    def get_competitor_name_map(self, ct: int, match_id: str) -> dict[int, str]:
+        """Return competitor_id → name mapping for a match."""
+        rows = self.db.execute(
+            "SELECT competitor_id, name FROM competitors WHERE ct = ? AND match_id = ?",
+            [ct, match_id],
+        ).fetchall()
+        return {r[0]: r[1] for r in rows}
+
+    def get_competitor_region_map(self, ct: int, match_id: str) -> dict[int, str | None]:
+        """Return competitor_id → region mapping for a match."""
+        rows = self.db.execute(
+            "SELECT competitor_id, region FROM competitors WHERE ct = ? AND match_id = ?",
+            [ct, match_id],
+        ).fetchall()
+        return {r[0]: r[1] for r in rows}
+
+    def get_competitor_category_map(self, ct: int, match_id: str) -> dict[int, str | None]:
+        """Return competitor_id → category mapping for a match."""
+        rows = self.db.execute(
+            "SELECT competitor_id, category FROM competitors WHERE ct = ? AND match_id = ?",
+            [ct, match_id],
+        ).fetchall()
+        return {r[0]: r[1] for r in rows}
+
+    def save_ratings(self, algorithm: str, ratings: dict[int, RatingRow]) -> None:
         """Save ratings for an algorithm.
 
-        Values: (name, division, mu, sigma, matches_played, last_match_date).
+        Values: (name, division, region, category, mu, sigma, matches_played, last_match_date).
         """
         updated_at = datetime.now(UTC).isoformat()
-        for sid, (name, div, mu, sigma, played, last_date) in ratings.items():
+        for sid, (name, div, region, category, mu, sigma, played, last_date) in ratings.items():
             self.db.execute(
                 """INSERT OR REPLACE INTO shooter_ratings
-                   (algorithm, shooter_id, name, division, mu, sigma,
+                   (algorithm, shooter_id, name, division, region, category, mu, sigma,
                     matches_played, last_match_date, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                [algorithm, sid, name, div, mu, sigma, played, last_date, updated_at],
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                [algorithm, sid, name, div, region, category, mu, sigma, played,
+                 last_date, updated_at],
             )
 
     def save_rating_snapshot(

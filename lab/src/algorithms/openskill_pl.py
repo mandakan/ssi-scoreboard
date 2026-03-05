@@ -27,6 +27,10 @@ class OpenSkillPL(RatingAlgorithm):
         self._names: dict[int, str] = {}
         # shooter_id → division (most recent)
         self._divisions: dict[int, str | None] = {}
+        # shooter_id → region (most recent)
+        self._regions: dict[int, str | None] = {}
+        # shooter_id → category (most recent)
+        self._categories: dict[int, str | None] = {}
         # shooter_id → matches_played count
         self._matches: dict[int, int] = defaultdict(int)
         # Track which shooters participated in each match (by match key)
@@ -50,6 +54,11 @@ class OpenSkillPL(RatingAlgorithm):
         match_date: str | None,
         stage_results: list[tuple[int, int, float | None, bool, bool, bool]],
         competitor_shooter_map: dict[int, int | None],
+        *,
+        name_map: dict[int, str] | None = None,
+        division_map: dict[int, str | None] | None = None,
+        region_map: dict[int, str | None] | None = None,
+        category_map: dict[int, str | None] | None = None,
     ) -> None:
         match_key = f"{ct}:{match_id}"
         if match_key in self._seen_matches:
@@ -103,10 +112,20 @@ class OpenSkillPL(RatingAlgorithm):
                 new_r = updated[i][0]
                 self._ratings[sid] = (new_r.mu, new_r.sigma)
 
-        # Update match counts and names
-        for _comp_id, shooter_id in competitor_shooter_map.items():
-            if shooter_id is not None and shooter_id in match_shooters:
+        # Update match counts and metadata
+        for comp_id, shooter_id in competitor_shooter_map.items():
+            if shooter_id is None:
+                continue
+            if shooter_id in match_shooters:
                 self._matches[shooter_id] += 1
+            if name_map and comp_id in name_map:
+                self._names[shooter_id] = name_map[comp_id]
+            if division_map and comp_id in division_map:
+                self._divisions[shooter_id] = division_map[comp_id]
+            if region_map and comp_id in region_map:
+                self._regions[shooter_id] = region_map[comp_id]
+            if category_map and comp_id in category_map:
+                self._categories[shooter_id] = category_map[comp_id]
 
     def get_ratings(self) -> dict[int, Rating]:
         result: dict[int, Rating] = {}
@@ -115,6 +134,8 @@ class OpenSkillPL(RatingAlgorithm):
                 shooter_id=sid,
                 name=self._names.get(sid, f"Shooter {sid}"),
                 division=self._divisions.get(sid),
+                region=self._regions.get(sid),
+                category=self._categories.get(sid),
                 mu=mu,
                 sigma=sigma,
                 matches_played=self._matches.get(sid, 0),
@@ -135,14 +156,18 @@ class OpenSkillPL(RatingAlgorithm):
             "matches": {str(k): v for k, v in self._matches.items()},
             "names": {str(k): v for k, v in self._names.items()},
             "divisions": {str(k): v for k, v in self._divisions.items()},
+            "regions": {str(k): v for k, v in self._regions.items()},
+            "categories": {str(k): v for k, v in self._categories.items()},
             "seen_matches": list(self._seen_matches),
         }
         path.write_text(json.dumps(state))
 
     def load_state(self, path: Path) -> None:
         state = json.loads(path.read_text())
-        self._ratings = {int(k): tuple(v) for k, v in state["ratings"].items()}
+        self._ratings = {int(k): (v[0], v[1]) for k, v in state["ratings"].items()}
         self._matches = defaultdict(int, {int(k): v for k, v in state["matches"].items()})
         self._names = {int(k): v for k, v in state.get("names", {}).items()}
         self._divisions = {int(k): v for k, v in state.get("divisions", {}).items()}
+        self._regions = {int(k): v for k, v in state.get("regions", {}).items()}
+        self._categories = {int(k): v for k, v in state.get("categories", {}).items()}
         self._seen_matches = set(state.get("seen_matches", []))
