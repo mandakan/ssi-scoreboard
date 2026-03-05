@@ -4,7 +4,6 @@
 import Database from "better-sqlite3";
 import path from "path";
 import type { AppDatabase } from "@/lib/db";
-import { MAX_SHOOTER_MATCHES } from "@/lib/constants";
 
 const SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS shooter_profiles (
@@ -99,27 +98,6 @@ export function createSqliteDatabase(
          ON CONFLICT(shooter_id, match_ref)
          DO UPDATE SET start_timestamp = excluded.start_timestamp`,
       ).run(shooterId, matchRef, startTimestamp);
-
-      // Trim to MAX_SHOOTER_MATCHES oldest entries per shooter
-      const count = (
-        d
-          .prepare(
-            `SELECT COUNT(*) AS cnt FROM shooter_matches WHERE shooter_id = ?`,
-          )
-          .get(shooterId) as { cnt: number }
-      ).cnt;
-
-      if (count > MAX_SHOOTER_MATCHES) {
-        d.prepare(
-          `DELETE FROM shooter_matches
-           WHERE shooter_id = ? AND match_ref IN (
-             SELECT match_ref FROM shooter_matches
-             WHERE shooter_id = ?
-             ORDER BY start_timestamp ASC
-             LIMIT ?
-           )`,
-        ).run(shooterId, shooterId, count - MAX_SHOOTER_MATCHES);
-      }
     },
 
     async setShooterProfile(shooterId, profile) {

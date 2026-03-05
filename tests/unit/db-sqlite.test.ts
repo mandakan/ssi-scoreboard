@@ -30,14 +30,13 @@ describe("AppDatabase (SQLite)", () => {
       expect(refs).toEqual(["22:1001"]);
     });
 
-    it("trims to MAX_SHOOTER_MATCHES (200)", async () => {
+    it("keeps all matches without pruning", async () => {
       for (let i = 0; i < 210; i++) {
         await db.indexShooterMatch(100, `22:${i}`, 1700000000 + i);
       }
       const refs = await db.getShooterMatches(100);
-      expect(refs.length).toBe(200);
-      // The oldest 10 should be trimmed (refs 0–9)
-      expect(refs[0]).toBe("22:10");
+      expect(refs.length).toBe(210);
+      expect(refs[0]).toBe("22:0");
       expect(refs[refs.length - 1]).toBe("22:209");
     });
   });

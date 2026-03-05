@@ -4,7 +4,6 @@
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AppDatabase } from "@/lib/db";
-import { MAX_SHOOTER_MATCHES } from "@/lib/constants";
 
 // Minimal D1Database type for the binding. The full type comes from
 // @cloudflare/workers-types which is a devDep of the opennextjs package.
@@ -46,27 +45,6 @@ const db: AppDatabase = {
       )
       .bind(shooterId, matchRef, startTimestamp)
       .run();
-
-    const countRow = await db
-      .prepare(`SELECT COUNT(*) AS cnt FROM shooter_matches WHERE shooter_id = ?`)
-      .bind(shooterId)
-      .first<{ cnt: number }>();
-
-    const count = countRow?.cnt ?? 0;
-    if (count > MAX_SHOOTER_MATCHES) {
-      await db
-        .prepare(
-          `DELETE FROM shooter_matches
-           WHERE shooter_id = ? AND match_ref IN (
-             SELECT match_ref FROM shooter_matches
-             WHERE shooter_id = ?
-             ORDER BY start_timestamp ASC
-             LIMIT ?
-           )`,
-        )
-        .bind(shooterId, shooterId, count - MAX_SHOOTER_MATCHES)
-        .run();
-    }
   },
 
   async setShooterProfile(shooterId, profile) {

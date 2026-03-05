@@ -18,10 +18,3 @@ export const MAX_COMPETITORS = 12;
  *   6 → added shooter { id } to IpscCompetitorNode in MATCH_QUERY; shooterId on CompetitorInfo
  */
 export const CACHE_SCHEMA_VERSION = 6;
-
-/**
- * Maximum number of match references to keep per shooter in the
- * `shooter:{id}:matches` sorted set. Oldest entries are trimmed
- * after each indexShooterMatch() call to prevent unbounded growth.
- */
-export const MAX_SHOOTER_MATCHES = 200;
