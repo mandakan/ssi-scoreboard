@@ -99,6 +99,20 @@ class Store:
         ).fetchone()
         return row is not None
 
+    def skip_match(self, ct: int, match_id: str, name: str) -> None:
+        """Record a match as known but without results (e.g. no scorecards on SSI).
+
+        Prevents the sync from retrying it on every run.
+        """
+        synced_at = datetime.now(UTC).isoformat()
+        self.db.execute(
+            """INSERT OR IGNORE INTO matches
+               (ct, match_id, name, date, level, region,
+                competitor_count, stage_count, scoring_completed, synced_at)
+               VALUES (?, ?, ?, NULL, NULL, NULL, 0, 0, 0, ?)""",
+            [ct, match_id, name, synced_at],
+        )
+
     def store_match_results(self, results: MatchResults) -> None:
         """Store a full match result set (metadata + competitors + stages + results)."""
         meta = results.meta
