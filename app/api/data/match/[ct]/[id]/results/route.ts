@@ -30,6 +30,9 @@ interface RawMatchData {
       handgun_div?: string | null;
       get_handgun_div_display?: string | null;
       shooter?: { id: string } | null;
+      region?: string | null;
+      get_region_display?: string | null;
+      category?: string | null;
     }>;
   } | null;
 }
@@ -89,6 +92,9 @@ export async function GET(
     name: [c.first_name, c.last_name].filter(Boolean).join(" "),
     club: c.club ?? null,
     division: c.get_handgun_div_display ?? c.handgun_div ?? null,
+    region: c.region ?? null,
+    regionDisplay: c.get_region_display ?? null,
+    category: c.category ?? null,
   }));
 
   // Build stage metadata

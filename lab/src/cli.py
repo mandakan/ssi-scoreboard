@@ -18,7 +18,7 @@ def sync(
     url: str = typer.Option("http://localhost:3000", help="Base URL of the SSI Scoreboard app"),
     token: str = typer.Option(..., envvar="CACHE_PURGE_SECRET", help="Bearer token for auth"),
     full: bool = typer.Option(False, help="Full sync (ignore watermark)"),
-    force: bool = typer.Option(False, help="Force re-download of all matches (even if already stored)"),
+    force: bool = typer.Option(False, help="Force re-download of all matches (even if already stored)"),  # noqa: E501
     delay: float = typer.Option(2.0, help="Delay between requests in seconds (0 for no delay)"),
     db_path: Path = DB_PATH_OPTION,
 ) -> None:
@@ -59,15 +59,27 @@ def train(
                 comp_map = store.get_competitor_shooter_map(ct, match_id)
                 if not results:
                     continue
-                algo.process_match_data(ct, match_id, match_date, results, comp_map)
+                name_map = store.get_competitor_name_map(ct, match_id)
+                div_map = store.get_competitor_division_map(ct, match_id)
+                region_map = store.get_competitor_region_map(ct, match_id)
+                cat_map = store.get_competitor_category_map(ct, match_id)
+                algo.process_match_data(
+                    ct, match_id, match_date, results, comp_map,
+                    name_map=name_map, division_map=div_map,
+                    region_map=region_map, category_map=cat_map,
+                )
 
             ratings = algo.get_ratings()
             console.print(f"  Rated {len(ratings)} shooters")
 
             # Save to DuckDB
-            rating_data: dict[int, tuple[str, str | None, float, float, int, str | None]] = {}
+            from src.data.store import RatingRow
+            rating_data: dict[int, RatingRow] = {}
             for sid, r in ratings.items():
-                rating_data[sid] = (r.name, r.division, r.mu, r.sigma, r.matches_played, None)
+                rating_data[sid] = (
+                    r.name, r.division, r.region, r.category,
+                    r.mu, r.sigma, r.matches_played, None,
+                )
             store.save_ratings(algo.name, rating_data)
             console.print(f"  [green]Saved ratings for {algo.name}[/green]")
     finally:

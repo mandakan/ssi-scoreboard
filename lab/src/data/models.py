@@ -46,6 +46,9 @@ class CompetitorMeta(BaseModel):
     name: str
     club: str | None = None
     division: str | None = None
+    region: str | None = None
+    region_display: str | None = None
+    category: str | None = None
 
 
 class StageResult(BaseModel):
@@ -99,6 +102,8 @@ class Rating(BaseModel):
     shooter_id: int
     name: str
     division: str | None = None
+    region: str | None = None
+    category: str | None = None
     mu: float
     sigma: float
     matches_played: int = 0

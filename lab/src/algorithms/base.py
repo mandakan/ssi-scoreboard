@@ -29,6 +29,11 @@ class RatingAlgorithm(ABC):
         match_date: str | None,
         stage_results: list[tuple[int, int, float | None, bool, bool, bool]],
         competitor_shooter_map: dict[int, int | None],
+        *,
+        name_map: dict[int, str] | None = None,
+        division_map: dict[int, str | None] | None = None,
+        region_map: dict[int, str | None] | None = None,
+        category_map: dict[int, str | None] | None = None,
     ) -> None:
         """Process a single match's stage results.
 
@@ -38,6 +43,10 @@ class RatingAlgorithm(ABC):
             match_date: ISO date string or None
             stage_results: List of (competitor_id, stage_id, hit_factor, dq, dnf, zeroed)
             competitor_shooter_map: competitor_id → shooter_id mapping
+            name_map: competitor_id → name mapping (optional)
+            division_map: competitor_id → division mapping (optional)
+            region_map: competitor_id → region mapping (optional)
+            category_map: competitor_id → category mapping (optional)
         """
 
     @abstractmethod

@@ -14,6 +14,8 @@ class RatingResponse(BaseModel):
     shooter_id: int
     name: str
     division: str | None
+    region: str | None
+    category: str | None
     mu: float
     sigma: float
     matches_played: int
@@ -38,24 +40,38 @@ def create_app(db_path: Path = Path("data/lab.duckdb")) -> FastAPI:
         algorithm: str,
         limit: int = 50,
         offset: int = 0,
+        division: str | None = None,
+        region: str | None = None,
+        category: str | None = None,
     ) -> list[RatingResponse]:
         """Get top ratings for an algorithm, sorted by mu descending."""
+        filters = ["algorithm = ?"]
+        params: list[object] = [algorithm]
+        if division:
+            filters.append("division = ?")
+            params.append(division)
+        if region:
+            filters.append("region = ?")
+            params.append(region)
+        if category:
+            filters.append("category = ?")
+            params.append(category)
+        where = " AND ".join(filters)
         rows = store.db.execute(
-            """SELECT shooter_id, name, division, mu, sigma, matches_played
-               FROM shooter_ratings
-               WHERE algorithm = ?
-               ORDER BY mu DESC
-               LIMIT ? OFFSET ?""",
-            [algorithm, limit, offset],
+            f"SELECT shooter_id, name, division, region, category, mu, sigma, matches_played "
+            f"FROM shooter_ratings WHERE {where} ORDER BY mu DESC LIMIT ? OFFSET ?",
+            params + [limit, offset],
         ).fetchall()
         return [
             RatingResponse(
                 shooter_id=r[0],
                 name=r[1] or f"Shooter {r[0]}",
                 division=r[2],
-                mu=r[3],
-                sigma=r[4],
-                matches_played=r[5],
+                region=r[3],
+                category=r[4],
+                mu=r[5],
+                sigma=r[6],
+                matches_played=r[7],
             )
             for r in rows
         ]
@@ -64,7 +80,7 @@ def create_app(db_path: Path = Path("data/lab.duckdb")) -> FastAPI:
     async def get_rating(algorithm: str, shooter_id: int) -> RatingResponse | None:
         """Get a specific shooter's rating."""
         row = store.db.execute(
-            """SELECT shooter_id, name, division, mu, sigma, matches_played
+            """SELECT shooter_id, name, division, region, category, mu, sigma, matches_played
                FROM shooter_ratings
                WHERE algorithm = ? AND shooter_id = ?""",
             [algorithm, shooter_id],
@@ -75,9 +91,11 @@ def create_app(db_path: Path = Path("data/lab.duckdb")) -> FastAPI:
             shooter_id=row[0],
             name=row[1] or f"Shooter {row[0]}",
             division=row[2],
-            mu=row[3],
-            sigma=row[4],
-            matches_played=row[5],
+            region=row[3],
+            category=row[4],
+            mu=row[5],
+            sigma=row[6],
+            matches_played=row[7],
         )
 
     @app.get("/history/{algorithm}/{shooter_id}")

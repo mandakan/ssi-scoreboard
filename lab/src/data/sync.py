@@ -111,6 +111,9 @@ class SyncClient:
                 name=c["name"],
                 club=c.get("club"),
                 division=c.get("division"),
+                region=c.get("region"),
+                region_display=c.get("regionDisplay"),
+                category=c.get("category"),
             )
             for c in data.get("competitors", [])
         ]
@@ -146,7 +149,7 @@ class SyncClient:
         """Run incremental (or full) sync. Returns number of new matches synced."""
         since = None if (full or force) else self.store.get_sync_watermark()
 
-        mode = "force re-download" if force else "full sync" if full else f"since {since}" if since else "initial sync"
+        mode = "force re-download" if force else "full sync" if full else f"since {since}" if since else "initial sync"  # noqa: E501
         console.print(f"[bold]Fetching match list[/bold] ({mode})...")
         listing = self.fetch_match_list(since=since)
         console.print(f"  Found {len(listing.matches)} matches with scorecards")
