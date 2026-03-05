@@ -14,7 +14,8 @@
  *
  * Options:
  *   --target <sqlite|d1>   Write target (default: sqlite)
- *   --drain                Set 24h Redis TTL on migrated keys
+ *   --drain                Set 24h Redis TTL on migrated keys (frees space over ~24h)
+ *   --delete               Delete migrated keys from Redis immediately (instant relief)
  *   --dry-run              Show what would be migrated without writing
  *   --limit <n>            Max keys to migrate (default: unlimited)
  *
@@ -130,6 +131,7 @@ interface MigrationClient {
   get(key: string): Promise<string | null>;
   ttl(key: string): Promise<number>;
   expire(key: string, ttl: number): Promise<void>;
+  del(key: string): Promise<void>;
   quit(): Promise<void>;
 }
 
@@ -166,6 +168,7 @@ async function createClient(): Promise<MigrationClient> {
       async get(key) { return redis.get<string>(pk(key)); },
       async ttl(key) { return redis.ttl(pk(key)); },
       async expire(key, ttlSec) { await redis.expire(pk(key), ttlSec); },
+      async del(key) { await redis.del(pk(key)); },
       async quit() { /* no-op */ },
     };
   }
@@ -191,6 +194,7 @@ async function createClient(): Promise<MigrationClient> {
     async get(key) { return redis.get(pk(key)); },
     async ttl(key) { return redis.ttl(pk(key)); },
     async expire(key, ttlSec) { await redis.expire(pk(key), ttlSec); },
+    async del(key) { await redis.del(pk(key)); },
     async quit() { await redis.quit(); },
   };
 }
@@ -200,6 +204,7 @@ async function createClient(): Promise<MigrationClient> {
 interface CliArgs {
   target: "sqlite" | "d1";
   drain: boolean;
+  delete: boolean;
   dryRun: boolean;
   limit: number | null;
 }
@@ -216,9 +221,14 @@ function parseArgs(): CliArgs {
     console.error(`Error: --target must be "sqlite" or "d1", got "${target}"`);
     process.exit(1);
   }
+  if (has("--drain") && has("--delete")) {
+    console.error("Error: --drain and --delete are mutually exclusive");
+    process.exit(1);
+  }
   return {
     target,
     drain: has("--drain"),
+    delete: has("--delete"),
     dryRun: has("--dry-run"),
     limit: get("--limit") !== null ? parseInt(get("--limit")!, 10) : null,
   };
@@ -235,7 +245,11 @@ async function main(): Promise<void> {
   console.log("Match cache → D1/SQLite migration");
   console.log("─".repeat(50));
   console.log(`Target : ${args.target}`);
-  console.log(`Mode   : ${args.dryRun ? "DRY RUN" : args.drain ? "migrate + drain (24h TTL)" : "migrate only (keep Redis keys)"}`);
+  const modeLabel = args.dryRun ? "DRY RUN"
+    : args.delete ? "migrate + delete from Redis (immediate)"
+    : args.drain ? "migrate + drain (24h TTL)"
+    : "migrate only (keep Redis keys)";
+  console.log(`Mode   : ${modeLabel}`);
   if (args.limit) console.log(`Limit  : ${args.limit} keys`);
   console.log("─".repeat(50));
 
@@ -309,6 +323,8 @@ async function main(): Promise<void> {
 
       if (args.drain) {
         await client.expire(key, DRAIN_TTL);
+      } else if (args.delete) {
+        await client.del(key);
       }
 
       migrated++;
@@ -327,6 +343,8 @@ async function main(): Promise<void> {
   console.log(`Done: migrated=${migrated}  skipped=${skipped}  failed=${failed}`);
   if (args.drain && migrated > 0) {
     console.log(`Redis keys set to expire in 24h (${DRAIN_TTL}s)`);
+  } else if (args.delete && migrated > 0) {
+    console.log(`Deleted ${migrated} keys from Redis immediately.`);
   }
 }
 
