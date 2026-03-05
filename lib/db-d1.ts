@@ -286,7 +286,7 @@ const db: AppDatabase = {
 
   async listMatchCacheEntries(options) {
     const d = getDb();
-    type Row = { cache_key: string; key_type: string; ct: number; match_id: string; stored_at: string };
+    type Row = { cache_key: string; key_type: string; ct: number; match_id: string; stored_at: string; data?: string };
     const conditions: string[] = [];
     const binds: unknown[] = [];
     if (options?.keyType) {
@@ -297,8 +297,11 @@ const db: AppDatabase = {
       conditions.push("stored_at >= ?");
       binds.push(options.since);
     }
+    const cols = options?.includeData
+      ? "cache_key, key_type, ct, match_id, stored_at, data"
+      : "cache_key, key_type, ct, match_id, stored_at";
     const where = conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : "";
-    let stmt = d.prepare(`SELECT cache_key, key_type, ct, match_id, stored_at FROM match_data_cache${where} ORDER BY stored_at DESC`);
+    let stmt = d.prepare(`SELECT ${cols} FROM match_data_cache${where} ORDER BY stored_at DESC`);
     if (binds.length > 0) stmt = stmt.bind(...binds);
     const result = await stmt.all<Row>();
     return result.results.map((r) => ({
@@ -307,6 +310,7 @@ const db: AppDatabase = {
       ct: r.ct,
       matchId: r.match_id,
       storedAt: r.stored_at,
+      ...(r.data != null ? { data: r.data } : {}),
     }));
   },
 };

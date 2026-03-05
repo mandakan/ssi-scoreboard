@@ -320,7 +320,7 @@ export function createSqliteDatabase(
 
     async listMatchCacheEntries(options) {
       const d = getDb();
-      type Row = { cache_key: string; key_type: string; ct: number; match_id: string; stored_at: string };
+      type Row = { cache_key: string; key_type: string; ct: number; match_id: string; stored_at: string; data?: string };
       const conditions: string[] = [];
       const params: unknown[] = [];
       if (options?.keyType) {
@@ -331,9 +331,12 @@ export function createSqliteDatabase(
         conditions.push("stored_at >= ?");
         params.push(options.since);
       }
+      const cols = options?.includeData
+        ? "cache_key, key_type, ct, match_id, stored_at, data"
+        : "cache_key, key_type, ct, match_id, stored_at";
       const where = conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : "";
       const rows = d
-        .prepare(`SELECT cache_key, key_type, ct, match_id, stored_at FROM match_data_cache${where} ORDER BY stored_at DESC`)
+        .prepare(`SELECT ${cols} FROM match_data_cache${where} ORDER BY stored_at DESC`)
         .all(...params) as Row[];
       return rows.map((r) => ({
         cacheKey: r.cache_key,
@@ -341,6 +344,7 @@ export function createSqliteDatabase(
         ct: r.ct,
         matchId: r.match_id,
         storedAt: r.stored_at,
+        ...(r.data != null ? { data: r.data } : {}),
       }));
     },
   };

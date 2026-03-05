@@ -75,7 +75,10 @@ async function createClient(): Promise<MigrationClient> {
         const keys: string[] = [];
         let cursor = 0;
         do {
-          const [nextCursor, batch] = await redis.scan(cursor, { match: pk(pattern), count: 200 });
+          // Upstash SCAN scans at most `count` keyspace entries per call and
+          // returns cursor 0 even when the full keyspace hasn't been covered.
+          // Use a large count to ensure we scan all keys in one pass.
+          const [nextCursor, batch] = await redis.scan(cursor, { match: pk(pattern), count: 10_000 });
           cursor = Number(nextCursor);
           for (const k of batch) {
             // Strip prefix

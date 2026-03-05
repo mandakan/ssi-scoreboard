@@ -1,13 +1,12 @@
 // Admin-only endpoint: full match results for all competitors.
 // Optimized for DataFrame/DuckDB loading in the data science lab.
 // Auth: Authorization: Bearer <CACHE_PURGE_SECRET>
-// Read-only — never triggers GraphQL calls.
+// Uses cachedExecuteQuery — stale/missing cache entries are auto-refreshed from GraphQL.
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getMatchDataWithFallback } from "@/lib/match-data-store";
+import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY, SCORECARDS_QUERY } from "@/lib/graphql";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
 import { computeFullFieldRankings } from "@/app/api/compare/logic";
-import { CACHE_SCHEMA_VERSION } from "@/lib/constants";
 import { decodeShooterId } from "@/lib/shooter-index";
 
 interface RawMatchData {
@@ -51,32 +50,30 @@ export async function GET(
     return NextResponse.json({ error: "Invalid ct or id" }, { status: 400 });
   }
 
-  // Load match metadata (read-only, no GraphQL)
-  const matchKey = `gql:GetMatch:${JSON.stringify({ ct: ctNum, id })}`;
-  const matchRaw = await getMatchDataWithFallback(matchKey);
-  if (!matchRaw) {
-    return NextResponse.json({ error: "Match not found in cache" }, { status: 404 });
+  // Load match metadata — auto-refreshes stale/missing entries from GraphQL
+  const matchKey = gqlCacheKey("GetMatch", { ct: ctNum, id });
+  let matchData: RawMatchData;
+  try {
+    ({ data: matchData } = await cachedExecuteQuery<RawMatchData>(matchKey, MATCH_QUERY, { ct: ctNum, id }, null));
+  } catch {
+    return NextResponse.json({ error: "Failed to fetch match data" }, { status: 502 });
   }
 
-  const matchParsed = JSON.parse(matchRaw) as { v?: number; data?: RawMatchData };
-  if (matchParsed.v !== CACHE_SCHEMA_VERSION || !matchParsed.data?.event) {
-    return NextResponse.json({ error: "Match data has outdated schema" }, { status: 404 });
+  if (!matchData.event) {
+    return NextResponse.json({ error: "Match not found" }, { status: 404 });
   }
 
-  // Load scorecards (read-only, no GraphQL)
-  const scKey = `gql:GetMatchScorecards:${JSON.stringify({ ct: ctNum, id })}`;
-  const scRaw = await getMatchDataWithFallback(scKey);
-  if (!scRaw) {
-    return NextResponse.json({ error: "Scorecards not found in cache" }, { status: 404 });
+  // Load scorecards — auto-refreshes stale/missing entries from GraphQL
+  const scKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
+  let scorecardsData: RawScorecardsData;
+  try {
+    ({ data: scorecardsData } = await cachedExecuteQuery<RawScorecardsData>(scKey, SCORECARDS_QUERY, { ct: ctNum, id }, null));
+  } catch {
+    return NextResponse.json({ error: "Failed to fetch scorecards" }, { status: 502 });
   }
 
-  const scParsed = JSON.parse(scRaw) as { v?: number; data?: RawScorecardsData };
-  if (scParsed.v !== CACHE_SCHEMA_VERSION || !scParsed.data) {
-    return NextResponse.json({ error: "Scorecard data has outdated schema" }, { status: 404 });
-  }
-
-  const ev = matchParsed.data.event;
-  const rawScorecards = parseRawScorecards(scParsed.data);
+  const ev = matchData.event;
+  const rawScorecards = parseRawScorecards(scorecardsData);
 
   if (rawScorecards.length === 0) {
     return NextResponse.json({ error: "No scorecard data available" }, { status: 404 });
