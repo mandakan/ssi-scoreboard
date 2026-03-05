@@ -18,6 +18,7 @@ def sync(
     url: str = typer.Option("http://localhost:3000", help="Base URL of the SSI Scoreboard app"),
     token: str = typer.Option(..., envvar="CACHE_PURGE_SECRET", help="Bearer token for auth"),
     full: bool = typer.Option(False, help="Full sync (ignore watermark)"),
+    force: bool = typer.Option(False, help="Force re-download of all matches (even if already stored)"),
     delay: float = typer.Option(2.0, help="Delay between requests in seconds (0 for no delay)"),
     db_path: Path = DB_PATH_OPTION,
 ) -> None:
@@ -29,7 +30,7 @@ def sync(
     jitter = min(delay * 0.5, 1.0) if delay > 0 else 0.0
     client = SyncClient(url, token, store, delay=delay, jitter=jitter)
     try:
-        client.sync(full=full)
+        client.sync(full=full, force=force)
     finally:
         client.close()
         store.close()

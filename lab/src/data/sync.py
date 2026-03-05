@@ -142,23 +142,24 @@ class SyncClient:
 
         return MatchResults(meta=meta, stages=stages, competitors=competitors, results=results)
 
-    def sync(self, full: bool = False) -> int:
+    def sync(self, full: bool = False, force: bool = False) -> int:
         """Run incremental (or full) sync. Returns number of new matches synced."""
-        since = None if full else self.store.get_sync_watermark()
+        since = None if (full or force) else self.store.get_sync_watermark()
 
-        console.print(
-            f"[bold]Fetching match list[/bold] "
-            f"({'full sync' if full else f'since {since}' if since else 'initial sync'})..."
-        )
+        mode = "force re-download" if force else "full sync" if full else f"since {since}" if since else "initial sync"
+        console.print(f"[bold]Fetching match list[/bold] ({mode})...")
         listing = self.fetch_match_list(since=since)
         console.print(f"  Found {len(listing.matches)} matches with scorecards")
 
-        # Filter out matches we already have
-        new_matches = [
-            m for m in listing.matches
-            if not self.store.has_match(m.ct, m.match_id)
-        ]
-        console.print(f"  {len(new_matches)} new matches to sync")
+        if force:
+            new_matches = listing.matches
+        else:
+            # Filter out matches we already have
+            new_matches = [
+                m for m in listing.matches
+                if not self.store.has_match(m.ct, m.match_id)
+            ]
+        console.print(f"  {len(new_matches)} matches to sync")
 
         if not new_matches:
             console.print("[green]Already up to date.[/green]")
