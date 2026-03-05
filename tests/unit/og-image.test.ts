@@ -27,12 +27,12 @@ const MOCK_MATCH: OgMatchData = {
   imageWidth: null,
   imageHeight: null,
   competitors: [
-    { id: 1, shooterId: null, name: "Alice Andersson", competitor_number: "A001", club: "Test Club", division: "Production" },
-    { id: 2, shooterId: null, name: "Bob Bjork", competitor_number: "B002", club: "Other Club", division: "Open" },
-    { id: 3, shooterId: null, name: "Charlie Chen", competitor_number: "C003", club: "Third Club", division: "Standard" },
-    { id: 4, shooterId: null, name: "Diana Dahl", competitor_number: "D004", club: "Fourth Club", division: "Production Optics" },
-    { id: 5, shooterId: null, name: "Erik Ekman", competitor_number: "E005", club: "Fifth Club", division: "Classic" },
-    { id: 6, shooterId: null, name: "Fiona Falk", competitor_number: "F006", club: "Sixth Club", division: "Revolver" },
+    { id: 1, shooterId: null, name: "Alice Andersson", competitor_number: "A001", club: "Test Club", division: "Production", region: null, region_display: null, category: null, ics_alias: null, license: null },
+    { id: 2, shooterId: null, name: "Bob Bjork", competitor_number: "B002", club: "Other Club", division: "Open", region: null, region_display: null, category: null, ics_alias: null, license: null },
+    { id: 3, shooterId: null, name: "Charlie Chen", competitor_number: "C003", club: "Third Club", division: "Standard", region: null, region_display: null, category: null, ics_alias: null, license: null },
+    { id: 4, shooterId: null, name: "Diana Dahl", competitor_number: "D004", club: "Fourth Club", division: "Production Optics", region: null, region_display: null, category: null, ics_alias: null, license: null },
+    { id: 5, shooterId: null, name: "Erik Ekman", competitor_number: "E005", club: "Fifth Club", division: "Classic", region: null, region_display: null, category: null, ics_alias: null, license: null },
+    { id: 6, shooterId: null, name: "Fiona Falk", competitor_number: "F006", club: "Sixth Club", division: "Revolver", region: null, region_display: null, category: null, ics_alias: null, license: null },
   ],
 };
 

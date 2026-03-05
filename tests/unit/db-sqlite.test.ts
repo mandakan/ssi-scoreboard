@@ -49,6 +49,11 @@ describe("AppDatabase (SQLite)", () => {
       club: "Club A",
       division: "Production",
       lastSeen: "2025-06-01T12:00:00Z",
+      region: null,
+      region_display: null,
+      category: null,
+      ics_alias: null,
+      license: null,
     };
 
     it("inserts and retrieves a profile", async () => {
@@ -64,6 +69,11 @@ describe("AppDatabase (SQLite)", () => {
         club: "Club B",
         division: "Standard",
         lastSeen: "2025-07-01T12:00:00Z",
+        region: null,
+        region_display: null,
+        category: null,
+        ics_alias: null,
+        license: null,
       };
       await db.setShooterProfile(100, updated);
       const result = await db.getShooterProfile(100);
@@ -81,6 +91,11 @@ describe("AppDatabase (SQLite)", () => {
         club: null,
         division: null,
         lastSeen: "2025-06-01T00:00:00Z",
+        region: null,
+        region_display: null,
+        category: null,
+        ics_alias: null,
+        license: null,
       };
       await db.setShooterProfile(200, p);
       const result = await db.getShooterProfile(200);
@@ -118,6 +133,11 @@ describe("AppDatabase (SQLite)", () => {
         club: null,
         division: null,
         lastSeen: "2025-06-01T00:00:00Z",
+        region: null,
+        region_display: null,
+        category: null,
+        ics_alias: null,
+        license: null,
       });
       expect(await db.hasShooterProfile(100)).toBe(true);
     });

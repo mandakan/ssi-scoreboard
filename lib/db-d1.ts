@@ -51,13 +51,18 @@ const db: AppDatabase = {
     const db = getDb();
     await db
       .prepare(
-        `INSERT INTO shooter_profiles (shooter_id, name, club, division, last_seen)
-         VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO shooter_profiles (shooter_id, name, club, division, last_seen, region, region_display, category, ics_alias, license)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(shooter_id)
          DO UPDATE SET name = excluded.name,
                        club = excluded.club,
                        division = excluded.division,
-                       last_seen = excluded.last_seen`,
+                       last_seen = excluded.last_seen,
+                       region = excluded.region,
+                       region_display = excluded.region_display,
+                       category = excluded.category,
+                       ics_alias = excluded.ics_alias,
+                       license = excluded.license`,
       )
       .bind(
         shooterId,
@@ -65,6 +70,11 @@ const db: AppDatabase = {
         profile.club ?? null,
         profile.division ?? null,
         profile.lastSeen,
+        profile.region ?? null,
+        profile.region_display ?? null,
+        profile.category ?? null,
+        profile.ics_alias ?? null,
+        profile.license ?? null,
       )
       .run();
   },
@@ -100,17 +110,32 @@ const db: AppDatabase = {
     const db = getDb();
     const row = await db
       .prepare(
-        `SELECT name, club, division, last_seen FROM shooter_profiles
-         WHERE shooter_id = ?`,
+        `SELECT name, club, division, last_seen, region, region_display, category, ics_alias, license
+         FROM shooter_profiles WHERE shooter_id = ?`,
       )
       .bind(shooterId)
-      .first<{ name: string; club: string | null; division: string | null; last_seen: string }>();
+      .first<{
+        name: string;
+        club: string | null;
+        division: string | null;
+        last_seen: string;
+        region: string | null;
+        region_display: string | null;
+        category: string | null;
+        ics_alias: string | null;
+        license: string | null;
+      }>();
     if (!row) return null;
     return {
       name: row.name,
       club: row.club,
       division: row.division,
       lastSeen: row.last_seen,
+      region: row.region,
+      region_display: row.region_display,
+      category: row.category,
+      ics_alias: row.ics_alias,
+      license: row.license,
     };
   },
 

@@ -180,6 +180,11 @@ async function fetchOgCompareStatsImpl(
       competitor_number: "",
       club: null,
       division: null,
+      region: null,
+      region_display: null,
+      category: null,
+      ics_alias: null,
+      license: null,
     }));
 
     // computeGroupRankings gives accurate group/div/overall % using the full field

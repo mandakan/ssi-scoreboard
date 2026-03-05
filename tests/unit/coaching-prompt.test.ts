@@ -24,6 +24,11 @@ function makeCompetitor(overrides?: Partial<CompetitorInfo>): CompetitorInfo {
     competitor_number: "42",
     club: "Shooters United",
     division: "Production",
+    region: null,
+    region_display: null,
+    category: null,
+    ics_alias: null,
+    license: null,
     ...overrides,
   };
 }

@@ -34,6 +34,11 @@ export interface ShooterProfile {
   club: string | null;
   division: string | null;
   lastSeen: string; // ISO timestamp
+  region: string | null;
+  region_display: string | null;
+  category: string | null;
+  ics_alias: string | null;
+  license: string | null;
 }
 
 /**
@@ -57,6 +62,11 @@ export function indexMatchShooters(
     name: string;
     club: string | null;
     division: string | null;
+    region?: string | null;
+    region_display?: string | null;
+    category?: string | null;
+    ics_alias?: string | null;
+    license?: string | null;
   }>,
 ): Promise<void> {
   const matchRef = `${ct}:${matchId}`;
@@ -74,6 +84,11 @@ export function indexMatchShooters(
       club: c.club,
       division: c.division,
       lastSeen,
+      region: c.region ?? null,
+      region_display: c.region_display ?? null,
+      category: c.category ?? null,
+      ics_alias: c.ics_alias ?? null,
+      license: c.license ?? null,
     };
     writes.push(
       db.indexShooterMatch(shooterId, matchRef, startTimestamp).catch(() => {}),

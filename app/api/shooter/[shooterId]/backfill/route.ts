@@ -76,6 +76,11 @@ export async function POST(
         club: competitor.club,
         division: competitor.division,
         lastSeen,
+        region: competitor.region,
+        region_display: competitor.region_display,
+        category: competitor.category,
+        ics_alias: competitor.ics_alias,
+        license: competitor.license,
       });
       // Invalidate dashboard cache
       await cache.del(`computed:shooter:${sid}:dashboard`);

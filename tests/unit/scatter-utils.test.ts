@@ -75,6 +75,11 @@ const aliceInfo: CompetitorInfo = {
   competitor_number: "10",
   club: null,
   division: "Open",
+  region: null,
+  region_display: null,
+  category: null,
+  ics_alias: null,
+  license: null,
 };
 
 const bobInfo: CompetitorInfo = {
@@ -84,6 +89,11 @@ const bobInfo: CompetitorInfo = {
   competitor_number: "20",
   club: null,
   division: "Production",
+  region: null,
+  region_display: null,
+  category: null,
+  ics_alias: null,
+  license: null,
 };
 
 interface StageOverrides {

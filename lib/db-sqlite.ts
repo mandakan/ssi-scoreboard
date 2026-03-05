@@ -11,7 +11,12 @@ const SCHEMA_SQL = `
     name TEXT NOT NULL,
     club TEXT,
     division TEXT,
-    last_seen TEXT NOT NULL
+    last_seen TEXT NOT NULL,
+    region TEXT,
+    region_display TEXT,
+    category TEXT,
+    ics_alias TEXT,
+    license TEXT
   );
 
   CREATE TABLE IF NOT EXISTS shooter_matches (
@@ -61,6 +66,10 @@ function openDb(dbPath: string): Database.Database {
   db.pragma("journal_mode = WAL");
   db.pragma("busy_timeout = 5000");
   db.exec(SCHEMA_SQL);
+  // Apply new columns to existing databases (idempotent — SQLite errors on duplicate columns).
+  for (const col of ["region TEXT", "region_display TEXT", "category TEXT", "ics_alias TEXT", "license TEXT"]) {
+    try { db.exec(`ALTER TABLE shooter_profiles ADD COLUMN ${col}`); } catch { /* already exists */ }
+  }
   return db;
 }
 
@@ -103,13 +112,18 @@ export function createSqliteDatabase(
     async setShooterProfile(shooterId, profile) {
       getDb()
         .prepare(
-          `INSERT INTO shooter_profiles (shooter_id, name, club, division, last_seen)
-           VALUES (?, ?, ?, ?, ?)
+          `INSERT INTO shooter_profiles (shooter_id, name, club, division, last_seen, region, region_display, category, ics_alias, license)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(shooter_id)
            DO UPDATE SET name = excluded.name,
                          club = excluded.club,
                          division = excluded.division,
-                         last_seen = excluded.last_seen`,
+                         last_seen = excluded.last_seen,
+                         region = excluded.region,
+                         region_display = excluded.region_display,
+                         category = excluded.category,
+                         ics_alias = excluded.ics_alias,
+                         license = excluded.license`,
         )
         .run(
           shooterId,
@@ -117,6 +131,11 @@ export function createSqliteDatabase(
           profile.club ?? null,
           profile.division ?? null,
           profile.lastSeen,
+          profile.region ?? null,
+          profile.region_display ?? null,
+          profile.category ?? null,
+          profile.ics_alias ?? null,
+          profile.license ?? null,
         );
     },
 
@@ -146,11 +165,21 @@ export function createSqliteDatabase(
     async getShooterProfile(shooterId) {
       const row = getDb()
         .prepare(
-          `SELECT name, club, division, last_seen FROM shooter_profiles
-           WHERE shooter_id = ?`,
+          `SELECT name, club, division, last_seen, region, region_display, category, ics_alias, license
+           FROM shooter_profiles WHERE shooter_id = ?`,
         )
         .get(shooterId) as
-        | { name: string; club: string | null; division: string | null; last_seen: string }
+        | {
+            name: string;
+            club: string | null;
+            division: string | null;
+            last_seen: string;
+            region: string | null;
+            region_display: string | null;
+            category: string | null;
+            ics_alias: string | null;
+            license: string | null;
+          }
         | undefined;
       if (!row) return null;
       return {
@@ -158,6 +187,11 @@ export function createSqliteDatabase(
         club: row.club,
         division: row.division,
         lastSeen: row.last_seen,
+        region: row.region,
+        region_display: row.region_display,
+        category: row.category,
+        ics_alias: row.ics_alias,
+        license: row.license,
       };
     },
 
