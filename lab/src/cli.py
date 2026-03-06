@@ -54,6 +54,11 @@ def train(
 
         for algo in algorithms:
             console.print(f"\n[cyan]{algo.name}[/cyan]")
+
+            # Track the most recent match date per shooter across chronological matches.
+            # Matches are ordered ascending so the last write wins (most recent date).
+            shooter_last_date: dict[int, str] = {}
+
             for ct, match_id, match_date, match_level in matches:
                 results = store.get_stage_results_for_match(ct, match_id)
                 comp_map = store.get_competitor_shooter_map(ct, match_id)
@@ -69,6 +74,10 @@ def train(
                     region_map=region_map, category_map=cat_map,
                     match_level=match_level,
                 )
+                if match_date:
+                    for sid in comp_map.values():
+                        if sid is not None:
+                            shooter_last_date[sid] = match_date
 
             ratings = algo.get_ratings()
             console.print(f"  Rated {len(ratings)} shooters")
@@ -79,7 +88,8 @@ def train(
             for sid, r in ratings.items():
                 rating_data[sid] = (
                     r.name, r.division, r.region, r.category,
-                    r.mu, r.sigma, r.matches_played, None,
+                    r.mu, r.sigma, r.matches_played,
+                    shooter_last_date.get(sid),
                 )
             store.save_ratings(algo.name, rating_data)
             console.print(f"  [green]Saved ratings for {algo.name}[/green]")
