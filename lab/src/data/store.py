@@ -193,12 +193,34 @@ class Store:
         row = self.db.execute("SELECT count(*) FROM matches").fetchone()
         return row[0] if row else 0
 
-    def get_matches_chronological(self) -> list[tuple[int, str, str | None]]:
-        """Return (ct, match_id, date) tuples sorted by date ascending."""
+    def get_matches_chronological(self) -> list[tuple[int, str, str | None, str | None]]:
+        """Return (ct, match_id, date, level) tuples sorted by date ascending."""
         rows = self.db.execute(
-            "SELECT ct, match_id, date FROM matches ORDER BY date ASC NULLS LAST"
+            "SELECT ct, match_id, date, level FROM matches ORDER BY date ASC NULLS LAST"
         ).fetchall()
-        return [(r[0], r[1], str(r[2]) if r[2] else None) for r in rows]
+        return [(r[0], r[1], str(r[2]) if r[2] else None, r[3]) for r in rows]
+
+    def get_match_scores(self, ct: int, match_id: str) -> list[tuple[int, float, bool, bool]]:
+        """Return (competitor_id, total_points, is_dq, is_zeroed) for match-level scoring.
+
+        Aggregates all stages into one score per competitor.  DNF stages contribute 0
+        (competitor still counted); DQ zeroes the whole competitor's score.
+        Used for the 'match_pct' scoring mode as an alternative to per-stage hit factor.
+        """
+        rows = self.db.execute(
+            """SELECT competitor_id,
+                      SUM(CASE WHEN dq THEN 0.0 ELSE COALESCE(points, 0.0) END) AS total_pts,
+                      BOOL_OR(dq)     AS is_dq,
+                      BOOL_OR(zeroed) AS is_zeroed
+               FROM stage_results
+               WHERE ct = ? AND match_id = ?
+               GROUP BY competitor_id""",
+            [ct, match_id],
+        ).fetchall()
+        return [
+            (int(r[0]), 0.0 if r[2] else float(r[1]), bool(r[2]), bool(r[3]))
+            for r in rows
+        ]
 
     def get_stage_results_for_match(
         self, ct: int, match_id: str
