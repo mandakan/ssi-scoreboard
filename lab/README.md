@@ -44,10 +44,14 @@ docker compose --profile jupyter up   # + Jupyter on :8888
 ## Architecture
 
 - `src/data/` — Pydantic models, DuckDB store, HTTP sync client
-- `src/algorithms/` — Rating algorithm implementations (OpenSkill, ELO)
-- `src/benchmark/` — Chronological train/test evaluation framework
+- `src/algorithms/` — Rating algorithm implementations (OpenSkill PL/BT variants, ELO)
+- `src/benchmark/` — Chronological train/test evaluation with conservative ranking and per-division fairness analysis
 - `src/engine/` — FastAPI rating server with scheduled recalculation
 - `src/cli.py` — Typer CLI (`rating sync|train|benchmark|serve`)
+
+See [docs/algorithms.md](docs/algorithms.md) for a plain-language explanation of every
+algorithm: what it does, why it was chosen, its strengths, weaknesses, and parameter
+rationale.
 
 ## Data flow
 
