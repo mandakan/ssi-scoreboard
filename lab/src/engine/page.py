@@ -105,6 +105,16 @@ ALGO_DESCRIPTION: dict[str, str] = {
     ),
 }
 
+# Short, non-technical model names for the two-step picker dropdown.
+BASE_ALGO_DISPLAY: dict[str, str] = {
+    "openskill_bt_lvl":       "Recommended — pairwise + match level",
+    "openskill_bt_lvl_decay": "Recommended + activity decay",
+    "openskill_bt":           "Pairwise (simpler)",
+    "openskill_pl_decay":     "Basic Bayesian + activity decay",
+    "openskill":              "Basic Bayesian",
+    "elo":                    "Classic ELO",
+}
+
 # Preferred display order — recommended algorithms first, _mpct variants after their base.
 _ALGO_ORDER: list[str] = [
     "openskill_bt_lvl",
@@ -162,10 +172,17 @@ _HTML = r"""<!DOCTYPE html>
 
     <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+        <div class="col-span-2 sm:col-span-3 lg:col-span-2">
+          <label class="block text-xs font-medium text-gray-500 mb-1">Scoring method</label>
+          <div class="flex rounded-lg border border-gray-200 overflow-hidden">
+            <button @click="ts.scoring='hf'" :class="ts.scoring==='hf'?'bg-blue-600 text-white':'bg-white text-gray-600 hover:bg-gray-50'" class="flex-1 px-2 py-1.5 text-xs font-medium transition-colors whitespace-nowrap">Hit factor / stage</button>
+            <button @click="ts.scoring='mpct'" :class="ts.scoring==='mpct'?'bg-blue-600 text-white':'bg-white text-gray-600 hover:bg-gray-50'" class="flex-1 px-2 py-1.5 text-xs font-medium transition-colors whitespace-nowrap border-l border-gray-200">Match % (IPSC)</button>
+          </div>
+        </div>
         <div>
-          <label class="block text-xs font-medium text-gray-500 mb-1">Algorithm</label>
-          <select x-model="ts.algo" class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <template x-for="a in algoOpts" :key="a.v">
+          <label class="block text-xs font-medium text-gray-500 mb-1">Model</label>
+          <select x-model="ts.base" class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <template x-for="a in baseAlgos" :key="a.v">
               <option :value="a.v" x-text="a.l"></option>
             </template>
           </select>
@@ -263,7 +280,7 @@ _HTML = r"""<!DOCTYPE html>
                     <td class="px-3 py-2 text-right font-mono text-xs"
                       x-text="scoreVal(s).toFixed(2)"></td>
                     <td class="px-3 py-2 text-right text-gray-400 text-xs"
-                      x-text="s.ratings[ts.algo].m"></td>
+                      x-text="s.ratings[tsAlgo].m"></td>
                   </tr>
                 </template>
               </tbody>
@@ -309,7 +326,7 @@ _HTML = r"""<!DOCTYPE html>
                     <td class="px-3 py-2 text-right font-mono text-xs"
                       x-text="scoreVal(s).toFixed(2)"></td>
                     <td class="px-3 py-2 text-right text-gray-400 text-xs"
-                      x-text="s.ratings[ts.algo].m"></td>
+                      x-text="s.ratings[tsAlgo].m"></td>
                   </tr>
                 </template>
               </tbody>
@@ -323,11 +340,18 @@ _HTML = r"""<!DOCTYPE html>
   <!-- ── RANKINGS ── -->
   <section x-show="tab==='rankings'">
     <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-3">
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-3">
+        <div class="col-span-2 sm:col-span-3 lg:col-span-2">
+          <label class="block text-xs font-medium text-gray-500 mb-1">Scoring method</label>
+          <div class="flex rounded-lg border border-gray-200 overflow-hidden">
+            <button @click="rk.scoring='hf'" :class="rk.scoring==='hf'?'bg-blue-600 text-white':'bg-white text-gray-600 hover:bg-gray-50'" class="flex-1 px-2 py-1.5 text-xs font-medium transition-colors whitespace-nowrap">Hit factor / stage</button>
+            <button @click="rk.scoring='mpct'" :class="rk.scoring==='mpct'?'bg-blue-600 text-white':'bg-white text-gray-600 hover:bg-gray-50'" class="flex-1 px-2 py-1.5 text-xs font-medium transition-colors whitespace-nowrap border-l border-gray-200">Match % (IPSC)</button>
+          </div>
+        </div>
         <div>
-          <label class="block text-xs font-medium text-gray-500 mb-1">Algorithm</label>
-          <select x-model="rk.algo" class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <template x-for="a in algoOpts" :key="a.v">
+          <label class="block text-xs font-medium text-gray-500 mb-1">Model</label>
+          <select x-model="rk.base" class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <template x-for="a in baseAlgos" :key="a.v">
               <option :value="a.v" x-text="a.l"></option>
             </template>
           </select>
@@ -406,13 +430,13 @@ _HTML = r"""<!DOCTYPE html>
                 <td class="px-4 py-2.5 text-gray-400 text-xs" x-text="s.category||'—'"></td>
                 <td class="px-4 py-2.5 text-gray-500 text-xs" x-text="s.region||'—'"></td>
                 <td class="px-4 py-2.5 text-right font-mono text-xs"
-                  x-text="s.ratings[rk.algo].mu.toFixed(2)"></td>
+                  x-text="s.ratings[rkAlgo].mu.toFixed(2)"></td>
                 <td class="px-4 py-2.5 text-right font-mono text-xs font-semibold text-blue-700"
-                  x-text="s.ratings[rk.algo].cr.toFixed(2)"></td>
+                  x-text="s.ratings[rkAlgo].cr.toFixed(2)"></td>
                 <td class="px-4 py-2.5 text-right text-gray-500 text-xs"
-                  x-text="s.ratings[rk.algo].m"></td>
+                  x-text="s.ratings[rkAlgo].m"></td>
                 <td class="px-4 py-2.5 text-right text-gray-400 text-xs"
-                  x-text="s.ratings[rk.algo].d||'—'"></td>
+                  x-text="s.ratings[rkAlgo].d||'—'"></td>
               </tr>
             </template>
           </tbody>
@@ -563,16 +587,20 @@ _HTML = r"""<!DOCTYPE html>
 </div>
 
 <script>
-const D            = DATA_PLACEHOLDER;
-const ALGO_DISPLAY = ALGO_DISPLAY_PLACEHOLDER;
-const ALGO_DESC    = ALGO_DESC_PLACEHOLDER;
+const D                 = DATA_PLACEHOLDER;
+const ALGO_DISPLAY      = ALGO_DISPLAY_PLACEHOLDER;
+const ALGO_DESC         = ALGO_DESC_PLACEHOLDER;
+const BASE_ALGO_DISPLAY = BASE_ALGO_DISPLAY_PLACEHOLDER;
+
+const _BASE_ORDER = ['openskill_bt_lvl','openskill_bt_lvl_decay','openskill_bt','openskill_pl_decay','openskill','elo'];
 
 document.addEventListener('alpine:init', () => {
   Alpine.data('app', () => ({
     D,
     tab: 'team',
     ts: {
-      algo:   D.algorithms.find(a => a === 'openskill_bt_lvl') ?? D.algorithms[0] ?? '',
+      base:    'openskill_bt_lvl',
+      scoring: D.algorithms.some(a => a.endsWith('_mpct')) ? 'mpct' : 'hf',
       region: '',
       sort:   'conservative',
       minM:   3,
@@ -582,23 +610,45 @@ document.addEventListener('alpine:init', () => {
       cat:    '',
     },
     rk: {
-      algo:   D.algorithms.find(a => a === 'openskill_bt_lvl') ?? D.algorithms[0] ?? '',
+      base:    'openskill_bt_lvl',
+      scoring: D.algorithms.some(a => a.endsWith('_mpct')) ? 'mpct' : 'hf',
       div: '', region: '', cat: '', sort: 'conservative', q: '',
     },
 
+    _resolveAlgo(base, scoring) {
+      const full = scoring === 'mpct' ? base + '_mpct' : base;
+      if (this.D.algorithms.includes(full)) return full;
+      if (this.D.algorithms.includes(base)) return base;
+      return this.D.algorithms[0] ?? '';
+    },
+    get tsAlgo() { return this._resolveAlgo(this.ts.base, this.ts.scoring); },
+    get rkAlgo() { return this._resolveAlgo(this.rk.base, this.rk.scoring); },
+
+    get baseAlgos() {
+      const bases = [...new Set(this.D.algorithms.map(a => a.replace(/_mpct$/, '')))];
+      bases.sort((a, b) => {
+        const ia = _BASE_ORDER.indexOf(a), ib = _BASE_ORDER.indexOf(b);
+        if (ia === -1 && ib === -1) return a.localeCompare(b);
+        if (ia === -1) return 1; if (ib === -1) return -1;
+        return ia - ib;
+      });
+      return bases.map(v => ({ v, l: BASE_ALGO_DISPLAY[v] ?? v }));
+    },
+
+    // Full algo list used only in the About tab.
     get algoOpts() {
       return this.D.algorithms.map(a => ({ v: a, l: ALGO_DISPLAY[a] ?? a }));
     },
 
     scoreVal(s) {
-      const r = s.ratings[this.ts.algo];
+      const r = s.ratings[this.tsAlgo];
       if (!r) return 0;
       return this.ts.sort === 'conservative' ? r.cr : r.mu;
     },
 
     _eligible(s) {
-      const { algo, region, minM, since } = this.ts;
-      const r = s.ratings[algo];
+      const { base, scoring, region, minM, since } = this.ts;
+      const r = s.ratings[this._resolveAlgo(base, scoring)];
       if (!r) return false;
       if (region && s.region !== region) return false;
       if (r.m < minM) return false;
@@ -607,7 +657,8 @@ document.addEventListener('alpine:init', () => {
     },
 
     _sorted(list) {
-      const { algo, sort } = this.ts;
+      const algo = this.tsAlgo;
+      const { sort } = this.ts;
       return [...list].sort((a, b) => {
         const ra = a.ratings[algo], rb = b.ratings[algo];
         return sort === 'conservative' ? rb.cr - ra.cr : rb.mu - ra.mu;
@@ -642,7 +693,8 @@ document.addEventListener('alpine:init', () => {
     },
 
     get ranked() {
-      const { algo, div, region, cat, sort, q } = this.rk;
+      const algo = this.rkAlgo;
+      const { div, region, cat, sort, q } = this.rk;
       const lq = q.toLowerCase();
       const list = this.D.shooters.filter(s => {
         const r = s.ratings[algo];
@@ -698,7 +750,8 @@ def generate_site(data: dict[str, Any], output_dir: Path) -> None:
     html = _HTML
     html = html.replace("DATA_PLACEHOLDER",         json.dumps(data,             separators=sep))
     html = html.replace("ALGO_DISPLAY_PLACEHOLDER", json.dumps(ALGO_DISPLAY,     separators=sep))
-    html = html.replace("ALGO_DESC_PLACEHOLDER",    json.dumps(ALGO_DESCRIPTION, separators=sep))
+    html = html.replace("ALGO_DESC_PLACEHOLDER",         json.dumps(ALGO_DESCRIPTION,  separators=sep))
+    html = html.replace("BASE_ALGO_DISPLAY_PLACEHOLDER", json.dumps(BASE_ALGO_DISPLAY, separators=sep))
 
     out = output_dir / "index.html"
     out.write_text(html, encoding="utf-8")
