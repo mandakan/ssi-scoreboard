@@ -90,15 +90,19 @@ def train(
 @app.command()
 def benchmark(
     split: float = typer.Option(0.7, help="Train/test split ratio (chronological)"),
+    chart: bool = typer.Option(False, help="Save a comparison chart to data/benchmark.png"),
     db_path: Path = DB_PATH_OPTION,
 ) -> None:
-    """Run benchmark comparing all algorithms."""
+    """Run benchmark comparing all algorithms (base + conservative ranking variants)."""
+    from src.benchmark.report import save_chart
     from src.benchmark.runner import run_benchmark
     from src.data.store import Store
 
     store = Store(db_path)
     try:
-        run_benchmark(store, split_ratio=split)
+        algo_metrics = run_benchmark(store, split_ratio=split)
+        if chart and algo_metrics:
+            save_chart(algo_metrics, output_path=str(db_path.parent / "benchmark.png"))
     finally:
         store.close()
 
