@@ -306,10 +306,15 @@ async function main(): Promise<void> {
     if (cacheHit && !args.force) {
       opLine("GetMatch", "skip", "cached", fetchMs);
       skipped++;
-    } else {
-      opLine("GetMatch", "ok", `${matchResponse.competitors_count} competitors, ${matchResponse.stages_count} stages`, fetchMs);
-      warmed++;
+      // Scorecards are warmed alongside GetMatch — skip Compare and use a
+      // minimal delay so already-cached runs don't compound unnecessarily.
+      await wait(Math.min(args.delay, 200), false);
+      printProgress(i + 1, filtered.length, warmed, args.limit, sessionStart);
+      continue;
     }
+
+    opLine("GetMatch", "ok", `${matchResponse.competitors_count} competitors, ${matchResponse.stages_count} stages`, fetchMs);
+    warmed++;
 
     // ── Step 2: Warm scorecards + fingerprints via /api/compare ─────────
     if (!args.skipScorecards && matchResponse.competitors.length > 0) {
