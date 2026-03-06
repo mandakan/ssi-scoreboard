@@ -66,11 +66,13 @@ def run_benchmark(store: Store, split_ratio: float = 0.7) -> None:
         console.print(f"\n[cyan]Training {algo.name}...[/cyan]")
 
         # Train phase
-        for ct, match_id, match_date in train_matches:
+        for ct, match_id, match_date, match_level in train_matches:
             results = store.get_stage_results_for_match(ct, match_id)
             comp_map = store.get_competitor_shooter_map(ct, match_id)
             if results:
-                algo.process_match_data(ct, match_id, match_date, results, comp_map)
+                algo.process_match_data(
+                    ct, match_id, match_date, results, comp_map, match_level=match_level
+                )
 
         n_rated = len(algo.get_ratings())
         console.print(f"  Trained on {len(train_matches)} matches, {n_rated} shooters rated")
@@ -83,7 +85,7 @@ def run_benchmark(store: Store, split_ratio: float = 0.7) -> None:
             "mrr": [],
         }
 
-        for ct, match_id, match_date in test_matches:
+        for ct, match_id, match_date, match_level in test_matches:
             # Get actual ranking
             actual = _actual_ranking_for_match(store, ct, match_id)
             if len(actual) < 5:
@@ -103,7 +105,9 @@ def run_benchmark(store: Store, split_ratio: float = 0.7) -> None:
             results = store.get_stage_results_for_match(ct, match_id)
             comp_map = store.get_competitor_shooter_map(ct, match_id)
             if results:
-                algo.process_match_data(ct, match_id, match_date, results, comp_map)
+                algo.process_match_data(
+                    ct, match_id, match_date, results, comp_map, match_level=match_level
+                )
 
         algo_metrics[algo.name] = metrics
         n_tested = len(metrics["kendall_tau"])

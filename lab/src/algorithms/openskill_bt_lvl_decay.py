@@ -1,51 +1,87 @@
-"""OpenSkill Plackett-Luce rating algorithm.
+"""OpenSkill BradleyTerryPart with match-level beta scaling and inactivity decay.
 
-Each stage is an independent N-player ranking event. Competitors are ranked
-by hit factor. DQ/zeroed → HF 0 (ranked last). DNF → excluded.
+Combines both innovations from the other variants:
+- BradleyTerryPart model with per-level beta scaling (openskill_bt_lvl)
+- Inactivity sigma decay proportional to days since last match (openskill_pl_decay)
+
+Concept and beta values adapted from Jonas Emilsson's ipsc-ranking project
+(https://github.com/ipsc-ranking/ipsc-ranking.github.io, CC BY-NC-SA 4.0).
+Only the algorithmic ideas are borrowed; the implementation follows this
+project's conventions and architecture.
 """
 
 from __future__ import annotations
 
 import json
 from collections import defaultdict
+from datetime import date
 from pathlib import Path
 
-from openskill.models import PlackettLuce
+from openskill.models import BradleyTerryPart
 
 from src.algorithms.base import RatingAlgorithm
 from src.data.models import Rating
 
+_DEFAULT_MU = 25.0
+_LEVEL_BETA: dict[str, float] = {
+    "l2": _DEFAULT_MU / 12,
+    "l3": _DEFAULT_MU / 6,
+    "l4": _DEFAULT_MU / 3,
+    "l5": _DEFAULT_MU / 1.5,
+}
+_TAU: float = _DEFAULT_MU / 300
+_DEFAULT_SIGMA: float = _DEFAULT_MU / 3
 
-class OpenSkillPL(RatingAlgorithm):
-    """OpenSkill Plackett-Luce (Weng-Lin Bayesian) rating algorithm."""
+
+def _parse_date(date_str: str) -> date | None:
+    try:
+        return date.fromisoformat(date_str[:10])
+    except (ValueError, IndexError):
+        return None
+
+
+class OpenSkillBTLvlDecay(RatingAlgorithm):
+    """BradleyTerryPart with level-scaled beta and inactivity sigma decay."""
 
     def __init__(self) -> None:
-        self.model = PlackettLuce()
-        # shooter_id → (mu, sigma)
+        self._model = BradleyTerryPart()
+        self._level_models = {lvl: BradleyTerryPart(beta=beta) for lvl, beta in _LEVEL_BETA.items()}
+
         self._ratings: dict[int, tuple[float, float]] = {}
-        # shooter_id → name (most recent)
         self._names: dict[int, str] = {}
-        # shooter_id → division (most recent)
         self._divisions: dict[int, str | None] = {}
-        # shooter_id → region (most recent)
         self._regions: dict[int, str | None] = {}
-        # shooter_id → category (most recent)
         self._categories: dict[int, str | None] = {}
-        # shooter_id → matches_played count
         self._matches: dict[int, int] = defaultdict(int)
-        # Track which shooters participated in each match (by match key)
         self._seen_matches: set[str] = set()
+        self._last_date: dict[int, str] = {}
 
     @property
     def name(self) -> str:
-        return "openskill"
+        return "openskill_bt_lvl_decay"
 
     def _get_rating(self, shooter_id: int) -> tuple[float, float]:
-        """Get or create a rating for a shooter."""
         if shooter_id not in self._ratings:
-            r = self.model.rating()
+            r = self._model.rating()
             self._ratings[shooter_id] = (r.mu, r.sigma)
         return self._ratings[shooter_id]
+
+    def _apply_decay(self, shooter_id: int, match_date_str: str) -> None:
+        last_str = self._last_date.get(shooter_id)
+        if last_str is None:
+            return
+
+        match_d = _parse_date(match_date_str)
+        last_d = _parse_date(last_str)
+        if match_d is None or last_d is None:
+            return
+
+        days = (match_d - last_d).days
+        if days <= 0:
+            return
+
+        mu, sigma = self._get_rating(shooter_id)
+        self._ratings[shooter_id] = (mu, min(sigma + _TAU * days, _DEFAULT_SIGMA))
 
     def process_match_data(
         self,
@@ -66,59 +102,60 @@ class OpenSkillPL(RatingAlgorithm):
             return
         self._seen_matches.add(match_key)
 
-        # Track which shooters are in this match
-        match_shooters: set[int] = set()
+        rate_model = self._level_models.get(match_level or "", self._model)
 
-        # Group results by stage
+        match_shooters: set[int] = set()
+        for comp_id, _stage_id, _hf, _dq, dnf, _zeroed in stage_results:
+            sid = competitor_shooter_map.get(comp_id)
+            if sid is not None and not dnf:
+                match_shooters.add(sid)
+
+        if match_date:
+            for sid in match_shooters:
+                self._apply_decay(sid, match_date)
+
         by_stage: dict[int, list[tuple[int, float | None, bool, bool, bool]]] = defaultdict(list)
         for comp_id, stage_id, hf, dq, dnf, zeroed in stage_results:
             by_stage[stage_id].append((comp_id, hf, dq, dnf, zeroed))
 
         for _stage_id, stage_entries in by_stage.items():
-            # Build ranking: exclude DNF, treat DQ/zeroed as HF=0
             ranked: list[tuple[int, float]] = []
             for comp_id, hf, dq, dnf, zeroed in stage_entries:
                 shooter_id = competitor_shooter_map.get(comp_id)
-                if shooter_id is None:
-                    continue
-                if dnf:
+                if shooter_id is None or dnf:
                     continue
                 effective_hf = 0.0 if (dq or zeroed) else (hf if hf is not None else 0.0)
                 ranked.append((shooter_id, effective_hf))
-                match_shooters.add(shooter_id)
 
             if len(ranked) < 2:
                 continue
 
-            # Sort by hit factor descending
             ranked.sort(key=lambda x: x[1], reverse=True)
 
-            # Build teams (each team = 1 player) and ranks
             teams = []
             ranks = []
             current_rank = 1
-            for i, (sid, _ehf) in enumerate(ranked):
+            for i, (sid, _) in enumerate(ranked):
                 mu, sigma = self._get_rating(sid)
-                r = self.model.rating(mu=mu, sigma=sigma)
+                r = self._model.rating(mu=mu, sigma=sigma)
                 teams.append([r])
                 if i > 0 and ranked[i][1] < ranked[i - 1][1]:
                     current_rank = i + 1
                 ranks.append(current_rank)
 
-            # Rate — OpenSkill expects list[float] for ranks
-            updated = self.model.rate(teams, ranks=[float(r) for r in ranks])
+            updated = rate_model.rate(teams, ranks=[float(r) for r in ranks])
 
-            # Store updated ratings
             for i, (sid, _) in enumerate(ranked):
                 new_r = updated[i][0]
                 self._ratings[sid] = (new_r.mu, new_r.sigma)
 
-        # Update match counts and metadata
         for comp_id, shooter_id in competitor_shooter_map.items():
             if shooter_id is None:
                 continue
             if shooter_id in match_shooters:
                 self._matches[shooter_id] += 1
+                if match_date:
+                    self._last_date[shooter_id] = match_date
             if name_map and comp_id in name_map:
                 self._names[shooter_id] = name_map[comp_id]
             if division_map and comp_id in division_map:
@@ -144,10 +181,7 @@ class OpenSkillPL(RatingAlgorithm):
         return result
 
     def predict_rank(self, shooter_ids: list[int]) -> list[int]:
-        rated = []
-        for sid in shooter_ids:
-            mu, sigma = self._get_rating(sid)
-            rated.append((sid, mu))
+        rated = [(sid, self._get_rating(sid)[0]) for sid in shooter_ids]
         rated.sort(key=lambda x: x[1], reverse=True)
         return [sid for sid, _ in rated]
 
@@ -160,6 +194,7 @@ class OpenSkillPL(RatingAlgorithm):
             "regions": {str(k): v for k, v in self._regions.items()},
             "categories": {str(k): v for k, v in self._categories.items()},
             "seen_matches": list(self._seen_matches),
+            "last_date": dict(self._last_date),
         }
         path.write_text(json.dumps(state))
 
@@ -172,3 +207,4 @@ class OpenSkillPL(RatingAlgorithm):
         self._regions = {int(k): v for k, v in state.get("regions", {}).items()}
         self._categories = {int(k): v for k, v in state.get("categories", {}).items()}
         self._seen_matches = set(state.get("seen_matches", []))
+        self._last_date = {int(k): v for k, v in state.get("last_date", {}).items()}

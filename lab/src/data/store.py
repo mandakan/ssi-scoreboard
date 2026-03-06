@@ -193,12 +193,12 @@ class Store:
         row = self.db.execute("SELECT count(*) FROM matches").fetchone()
         return row[0] if row else 0
 
-    def get_matches_chronological(self) -> list[tuple[int, str, str | None]]:
-        """Return (ct, match_id, date) tuples sorted by date ascending."""
+    def get_matches_chronological(self) -> list[tuple[int, str, str | None, str | None]]:
+        """Return (ct, match_id, date, level) tuples sorted by date ascending."""
         rows = self.db.execute(
-            "SELECT ct, match_id, date FROM matches ORDER BY date ASC NULLS LAST"
+            "SELECT ct, match_id, date, level FROM matches ORDER BY date ASC NULLS LAST"
         ).fetchall()
-        return [(r[0], r[1], str(r[2]) if r[2] else None) for r in rows]
+        return [(r[0], r[1], str(r[2]) if r[2] else None, r[3]) for r in rows]
 
     def get_stage_results_for_match(
         self, ct: int, match_id: str

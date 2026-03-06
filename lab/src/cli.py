@@ -54,7 +54,7 @@ def train(
 
         for algo in algorithms:
             console.print(f"\n[cyan]{algo.name}[/cyan]")
-            for ct, match_id, match_date in matches:
+            for ct, match_id, match_date, match_level in matches:
                 results = store.get_stage_results_for_match(ct, match_id)
                 comp_map = store.get_competitor_shooter_map(ct, match_id)
                 if not results:
@@ -67,6 +67,7 @@ def train(
                     ct, match_id, match_date, results, comp_map,
                     name_map=name_map, division_map=div_map,
                     region_map=region_map, category_map=cat_map,
+                    match_level=match_level,
                 )
 
             ratings = algo.get_ratings()

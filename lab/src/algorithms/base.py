@@ -34,6 +34,7 @@ class RatingAlgorithm(ABC):
         division_map: dict[int, str | None] | None = None,
         region_map: dict[int, str | None] | None = None,
         category_map: dict[int, str | None] | None = None,
+        match_level: str | None = None,
     ) -> None:
         """Process a single match's stage results.
 
@@ -47,6 +48,7 @@ class RatingAlgorithm(ABC):
             division_map: competitor_id → division mapping (optional)
             region_map: competitor_id → region mapping (optional)
             category_map: competitor_id → category mapping (optional)
+            match_level: Match level string e.g. 'l2', 'l3', 'l4', 'l5' (optional)
         """
 
     @abstractmethod
@@ -69,9 +71,20 @@ class RatingAlgorithm(ABC):
 def get_algorithms(name: str | None = None) -> list[RatingAlgorithm]:
     """Get algorithm instances by name. None or 'all' returns all."""
     from src.algorithms.elo import MultiElo
+    from src.algorithms.openskill_bt import OpenSkillBT
+    from src.algorithms.openskill_bt_lvl import OpenSkillBTLvl
+    from src.algorithms.openskill_bt_lvl_decay import OpenSkillBTLvlDecay
     from src.algorithms.openskill_pl import OpenSkillPL
+    from src.algorithms.openskill_pl_decay import OpenSkillPLDecay
 
-    all_algos: list[RatingAlgorithm] = [OpenSkillPL(), MultiElo()]
+    all_algos: list[RatingAlgorithm] = [
+        OpenSkillPL(),
+        OpenSkillBT(),
+        OpenSkillBTLvl(),
+        OpenSkillPLDecay(),
+        OpenSkillBTLvlDecay(),
+        MultiElo(),
+    ]
 
     if name is None or name == "all":
         return all_algos
