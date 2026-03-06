@@ -748,10 +748,12 @@ def generate_site(data: dict[str, Any], output_dir: Path) -> None:
 
     sep = (",", ":")
     html = _HTML
-    html = html.replace("DATA_PLACEHOLDER",         json.dumps(data,             separators=sep))
-    html = html.replace("ALGO_DISPLAY_PLACEHOLDER", json.dumps(ALGO_DISPLAY,     separators=sep))
-    html = html.replace("ALGO_DESC_PLACEHOLDER",         json.dumps(ALGO_DESCRIPTION,  separators=sep))
+    # Replace longer/prefixed placeholders first so partial matches don't corrupt them.
+    # (ALGO_DISPLAY_PLACEHOLDER is a substring of BASE_ALGO_DISPLAY_PLACEHOLDER)
+    html = html.replace("DATA_PLACEHOLDER",              json.dumps(data,             separators=sep))
     html = html.replace("BASE_ALGO_DISPLAY_PLACEHOLDER", json.dumps(BASE_ALGO_DISPLAY, separators=sep))
+    html = html.replace("ALGO_DISPLAY_PLACEHOLDER",      json.dumps(ALGO_DISPLAY,     separators=sep))
+    html = html.replace("ALGO_DESC_PLACEHOLDER",         json.dumps(ALGO_DESCRIPTION, separators=sep))
 
     out = output_dir / "index.html"
     out.write_text(html, encoding="utf-8")
