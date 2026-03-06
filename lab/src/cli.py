@@ -118,6 +118,36 @@ def benchmark(
 
 
 @app.command()
+def export(
+    output_dir: Path = typer.Option(Path("site"), help="Output directory for the static explorer"),  # noqa: B008
+    db_path: Path = DB_PATH_OPTION,
+) -> None:
+    """Export ratings to a self-contained static HTML explorer.
+
+    The generated site/ directory can be:
+    - Opened directly in a browser (open site/index.html)
+    - Served by the rating engine (mounts automatically when site/ exists)
+    - Deployed to GitHub Pages (commit site/, rename to docs/, enable Pages from /docs)
+    - Deployed to Cloudflare Pages (set publish directory to lab/site)
+    """
+    from src.data.exporter import export_data
+    from src.data.store import Store
+    from src.engine.page import generate_site
+
+    store = Store(db_path)
+    try:
+        data = export_data(store)
+        generate_site(data, output_dir)
+        console.print(f"\n[bold]Open locally:[/bold] {output_dir / 'index.html'}")
+        console.print(
+            "[dim]Tip: commit site/ and push — "
+            "the rating server mounts it automatically at /.[/dim]"
+        )
+    finally:
+        store.close()
+
+
+@app.command()
 def serve(
     host: str = typer.Option("0.0.0.0", help="Host to bind to"),
     port: int = typer.Option(8000, help="Port to bind to"),

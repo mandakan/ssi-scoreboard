@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Query
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from src.data.store import Store
@@ -253,5 +254,11 @@ def create_app(db_path: Path = Path("data/lab.duckdb")) -> FastAPI:
             }
             for r in rows
         ]
+
+    # Serve the static explorer if site/ exists alongside the API.
+    # Routes defined above take precedence; StaticFiles only handles the rest.
+    _site = Path("site")
+    if _site.exists():
+        app.mount("/", StaticFiles(directory=str(_site), html=True), name="static")
 
     return app
