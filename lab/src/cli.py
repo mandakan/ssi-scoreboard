@@ -39,18 +39,40 @@ def sync(
 @app.command()
 def train(
     algorithm: str = typer.Option("all", help="Algorithm to train: openskill, elo, or all"),
+    scoring: str = typer.Option(
+        "stage_hf",
+        help="Scoring mode: stage_hf (per-stage hit factor) or match_pct (whole-match points)",
+    ),
     db_path: Path = DB_PATH_OPTION,
 ) -> None:
-    """Train rating algorithms on synced match data."""
+    """Train rating algorithms on synced match data.
+
+    Two scoring modes are available:
+
+    stage_hf  — each stage is an independent ranking event (default).
+                A 10-stage match gives 10 data points; more signal, faster convergence.
+
+    match_pct — the whole match is one ranking event, ordered by total match points.
+                Aligns with IPSC's official scoring. Ratings are stored with a _mpct
+                suffix so both modes can coexist and be compared in the explorer.
+    """
     from src.algorithms.base import get_algorithms
     from src.data.store import Store
+
+    if scoring not in ("stage_hf", "match_pct"):
+        console.print(f"[red]Unknown scoring mode '{scoring}'. Use stage_hf or match_pct.[/red]")
+        raise typer.Exit(1)
 
     store = Store(db_path)
     try:
         algorithms = get_algorithms() if algorithm == "all" else get_algorithms(algorithm)
         matches = store.get_matches_chronological()
         n_algo, n_match = len(algorithms), len(matches)
-        console.print(f"[bold]Training {n_algo} algorithm(s) on {n_match} matches[/bold]")
+        mode_label = "stage HF" if scoring == "stage_hf" else "match %"
+        console.print(
+            f"[bold]Training {n_algo} algorithm(s) on {n_match} matches "
+            f"(scoring: {mode_label})[/bold]"
+        )
 
         for algo in algorithms:
             console.print(f"\n[cyan]{algo.name}[/cyan]")
@@ -60,7 +82,14 @@ def train(
             shooter_last_date: dict[int, str] = {}
 
             for ct, match_id, match_date, match_level in matches:
-                results = store.get_stage_results_for_match(ct, match_id)
+                if scoring == "stage_hf":
+                    results = store.get_stage_results_for_match(ct, match_id)
+                else:
+                    scores = store.get_match_scores(ct, match_id)
+                    results = [
+                        (cid, 0, pts, is_dq, False, is_zeroed)
+                        for cid, pts, is_dq, is_zeroed in scores
+                    ]
                 comp_map = store.get_competitor_shooter_map(ct, match_id)
                 if not results:
                     continue
@@ -82,7 +111,10 @@ def train(
             ratings = algo.get_ratings()
             console.print(f"  Rated {len(ratings)} shooters")
 
-            # Save to DuckDB
+            # Suffix algo name with _mpct when using match_pct so both modes can
+            # coexist in the DB and be compared in the explorer / benchmark.
+            stored_name = algo.name if scoring == "stage_hf" else f"{algo.name}_mpct"
+
             from src.data.store import RatingRow
             rating_data: dict[int, RatingRow] = {}
             for sid, r in ratings.items():
@@ -91,8 +123,8 @@ def train(
                     r.mu, r.sigma, r.matches_played,
                     shooter_last_date.get(sid),
                 )
-            store.save_ratings(algo.name, rating_data)
-            console.print(f"  [green]Saved ratings for {algo.name}[/green]")
+            store.save_ratings(stored_name, rating_data)
+            console.print(f"  [green]Saved ratings for {stored_name}[/green]")
     finally:
         store.close()
 
@@ -101,16 +133,25 @@ def train(
 def benchmark(
     split: float = typer.Option(0.7, help="Train/test split ratio (chronological)"),
     chart: bool = typer.Option(False, help="Save a comparison chart to data/benchmark.png"),
+    scoring: str = typer.Option(
+        "stage_hf",
+        help="Scoring mode: stage_hf, match_pct, or all (runs both, combined table)",
+    ),
     db_path: Path = DB_PATH_OPTION,
 ) -> None:
-    """Run benchmark comparing all algorithms (base + conservative ranking variants)."""
+    """Run benchmark comparing all algorithms (base + conservative ranking variants).
+
+    Use --scoring all to run both stage_hf and match_pct in one pass and compare
+    them side-by-side in a single table — the clearest way to see which scoring
+    mode performs better for your data.
+    """
     from src.benchmark.report import save_chart
     from src.benchmark.runner import run_benchmark
     from src.data.store import Store
 
     store = Store(db_path)
     try:
-        algo_metrics = run_benchmark(store, split_ratio=split)
+        algo_metrics = run_benchmark(store, split_ratio=split, scoring=scoring)
         if chart and algo_metrics:
             save_chart(algo_metrics, output_path=str(db_path.parent / "benchmark.png"))
     finally:

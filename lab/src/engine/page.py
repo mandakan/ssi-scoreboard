@@ -9,9 +9,13 @@ from typing import Any
 
 from rich.console import Console
 
+_MANIFEST_VERSION = 1
+
 console = Console()
 
 # Human-readable names for the dropdown and About tab.
+# _mpct suffix = trained on total match points (one event per match)
+# instead of per-stage hit factor (one event per stage).
 ALGO_DISPLAY: dict[str, str] = {
     "elo": "ELO (classic baseline)",
     "openskill": "Bayesian — full ranking",
@@ -19,6 +23,13 @@ ALGO_DISPLAY: dict[str, str] = {
     "openskill_bt_lvl": "Bayesian — pairwise + level weighting",
     "openskill_pl_decay": "Bayesian — full ranking + activity decay",
     "openskill_bt_lvl_decay": "Bayesian — pairwise + level weighting + activity decay",
+    # match_pct variants — same models trained on total match points per official IPSC scoring
+    "elo_mpct": "ELO (classic baseline) · match %",
+    "openskill_mpct": "Bayesian — full ranking · match %",
+    "openskill_bt_mpct": "Bayesian — pairwise · match %",
+    "openskill_bt_lvl_mpct": "Bayesian — pairwise + level weighting · match %",
+    "openskill_pl_decay_mpct": "Bayesian — full ranking + activity decay · match %",
+    "openskill_bt_lvl_decay_mpct": "Bayesian — pairwise + level weighting + activity decay · match %",
 }
 
 ALGO_DESCRIPTION: dict[str, str] = {
@@ -59,16 +70,55 @@ ALGO_DESCRIPTION: dict[str, str] = {
         "Slightly lower top-5 accuracy than plain BradleyTerry because elite shooters "
         "who compete less frequently accumulate extra uncertainty between events."
     ),
+    # match_pct variants — same description prefixed with the key difference
+    "elo_mpct": (
+        "Trained on total match points (official IPSC scoring) rather than per-stage hit "
+        "factor. One ranking event per competition instead of one per stage — fewer data "
+        "points but aligns with how IPSC officially declares results."
+    ),
+    "openskill_mpct": (
+        "Bayesian full-ranking model trained on total match points (official IPSC scoring). "
+        "Each match is one ranking event ordered by total points. Fewer data points than the "
+        "stage_hf variant but scores align exactly with official IPSC result sheets."
+    ),
+    "openskill_bt_mpct": (
+        "BradleyTerry pairwise model trained on total match points (official IPSC scoring). "
+        "Better at identifying top performers than the Plackett-Luce variant; "
+        "one ranking event per match."
+    ),
+    "openskill_bt_lvl_mpct": (
+        "BradleyTerry pairwise model with match-level scaling, trained on total match points "
+        "(official IPSC scoring). Combines the accuracy of pairwise comparisons with the "
+        "fairness of level-weighted updates. One event per match — useful for comparing "
+        "stage_hf vs match_pct scoring approaches side-by-side."
+    ),
+    "openskill_pl_decay_mpct": (
+        "Bayesian full-ranking model with inactivity penalty, trained on total match points "
+        "(official IPSC scoring). Inactive shooters accumulate uncertainty; returning "
+        "to competition restores confidence quickly. One ranking event per match."
+    ),
+    "openskill_bt_lvl_decay_mpct": (
+        "The most complete model trained on total match points (official IPSC scoring): "
+        "pairwise comparisons + match-level scaling + inactivity penalty. "
+        "Use this alongside openskill_bt_lvl_decay to compare how the choice of "
+        "scoring method (hit factor vs match points) affects the final ranking."
+    ),
 }
 
-# Preferred display order — recommended algorithms first.
+# Preferred display order — recommended algorithms first, _mpct variants after their base.
 _ALGO_ORDER: list[str] = [
     "openskill_bt_lvl",
+    "openskill_bt_lvl_mpct",
     "openskill_bt_lvl_decay",
+    "openskill_bt_lvl_decay_mpct",
     "openskill_bt",
+    "openskill_bt_mpct",
     "openskill_pl_decay",
+    "openskill_pl_decay_mpct",
     "openskill",
+    "openskill_mpct",
     "elo",
+    "elo_mpct",
 ]
 
 _HTML = r"""<!DOCTYPE html>
@@ -376,8 +426,10 @@ _HTML = r"""<!DOCTYPE html>
     <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 text-sm text-blue-800">
       <strong>Transparency:</strong>
       These <span x-text="D.matches.length"></span> competitions were used to train all rating
-      algorithms, processed in chronological order. Each stage within each match is treated as a
-      separate ranking event based on hit factor (points scored ÷ time taken on that stage).
+      algorithms, processed in chronological order.
+      Algorithms without a suffix use <strong>hit factor per stage</strong> (each stage is a
+      separate ranking event). Algorithms marked <strong>· match %</strong> use
+      <strong>total match points</strong> per official IPSC scoring (one ranking event per match).
     </div>
     <div class="bg-white rounded-xl shadow-sm overflow-hidden">
       <table class="w-full text-sm">
@@ -476,24 +528,34 @@ _HTML = r"""<!DOCTYPE html>
     <div class="bg-white rounded-xl shadow-sm p-6 text-sm text-gray-700 space-y-3">
       <h2 class="text-lg font-bold text-gray-900">How the ratings are calculated</h2>
       <p>
-        Competitions are processed in <strong>chronological order</strong>. For each competition,
-        every stage is treated as a separate ranking event. Competitors are ranked by
-        <strong>hit factor</strong> (points scored ÷ time taken on that stage).
+        Competitions are processed in <strong>chronological order</strong>. Two scoring modes
+        are available and can be compared side-by-side by selecting different algorithms:
+      </p>
+      <ul class="list-disc pl-5 space-y-1">
+        <li>
+          <strong>Hit factor per stage</strong> (algorithms without suffix) — each stage is a
+          separate ranking event. Competitors are ranked by hit factor (points ÷ time).
+          A 10-stage match produces 10 data points, giving faster convergence.
+        </li>
+        <li>
+          <strong>Match % (· match % suffix)</strong> — the whole match is one ranking event,
+          ordered by total match points. This aligns exactly with how IPSC officially declares
+          results. Fewer data points per competition, but scores match the official scoresheet.
+        </li>
+      </ul>
+      <p>
+        Disqualified or zeroed competitors are ranked last. Competitors who did not fire a
+        stage (DNF) are excluded from that stage result.
       </p>
       <p>
-        Disqualified or zeroed competitors are ranked last on that stage.
-        Competitors who did not fire a stage (DNF) are excluded from that stage entirely.
-      </p>
-      <p>
-        After each stage result, the algorithm updates its belief about each competitor's skill
-        based on how they performed relative to everyone else. Over many competitions a shooter's
-        rating converges towards their true skill level — and the uncertainty decreases.
+        After each ranking event the algorithm updates its belief about each competitor's skill.
+        Over many competitions a shooter's rating converges towards their true skill level
+        and the uncertainty decreases.
       </p>
       <p>
         The <strong>Matches tab</strong> lists every competition included in the calculation.
-        The <strong>reliability score</strong> used throughout this tool is the 70th-percentile
-        lower bound of the rating: we are 70% confident the shooter's true skill is
-        at least that high.
+        The <strong>reliability score</strong> is the 70th-percentile lower bound of the rating:
+        we are 70% confident the shooter's true skill is at least that high.
       </p>
     </div>
 
@@ -605,8 +667,24 @@ document.addEventListener('alpine:init', () => {
 """
 
 
+def _build_manifest(data: dict[str, Any]) -> dict[str, Any]:
+    """Return a small provenance manifest for reproducibility checking."""
+    dates = [m["date"] for m in data["matches"] if m.get("date")]
+    return {
+        "manifest_version": _MANIFEST_VERSION,
+        "generated_at": data["generated_at"],
+        "match_count": len(data["matches"]),
+        "shooter_count": len(data["shooters"]),
+        "date_range": {
+            "from": min(dates) if dates else None,
+            "to": max(dates) if dates else None,
+        },
+        "algorithms": data["algorithms"],
+    }
+
+
 def generate_site(data: dict[str, Any], output_dir: Path) -> None:
-    """Write the static explorer to output_dir/index.html."""
+    """Write the static explorer to output_dir/index.html and manifest.json."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Sort algorithms by preferred order; unknowns go to the end alphabetically.
@@ -625,6 +703,10 @@ def generate_site(data: dict[str, Any], output_dir: Path) -> None:
     out = output_dir / "index.html"
     out.write_text(html, encoding="utf-8")
 
+    manifest = _build_manifest(data)
+    manifest_out = output_dir / "manifest.json"
+    manifest_out.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
     size_kb = out.stat().st_size // 1024
     console.print(f"[green]Site written to {out}[/green] ({size_kb} KB)")
     console.print(
@@ -632,3 +714,4 @@ def generate_site(data: dict[str, Any], output_dir: Path) -> None:
         f"{len(data['algorithms'])} algorithms · "
         f"{len(data['matches'])} matches"
     )
+    console.print(f"[dim]Manifest: {manifest_out}[/dim]")

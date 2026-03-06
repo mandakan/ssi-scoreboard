@@ -83,6 +83,23 @@ def _actual_ranking_by_division(
     return full_actual, dict(by_div)
 
 
+def _get_results(
+    store: Store, ct: int, match_id: str, scoring: str
+) -> list[tuple[int, int, float | None, bool, bool, bool]]:
+    """Return stage results in the format expected by process_match_data.
+
+    stage_hf  — one row per stage per competitor (hit factor as metric).
+    match_pct — one synthetic row per competitor; metric is total match points.
+                Treating the whole match as a single ranking event aligns with
+                how IPSC officially scores competitors.
+    """
+    if scoring == "stage_hf":
+        return store.get_stage_results_for_match(ct, match_id)
+    scores = store.get_match_scores(ct, match_id)
+    # Synthetic stage_id = 0; dnf=False because absent competitors are already excluded
+    return [(cid, 0, pts, is_dq, False, is_zeroed) for cid, pts, is_dq, is_zeroed in scores]
+
+
 def _empty_metrics() -> dict[str, list[float]]:
     return {"kendall_tau": [], "top_5_accuracy": [], "top_10_accuracy": [], "mrr": []}
 
@@ -98,48 +115,26 @@ def _record_metrics(
     m["mrr"].append(mean_reciprocal_rank(predicted, actual[:10]))
 
 
-def run_benchmark(store: Store, split_ratio: float = 0.7) -> dict[str, dict[str, list[float]]]:
-    """Run chronological train/test benchmark for all algorithms.
+def _run_mode(
+    store: Store,
+    train_matches: list[tuple[int, str, str | None, str | None]],
+    test_matches: list[tuple[int, str, str | None, str | None]],
+    test_actuals: list[tuple[list[int], dict[str, list[int]]]],
+    scoring: str,
+) -> tuple[dict[str, dict[str, list[float]]], dict[str, dict[str, list[float]]]]:
+    """Train and evaluate all algorithms for one scoring mode.
 
-    For each algorithm, measures two ranking strategies:
-    - Base: algorithm's own predict_rank() (mu-ordered for OpenSkill)
-    - Conservative (+cons): mu - z*sigma at 70th percentile — penalises high uncertainty
-
-    Also produces a per-division Kendall τ breakdown to check cross-division fairness.
+    Returns (algo_metrics, division_taus) with algorithm names suffixed by
+    '_mpct' when scoring == 'match_pct' so both modes can coexist in one table.
     """
-    matches = store.get_matches_chronological()
-    if not matches:
-        console.print("[red]No matches in store. Run sync first.[/red]")
-        return {}
-
-    split_idx = int(len(matches) * split_ratio)
-    train_matches = matches[:split_idx]
-    test_matches = matches[split_idx:]
-
-    console.print(f"[bold]Benchmark: {len(matches)} matches[/bold]")
-    console.print(f"  Train: {len(train_matches)} | Test: {len(test_matches)}")
-
-    # Precompute actual rankings for all test matches (once, outside the algo loop).
-    console.print("\n[dim]Precomputing actual rankings for test matches...[/dim]")
-    test_actuals: list[tuple[list[int], dict[str, list[int]]]] = []
-    for ct, match_id, _date, _level in test_matches:
-        actual, by_div = _actual_ranking_by_division(store, ct, match_id)
-        test_actuals.append((actual, by_div))
-
-    algorithms = get_algorithms()
-
-    # algo_metrics: interleaved base and +cons rows for the main report table.
     algo_metrics: dict[str, dict[str, list[float]]] = {}
-
-    # division_taus: algo_name → division → list of per-match Kendall τ values.
-    # Base algorithms only — conservative adds no new information per division.
     division_taus: dict[str, dict[str, list[float]]] = {}
 
-    for algo in algorithms:
-        console.print(f"\n[cyan]Training {algo.name}...[/cyan]")
+    for algo in get_algorithms():
+        console.print(f"\n[cyan]Training {algo.name}[/cyan] ({scoring})")
 
         for ct, match_id, match_date, match_level in train_matches:
-            results = store.get_stage_results_for_match(ct, match_id)
+            results = _get_results(store, ct, match_id, scoring)
             comp_map = store.get_competitor_shooter_map(ct, match_id)
             if results:
                 algo.process_match_data(
@@ -159,7 +154,6 @@ def run_benchmark(store: Store, split_ratio: float = 0.7) -> dict[str, dict[str,
             if len(actual) < 5:
                 continue
 
-            # Snapshot ratings before the online update for this match.
             ratings = algo.get_ratings()
             predicted = algo.predict_rank(actual)
             cons_predicted = _conservative_rank(ratings, actual)
@@ -167,7 +161,6 @@ def run_benchmark(store: Store, split_ratio: float = 0.7) -> dict[str, dict[str,
             _record_metrics(base_m, predicted, actual)
             _record_metrics(cons_m, cons_predicted, actual)
 
-            # Per-division τ: filter the cross-field predicted ranking to each division.
             for div, div_actual in by_div.items():
                 if len(div_actual) < 3:
                     continue
@@ -176,22 +169,71 @@ def run_benchmark(store: Store, split_ratio: float = 0.7) -> dict[str, dict[str,
                 if len(div_predicted) >= 2:
                     algo_div_taus[div].append(kendall_tau(div_predicted, div_actual))
 
-            # Online learning — update ratings with this match before the next prediction.
-            results = store.get_stage_results_for_match(ct, match_id)
+            results = _get_results(store, ct, match_id, scoring)
             comp_map = store.get_competitor_shooter_map(ct, match_id)
             if results:
                 algo.process_match_data(
                     ct, match_id, match_date, results, comp_map, match_level=match_level
                 )
 
-        # Insert interleaved: base row, then conservative row.
-        algo_metrics[algo.name] = base_m
-        algo_metrics[f"{algo.name}+cons"] = cons_m
-        division_taus[algo.name] = dict(algo_div_taus)
+        suffix = "" if scoring == "stage_hf" else "_mpct"
+        name = f"{algo.name}{suffix}"
+        algo_metrics[name] = base_m
+        algo_metrics[f"{name}+cons"] = cons_m
+        division_taus[name] = dict(algo_div_taus)
+        console.print(f"  Tested on {len(base_m['kendall_tau'])} matches")
 
-        n_tested = len(base_m["kendall_tau"])
-        console.print(f"  Tested on {n_tested} matches")
+    return algo_metrics, division_taus
 
-    print_report(algo_metrics)
-    print_division_report(division_taus, min_matches=5)
-    return algo_metrics
+
+def run_benchmark(
+    store: Store,
+    split_ratio: float = 0.7,
+    scoring: str = "stage_hf",
+) -> dict[str, dict[str, list[float]]]:
+    """Run chronological train/test benchmark for all algorithms.
+
+    scoring:
+      stage_hf  — rank by hit factor on each stage independently (default).
+                  More data points per match; each stage is a separate event.
+      match_pct — rank by total match points; one event per match.
+                  Aligns with IPSC's official scoring; fewer but holistic signals.
+      all       — run both modes and show them side-by-side in one combined table.
+
+    For each algorithm × scoring mode, measures:
+    - Base: algorithm's own predict_rank() (mu-ordered)
+    - Conservative (+cons): mu − z×σ at 70th percentile
+
+    Also produces a per-division Kendall τ breakdown for cross-division fairness.
+    """
+    matches = store.get_matches_chronological()
+    if not matches:
+        console.print("[red]No matches in store. Run sync first.[/red]")
+        return {}
+
+    split_idx = int(len(matches) * split_ratio)
+    train_matches = matches[:split_idx]
+    test_matches = matches[split_idx:]
+
+    modes = ["stage_hf", "match_pct"] if scoring == "all" else [scoring]
+    mode_label = " + ".join("stage HF" if m == "stage_hf" else "match %" for m in modes)
+    console.print(f"[bold]Benchmark: {len(matches)} matches — scoring: {mode_label}[/bold]")
+    console.print(f"  Train: {len(train_matches)} | Test: {len(test_matches)}")
+
+    console.print("\n[dim]Precomputing actual rankings for test matches...[/dim]")
+    test_actuals: list[tuple[list[int], dict[str, list[int]]]] = []
+    for ct, match_id, _date, _level in test_matches:
+        actual, by_div = _actual_ranking_by_division(store, ct, match_id)
+        test_actuals.append((actual, by_div))
+
+    all_metrics: dict[str, dict[str, list[float]]] = {}
+    all_div_taus: dict[str, dict[str, list[float]]] = {}
+
+    for mode in modes:
+        m, d = _run_mode(store, train_matches, test_matches, test_actuals, mode)
+        all_metrics.update(m)
+        all_div_taus.update(d)
+
+    print_report(all_metrics)
+    print_division_report(all_div_taus, min_matches=5)
+    return all_metrics
