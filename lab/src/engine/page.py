@@ -175,7 +175,7 @@ _HTML = r"""<!DOCTYPE html>
         <div class="col-span-2 sm:col-span-3 lg:col-span-2">
           <label class="block text-xs font-medium text-gray-500 mb-1">Scoring method</label>
           <div class="flex rounded-lg border border-gray-200 overflow-hidden">
-            <button @click="ts.scoring='hf'" :class="ts.scoring==='hf'?'bg-blue-600 text-white':'bg-white text-gray-600 hover:bg-gray-50'" class="flex-1 px-2 py-1.5 text-xs font-medium transition-colors whitespace-nowrap">Hit factor / stage</button>
+            <button @click="ts.scoring='hf'" :disabled="!D.algorithms.some(a => !a.endsWith('_mpct'))" :class="ts.scoring==='hf'?'bg-blue-600 text-white':(!D.algorithms.some(a=>!a.endsWith('_mpct'))?'bg-gray-100 text-gray-400 cursor-not-allowed':'bg-white text-gray-600 hover:bg-gray-50')" class="flex-1 px-2 py-1.5 text-xs font-medium transition-colors whitespace-nowrap">Hit factor / stage</button>
             <button @click="ts.scoring='mpct'" :class="ts.scoring==='mpct'?'bg-blue-600 text-white':'bg-white text-gray-600 hover:bg-gray-50'" class="flex-1 px-2 py-1.5 text-xs font-medium transition-colors whitespace-nowrap border-l border-gray-200">Match % (IPSC)</button>
           </div>
         </div>
@@ -207,6 +207,15 @@ _HTML = r"""<!DOCTYPE html>
           <label class="block text-xs font-medium text-gray-500 mb-1">Min. matches</label>
           <input type="number" x-model.number="ts.minM" min="0" max="50"
             class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">In period</label>
+          <select x-model="ts.minMPeriod" class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="all">All time</option>
+            <option value="m12">Last 12 months</option>
+            <option :value="'mcurr'" x-text="CY"></option>
+            <option :value="'mprev'" x-text="CY - 1"></option>
+          </select>
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-500 mb-1">Active since</label>
@@ -344,7 +353,7 @@ _HTML = r"""<!DOCTYPE html>
         <div class="col-span-2 sm:col-span-3 lg:col-span-2">
           <label class="block text-xs font-medium text-gray-500 mb-1">Scoring method</label>
           <div class="flex rounded-lg border border-gray-200 overflow-hidden">
-            <button @click="rk.scoring='hf'" :class="rk.scoring==='hf'?'bg-blue-600 text-white':'bg-white text-gray-600 hover:bg-gray-50'" class="flex-1 px-2 py-1.5 text-xs font-medium transition-colors whitespace-nowrap">Hit factor / stage</button>
+            <button @click="rk.scoring='hf'" :disabled="!D.algorithms.some(a => !a.endsWith('_mpct'))" :class="rk.scoring==='hf'?'bg-blue-600 text-white':(!D.algorithms.some(a=>!a.endsWith('_mpct'))?'bg-gray-100 text-gray-400 cursor-not-allowed':'bg-white text-gray-600 hover:bg-gray-50')" class="flex-1 px-2 py-1.5 text-xs font-medium transition-colors whitespace-nowrap">Hit factor / stage</button>
             <button @click="rk.scoring='mpct'" :class="rk.scoring==='mpct'?'bg-blue-600 text-white':'bg-white text-gray-600 hover:bg-gray-50'" class="flex-1 px-2 py-1.5 text-xs font-medium transition-colors whitespace-nowrap border-l border-gray-200">Match % (IPSC)</button>
           </div>
         </div>
@@ -593,6 +602,7 @@ const ALGO_DESC         = ALGO_DESC_PLACEHOLDER;
 const BASE_ALGO_DISPLAY = BASE_ALGO_DISPLAY_PLACEHOLDER;
 
 const _BASE_ORDER = ['openskill_bt_lvl','openskill_bt_lvl_decay','openskill_bt','openskill_pl_decay','openskill','elo'];
+const CY = new Date().getFullYear();
 
 document.addEventListener('alpine:init', () => {
   Alpine.data('app', () => ({
@@ -604,6 +614,7 @@ document.addEventListener('alpine:init', () => {
       region: '',
       sort:   'conservative',
       minM:   3,
+      minMPeriod: 'all',
       since:  '2024-01-01',
       topN:   6,
       view:   'div',
@@ -647,11 +658,12 @@ document.addEventListener('alpine:init', () => {
     },
 
     _eligible(s) {
-      const { base, scoring, region, minM, since } = this.ts;
+      const { base, scoring, region, minM, minMPeriod, since } = this.ts;
       const r = s.ratings[this._resolveAlgo(base, scoring)];
       if (!r) return false;
       if (region && s.region !== region) return false;
-      if (r.m < minM) return false;
+      const mCount = minMPeriod === 'all' ? r.m : (r[minMPeriod] ?? 0);
+      if (mCount < minM) return false;
       if (since && r.d && r.d < since) return false;
       return true;
     },
