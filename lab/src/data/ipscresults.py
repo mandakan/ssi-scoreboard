@@ -49,15 +49,14 @@ _BASE_URL = "https://ipscresults.org/odata"
 # ipscresults level codes → lab level strings
 _LEVEL_MAP: dict[int, str] = {3: "l3", 4: "l4", 5: "l5"}
 
-# Disciplines to import. "Handgun" covers IPSC Handgun (Production, Standard, Open, etc.)
-# Add "Rifle" or "Shotgun" if needed in future.
-DEFAULT_DISCIPLINES = {"Handgun"}
-
 # Page size for paginated requests. 1254 total matches fit in 3 pages.
 _PAGE_SIZE = 500
 
-DEFAULT_FETCH_DELAY = 0.5
-DEFAULT_FETCH_JITTER = 0.25
+# Inter-match delay: one polite pause between matches; no sleep within a single match's
+# fetch (get_divisions → get_competitors → per-division stage_list + stage_results are
+# sequential calls for one unit of work and don't need individual rate-limiting).
+DEFAULT_FETCH_DELAY = 0.3
+DEFAULT_FETCH_JITTER = 0.1
 
 
 class IpscResultsClient:
@@ -95,10 +94,11 @@ class IpscResultsClient:
         level_min: int = 3,
         disciplines: set[str] | None = None,
     ) -> list[IpscMatch]:
-        """Fetch all matches from StatsMatchList, paginated."""
-        if disciplines is None:
-            disciplines = DEFAULT_DISCIPLINES
+        """Fetch all matches from StatsMatchList, paginated.
 
+        disciplines: set of discipline names to include (e.g. {"Handgun", "Rifle"}).
+                     Pass None (default) to include all disciplines.
+        """
         matches: list[IpscMatch] = []
         skip = 0
         while True:
@@ -118,7 +118,9 @@ class IpscResultsClient:
                     discipline=raw.get("Discipline"),
                     state=raw.get("State", 0),
                 )
-                if m.level >= level_min and (m.discipline or "") in disciplines:
+                level_ok = m.level >= level_min
+                disc_ok = disciplines is None or (m.discipline or "") in disciplines
+                if level_ok and disc_ok:
                     matches.append(m)
             skip += len(page)
             if skip >= total or not page:
@@ -240,7 +242,8 @@ class IpscResultsSyncer:
         self.client = client
         self.store = store
         self.level_min = level_min
-        self.disciplines = disciplines or DEFAULT_DISCIPLINES
+        # None means all disciplines (no filter)
+        self.disciplines = disciplines
 
     def sync(self, full: bool = False) -> int:
         """Sync matches from ipscresults.org. Returns number of new matches stored."""
@@ -248,8 +251,9 @@ class IpscResultsSyncer:
         all_matches = self.client.get_match_list(
             level_min=self.level_min, disciplines=self.disciplines
         )
+        disc_label = ", ".join(sorted(self.disciplines)) if self.disciplines else "all disciplines"
         console.print(
-            f"  Found {len(all_matches)} matches (L{self.level_min}+, {self.disciplines})"
+            f"  Found {len(all_matches)} matches (L{self.level_min}+, {disc_label})"
         )
 
         if not full:
@@ -299,7 +303,6 @@ class IpscResultsSyncer:
             return None
 
         # Fetch all competitors for DQ status (shared across divisions)
-        self.client._sleep()
         all_competitors = self.client.get_competitors(m.id)
         dq_map: dict[int, bool] = {c.id: c.dq for c in all_competitors}
         # Division per competitor_number (used to assign division to stage results)
@@ -314,9 +317,7 @@ class IpscResultsSyncer:
 
         for div in divisions:
             try:
-                self.client._sleep()
                 stages = self.client.get_stage_list(m.id, div.division_code)
-                self.client._sleep()
                 results = self.client.get_stage_results(m.id, div.division_code)
             except httpx.HTTPStatusError:
                 continue  # skip divisions that fail

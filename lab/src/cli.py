@@ -111,30 +111,38 @@ def sync_ipscresults(
     level_min: int = typer.Option(
         3, help="Minimum match level to import (3=National, 4=Continental, 5=World)"
     ),
-    discipline: str = typer.Option("Handgun", help="Discipline to import (e.g. Handgun, Rifle)"),
+    disciplines: str = typer.Option(
+        "",
+        help=(
+            "Comma-separated disciplines to import, e.g. 'Handgun,Rifle'. "
+            "Leave empty (default) to import all disciplines."
+        ),
+    ),
     full: bool = typer.Option(False, help="Re-sync all matches, ignoring already-stored ones"),
     delay: float = typer.Option(
-        0.5, help="Delay between API requests in seconds"
+        0.3, help="Delay between matches in seconds (inter-match only)"
     ),
     db_path: Path = DB_PATH_OPTION,
 ) -> None:
     """Sync match data from ipscresults.org OData API.
 
-    Downloads L3+ (National/Continental/World) match results. These complement the
-    SSI dataset which is mostly L2 (Regional). Run 'rating link' afterwards to
-    resolve shooter identities and remove cross-source duplicates.
+    Downloads L3+ (National/Continental/World) match results for all disciplines
+    (Handgun, Rifle, Shotgun, …) by default. Use --disciplines to restrict to a
+    subset. These complement the SSI dataset which is mostly L2 (Regional).
+
+    Run 'rating link' afterwards to resolve shooter identities and remove
+    cross-source duplicates before training.
     """
     from src.data.ipscresults import IpscResultsClient, IpscResultsSyncer
     from src.data.store import Store
 
-    store = Store(db_path)
-    jitter = min(delay * 0.5, 0.5) if delay > 0 else 0.0
-    client = IpscResultsClient(delay=delay, jitter=jitter)
-    syncer = IpscResultsSyncer(
-        client, store,
-        level_min=level_min,
-        disciplines={discipline},
+    disc_set: set[str] | None = (
+        {d.strip() for d in disciplines.split(",") if d.strip()} if disciplines else None
     )
+    store = Store(db_path)
+    jitter = min(delay * 0.3, 0.1) if delay > 0 else 0.0
+    client = IpscResultsClient(delay=delay, jitter=jitter)
+    syncer = IpscResultsSyncer(client, store, level_min=level_min, disciplines=disc_set)
     try:
         syncer.sync(full=full)
     finally:
@@ -407,8 +415,8 @@ def pipeline(
 
         if not skip_ipscresults:
             console.rule("[bold blue]Step 2/5 — Sync ipscresults[/bold blue]")
-            ir_client = IpscResultsClient(delay=0.5, jitter=0.25)
-            syncer = IpscResultsSyncer(ir_client, store)
+            ir_client = IpscResultsClient(delay=0.3, jitter=0.1)
+            syncer = IpscResultsSyncer(ir_client, store)  # disciplines=None → all
             try:
                 syncer.sync(full=full)
             finally:
