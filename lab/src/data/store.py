@@ -152,7 +152,8 @@ class Store:
         self._migrate_if_needed()
 
     def _migrate_if_needed(self) -> None:
-        """Drop and recreate data tables if SCHEMA_VERSION has changed."""
+        """Apply schema migrations. Uses targeted per-version upgrades where possible
+        to avoid wiping sync data unnecessarily."""
         row = self.db.execute(
             "SELECT value FROM sync_state WHERE key = 'schema_version'"
         ).fetchone()
@@ -162,16 +163,43 @@ class Store:
             for col in ["region TEXT", "region_display TEXT", "category TEXT"]:
                 with contextlib.suppress(Exception):
                     self.db.execute(f"ALTER TABLE competitors ADD COLUMN IF NOT EXISTS {col}")
-            for col in ["region TEXT", "category TEXT"]:
-                with contextlib.suppress(Exception):
-                    self.db.execute(f"ALTER TABLE shooter_ratings ADD COLUMN IF NOT EXISTS {col}")
             with contextlib.suppress(Exception):
                 self.db.execute(
                     "ALTER TABLE matches ADD COLUMN IF NOT EXISTS skip_reason TEXT"
                 )
             return
 
-        # Version mismatch — drop all data tables and recreate.
+        # v2 → v3: only shooter_ratings and rating_history changed (division added to PK).
+        # All sync data (matches, competitors, stages, stage_results) and identity tables
+        # are unchanged — preserve them so no re-sync is required.
+        if current == "2" and SCHEMA_VERSION == "3":
+            for tbl in ["shooter_ratings", "rating_history"]:
+                self.db.execute(f"DROP TABLE IF EXISTS {tbl}")
+            self.db.execute("""
+                CREATE TABLE IF NOT EXISTS shooter_ratings (
+                  algorithm TEXT, shooter_id INTEGER, division TEXT NOT NULL DEFAULT '',
+                  name TEXT, region TEXT, category TEXT,
+                  mu DOUBLE, sigma DOUBLE, matches_played INTEGER,
+                  last_match_date TIMESTAMP, updated_at TIMESTAMP,
+                  PRIMARY KEY (algorithm, shooter_id, division)
+                )
+            """)
+            self.db.execute("""
+                CREATE TABLE IF NOT EXISTS rating_history (
+                  algorithm TEXT, shooter_id INTEGER, division TEXT NOT NULL DEFAULT '',
+                  match_source TEXT, match_ct INTEGER, match_id TEXT,
+                  match_date TIMESTAMP, mu DOUBLE, sigma DOUBLE,
+                  PRIMARY KEY (algorithm, shooter_id, division, match_source, match_ct, match_id)
+                )
+            """)
+            self.db.execute(
+                "INSERT OR REPLACE INTO sync_state (key, value) VALUES ('schema_version', ?)",
+                [SCHEMA_VERSION],
+            )
+            return
+
+        # Unknown version combination — full drop and recreate.
+        # This requires a full re-sync from the source APIs.
         for tbl in [
             "stage_results", "stages", "competitors", "matches",
             "shooter_identity_links", "shooter_identities", "match_links",
