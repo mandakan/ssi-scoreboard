@@ -17,7 +17,9 @@ SCHEMA_VERSION = "2"
 # (name, division, region, category, mu, sigma, matches_played, last_match_date)
 RatingRow = tuple[str, str | None, str | None, str | None, float, float, int, str | None]
 
-DEFAULT_DB_PATH = Path("data/lab.duckdb")
+# Absolute path so the DB always lives at lab/data/lab.duckdb regardless of
+# which directory the CLI is invoked from (e.g. project root vs lab/).
+DEFAULT_DB_PATH = Path(__file__).parent.parent.parent / "data" / "lab.duckdb"
 
 # The sync_state table is never dropped — it persists the watermark and version.
 _BASE_SCHEMA_SQL = """
