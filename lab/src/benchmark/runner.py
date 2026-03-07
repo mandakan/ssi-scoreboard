@@ -6,7 +6,7 @@ from collections import defaultdict
 
 from rich.console import Console
 
-from src.algorithms.base import get_algorithms
+from src.algorithms.base import DivKey, get_algorithms
 from src.benchmark.metrics import kendall_tau, mean_reciprocal_rank, top_k_accuracy
 from src.benchmark.report import print_division_report, print_report
 from src.data.models import Rating
@@ -23,18 +23,21 @@ _DEFAULT_MU = 25.0
 _DEFAULT_SIGMA = 25.0 / 3
 
 
-def _conservative_rank(ratings: dict[int, Rating], shooter_ids: list[int]) -> list[int]:
-    """Rank shooters by conservative rating (mu - z*sigma at 70th percentile).
+def _conservative_rank(ratings: dict[DivKey, Rating], shooter_ids: list[int]) -> list[int]:
+    """Rank shooters by best conservative rating across all divisions.
 
-    Unrated shooters receive the default mu/sigma so they sink to the bottom.
-    This penalises low match counts and surfaces consistently-performing shooters.
+    For each shooter, the best (highest) conservative rating across all divisions
+    they have competed in is used. Unrated shooters receive the default mu/sigma.
     """
-    scored = []
-    for sid in shooter_ids:
-        r = ratings.get(sid)
-        mu = r.mu if r else _DEFAULT_MU
-        sigma = r.sigma if r else _DEFAULT_SIGMA
-        scored.append((sid, mu - _CONS_Z * sigma))
+    # Pre-compute best conservative rating per shooter across all their divisions.
+    best_cr: dict[int, float] = {}
+    for (sid, _div), r in ratings.items():
+        cr = r.mu - _CONS_Z * r.sigma
+        if sid not in best_cr or cr > best_cr[sid]:
+            best_cr[sid] = cr
+
+    default_cr = _DEFAULT_MU - _CONS_Z * _DEFAULT_SIGMA
+    scored = [(sid, best_cr.get(sid, default_cr)) for sid in shooter_ids]
     scored.sort(key=lambda x: x[1], reverse=True)
     return [sid for sid, _ in scored]
 
@@ -142,8 +145,9 @@ def _run_mode(
                     ct, match_id, match_date, results, comp_map, match_level=match_level
                 )
 
-        n_rated = len(algo.get_ratings())
-        console.print(f"  Trained on {len(train_matches)} matches, {n_rated} shooters rated")
+        all_ratings = algo.get_ratings()
+        n_shooters = len({sid for sid, _ in all_ratings})
+        console.print(f"  Trained on {len(train_matches)} matches, {n_shooters} shooters rated")
 
         base_m = _empty_metrics()
         cons_m = _empty_metrics()
@@ -155,9 +159,9 @@ def _run_mode(
             if len(actual) < 5:
                 continue
 
-            ratings = algo.get_ratings()
+            cur_ratings = algo.get_ratings()
             predicted = algo.predict_rank(actual)
-            cons_predicted = _conservative_rank(ratings, actual)
+            cons_predicted = _conservative_rank(cur_ratings, actual)
 
             _record_metrics(base_m, predicted, actual)
             _record_metrics(cons_m, cons_predicted, actual)

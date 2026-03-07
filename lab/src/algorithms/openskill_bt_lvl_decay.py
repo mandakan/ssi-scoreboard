@@ -19,7 +19,13 @@ from pathlib import Path
 
 from openskill.models import BradleyTerryPart
 
-from src.algorithms.base import RatingAlgorithm
+from src.algorithms.base import (
+    DivKey,
+    RatingAlgorithm,
+    decode_div_key,
+    encode_div_key,
+    group_stage_by_division,
+)
 from src.data.models import Rating
 
 _DEFAULT_MU = 25.0
@@ -41,33 +47,38 @@ def _parse_date(date_str: str) -> date | None:
 
 
 class OpenSkillBTLvlDecay(RatingAlgorithm):
-    """BradleyTerryPart with level-scaled beta and inactivity sigma decay."""
+    """BradleyTerryPart with level-scaled beta and per-(shooter, division) sigma decay."""
 
     def __init__(self) -> None:
         self._model = BradleyTerryPart()
-        self._level_models = {lvl: BradleyTerryPart(beta=beta) for lvl, beta in _LEVEL_BETA.items()}
+        self._level_models = {
+            lvl: BradleyTerryPart(beta=beta) for lvl, beta in _LEVEL_BETA.items()
+        }
 
-        self._ratings: dict[int, tuple[float, float]] = {}
+        self._ratings: dict[DivKey, tuple[float, float]] = {}
         self._names: dict[int, str] = {}
-        self._divisions: dict[int, str | None] = {}
         self._regions: dict[int, str | None] = {}
         self._categories: dict[int, str | None] = {}
-        self._matches: dict[int, int] = defaultdict(int)
+        self._matches: dict[DivKey, int] = defaultdict(int)
         self._seen_matches: set[str] = set()
-        self._last_date: dict[int, str] = {}
+        self._last_date: dict[DivKey, str] = {}
 
     @property
     def name(self) -> str:
         return "openskill_bt_lvl_decay"
 
-    def _get_rating(self, shooter_id: int) -> tuple[float, float]:
-        if shooter_id not in self._ratings:
+    def _get_rating(self, shooter_id: int, division: str | None) -> tuple[float, float]:
+        key: DivKey = (shooter_id, division)
+        if key not in self._ratings:
             r = self._model.rating()
-            self._ratings[shooter_id] = (r.mu, r.sigma)
-        return self._ratings[shooter_id]
+            self._ratings[key] = (r.mu, r.sigma)
+        return self._ratings[key]
 
-    def _apply_decay(self, shooter_id: int, match_date_str: str) -> None:
-        last_str = self._last_date.get(shooter_id)
+    def _apply_decay(
+        self, shooter_id: int, division: str | None, match_date_str: str
+    ) -> None:
+        key: DivKey = (shooter_id, division)
+        last_str = self._last_date.get(key)
         if last_str is None:
             return
 
@@ -80,8 +91,8 @@ class OpenSkillBTLvlDecay(RatingAlgorithm):
         if days <= 0:
             return
 
-        mu, sigma = self._get_rating(shooter_id)
-        self._ratings[shooter_id] = (mu, min(sigma + _TAU * days, _DEFAULT_SIGMA))
+        mu, sigma = self._get_rating(shooter_id, division)
+        self._ratings[key] = (mu, min(sigma + _TAU * days, _DEFAULT_SIGMA))
 
     def process_match_data(
         self,
@@ -104,107 +115,127 @@ class OpenSkillBTLvlDecay(RatingAlgorithm):
 
         rate_model = self._level_models.get(match_level or "", self._model)
 
-        match_shooters: set[int] = set()
+        pre_keys: set[DivKey] = set()
         for comp_id, _stage_id, _hf, _dq, dnf, _zeroed in stage_results:
             sid = competitor_shooter_map.get(comp_id)
             if sid is not None and not dnf:
-                match_shooters.add(sid)
+                div = division_map.get(comp_id) if division_map else None
+                pre_keys.add((sid, div))
 
         if match_date:
-            for sid in match_shooters:
-                self._apply_decay(sid, match_date)
+            for sid, div in pre_keys:
+                self._apply_decay(sid, div, match_date)
+
+        match_keys: set[DivKey] = set()
 
         by_stage: dict[int, list[tuple[int, float | None, bool, bool, bool]]] = defaultdict(list)
         for comp_id, stage_id, hf, dq, dnf, zeroed in stage_results:
             by_stage[stage_id].append((comp_id, hf, dq, dnf, zeroed))
 
         for _stage_id, stage_entries in by_stage.items():
-            ranked: list[tuple[int, float]] = []
-            for comp_id, hf, dq, dnf, zeroed in stage_entries:
-                shooter_id = competitor_shooter_map.get(comp_id)
-                if shooter_id is None or dnf:
+            by_div, stage_keys = group_stage_by_division(
+                stage_entries, competitor_shooter_map, division_map
+            )
+            match_keys.update(stage_keys)
+
+            for div, div_ranked in by_div.items():
+                if len(div_ranked) < 2:
                     continue
-                effective_hf = 0.0 if (dq or zeroed) else (hf if hf is not None else 0.0)
-                ranked.append((shooter_id, effective_hf))
+                div_ranked.sort(key=lambda x: x[1], reverse=True)
 
-            if len(ranked) < 2:
-                continue
+                teams = []
+                ranks = []
+                current_rank = 1
+                for i, (sid, _) in enumerate(div_ranked):
+                    mu, sigma = self._get_rating(sid, div)
+                    r = self._model.rating(mu=mu, sigma=sigma)
+                    teams.append([r])
+                    if i > 0 and div_ranked[i][1] < div_ranked[i - 1][1]:
+                        current_rank = i + 1
+                    ranks.append(current_rank)
 
-            ranked.sort(key=lambda x: x[1], reverse=True)
-
-            teams = []
-            ranks = []
-            current_rank = 1
-            for i, (sid, _) in enumerate(ranked):
-                mu, sigma = self._get_rating(sid)
-                r = self._model.rating(mu=mu, sigma=sigma)
-                teams.append([r])
-                if i > 0 and ranked[i][1] < ranked[i - 1][1]:
-                    current_rank = i + 1
-                ranks.append(current_rank)
-
-            updated = rate_model.rate(teams, ranks=[float(r) for r in ranks])
-
-            for i, (sid, _) in enumerate(ranked):
-                new_r = updated[i][0]
-                self._ratings[sid] = (new_r.mu, new_r.sigma)
+                updated = rate_model.rate(teams, ranks=[float(r) for r in ranks])
+                for i, (sid, _) in enumerate(div_ranked):
+                    new_r = updated[i][0]
+                    self._ratings[(sid, div)] = (new_r.mu, new_r.sigma)
 
         for comp_id, shooter_id in competitor_shooter_map.items():
             if shooter_id is None:
                 continue
-            if shooter_id in match_shooters:
-                self._matches[shooter_id] += 1
+            div = division_map.get(comp_id) if division_map else None
+            key: DivKey = (shooter_id, div)
+            if key in match_keys:
+                self._matches[key] += 1
                 if match_date:
-                    self._last_date[shooter_id] = match_date
+                    self._last_date[key] = match_date
             if name_map and comp_id in name_map:
                 self._names[shooter_id] = name_map[comp_id]
-            if division_map and comp_id in division_map:
-                self._divisions[shooter_id] = division_map[comp_id]
             if region_map and comp_id in region_map:
                 self._regions[shooter_id] = region_map[comp_id]
             if category_map and comp_id in category_map:
                 self._categories[shooter_id] = category_map[comp_id]
 
-    def get_ratings(self) -> dict[int, Rating]:
-        result: dict[int, Rating] = {}
-        for sid, (mu, sigma) in self._ratings.items():
-            result[sid] = Rating(
+    def get_ratings(self) -> dict[DivKey, Rating]:
+        result: dict[DivKey, Rating] = {}
+        for (sid, div), (mu, sigma) in self._ratings.items():
+            result[(sid, div)] = Rating(
                 shooter_id=sid,
                 name=self._names.get(sid, f"Shooter {sid}"),
-                division=self._divisions.get(sid),
+                division=div,
                 region=self._regions.get(sid),
                 category=self._categories.get(sid),
                 mu=mu,
                 sigma=sigma,
-                matches_played=self._matches.get(sid, 0),
+                matches_played=self._matches.get((sid, div), 0),
             )
         return result
 
-    def predict_rank(self, shooter_ids: list[int]) -> list[int]:
-        rated = [(sid, self._get_rating(sid)[0]) for sid in shooter_ids]
+    def predict_rank(
+        self, shooter_ids: list[int], division: str | None = None
+    ) -> list[int]:
+        rated = []
+        for sid in shooter_ids:
+            if division is not None:
+                mu = self._ratings.get((sid, division), (_DEFAULT_MU, 0.0))[0]
+            else:
+                mus = [v[0] for k, v in self._ratings.items() if k[0] == sid]
+                mu = max(mus) if mus else _DEFAULT_MU
+            rated.append((sid, mu))
         rated.sort(key=lambda x: x[1], reverse=True)
         return [sid for sid, _ in rated]
 
     def save_state(self, path: Path) -> None:
         state = {
-            "ratings": {str(k): list(v) for k, v in self._ratings.items()},
-            "matches": {str(k): v for k, v in self._matches.items()},
+            "ratings": {
+                encode_div_key(s, d): list(v)
+                for (s, d), v in self._ratings.items()
+            },
+            "matches": {
+                encode_div_key(s, d): v
+                for (s, d), v in self._matches.items()
+            },
             "names": {str(k): v for k, v in self._names.items()},
-            "divisions": {str(k): v for k, v in self._divisions.items()},
             "regions": {str(k): v for k, v in self._regions.items()},
             "categories": {str(k): v for k, v in self._categories.items()},
             "seen_matches": list(self._seen_matches),
-            "last_date": dict(self._last_date),
+            "last_date": {
+                encode_div_key(s, d): v for (s, d), v in self._last_date.items()
+            },
         }
         path.write_text(json.dumps(state))
 
     def load_state(self, path: Path) -> None:
         state = json.loads(path.read_text())
-        self._ratings = {int(k): (v[0], v[1]) for k, v in state["ratings"].items()}
-        self._matches = defaultdict(int, {int(k): v for k, v in state["matches"].items()})
+        self._ratings = {
+            decode_div_key(k): (v[0], v[1]) for k, v in state["ratings"].items()
+        }
+        self._matches = defaultdict(
+            int, {decode_div_key(k): v for k, v in state["matches"].items()}
+        )
         self._names = {int(k): v for k, v in state.get("names", {}).items()}
-        self._divisions = {int(k): v for k, v in state.get("divisions", {}).items()}
         self._regions = {int(k): v for k, v in state.get("regions", {}).items()}
         self._categories = {int(k): v for k, v in state.get("categories", {}).items()}
         self._seen_matches = set(state.get("seen_matches", []))
-        self._last_date = {int(k): v for k, v in state.get("last_date", {}).items()}
+        self._last_date = {
+            decode_div_key(k): v for k, v in state.get("last_date", {}).items()
+        }

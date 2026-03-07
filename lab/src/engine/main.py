@@ -66,10 +66,12 @@ def _order_by(sort: str) -> str:
 def _build_rating(row: Any) -> RatingResponse:
     mu = float(row[5])
     sigma = float(row[6])
+    # division column uses '' as sentinel for cross-division (None) ratings
+    raw_div = str(row[2]) if row[2] else None
     return RatingResponse(
         shooter_id=int(row[0]),
         name=str(row[1]) if row[1] else f"Shooter {row[0]}",
-        division=str(row[2]) if row[2] else None,
+        division=raw_div if raw_div else None,
         region=str(row[3]) if row[3] else None,
         category=str(row[4]) if row[4] else None,
         mu=mu,
@@ -181,7 +183,7 @@ def create_app(db_path: Path = Path("data/lab.duckdb")) -> FastAPI:
         - min_matches=3 (require meaningful competitive history)
         - active_since=2024-01-01 (require recent activity)
         """
-        filters = ["algorithm = ?", "region = ?", "division IS NOT NULL"]
+        filters = ["algorithm = ?", "region = ?", "division != ''"]
         params: list[object] = [algorithm, region]
 
         if min_matches > 0:

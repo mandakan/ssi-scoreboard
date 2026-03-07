@@ -31,9 +31,10 @@ def _export_algorithms(store: Store) -> list[str]:
 
 
 def _export_divisions(store: Store) -> list[str]:
+    # Exclude '' sentinel (cross-division / global ratings)
     rows = store.db.execute(
         "SELECT DISTINCT division FROM shooter_ratings"
-        " WHERE division IS NOT NULL ORDER BY division"
+        " WHERE division != '' ORDER BY division"
     ).fetchall()
     return [str(r[0]) for r in rows]
 
@@ -62,13 +63,16 @@ def _export_shooters(store: Store) -> list[dict[str, Any]]:
                (mu - {_CONS_Z} * sigma) AS cr,
                matches_played, last_match_date
         FROM shooter_ratings
-        ORDER BY shooter_id, algorithm
+        ORDER BY shooter_id, division, algorithm
         """
     ).fetchall()
 
-    shooters: dict[int, dict[str, Any]] = {}
+    # Key: (shooter_id, division_db) — one entry per (shooter, division) combination.
+    # division_db is '' for cross-division/global ratings.
+    shooters: dict[tuple[int, str], dict[str, Any]] = {}
     for row in rows:
         sid = int(row[0])
+        div_db = str(row[2]) if row[2] else ""
         algo = str(row[5])
         mu = float(row[6])
         sigma = float(row[7])
@@ -76,17 +80,21 @@ def _export_shooters(store: Store) -> list[dict[str, Any]]:
         matches = int(row[9])
         last_date = str(row[10])[:10] if row[10] else None
 
-        if sid not in shooters:
-            shooters[sid] = {
+        key = (sid, div_db)
+        if key not in shooters:
+            shooters[key] = {
                 "id": sid,
+                # Unique key for use as x-for :key in the static explorer
+                "key": f"{sid}|{div_db}",
                 "name": str(row[1]) if row[1] else f"Shooter {sid}",
-                "division": str(row[2]) if row[2] else None,
+                # '' sentinel → None for display; real division string otherwise
+                "division": div_db if div_db else None,
                 "region": str(row[3]) if row[3] else None,
                 "category": str(row[4]) if row[4] else None,
                 "ratings": {},
             }
 
-        shooters[sid]["ratings"][algo] = {
+        shooters[key]["ratings"][algo] = {
             "mu": round(mu, 3),
             "sigma": round(sigma, 3),
             "cr": round(cr, 3),

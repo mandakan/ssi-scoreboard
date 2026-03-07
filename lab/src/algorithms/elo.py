@@ -1,8 +1,8 @@
 """Multi-player ELO baseline algorithm.
 
-Simple ELO-style rating where each stage is a series of pairwise comparisons.
-K-factor decreases with more matches played. Used as a baseline for
-benchmarking against the OpenSkill Plackett-Luce algorithm.
+Simple ELO-style rating where each stage is a series of pairwise comparisons
+**within each division**. K-factor decreases with more matches played. Used as
+a baseline for benchmarking against the OpenSkill algorithms.
 """
 
 from __future__ import annotations
@@ -12,7 +12,13 @@ import math
 from collections import defaultdict
 from pathlib import Path
 
-from src.algorithms.base import RatingAlgorithm
+from src.algorithms.base import (
+    DivKey,
+    RatingAlgorithm,
+    decode_div_key,
+    encode_div_key,
+    group_stage_by_division,
+)
 from src.data.models import Rating
 
 DEFAULT_RATING = 1500.0
@@ -22,24 +28,23 @@ K_DECAY_MATCHES = 20  # K decays from DEFAULT_K to MIN_K over this many matches
 
 
 class MultiElo(RatingAlgorithm):
-    """Multi-player ELO with pairwise stage comparisons."""
+    """Multi-player ELO with pairwise stage comparisons, per-division ratings."""
 
     def __init__(self) -> None:
-        self._ratings: dict[int, float] = {}
+        self._ratings: dict[DivKey, float] = {}
         self._names: dict[int, str] = {}
-        self._divisions: dict[int, str | None] = {}
         self._regions: dict[int, str | None] = {}
         self._categories: dict[int, str | None] = {}
-        self._matches: dict[int, int] = defaultdict(int)
+        self._matches: dict[DivKey, int] = defaultdict(int)
         self._seen_matches: set[str] = set()
 
     @property
     def name(self) -> str:
         return "elo"
 
-    def _k_factor(self, shooter_id: int) -> float:
+    def _k_factor(self, key: DivKey) -> float:
         """Adaptive K-factor that decreases with experience."""
-        matches = self._matches.get(shooter_id, 0)
+        matches = self._matches.get(key, 0)
         if matches >= K_DECAY_MATCHES:
             return MIN_K
         t = matches / K_DECAY_MATCHES
@@ -68,102 +73,108 @@ class MultiElo(RatingAlgorithm):
             return
         self._seen_matches.add(match_key)
 
-        match_shooters: set[int] = set()
+        match_keys: set[DivKey] = set()
 
-        # Group results by stage
-        by_stage: dict[int, list[tuple[int, float]]] = defaultdict(list)
+        by_stage: dict[int, list[tuple[int, float | None, bool, bool, bool]]] = defaultdict(list)
         for comp_id, stage_id, hf, dq, dnf, zeroed in stage_results:
-            shooter_id = competitor_shooter_map.get(comp_id)
-            if shooter_id is None or dnf:
-                continue
-            effective_hf = 0.0 if (dq or zeroed) else (hf if hf is not None else 0.0)
-            by_stage[stage_id].append((shooter_id, effective_hf))
-            match_shooters.add(shooter_id)
+            by_stage[stage_id].append((comp_id, hf, dq, dnf, zeroed))
 
         for _stage_id, stage_entries in by_stage.items():
-            if len(stage_entries) < 2:
-                continue
+            by_div, stage_keys = group_stage_by_division(
+                stage_entries, competitor_shooter_map, division_map
+            )
+            match_keys.update(stage_keys)
 
-            # Sort by hit factor descending for ranking
-            stage_entries.sort(key=lambda x: x[1], reverse=True)
+            for div, div_ranked in by_div.items():
+                if len(div_ranked) < 2:
+                    continue
+                div_ranked.sort(key=lambda x: x[1], reverse=True)
 
-            # Compute pairwise ELO updates
-            deltas: dict[int, float] = defaultdict(float)
-            n = len(stage_entries)
+                n = len(div_ranked)
+                deltas: dict[DivKey, float] = defaultdict(float)
 
-            for i in range(n):
-                sid_a = stage_entries[i][0]
-                hf_a = stage_entries[i][1]
-                ra = self._ratings.get(sid_a, DEFAULT_RATING)
-                k_a = self._k_factor(sid_a)
+                for i in range(n):
+                    sid_a, hf_a = div_ranked[i]
+                    key_a: DivKey = (sid_a, div)
+                    ra = self._ratings.get(key_a, DEFAULT_RATING)
+                    k_a = self._k_factor(key_a)
 
-                for j in range(i + 1, n):
-                    sid_b = stage_entries[j][0]
-                    hf_b = stage_entries[j][1]
-                    rb = self._ratings.get(sid_b, DEFAULT_RATING)
-                    k_b = self._k_factor(sid_b)
+                    for j in range(i + 1, n):
+                        sid_b, hf_b = div_ranked[j]
+                        key_b: DivKey = (sid_b, div)
+                        rb = self._ratings.get(key_b, DEFAULT_RATING)
+                        k_b = self._k_factor(key_b)
 
-                    expected_a = self._expected_score(ra, rb)
+                        expected_a = self._expected_score(ra, rb)
 
-                    # Actual score: 1 if A won, 0.5 if tied, 0 if B won
-                    if hf_a > hf_b:
-                        actual_a = 1.0
-                    elif hf_a == hf_b:
-                        actual_a = 0.5
-                    else:
-                        actual_a = 0.0
+                        if hf_a > hf_b:
+                            actual_a = 1.0
+                        elif hf_a == hf_b:
+                            actual_a = 0.5
+                        else:
+                            actual_a = 0.0
 
-                    # Scale by 1/n to avoid over-updating with many competitors
-                    scale = 1.0 / n
-                    deltas[sid_a] += k_a * (actual_a - expected_a) * scale
-                    deltas[sid_b] += k_b * ((1.0 - actual_a) - (1.0 - expected_a)) * scale
+                        # Scale by 1/n to avoid over-updating with many competitors
+                        scale = 1.0 / n
+                        deltas[key_a] += k_a * (actual_a - expected_a) * scale
+                        deltas[key_b] += k_b * ((1.0 - actual_a) - (1.0 - expected_a)) * scale
 
-            # Apply deltas
-            for sid, delta in deltas.items():
-                current = self._ratings.get(sid, DEFAULT_RATING)
-                self._ratings[sid] = current + delta
+                for key, delta in deltas.items():
+                    current = self._ratings.get(key, DEFAULT_RATING)
+                    self._ratings[key] = current + delta
 
-        # Update match counts and metadata
         for comp_id, shooter_id in competitor_shooter_map.items():
             if shooter_id is None:
                 continue
-            if shooter_id in match_shooters:
-                self._matches[shooter_id] += 1
+            div = division_map.get(comp_id) if division_map else None
+            comp_key: DivKey = (shooter_id, div)
+            if comp_key in match_keys:
+                self._matches[comp_key] += 1
             if name_map and comp_id in name_map:
                 self._names[shooter_id] = name_map[comp_id]
-            if division_map and comp_id in division_map:
-                self._divisions[shooter_id] = division_map[comp_id]
             if region_map and comp_id in region_map:
                 self._regions[shooter_id] = region_map[comp_id]
             if category_map and comp_id in category_map:
                 self._categories[shooter_id] = category_map[comp_id]
 
-    def get_ratings(self) -> dict[int, Rating]:
-        result: dict[int, Rating] = {}
-        for sid, rating in self._ratings.items():
-            result[sid] = Rating(
+    def get_ratings(self) -> dict[DivKey, Rating]:
+        result: dict[DivKey, Rating] = {}
+        for (sid, div), rating in self._ratings.items():
+            result[(sid, div)] = Rating(
                 shooter_id=sid,
                 name=self._names.get(sid, f"Shooter {sid}"),
-                division=self._divisions.get(sid),
+                division=div,
                 region=self._regions.get(sid),
                 category=self._categories.get(sid),
                 mu=rating,
                 sigma=0.0,  # ELO doesn't have a separate sigma
-                matches_played=self._matches.get(sid, 0),
+                matches_played=self._matches.get((sid, div), 0),
             )
         return result
 
-    def predict_rank(self, shooter_ids: list[int]) -> list[int]:
-        rated = [(sid, self._ratings.get(sid, DEFAULT_RATING)) for sid in shooter_ids]
+    def predict_rank(
+        self, shooter_ids: list[int], division: str | None = None
+    ) -> list[int]:
+        rated = []
+        for sid in shooter_ids:
+            if division is not None:
+                rating = self._ratings.get((sid, division), DEFAULT_RATING)
+            else:
+                ratings = [v for (s, _), v in self._ratings.items() if s == sid]
+                rating = max(ratings) if ratings else DEFAULT_RATING
+            rated.append((sid, rating))
         rated.sort(key=lambda x: x[1], reverse=True)
         return [sid for sid, _ in rated]
 
     def save_state(self, path: Path) -> None:
         state = {
-            "ratings": {str(k): v for k, v in self._ratings.items()},
-            "matches": {str(k): v for k, v in self._matches.items()},
+            "ratings": {
+                encode_div_key(s, d): v for (s, d), v in self._ratings.items()
+            },
+            "matches": {
+                encode_div_key(s, d): v for (s, d), v in self._matches.items()
+            },
             "names": {str(k): v for k, v in self._names.items()},
-            "divisions": {str(k): v for k, v in self._divisions.items()},
             "regions": {str(k): v for k, v in self._regions.items()},
             "categories": {str(k): v for k, v in self._categories.items()},
             "seen_matches": list(self._seen_matches),
@@ -172,10 +183,11 @@ class MultiElo(RatingAlgorithm):
 
     def load_state(self, path: Path) -> None:
         state = json.loads(path.read_text())
-        self._ratings = {int(k): v for k, v in state["ratings"].items()}
-        self._matches = defaultdict(int, {int(k): v for k, v in state["matches"].items()})
+        self._ratings = {decode_div_key(k): v for k, v in state["ratings"].items()}
+        self._matches = defaultdict(
+            int, {decode_div_key(k): v for k, v in state["matches"].items()}
+        )
         self._names = {int(k): v for k, v in state.get("names", {}).items()}
-        self._divisions = {int(k): v for k, v in state.get("divisions", {}).items()}
         self._regions = {int(k): v for k, v in state.get("regions", {}).items()}
         self._categories = {int(k): v for k, v in state.get("categories", {}).items()}
         self._seen_matches = set(state.get("seen_matches", []))

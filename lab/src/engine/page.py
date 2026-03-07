@@ -422,7 +422,7 @@ _HTML = r"""<!DOCTYPE html>
             </tr>
           </thead>
           <tbody>
-            <template x-for="(s, i) in ranked" :key="s.id">
+            <template x-for="(s, i) in ranked" :key="s.key">
               <tr class="border-t border-gray-100 hover:bg-gray-50">
                 <td class="px-4 py-2.5 text-right text-gray-400 text-xs" x-text="i+1"></td>
                 <td class="px-4 py-2.5 font-medium" x-text="s.name"></td>

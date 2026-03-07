@@ -85,6 +85,7 @@ def _run_train_mode(
     name_suffix: str = "",
 ) -> None:
     """Train all algorithm instances on matches for one scoring mode and save ratings."""
+    from src.algorithms.base import DivKey
     from src.data.store import RatingRow
 
     suffix = "" if scoring == "stage_hf" else "_mpct"
@@ -130,15 +131,16 @@ def _run_train_mode(
             console.print(f"  Skipped {skipped} deduplicated matches")
 
         ratings = algo.get_ratings()
-        console.print(f"  Rated {len(ratings)} shooters")
+        n_shooters = len({sid for sid, _ in ratings})
+        console.print(f"  Rated {n_shooters} shooters ({len(ratings)} division entries)")
         stored_name = f"{algo.name}{suffix}"
-        rating_data: dict[int, RatingRow] = {
-            sid: (
-                r.name, r.division, r.region, r.category,
+        rating_data: dict[DivKey, RatingRow] = {
+            (sid, div): (
+                r.name, div, r.region, r.category,
                 r.mu, r.sigma, r.matches_played,
                 shooter_last_date.get(sid),
             )
-            for sid, r in ratings.items()
+            for (sid, div), r in ratings.items()
         }
         store.save_ratings(stored_name, rating_data)
         console.print(f"  [green]Saved ratings for {stored_name}[/green]")

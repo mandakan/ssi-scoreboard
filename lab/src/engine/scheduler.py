@@ -49,13 +49,15 @@ def _recalc(db_path: Path, app_url: str, token: str) -> None:
                     )
 
             ratings = algo.get_ratings()
+            from src.algorithms.base import DivKey
             from src.data.store import RatingRow
-            rating_data: dict[int, RatingRow] = {}
-            for sid, r in ratings.items():
-                rating_data[sid] = (
-                    r.name, r.division, r.region, r.category,
+            rating_data: dict[DivKey, RatingRow] = {
+                (sid, div): (
+                    r.name, div, r.region, r.category,
                     r.mu, r.sigma, r.matches_played, None,
                 )
+                for (sid, div), r in ratings.items()
+            }
             store.save_ratings(algo.name, rating_data)
 
         n = len(algorithms)

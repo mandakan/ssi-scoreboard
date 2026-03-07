@@ -12,7 +12,7 @@ from src.data.models import MatchResults
 
 # Bump this whenever the schema of any data table changes (not sync_state).
 # On version mismatch, all data tables are dropped and recreated; sync from scratch.
-SCHEMA_VERSION = "2"
+SCHEMA_VERSION = "3"
 
 # (name, division, region, category, mu, sigma, matches_played, last_match_date)
 RatingRow = tuple[str, str | None, str | None, str | None, float, float, int, str | None]
@@ -111,21 +111,22 @@ CREATE TABLE IF NOT EXISTS match_links (
   PRIMARY KEY (source_a, match_id_a, source_b, match_id_b)
 );
 
--- Rating results per algorithm
+-- Rating results per algorithm, per (shooter, division) pair.
+-- division = '' (empty string) is the sentinel for cross-division / global ratings.
 CREATE TABLE IF NOT EXISTS shooter_ratings (
-  algorithm TEXT, shooter_id INTEGER, name TEXT, division TEXT,
-  region TEXT, category TEXT,
+  algorithm TEXT, shooter_id INTEGER, division TEXT NOT NULL DEFAULT '',
+  name TEXT, region TEXT, category TEXT,
   mu DOUBLE, sigma DOUBLE, matches_played INTEGER,
   last_match_date TIMESTAMP, updated_at TIMESTAMP,
-  PRIMARY KEY (algorithm, shooter_id)
+  PRIMARY KEY (algorithm, shooter_id, division)
 );
 
--- Rating history (snapshots after each match)
+-- Rating history (snapshots after each match), keyed per (shooter, division).
 CREATE TABLE IF NOT EXISTS rating_history (
-  algorithm TEXT, shooter_id INTEGER,
+  algorithm TEXT, shooter_id INTEGER, division TEXT NOT NULL DEFAULT '',
   match_source TEXT, match_ct INTEGER, match_id TEXT,
   match_date TIMESTAMP, mu DOUBLE, sigma DOUBLE,
-  PRIMARY KEY (algorithm, shooter_id, match_source, match_ct, match_id)
+  PRIMARY KEY (algorithm, shooter_id, division, match_source, match_ct, match_id)
 );
 """
 
@@ -650,19 +651,25 @@ class Store:
     # Rating storage
     # ------------------------------------------------------------------
 
-    def save_ratings(self, algorithm: str, ratings: dict[int, RatingRow]) -> None:
+    def save_ratings(
+        self, algorithm: str, ratings: dict[tuple[int, str | None], RatingRow]
+    ) -> None:
         """Save ratings for an algorithm.
 
+        Keys: (shooter_id, division) — division=None is stored as '' (empty string sentinel).
         Values: (name, division, region, category, mu, sigma, matches_played, last_match_date).
         """
         updated_at = datetime.now(UTC).isoformat()
-        for sid, (name, div, region, category, mu, sigma, played, last_date) in ratings.items():
+        for (sid, div), (name, _div, region, category, mu, sigma, played, last_date) in (
+            ratings.items()
+        ):
+            db_div = div or ""
             self.db.execute(
                 """INSERT OR REPLACE INTO shooter_ratings
-                   (algorithm, shooter_id, name, division, region, category, mu, sigma,
+                   (algorithm, shooter_id, division, name, region, category, mu, sigma,
                     matches_played, last_match_date, updated_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                [algorithm, sid, name, div, region, category, mu, sigma, played,
+                [algorithm, sid, db_div, name, region, category, mu, sigma, played,
                  last_date, updated_at],
             )
 
@@ -676,11 +683,15 @@ class Store:
         match_date: str | None,
         mu: float,
         sigma: float,
+        division: str | None = None,
     ) -> None:
         """Save a rating history snapshot after processing a match."""
+        db_div = division or ""
         self.db.execute(
             """INSERT OR REPLACE INTO rating_history
-               (algorithm, shooter_id, match_source, match_ct, match_id, match_date, mu, sigma)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            [algorithm, shooter_id, match_source, match_ct, match_id, match_date, mu, sigma],
+               (algorithm, shooter_id, division, match_source, match_ct, match_id,
+                match_date, mu, sigma)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            [algorithm, shooter_id, db_div, match_source, match_ct, match_id,
+             match_date, mu, sigma],
         )
