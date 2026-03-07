@@ -609,6 +609,43 @@ class Store:
         row = self.db.execute("SELECT count(*) FROM match_links").fetchone()
         return row[0] if row else 0
 
+    def clear_auto_links(self) -> None:
+        """Delete all automatically-generated identity and dedup links, preserving manual ones.
+
+        Removes:
+        - All shooter_identity_links with method != 'manual'
+        - All shooter_identities with canonical_id >= 2_000_000 (ipscresults-only) that are
+          no longer referenced by any remaining identity link
+        - All match_links (no manual concept for match dedup)
+        - Resets the identity_seq counter so new IDs are assigned cleanly from the gap
+
+        Manual identity links (method='manual') are always preserved.
+        Safe to call before re-running resolve_all().
+        """
+        self.db.execute("DELETE FROM shooter_identity_links WHERE method != 'manual'")
+
+        # Remove orphaned ipscresults-only canonical identities (>= 2_000_000) that are
+        # no longer referenced by any remaining (manual) link.
+        self.db.execute(
+            """DELETE FROM shooter_identities
+               WHERE canonical_id >= 2000000
+                 AND canonical_id NOT IN (
+                     SELECT canonical_id FROM shooter_identity_links
+                 )"""
+        )
+
+        # Reset identity_seq to just above any surviving manual ipscresults canonical IDs.
+        row = self.db.execute(
+            "SELECT MAX(canonical_id) FROM shooter_identity_links WHERE canonical_id >= 2000000"
+        ).fetchone()
+        next_seq = (int(row[0]) + 1) if row and row[0] is not None else 2_000_000
+        self.db.execute(
+            "INSERT OR REPLACE INTO sync_state (key, value) VALUES ('identity_seq', ?)",
+            [str(next_seq)],
+        )
+
+        self.db.execute("DELETE FROM match_links")
+
     # ------------------------------------------------------------------
     # Rating storage
     # ------------------------------------------------------------------

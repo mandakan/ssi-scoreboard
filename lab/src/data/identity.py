@@ -30,6 +30,17 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+    track,
+)
+
 if TYPE_CHECKING:
     from src.data.store import Store
 
@@ -152,7 +163,11 @@ class IdentityResolver:
             key = (sid, region or "")
             by_shooter[key].append(name)
 
-        for (sid, region), names in by_shooter.items():
+        items = list(by_shooter.items())
+        for (sid, region), names in track(
+            items,
+            description="Bootstrapping SSI identities…",
+        ):
             primary = _pick_primary_name(names)
             store.ensure_canonical_identity(sid, primary, region or None)
 
@@ -207,63 +222,94 @@ class IdentityResolver:
 
         exact_count = fuzzy_count = new_count = 0
 
-        for name, raw_region in unlinked:
-            region = raw_region or ""
-            display = normalize_name(name, "ipscresults")
-            fp = name_fingerprint(display, region)
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            MofNCompleteColumn(),
+            TextColumn("[cyan]{task.fields[stats]}[/cyan]"),
+            TimeElapsedColumn(),
+            TextColumn("ETA"),
+            TimeRemainingColumn(),
+        ) as progress:
+            task = progress.add_task(
+                "Linking ipscresults…",
+                total=len(unlinked),
+                stats="",
+            )
 
-            # 1. Exact fingerprint match against SSI fingerprints
-            canonical_id = store.get_identity_link("ssi_fp", fp)
-            if canonical_id is not None:
+            for name, raw_region in unlinked:
+                region = raw_region or ""
+                display = normalize_name(name, "ipscresults")
+                fp = name_fingerprint(display, region)
+
+                # 1. Exact fingerprint match against SSI fingerprints
+                canonical_id = store.get_identity_link("ssi_fp", fp)
+                if canonical_id is not None:
+                    store.save_identity_link(
+                        source="ipscresults",
+                        source_key=fp,
+                        canonical_id=canonical_id,
+                        name_variant=display,
+                        confidence=1.0,
+                        method="auto_exact",
+                    )
+                    exact_count += 1
+                    progress.advance(task)
+                    progress.update(
+                        task,
+                        stats=f"exact={exact_count} fuzzy={fuzzy_count} new={new_count}",
+                    )
+                    continue
+
+                # 2. Fuzzy match within same region
+                candidates = ssi_fp_by_region.get(region.upper(), [])
+                best_ratio = 0.0
+                best_canonical: int | None = None
+                normalized_name_part = fp.partition("|")[0]
+
+                for ssi_name_part, _ssi_fp, ssi_canonical in candidates:
+                    ratio = difflib.SequenceMatcher(
+                        None, normalized_name_part, ssi_name_part
+                    ).ratio()
+                    if ratio > best_ratio:
+                        best_ratio = ratio
+                        best_canonical = ssi_canonical
+
+                if best_ratio >= _FUZZY_THRESHOLD and best_canonical is not None:
+                    store.save_identity_link(
+                        source="ipscresults",
+                        source_key=fp,
+                        canonical_id=best_canonical,
+                        name_variant=display,
+                        confidence=round(best_ratio, 3),
+                        method="auto_fuzzy",
+                    )
+                    fuzzy_count += 1
+                    progress.advance(task)
+                    progress.update(
+                        task,
+                        stats=f"exact={exact_count} fuzzy={fuzzy_count} new={new_count}",
+                    )
+                    continue
+
+                # 3. No match — create a new canonical identity
+                new_canonical = store._next_canonical_id()
+                store.ensure_canonical_identity(new_canonical, display, region or None)
                 store.save_identity_link(
                     source="ipscresults",
                     source_key=fp,
-                    canonical_id=canonical_id,
+                    canonical_id=new_canonical,
                     name_variant=display,
                     confidence=1.0,
                     method="auto_exact",
                 )
-                exact_count += 1
-                continue
-
-            # 2. Fuzzy match within same region
-            candidates = ssi_fp_by_region.get(region.upper(), [])
-            best_ratio = 0.0
-            best_canonical: int | None = None
-            normalized_name_part = fp.partition("|")[0]
-
-            for ssi_name_part, _ssi_fp, ssi_canonical in candidates:
-                ratio = difflib.SequenceMatcher(
-                    None, normalized_name_part, ssi_name_part
-                ).ratio()
-                if ratio > best_ratio:
-                    best_ratio = ratio
-                    best_canonical = ssi_canonical
-
-            if best_ratio >= _FUZZY_THRESHOLD and best_canonical is not None:
-                store.save_identity_link(
-                    source="ipscresults",
-                    source_key=fp,
-                    canonical_id=best_canonical,
-                    name_variant=display,
-                    confidence=round(best_ratio, 3),
-                    method="auto_fuzzy",
+                new_count += 1
+                progress.advance(task)
+                progress.update(
+                    task,
+                    stats=f"exact={exact_count} fuzzy={fuzzy_count} new={new_count}",
                 )
-                fuzzy_count += 1
-                continue
-
-            # 3. No match — create a new canonical identity
-            new_canonical = store._next_canonical_id()
-            store.ensure_canonical_identity(new_canonical, display, region or None)
-            store.save_identity_link(
-                source="ipscresults",
-                source_key=fp,
-                canonical_id=new_canonical,
-                name_variant=display,
-                confidence=1.0,
-                method="auto_exact",
-            )
-            new_count += 1
 
         return exact_count, fuzzy_count, new_count
 

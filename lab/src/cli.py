@@ -194,6 +194,12 @@ def link(
 
     store = Store(db_path)
     try:
+        if force:
+            console.print(
+                "[yellow]--force: clearing all auto-generated identity and dedup links…[/yellow]"
+            )
+            store.clear_auto_links()
+
         console.rule("[bold blue]Step 1/2 — Identity resolution[/bold blue]")
         resolver = IdentityResolver()
         resolve_report = resolver.resolve_all(store)
