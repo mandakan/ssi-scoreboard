@@ -40,15 +40,15 @@ def _conservative_rank(ratings: dict[int, Rating], shooter_ids: list[int]) -> li
 
 
 def _actual_ranking_by_division(
-    store: Store, ct: int, match_id: str
+    store: Store, source: str, ct: int, match_id: str
 ) -> tuple[list[int], dict[str, list[int]]]:
     """Return (full_actual_ranking, per_division_actual_ranking).
 
     Full ranking: all shooters sorted by average overall_percent descending.
     Division rankings: same list split by division, preserving cross-field order.
     """
-    comp_map = store.get_competitor_shooter_map(ct, match_id)
-    div_map = store.get_competitor_division_map(ct, match_id)
+    comp_map = store.get_canonical_competitor_map(source, ct, match_id)
+    div_map = store.get_competitor_division_map(source, ct, match_id)
 
     shooter_div: dict[int, str] = {}
     for comp_id, sid in comp_map.items():
@@ -60,8 +60,9 @@ def _actual_ranking_by_division(
     rows = store.db.execute(
         """SELECT competitor_id, overall_percent
            FROM stage_results
-           WHERE ct = ? AND match_id = ? AND dnf = false AND overall_percent IS NOT NULL""",
-        [ct, match_id],
+           WHERE source = ? AND ct = ? AND match_id = ?
+             AND dnf = false AND overall_percent IS NOT NULL""",
+        [source, ct, match_id],
     ).fetchall()
 
     shooter_pcts: dict[int, list[float]] = defaultdict(list)
@@ -84,7 +85,7 @@ def _actual_ranking_by_division(
 
 
 def _get_results(
-    store: Store, ct: int, match_id: str, scoring: str
+    store: Store, source: str, ct: int, match_id: str, scoring: str
 ) -> list[tuple[int, int, float | None, bool, bool, bool]]:
     """Return stage results in the format expected by process_match_data.
 
@@ -94,8 +95,8 @@ def _get_results(
                 how IPSC officially scores competitors.
     """
     if scoring == "stage_hf":
-        return store.get_stage_results_for_match(ct, match_id)
-    scores = store.get_match_scores(ct, match_id)
+        return store.get_stage_results_for_match(source, ct, match_id)
+    scores = store.get_match_scores(source, ct, match_id)
     # Synthetic stage_id = 0; dnf=False because absent competitors are already excluded
     return [(cid, 0, pts, is_dq, False, is_zeroed) for cid, pts, is_dq, is_zeroed in scores]
 
@@ -117,8 +118,8 @@ def _record_metrics(
 
 def _run_mode(
     store: Store,
-    train_matches: list[tuple[int, str, str | None, str | None]],
-    test_matches: list[tuple[int, str, str | None, str | None]],
+    train_matches: list[tuple[str, int, str, str | None, str | None]],
+    test_matches: list[tuple[str, int, str, str | None, str | None]],
     test_actuals: list[tuple[list[int], dict[str, list[int]]]],
     scoring: str,
 ) -> tuple[dict[str, dict[str, list[float]]], dict[str, dict[str, list[float]]]]:
@@ -133,9 +134,9 @@ def _run_mode(
     for algo in get_algorithms():
         console.print(f"\n[cyan]Training {algo.name}[/cyan] ({scoring})")
 
-        for ct, match_id, match_date, match_level in train_matches:
-            results = _get_results(store, ct, match_id, scoring)
-            comp_map = store.get_competitor_shooter_map(ct, match_id)
+        for source, ct, match_id, match_date, match_level in train_matches:
+            results = _get_results(store, source, ct, match_id, scoring)
+            comp_map = store.get_canonical_competitor_map(source, ct, match_id)
             if results:
                 algo.process_match_data(
                     ct, match_id, match_date, results, comp_map, match_level=match_level
@@ -148,7 +149,7 @@ def _run_mode(
         cons_m = _empty_metrics()
         algo_div_taus: dict[str, list[float]] = defaultdict(list)
 
-        for (ct, match_id, match_date, match_level), (actual, by_div) in zip(
+        for (source, ct, match_id, match_date, match_level), (actual, by_div) in zip(
             test_matches, test_actuals, strict=True
         ):
             if len(actual) < 5:
@@ -169,8 +170,8 @@ def _run_mode(
                 if len(div_predicted) >= 2:
                     algo_div_taus[div].append(kendall_tau(div_predicted, div_actual))
 
-            results = _get_results(store, ct, match_id, scoring)
-            comp_map = store.get_competitor_shooter_map(ct, match_id)
+            results = _get_results(store, source, ct, match_id, scoring)
+            comp_map = store.get_canonical_competitor_map(source, ct, match_id)
             if results:
                 algo.process_match_data(
                     ct, match_id, match_date, results, comp_map, match_level=match_level
@@ -222,8 +223,8 @@ def run_benchmark(
 
     console.print("\n[dim]Precomputing actual rankings for test matches...[/dim]")
     test_actuals: list[tuple[list[int], dict[str, list[int]]]] = []
-    for ct, match_id, _date, _level in test_matches:
-        actual, by_div = _actual_ranking_by_division(store, ct, match_id)
+    for source, ct, match_id, _date, _level in test_matches:
+        actual, by_div = _actual_ranking_by_division(store, source, ct, match_id)
         test_actuals.append((actual, by_div))
 
     all_metrics: dict[str, dict[str, list[float]]] = {}
