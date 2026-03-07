@@ -48,6 +48,8 @@ class TeamSelectResponse(BaseModel):
     sort: str
     min_matches: int
     active_since: str | None
+    min_recent_matches: int
+    recent_since: str | None
     top_n: int
     divisions: dict[str, list[TeamSelectEntry]]
 
@@ -100,16 +102,27 @@ def create_app(db_path: Path = Path("data/lab.duckdb")) -> FastAPI:
         division: str | None = None,
         region: str | None = None,
         category: str | None = None,
-        min_matches: int = Query(0, ge=0, description="Minimum matches played"),
+        min_matches: int = Query(0, ge=0, description="Minimum matches played (career total)"),
         active_since: str | None = Query(
             None, description="Only include shooters active on or after this date (YYYY-MM-DD)"
+        ),
+        min_recent_matches: int = Query(
+            0, ge=0, description="Minimum matches played since recent_since"
+        ),
+        recent_since: str | None = Query(
+            None,
+            description=(
+                "Window start date for min_recent_matches filter (YYYY-MM-DD). "
+                "Only effective when min_recent_matches > 0."
+            ),
         ),
     ) -> list[RatingResponse]:
         """Get ratings for an algorithm with optional filtering and sorting.
 
         - **sort**: `mu` (default) or `conservative` (mu − 0.52×σ, penalises low match counts)
-        - **min_matches**: exclude shooters with fewer matches than this threshold
+        - **min_matches**: exclude shooters with fewer career matches than this threshold
         - **active_since**: ISO date — exclude shooters whose last match was before this date
+        - **min_recent_matches** + **recent_since**: require at least N matches since a date
         """
         filters = ["algorithm = ?"]
         params: list[object] = [algorithm]
@@ -129,6 +142,15 @@ def create_app(db_path: Path = Path("data/lab.duckdb")) -> FastAPI:
         if active_since:
             filters.append("last_match_date >= ?")
             params.append(active_since)
+        if min_recent_matches > 0 and recent_since:
+            filters.append(
+                "(SELECT COUNT(*) FROM rating_history rh"
+                " WHERE rh.algorithm = shooter_ratings.algorithm"
+                " AND rh.shooter_id = shooter_ratings.shooter_id"
+                " AND rh.division = shooter_ratings.division"
+                " AND rh.match_date >= ?) >= ?"
+            )
+            params.extend([recent_since, min_recent_matches])
 
         order = _order_by(sort)
         where = " AND ".join(filters)
@@ -163,12 +185,22 @@ def create_app(db_path: Path = Path("data/lab.duckdb")) -> FastAPI:
             "conservative",
             description="Sort order within each division: 'mu' or 'conservative'",
         ),
-        min_matches: int = Query(3, ge=0, description="Minimum matches played to be eligible"),
+        min_matches: int = Query(3, ge=0, description="Minimum career matches to be eligible"),
         active_since: str | None = Query(
             None,
             description=(
                 "Exclude shooters whose last match was before this date (YYYY-MM-DD). "
                 "E.g. '2024-01-01' to require at least one result since 2024."
+            ),
+        ),
+        min_recent_matches: int = Query(
+            0, ge=0, description="Minimum matches played since recent_since"
+        ),
+        recent_since: str | None = Query(
+            None,
+            description=(
+                "Window start date for min_recent_matches filter (YYYY-MM-DD). "
+                "Only effective when min_recent_matches > 0."
             ),
         ),
     ) -> TeamSelectResponse:
@@ -182,6 +214,7 @@ def create_app(db_path: Path = Path("data/lab.duckdb")) -> FastAPI:
         - sort=conservative (rewards consistency, penalises low match counts)
         - min_matches=3 (require meaningful competitive history)
         - active_since=2024-01-01 (require recent activity)
+        - min_recent_matches=2&recent_since=2024-01-01 (require N results in the window)
         """
         filters = ["algorithm = ?", "region = ?", "division != ''"]
         params: list[object] = [algorithm, region]
@@ -192,6 +225,15 @@ def create_app(db_path: Path = Path("data/lab.duckdb")) -> FastAPI:
         if active_since:
             filters.append("last_match_date >= ?")
             params.append(active_since)
+        if min_recent_matches > 0 and recent_since:
+            filters.append(
+                "(SELECT COUNT(*) FROM rating_history rh"
+                " WHERE rh.algorithm = shooter_ratings.algorithm"
+                " AND rh.shooter_id = shooter_ratings.shooter_id"
+                " AND rh.division = shooter_ratings.division"
+                " AND rh.match_date >= ?) >= ?"
+            )
+            params.extend([recent_since, min_recent_matches])
 
         order = _order_by(sort)
         where = " AND ".join(filters)
@@ -232,6 +274,8 @@ def create_app(db_path: Path = Path("data/lab.duckdb")) -> FastAPI:
             sort=sort,
             min_matches=min_matches,
             active_since=active_since,
+            min_recent_matches=min_recent_matches,
+            recent_since=recent_since,
             top_n=top_n,
             divisions=dict(by_division),
         )

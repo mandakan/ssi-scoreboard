@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from src.data.store import Store
@@ -56,6 +56,23 @@ def _export_categories(store: Store) -> list[str]:
 
 
 def _export_shooters(store: Store) -> list[dict[str, Any]]:
+    # Precompute recent match counts per (algorithm, shooter_id, division)
+    # for the last 12 months from today. Used by the static site for activity filtering.
+    since_12m = (date.today() - timedelta(days=365)).isoformat()
+    recent_rows = store.db.execute(
+        """
+        SELECT algorithm, shooter_id, division, COUNT(*) AS cnt
+        FROM rating_history
+        WHERE match_date >= ?
+        GROUP BY algorithm, shooter_id, division
+        """,
+        [since_12m],
+    ).fetchall()
+    recent_counts: dict[tuple[str, int, str], int] = {
+        (str(r[0]), int(r[1]), str(r[2]) if r[2] else ""): int(r[3])
+        for r in recent_rows
+    }
+
     rows = store.db.execute(
         f"""
         SELECT shooter_id, name, division, region, category,
@@ -79,6 +96,7 @@ def _export_shooters(store: Store) -> list[dict[str, Any]]:
         cr = float(row[8])
         matches = int(row[9])
         last_date = str(row[10])[:10] if row[10] else None
+        m_recent = recent_counts.get((algo, sid, div_db), 0)
 
         key = (sid, div_db)
         if key not in shooters:
@@ -99,6 +117,7 @@ def _export_shooters(store: Store) -> list[dict[str, Any]]:
             "sigma": round(sigma, 3),
             "cr": round(cr, 3),
             "m": matches,
+            "m12": m_recent,  # matches in the last 12 months from export date
             "d": last_date,
         }
 
