@@ -28,17 +28,68 @@ def _warn_if_fresh_db(db_path: Path) -> None:
         )
 
 
+def _date_label(date_from: str | None, date_to: str | None) -> str:
+    """Auto-generate a short label from a date range for use as a name suffix.
+
+    Examples::
+        (None,         "2025-12-31") → "2025"   # full-year snapshot
+        ("2025-01-01", "2025-12-31") → "2025"   # explicit full year
+        ("2025-01-01", "2025-06-30") → "2025-01-01_2025-06-30"
+        ("2024-01-01", None        ) → "from_2024-01-01"
+    """
+    if not date_from and not date_to:
+        return ""
+    if date_to and not date_from:
+        return date_to[:4]
+    if date_from and date_to:
+        full_year = date_from.endswith("-01-01") and date_to.endswith("-12-31")
+        if full_year and date_from[:4] == date_to[:4]:
+            return date_from[:4]
+        return f"{date_from}_{date_to}"
+    # date_from only
+    return f"from_{date_from}"
+
+
+def _filter_matches_by_date(
+    matches: list[tuple[str, int, str, str | None, str | None]],
+    date_from: str | None,
+    date_to: str | None,
+) -> list[tuple[str, int, str, str | None, str | None]]:
+    """Return only matches whose date falls within [date_from, date_to].
+
+    Matches with no date are excluded whenever a date filter is active.
+    Both bounds are inclusive (ISO string comparison on the first 10 chars).
+    """
+    if not date_from and not date_to:
+        return matches
+    filtered = []
+    for m in matches:
+        d = m[3]
+        if d is None:
+            continue
+        d10 = d[:10]
+        if date_from and d10 < date_from:
+            continue
+        if date_to and d10 > date_to:
+            continue
+        filtered.append(m)
+    return filtered
+
+
 def _run_train_mode(
     store: Any,
     algorithms: Any,
     matches: list[tuple[str, int, str, str | None, str | None]],
     scoring: str,
     skip_set: set[tuple[str, int, str]] | None = None,
+    name_suffix: str = "",
 ) -> None:
     """Train all algorithm instances on matches for one scoring mode and save ratings."""
     from src.data.store import RatingRow
 
     suffix = "" if scoring == "stage_hf" else "_mpct"
+    if name_suffix:
+        suffix += f"_{name_suffix}"
     skip = skip_set or set()
 
     for algo in algorithms:
@@ -296,6 +347,31 @@ def train(
         "stage_hf",
         help="Scoring mode: stage_hf (per-stage hit factor) or match_pct (whole-match points)",
     ),
+    date_from: str | None = typer.Option(
+        None,
+        "--date-from",
+        help=(
+            "Only include matches on or after this date (YYYY-MM-DD). "
+            "Use with --date-to for a year window, or alone for a 'from year X' snapshot."
+        ),
+    ),
+    date_to: str | None = typer.Option(
+        None,
+        "--date-to",
+        help=(
+            "Only include matches on or before this date (YYYY-MM-DD). "
+            "Use alone for an end-of-year snapshot (e.g. --date-to 2025-12-31)."
+        ),
+    ),
+    label: str | None = typer.Option(
+        None,
+        "--label",
+        help=(
+            "Override the auto-generated date suffix appended to stored algorithm names "
+            "(e.g. --label 2025 stores as 'openskill_2025'). "
+            "Auto-generated from --date-from/--date-to when omitted."
+        ),
+    ),
     db_path: Path = DB_PATH_OPTION,
 ) -> None:
     """Train rating algorithms on synced match data.
@@ -309,6 +385,17 @@ def train(
                 Aligns with IPSC's official scoring. Ratings are stored with a _mpct
                 suffix so both modes can coexist and be compared in the explorer.
 
+    Use --date-to for end-of-year snapshots ("best through 2025") or combine
+    --date-from and --date-to for a pure year window ("best of 2025 only"):
+
+        # End-of-2025 snapshot — all history up to 2025-12-31
+        rating train --date-to 2025-12-31
+        # → stored as openskill_2025, openskill_mpct_2025, etc.
+
+        # 2025-only window — only matches from 2025
+        rating train --date-from 2025-01-01 --date-to 2025-12-31
+        # → same suffix (full-year detected automatically)
+
     Tip: run 'rating link' before training to resolve cross-source shooter identities
     and exclude duplicate matches from the training set.
     """
@@ -319,19 +406,30 @@ def train(
         console.print(f"[red]Unknown scoring mode '{scoring}'. Use stage_hf or match_pct.[/red]")
         raise typer.Exit(1)
 
+    name_suffix = label if label is not None else _date_label(date_from, date_to)
+
     store = Store(db_path)
     try:
         algorithms = get_algorithms() if algorithm == "all" else get_algorithms(algorithm)
-        matches = store.get_matches_chronological()
+        all_matches = store.get_matches_chronological()
+        matches = _filter_matches_by_date(all_matches, date_from, date_to)
         skip_set = store.get_dedup_skip_set()
         n_algo, n_match = len(algorithms), len(matches)
         mode_label = "stage HF" if scoring == "stage_hf" else "match %"
+
+        date_range = ""
+        if date_from or date_to:
+            date_range = f", window: {date_from or '*'} → {date_to or '*'}"
         console.print(
             f"[bold]Training {n_algo} algorithm(s) on {n_match} matches "
-            f"(scoring: {mode_label}, dedup skip: {len(skip_set)})[/bold]"
+            f"(scoring: {mode_label}, dedup skip: {len(skip_set)}{date_range})[/bold]"
         )
+        if name_suffix:
+            console.print(f"  Storing as: [cyan]<algo>_{name_suffix}[/cyan]")
 
-        _run_train_mode(store, algorithms, matches, scoring, skip_set=skip_set)
+        _run_train_mode(
+            store, algorithms, matches, scoring, skip_set=skip_set, name_suffix=name_suffix
+        )
     finally:
         store.close()
 
