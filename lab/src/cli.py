@@ -14,6 +14,20 @@ console = Console()
 DB_PATH_OPTION = typer.Option(Path("data/lab.duckdb"), help="Path to DuckDB database")
 
 
+def _warn_if_fresh_db(db_path: Path) -> None:
+    """Print a hint about db-pull when there is no existing database file.
+
+    A full sync from both sources takes ~1 hour. If a shared bootstrap exists on
+    S3/R2, downloading it is much faster — this nudge makes that visible.
+    """
+    if not db_path.exists():
+        console.print(
+            f"[yellow]Note:[/yellow] no database found at {db_path}. "
+            "A full sync takes ~1 h. If a shared bootstrap is available, "
+            "consider running [bold]uv run rating db-pull[/bold] first."
+        )
+
+
 def _run_train_mode(
     store: Any,
     algorithms: Any,
@@ -96,6 +110,7 @@ def sync(
     from src.data.store import Store
     from src.data.sync import SyncClient
 
+    _warn_if_fresh_db(db_path)
     store = Store(db_path)
     jitter = min(delay * 0.5, 1.0) if delay > 0 else 0.0
     client = SyncClient(url, token, store, delay=delay, jitter=jitter)
@@ -139,6 +154,7 @@ def sync_ipscresults(
     disc_set: set[str] | None = (
         {d.strip() for d in disciplines.split(",") if d.strip()} if disciplines else None
     )
+    _warn_if_fresh_db(db_path)
     store = Store(db_path)
     jitter = min(delay * 0.3, 0.1) if delay > 0 else 0.0
     client = IpscResultsClient(delay=delay, jitter=jitter)
@@ -449,6 +465,271 @@ def pipeline(
         console.print("\n[bold green]Pipeline complete![/bold green]")
     finally:
         store.close()
+
+
+def _require_boto3() -> None:
+    """Print a helpful error and exit if boto3 is not installed."""
+    try:
+        import boto3  # noqa: F401
+    except ImportError as exc:
+        console.print(
+            "[red]boto3 not installed.[/red] "
+            "Run: [bold]uv sync --extra storage[/bold]"
+        )
+        raise typer.Exit(1) from exc
+
+
+def _s3_client(endpoint: str) -> Any:
+    """Return a configured boto3 S3 client."""
+    import boto3
+    kwargs: dict[str, str] = {}
+    if endpoint:
+        kwargs["endpoint_url"] = endpoint
+    return boto3.client("s3", **kwargs)
+
+
+def _read_db_stats(db_path: Path) -> dict[str, Any]:
+    """Return match count, watermarks and schema version from a local DuckDB."""
+    from src.data.store import SCHEMA_VERSION, Store
+
+    store = Store(db_path)
+    try:
+        row = store.db.execute("SELECT count(*) FROM matches").fetchone()
+        return {
+            "match_count": int(row[0]) if row else 0,
+            "ssi_watermark": store.get_sync_watermark(source="ssi"),
+            "ipscresults_watermark": store.get_sync_watermark(source="ipscresults"),
+            "schema_version": SCHEMA_VERSION,
+        }
+    finally:
+        store.close()
+
+
+def _local_is_newer(local: dict[str, Any], remote: dict[str, Any]) -> bool:
+    """Return True if local DB appears to have more or newer data than the remote manifest."""
+    lc = local.get("match_count") or 0
+    rc = remote.get("match_count") or 0
+    if lc > rc:
+        return True
+    if lc == rc:
+        # Same number of matches — check watermarks.
+        ls = local.get("ssi_watermark") or ""
+        rs = remote.get("ssi_watermark") or ""
+        li = local.get("ipscresults_watermark") or ""
+        ri = remote.get("ipscresults_watermark") or ""
+        return ls > rs or li > ri
+    return False
+
+
+_DB_KEY = "lab.duckdb.gz"
+_MANIFEST_KEY = "manifest.json"
+
+S3_BUCKET_OPTION = typer.Option(..., envvar="LAB_S3_BUCKET", help="S3/R2 bucket name")
+S3_PREFIX_OPTION = typer.Option(
+    "lab", envvar="LAB_S3_PREFIX", help="Key prefix inside the bucket (default: lab)"
+)
+S3_ENDPOINT_OPTION = typer.Option(
+    "",
+    envvar="LAB_S3_ENDPOINT",
+    help="Endpoint URL — required for Cloudflare R2, omit for AWS S3",
+)
+
+
+@app.command(name="db-push")
+def db_push(
+    db_path: Path = DB_PATH_OPTION,
+    bucket: str = S3_BUCKET_OPTION,
+    prefix: str = S3_PREFIX_OPTION,
+    endpoint: str = S3_ENDPOINT_OPTION,
+) -> None:
+    """Compress and upload the local DuckDB to S3/R2 as a shared bootstrap.
+
+    Reads match counts and watermarks from the DB, stores them in a manifest
+    alongside the compressed file so db-pull can do a safe comparison.
+
+    Required env vars: LAB_S3_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+    For Cloudflare R2: also set LAB_S3_ENDPOINT to your R2 endpoint URL.
+
+    Example (R2)::
+
+        export LAB_S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com
+        export LAB_S3_BUCKET=my-lab-bucket
+        export AWS_ACCESS_KEY_ID=...
+        export AWS_SECRET_ACCESS_KEY=...
+        uv run rating db-push
+    """
+    import gzip
+    import json
+    import shutil
+    import tempfile
+    from datetime import UTC, datetime
+
+    _require_boto3()
+
+    if not db_path.exists():
+        console.print(f"[red]DB not found:[/red] {db_path}")
+        raise typer.Exit(1)
+
+    console.print("[bold]Reading local DB stats...[/bold]")
+    stats = _read_db_stats(db_path)
+    console.print(
+        f"  {stats['match_count']} matches | "
+        f"SSI: {stats['ssi_watermark']} | "
+        f"ipscresults: {stats['ipscresults_watermark']}"
+    )
+
+    db_key = f"{prefix}/{_DB_KEY}"
+    manifest_key = f"{prefix}/{_MANIFEST_KEY}"
+    original_bytes = db_path.stat().st_size
+
+    console.print(
+        f"[bold]Compressing {db_path.name} "
+        f"({original_bytes / 1_048_576:.1f} MB)...[/bold]"
+    )
+    tmp_gz = Path(tempfile.mktemp(suffix=".duckdb.gz", dir=db_path.parent))
+    try:
+        with open(db_path, "rb") as src, gzip.open(tmp_gz, "wb", compresslevel=6) as dst:
+            shutil.copyfileobj(src, dst)
+        compressed_bytes = tmp_gz.stat().st_size
+        ratio = compressed_bytes / original_bytes * 100
+        console.print(
+            f"  Compressed to {compressed_bytes / 1_048_576:.1f} MB ({ratio:.0f}%)"
+        )
+
+        s3 = _s3_client(endpoint)
+
+        console.print(f"[bold]Uploading to s3://{bucket}/{db_key}...[/bold]")
+        s3.upload_file(str(tmp_gz), bucket, db_key)
+
+        manifest: dict[str, Any] = {
+            **stats,
+            "uploaded_at": datetime.now(UTC).isoformat(),
+            "db_key": db_key,
+            "original_size_bytes": original_bytes,
+            "compressed_size_bytes": compressed_bytes,
+        }
+        s3.put_object(
+            Bucket=bucket,
+            Key=manifest_key,
+            Body=json.dumps(manifest, indent=2).encode(),
+            ContentType="application/json",
+        )
+        console.print(f"  Manifest written to s3://{bucket}/{manifest_key}")
+
+    finally:
+        tmp_gz.unlink(missing_ok=True)
+
+    console.print(
+        f"[bold green]Done.[/bold green] "
+        f"{stats['match_count']} matches, "
+        f"{compressed_bytes / 1_048_576:.1f} MB uploaded."
+    )
+
+
+@app.command(name="db-pull")
+def db_pull(
+    db_path: Path = DB_PATH_OPTION,
+    bucket: str = S3_BUCKET_OPTION,
+    prefix: str = S3_PREFIX_OPTION,
+    endpoint: str = S3_ENDPOINT_OPTION,
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
+) -> None:
+    """Download the latest bootstrap DuckDB from S3/R2.
+
+    Compares the remote manifest against the local DB before downloading.
+    If the local DB appears to have more or newer data, you will be asked to
+    confirm before it is overwritten (bypass with --yes).
+
+    Required env vars: LAB_S3_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+    For Cloudflare R2: also set LAB_S3_ENDPOINT to your R2 endpoint URL.
+
+    Example (R2)::
+
+        export LAB_S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com
+        export LAB_S3_BUCKET=my-lab-bucket
+        export AWS_ACCESS_KEY_ID=...
+        export AWS_SECRET_ACCESS_KEY=...
+        uv run rating db-pull
+    """
+    import gzip
+    import json
+    import os
+    import shutil
+    import tempfile
+
+    from botocore.exceptions import ClientError
+
+    _require_boto3()
+
+    db_key = f"{prefix}/{_DB_KEY}"
+    manifest_key = f"{prefix}/{_MANIFEST_KEY}"
+    s3 = _s3_client(endpoint)
+
+    # Fetch remote manifest.
+    console.print("[bold]Fetching remote manifest...[/bold]")
+    try:
+        resp = s3.get_object(Bucket=bucket, Key=manifest_key)
+        manifest: dict[str, Any] = json.loads(resp["Body"].read())
+    except ClientError as e:
+        code = e.response["Error"]["Code"]
+        if code in ("NoSuchKey", "404"):
+            console.print("[red]No manifest found — has db-push been run yet?[/red]")
+        else:
+            console.print(f"[red]Failed to fetch manifest: {e}[/red]")
+        raise typer.Exit(1) from e
+
+    console.print(
+        f"  Remote: {manifest.get('match_count', '?')} matches | "
+        f"SSI: {manifest.get('ssi_watermark')} | "
+        f"ipscresults: {manifest.get('ipscresults_watermark')} | "
+        f"uploaded: {manifest.get('uploaded_at', '?')[:10]}"
+    )
+
+    # Safety check: warn if local DB exists and appears newer.
+    if db_path.exists():
+        console.print("[bold]Reading local DB stats...[/bold]")
+        local = _read_db_stats(db_path)
+        console.print(
+            f"  Local:  {local['match_count']} matches | "
+            f"SSI: {local['ssi_watermark']} | "
+            f"ipscresults: {local['ipscresults_watermark']}"
+        )
+        if _local_is_newer(local, manifest):
+            console.print(
+                "[bold yellow]Warning:[/bold yellow] "
+                "local DB appears to have more or newer data than the remote bootstrap."
+            )
+            if not yes and not typer.confirm("Overwrite local DB anyway?", default=False):
+                console.print("[dim]Aborted.[/dim]")
+                raise typer.Exit(0)
+
+    # Download to a temp file, then atomically replace.
+    compressed_mb = manifest.get("compressed_size_bytes", 0) / 1_048_576
+    console.print(
+        f"[bold]Downloading s3://{bucket}/{db_key} "
+        f"({compressed_mb:.1f} MB)...[/bold]"
+    )
+    tmp_gz = Path(tempfile.mktemp(suffix=".duckdb.gz", dir=db_path.parent))
+    tmp_db = Path(tempfile.mktemp(suffix=".duckdb.tmp", dir=db_path.parent))
+    try:
+        s3.download_file(bucket, db_key, str(tmp_gz))
+
+        console.print("[bold]Decompressing...[/bold]")
+        with gzip.open(tmp_gz, "rb") as src, open(tmp_db, "wb") as dst:
+            shutil.copyfileobj(src, dst)
+
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(tmp_db, db_path)  # atomic on POSIX
+    finally:
+        tmp_gz.unlink(missing_ok=True)
+        tmp_db.unlink(missing_ok=True)
+
+    final_mb = db_path.stat().st_size / 1_048_576
+    console.print(
+        f"[bold green]Done.[/bold green] "
+        f"{manifest.get('match_count', '?')} matches, "
+        f"{final_mb:.1f} MB at {db_path}"
+    )
 
 
 @app.command()

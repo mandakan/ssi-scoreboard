@@ -8,8 +8,12 @@ Next.js app — different language, toolchain, and runtime.
 ```bash
 cd lab
 uv sync                                       # install/update deps
+uv sync --extra storage                       # also install boto3 (for db-push/db-pull)
 
-# Sync data (both sources)
+# Bootstrap from shared DB (first time, avoids re-running the ~1h full sync)
+uv run rating db-pull                         # download latest DuckDB from R2/S3
+
+# Sync data (both sources) — run after bootstrap to pick up new matches
 uv run rating sync --token $CACHE_PURGE_SECRET              # pull SSI match data
 uv run rating sync-ipscresults                              # pull ipscresults.org data
 uv run rating link                                          # resolve identities + deduplicate
@@ -21,6 +25,9 @@ uv run rating pipeline --token $CACHE_PURGE_SECRET
 uv run rating train                           # train all algorithms
 uv run rating benchmark                       # compare algorithms
 uv run rating serve                           # start FastAPI server on :8000
+
+# Share updated DB after a sync
+uv run rating db-push                         # upload to R2/S3
 
 # Checks
 uv run pytest                                 # run tests
@@ -144,6 +151,53 @@ Local analytical database in `data/lab.duckdb`. All data tables include a `sourc
 
 **Persistent table** (never dropped):
 - `sync_state` — sync watermarks per source (`last_sync_ssi`, `last_sync_ipscresults`), schema version, identity sequence counter
+
+## DB Bootstrap (S3/R2)
+
+Syncing from scratch takes ~1h. Share a pre-built DuckDB via S3-compatible storage
+so collaborators and CI can skip the full sync.
+
+```bash
+# Install storage extras
+uv sync --extra storage
+
+# Set credentials (standard AWS env vars — works for both S3 and Cloudflare R2)
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+export LAB_S3_BUCKET=my-lab-bucket
+
+# Cloudflare R2 only — set the account endpoint
+export LAB_S3_ENDPOINT=https://<account_id>.r2.cloudflarestorage.com
+
+# Optional: key prefix inside the bucket (default: "lab")
+export LAB_S3_PREFIX=lab
+```
+
+**Uploading** (after a sync, to share with others):
+```bash
+uv run rating db-push
+```
+Uploads `data/lab.duckdb.gz` and a `manifest.json` with match counts and watermarks.
+
+**Downloading** (first time, or to sync another machine):
+```bash
+uv run rating db-pull          # prompts before overwriting if local is newer
+uv run rating db-pull --yes    # skip prompt (for CI/scripts)
+```
+Downloads and decompresses into `data/lab.duckdb`. The safety check compares local
+match count and sync watermarks against the manifest — if local has more data you
+are asked to confirm before the local file is overwritten.
+
+**Inspect the manifest directly:**
+```bash
+aws s3 cp s3://$LAB_S3_BUCKET/lab/manifest.json - \
+  --endpoint-url $LAB_S3_ENDPOINT | python -m json.tool
+```
+
+**Inspect skipped matches in the local DB:**
+```sql
+SELECT name, skip_reason FROM matches WHERE skip_reason IS NOT NULL;
+```
 
 ## Code Conventions
 

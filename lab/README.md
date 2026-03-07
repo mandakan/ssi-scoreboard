@@ -11,17 +11,28 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 cd lab
 uv sync
+uv sync --extra storage   # optional — needed for db-push / db-pull
 
-# Option A: one-command pipeline (sync both sources → link → train → export)
+# Option A: download a pre-built shared DuckDB (skips the ~1h full sync)
+export LAB_S3_BUCKET=my-lab-bucket
+export LAB_S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com  # R2 only
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+uv run rating db-pull
+
+# Option B: one-command pipeline (sync both sources → link → train → export)
 uv run rating pipeline --token YOUR_CACHE_PURGE_SECRET
 
-# Option B: step by step
+# Option C: step by step
 uv run rating sync --token YOUR_CACHE_PURGE_SECRET    # pull SSI match data
 uv run rating sync-ipscresults                        # pull ipscresults.org data
 uv run rating link                                    # resolve identities + deduplicate
 uv run rating train                                   # train all algorithms
 uv run rating benchmark                               # compare algorithms
 uv run rating export                                  # build static explorer
+
+# After syncing new data, share the updated DB
+uv run rating db-push
 
 # Start the rating API server
 uv run rating serve

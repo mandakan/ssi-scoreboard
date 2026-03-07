@@ -29,6 +29,9 @@ dev = [
   "jupyterlab>=4.5",
   "pandas-stubs>=2.2",
 ]
+storage = [
+  "boto3>=1.38",
+]
 
 [tool.ruff]
 target-version = "py313"
@@ -44,7 +47,7 @@ warn_return_any = true
 warn_unused_configs = true
 
 [[tool.mypy.overrides]]
-module = ["openskill.*", "duckdb.*", "apscheduler.*", "scipy", "scipy.*"]
+module = ["openskill.*", "duckdb.*", "apscheduler.*", "scipy", "scipy.*", "boto3", "botocore.*"]
 ignore_missing_imports = true
 follow_untyped_imports = true
 
