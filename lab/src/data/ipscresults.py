@@ -270,6 +270,7 @@ class IpscResultsSyncer:
             return 0
 
         synced = 0
+        skipped_errors = 0
         with Progress(console=console) as progress:
             task = progress.add_task("Syncing matches...", total=len(new_matches))
             for m in new_matches:
@@ -282,8 +283,21 @@ class IpscResultsSyncer:
                             task, advance=1, description=f"[green]{m.name}[/green]"
                         )
                     else:
+                        # No usable data (empty divisions etc.) — record to skip next time.
+                        self.store.skip_match("ipscresults", 0, m.id, m.name)
                         progress.update(task, advance=1, description=f"[yellow]{m.name}[/yellow]")
+                except httpx.HTTPStatusError as e:
+                    # Server-side error for this specific match (e.g. 500 on DivisionList).
+                    # Record as skipped so we don't retry on every subsequent sync.
+                    console.print(
+                        f"  [yellow]HTTP {e.response.status_code} for {m.name} — skipping[/yellow]"
+                    )
+                    self.store.skip_match("ipscresults", 0, m.id, m.name)
+                    skipped_errors += 1
+                    progress.update(task, advance=1)
                 except Exception as e:
+                    # Unexpected error (network, parse failure) — log but don't skip,
+                    # so we can retry on the next sync run.
                     console.print(f"  [red]Error fetching {m.name}: {e}[/red]")
                     progress.update(task, advance=1)
                 self.client._sleep()
@@ -293,7 +307,10 @@ class IpscResultsSyncer:
         if dates:
             self.store.set_sync_watermark(max(dates), source="ipscresults")
 
-        console.print(f"[bold green]Synced {synced} new ipscresults matches.[/bold green]")
+        msg = f"[bold green]Synced {synced} new ipscresults matches.[/bold green]"
+        if skipped_errors:
+            msg += f" [yellow]({skipped_errors} skipped due to server errors)[/yellow]"
+        console.print(msg)
         return synced
 
     def _fetch_match(self, m: IpscMatch) -> MatchResults | None:
