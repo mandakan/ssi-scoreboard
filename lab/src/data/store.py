@@ -133,7 +133,18 @@ class Store:
 
     def __init__(self, db_path: Path = DEFAULT_DB_PATH) -> None:
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.db = duckdb.connect(str(db_path))
+        try:
+            self.db = duckdb.connect(str(db_path))
+            # Verify write access immediately — a second concurrent writer can
+            # silently succeed at connect() but fail (or drop) writes at runtime.
+            self.db.execute("BEGIN TRANSACTION")
+            self.db.execute("ROLLBACK")
+        except duckdb.IOException as e:
+            raise RuntimeError(
+                f"Cannot acquire write lock on {db_path}. "
+                "Is another sync or rating process already running? "
+                "Stop it first, then retry."
+            ) from e
         self.db.execute(_BASE_SCHEMA_SQL)
         self._migrate_if_needed()
 
