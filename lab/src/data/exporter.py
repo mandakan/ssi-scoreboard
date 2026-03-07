@@ -56,20 +56,34 @@ def _export_categories(store: Store) -> list[str]:
 
 
 def _export_shooters(store: Store) -> list[dict[str, Any]]:
-    # Precompute recent match counts per (algorithm, shooter_id, division)
-    # for the last 12 months from today. Used by the static site for activity filtering.
-    since_12m = (date.today() - timedelta(days=365)).isoformat()
+    # Precompute recent match counts per (algorithm, shooter_id, division).
+    # Three windows — all computed in one pass with conditional aggregation:
+    #   m12:   rolling last 12 months from today
+    #   mcurr: current calendar year (Jan 1 – Dec 31)
+    #   mprev: previous calendar year
+    today = date.today()
+    since_12m = (today - timedelta(days=365)).isoformat()
+    curr_year_start = date(today.year, 1, 1).isoformat()
+    curr_year_end = date(today.year, 12, 31).isoformat()
+    prev_year_start = date(today.year - 1, 1, 1).isoformat()
+    prev_year_end = date(today.year - 1, 12, 31).isoformat()
+
     recent_rows = store.db.execute(
         """
-        SELECT algorithm, shooter_id, division, COUNT(*) AS cnt
+        SELECT algorithm, shooter_id, division,
+               COUNT(*) FILTER (WHERE match_date >= ?)                        AS m12,
+               COUNT(*) FILTER (WHERE match_date BETWEEN ? AND ?)             AS mcurr,
+               COUNT(*) FILTER (WHERE match_date BETWEEN ? AND ?)             AS mprev
         FROM rating_history
         WHERE match_date >= ?
         GROUP BY algorithm, shooter_id, division
         """,
-        [since_12m],
+        [since_12m, curr_year_start, curr_year_end,
+         prev_year_start, prev_year_end, prev_year_start],
     ).fetchall()
-    recent_counts: dict[tuple[str, int, str], int] = {
-        (str(r[0]), int(r[1]), str(r[2]) if r[2] else ""): int(r[3])
+    # Maps (algo, shooter_id, div_db) → (m12, mcurr, mprev)
+    recent_counts: dict[tuple[str, int, str], tuple[int, int, int]] = {
+        (str(r[0]), int(r[1]), str(r[2]) if r[2] else ""): (int(r[3]), int(r[4]), int(r[5]))
         for r in recent_rows
     }
 
@@ -96,7 +110,7 @@ def _export_shooters(store: Store) -> list[dict[str, Any]]:
         cr = float(row[8])
         matches = int(row[9])
         last_date = str(row[10])[:10] if row[10] else None
-        m_recent = recent_counts.get((algo, sid, div_db), 0)
+        m12, mcurr, mprev = recent_counts.get((algo, sid, div_db), (0, 0, 0))
 
         key = (sid, div_db)
         if key not in shooters:
@@ -117,7 +131,9 @@ def _export_shooters(store: Store) -> list[dict[str, Any]]:
             "sigma": round(sigma, 3),
             "cr": round(cr, 3),
             "m": matches,
-            "m12": m_recent,  # matches in the last 12 months from export date
+            "m12": m12,      # rolling last 12 months from export date
+            "mcurr": mcurr,  # current calendar year
+            "mprev": mprev,  # previous calendar year
             "d": last_date,
         }
 
