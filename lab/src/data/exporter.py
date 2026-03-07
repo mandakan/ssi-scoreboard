@@ -56,11 +56,16 @@ def _export_categories(store: Store) -> list[str]:
 
 
 def _export_shooters(store: Store) -> list[dict[str, Any]]:
-    # Precompute recent match counts per (algorithm, shooter_id, division).
-    # Three windows — all computed in one pass with conditional aggregation:
+    # Precompute recent match participation counts per canonical shooter.
+    # Source: competitors + shooter_identity_links + matches — always available after sync.
+    # rating_history is not used here: it is only populated by the serve scheduler,
+    # not by `rating train`.
+    # Three windows computed in one pass using conditional aggregation:
     #   m12:   rolling last 12 months from today
     #   mcurr: current calendar year (Jan 1 – Dec 31)
     #   mprev: previous calendar year
+    # Keyed by canonical_id only (division-agnostic): "has this shooter been active
+    # recently?" is independent of which division they entered in each match.
     today = date.today()
     since_12m = (today - timedelta(days=365)).isoformat()
     curr_year_start = date(today.year, 1, 1).isoformat()
@@ -70,20 +75,27 @@ def _export_shooters(store: Store) -> list[dict[str, Any]]:
 
     recent_rows = store.db.execute(
         """
-        SELECT algorithm, shooter_id, division,
-               COUNT(*) FILTER (WHERE match_date >= ?)                        AS m12,
-               COUNT(*) FILTER (WHERE match_date BETWEEN ? AND ?)             AS mcurr,
-               COUNT(*) FILTER (WHERE match_date BETWEEN ? AND ?)             AS mprev
-        FROM rating_history
-        WHERE match_date >= ?
-        GROUP BY algorithm, shooter_id, division
+        SELECT sil.canonical_id,
+               COUNT(DISTINCT CASE WHEN m.date >= ?
+                    THEN c.source || '|' || c.match_id END)     AS m12,
+               COUNT(DISTINCT CASE WHEN m.date BETWEEN ? AND ?
+                    THEN c.source || '|' || c.match_id END)     AS mcurr,
+               COUNT(DISTINCT CASE WHEN m.date BETWEEN ? AND ?
+                    THEN c.source || '|' || c.match_id END)     AS mprev
+        FROM competitors c
+        JOIN shooter_identity_links sil
+          ON sil.source = c.source AND sil.source_key = c.identity_key
+        JOIN matches m
+          ON m.source = c.source AND m.ct = c.ct AND m.match_id = c.match_id
+        WHERE m.date >= ?
+        GROUP BY sil.canonical_id
         """,
         [since_12m, curr_year_start, curr_year_end,
          prev_year_start, prev_year_end, prev_year_start],
     ).fetchall()
-    # Maps (algo, shooter_id, div_db) → (m12, mcurr, mprev)
-    recent_counts: dict[tuple[str, int, str], tuple[int, int, int]] = {
-        (str(r[0]), int(r[1]), str(r[2]) if r[2] else ""): (int(r[3]), int(r[4]), int(r[5]))
+    # Maps canonical_id → (m12, mcurr, mprev)
+    recent_counts: dict[int, tuple[int, int, int]] = {
+        int(r[0]): (int(r[1]), int(r[2]), int(r[3]))
         for r in recent_rows
     }
 
@@ -110,7 +122,7 @@ def _export_shooters(store: Store) -> list[dict[str, Any]]:
         cr = float(row[8])
         matches = int(row[9])
         last_date = str(row[10])[:10] if row[10] else None
-        m12, mcurr, mprev = recent_counts.get((algo, sid, div_db), (0, 0, 0))
+        m12, mcurr, mprev = recent_counts.get(sid, (0, 0, 0))
 
         key = (sid, div_db)
         if key not in shooters:
