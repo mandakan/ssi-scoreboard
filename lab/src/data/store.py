@@ -183,6 +183,7 @@ class Store:
         )
 
     def close(self) -> None:
+        self.db.execute("CHECKPOINT")
         self.db.close()
 
     # ------------------------------------------------------------------
