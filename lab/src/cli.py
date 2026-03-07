@@ -344,7 +344,16 @@ def link_shooter(
 
 @app.command()
 def train(
-    algorithm: str = typer.Option("all", help="Algorithm to train: openskill, elo, or all"),
+    algorithm: str = typer.Option(
+        "default",
+        help=(
+            "Which algorithms to train. "
+            "'default' = recommended set (openskill_bt_lvl, openskill_pl_decay, "
+            "openskill_bt_lvl_decay). "
+            "'all' = also includes baselines (openskill, openskill_bt, elo). "
+            "Pass a single algorithm name to train just that one."
+        ),
+    ),
     scoring: str = typer.Option(
         "stage_hf",
         help="Scoring mode: stage_hf (per-stage hit factor) or match_pct (whole-match points)",

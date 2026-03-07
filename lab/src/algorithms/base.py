@@ -147,7 +147,12 @@ class RatingAlgorithm(ABC):
 
 
 def get_algorithms(name: str | None = None) -> list[RatingAlgorithm]:
-    """Get algorithm instances by name. None or 'all' returns all."""
+    """Get algorithm instances by name.
+
+    None or 'default' → recommended algorithms only (bt_lvl, pl_decay, bt_lvl_decay).
+    'all' → all algorithms including baselines (elo, openskill, openskill_bt).
+    Any other string → the single algorithm with that name.
+    """
     from src.algorithms.elo import MultiElo
     from src.algorithms.openskill_bt import OpenSkillBT
     from src.algorithms.openskill_bt_lvl import OpenSkillBTLvl
@@ -155,16 +160,26 @@ def get_algorithms(name: str | None = None) -> list[RatingAlgorithm]:
     from src.algorithms.openskill_pl import OpenSkillPL
     from src.algorithms.openskill_pl_decay import OpenSkillPLDecay
 
-    all_algos: list[RatingAlgorithm] = [
-        OpenSkillPL(),
-        OpenSkillBT(),
+    # Recommended algorithms — trained and exported by default.
+    default_algos: list[RatingAlgorithm] = [
         OpenSkillBTLvl(),
         OpenSkillPLDecay(),
         OpenSkillBTLvlDecay(),
+    ]
+
+    # Baseline/experimental algorithms — available via --algorithm all or by name.
+    extra_algos: list[RatingAlgorithm] = [
+        OpenSkillPL(),
+        OpenSkillBT(),
         MultiElo(),
     ]
 
-    if name is None or name == "all":
+    all_algos = default_algos + extra_algos
+
+    if name is None or name == "default":
+        return default_algos
+
+    if name == "all":
         return all_algos
 
     for algo in all_algos:
