@@ -355,8 +355,8 @@ def train(
         ),
     ),
     scoring: str = typer.Option(
-        "stage_hf",
-        help="Scoring mode: stage_hf (per-stage hit factor) or match_pct (whole-match points)",
+        "match_pct",
+        help="Scoring mode: match_pct (whole-match points, default) or stage_hf (per-stage HF)",
     ),
     date_from: str | None = typer.Option(
         None,
@@ -450,8 +450,8 @@ def benchmark(
     split: float = typer.Option(0.7, help="Train/test split ratio (chronological)"),
     chart: bool = typer.Option(False, help="Save a comparison chart to data/benchmark.png"),
     scoring: str = typer.Option(
-        "stage_hf",
-        help="Scoring mode: stage_hf, match_pct, or all (runs both, combined table)",
+        "match_pct",
+        help="Scoring mode: match_pct (default), stage_hf, or all (runs both, combined table)",
     ),
     db_path: Path = DB_PATH_OPTION,
 ) -> None:
@@ -565,14 +565,12 @@ def pipeline(
 
         matches = store.get_matches_chronological()
         skip_set = store.get_dedup_skip_set()
-        for scoring in ("stage_hf", "match_pct"):
-            mode_label = "stage HF" if scoring == "stage_hf" else "match %"
-            console.rule(f"[bold blue]Step 4/5 — Train ({mode_label})[/bold blue]")
-            console.print(
-                f"  {len(matches)} matches · {len(skip_set)} skipped (dedup)"
-                f" · scoring: {mode_label}"
-            )
-            _run_train_mode(store, get_algorithms(), matches, scoring, skip_set=skip_set)
+        console.rule("[bold blue]Step 4/5 — Train (match %)[/bold blue]")
+        console.print(
+            f"  {len(matches)} matches · {len(skip_set)} skipped (dedup)"
+            " · scoring: match %"
+        )
+        _run_train_mode(store, get_algorithms(), matches, "match_pct", skip_set=skip_set)
 
         console.rule("[bold blue]Step 5/5 — Export[/bold blue]")
         data = export_data(store)
