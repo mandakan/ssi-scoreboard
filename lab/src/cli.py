@@ -485,6 +485,10 @@ def _s3_client(endpoint: str) -> Any:
     kwargs: dict[str, str] = {}
     if endpoint:
         kwargs["endpoint_url"] = endpoint
+        # Cloudflare R2 uses its own region names — "auto" is the safe default.
+        # Without this, boto3 picks up the AWS region from ~/.aws/config which
+        # R2 rejects as invalid.
+        kwargs["region_name"] = "auto"
     return boto3.client("s3", **kwargs)
 
 
