@@ -809,6 +809,56 @@ def db_push(
     )
 
 
+@app.command(name="db-versions")
+def db_versions(
+    bucket: str = S3_BUCKET_OPTION,
+    prefix: str = S3_PREFIX_OPTION,
+    endpoint: str = S3_ENDPOINT_OPTION,
+) -> None:
+    """List available versioned backups stored in S3/R2.
+
+    Shows each version's timestamp, size, and the version ID to pass to
+    'rating db-pull --version <id>' for restoration.
+    """
+    _require_boto3()
+
+    s3 = _s3_client(endpoint)
+    versions_prefix = f"{prefix}/versions/"
+    paginator = s3.get_paginator("list_objects_v2")
+
+    entries: list[tuple[str, int, str]] = []  # (key, size_bytes, version_id)
+    for page in paginator.paginate(Bucket=bucket, Prefix=versions_prefix):
+        for obj in page.get("Contents", []):
+            key: str = obj["Key"]
+            size: int = obj["Size"]
+            # Extract timestamp from e.g. "lab/versions/lab.duckdb.20250307T142301.gz"
+            fname = key.split("/")[-1]  # lab.duckdb.20250307T142301.gz
+            version_id = fname.removeprefix("lab.duckdb.").removesuffix(".gz")
+            entries.append((key, size, version_id))
+
+    if not entries:
+        console.print("[yellow]No versioned backups found.[/yellow]")
+        console.print(
+            "[dim]Run 'rating db-push' (with --max-versions > 0) to create versioned backups.[/dim]"
+        )
+        return
+
+    entries.sort(reverse=True)  # newest first
+    console.print(f"[bold]{len(entries)} versioned backup(s) in s3://{bucket}/{versions_prefix}[/bold]")
+    console.print()
+    for _key, size, version_id in entries:
+        # Parse timestamp for human display: 20250307T142301 → 2025-03-07 14:23:01
+        ts = version_id
+        if len(ts) == 15 and "T" in ts:
+            ts = f"{ts[:4]}-{ts[4:6]}-{ts[6:8]} {ts[9:11]}:{ts[11:13]}:{ts[13:15]}"
+        console.print(
+            f"  [cyan]{version_id}[/cyan]  {ts}  {size / 1_048_576:.1f} MB"
+        )
+
+    console.print()
+    console.print("[dim]Restore with: rating db-pull --version <id>[/dim]")
+
+
 @app.command(name="db-pull")
 def db_pull(
     db_path: Path = DB_PATH_OPTION,
@@ -816,8 +866,19 @@ def db_pull(
     prefix: str = S3_PREFIX_OPTION,
     endpoint: str = S3_ENDPOINT_OPTION,
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
+    version: str | None = typer.Option(
+        None,
+        "--version",
+        help=(
+            "Restore a specific version instead of the latest. "
+            "Use 'rating db-versions' to list available version IDs."
+        ),
+    ),
 ) -> None:
     """Download the latest bootstrap DuckDB from S3/R2.
+
+    Pass --version <id> (from 'rating db-versions') to restore a specific
+    earlier backup instead of the current latest.
 
     Compares the remote manifest against the local DB before downloading.
     If the local DB appears to have more or newer data, you will be asked to
@@ -833,6 +894,7 @@ def db_pull(
         export AWS_ACCESS_KEY_ID=...
         export AWS_SECRET_ACCESS_KEY=...
         uv run rating db-pull
+        uv run rating db-pull --version 20250307T142301
     """
     import gzip
     import json
@@ -844,29 +906,37 @@ def db_pull(
 
     _require_boto3()
 
-    db_key = f"{prefix}/{_DB_KEY}"
-    manifest_key = f"{prefix}/{_MANIFEST_KEY}"
     s3 = _s3_client(endpoint)
 
-    # Fetch remote manifest.
-    console.print("[bold]Fetching remote manifest...[/bold]")
-    try:
-        resp = s3.get_object(Bucket=bucket, Key=manifest_key)
-        manifest: dict[str, Any] = json.loads(resp["Body"].read())
-    except ClientError as e:
-        code = e.response["Error"]["Code"]
-        if code in ("NoSuchKey", "404"):
-            console.print("[red]No manifest found — has db-push been run yet?[/red]")
-        else:
-            console.print(f"[red]Failed to fetch manifest: {e}[/red]")
-        raise typer.Exit(1) from e
+    if version:
+        # Versioned restore: skip the manifest, download directly from versions/.
+        db_key = f"{prefix}/versions/lab.duckdb.{version}.gz"
+        console.print(f"[bold]Restoring version {version}[/bold]")
+        console.print(f"  Source: s3://{bucket}/{db_key}")
+        display_info: dict[str, Any] = {"match_count": "?"}
+    else:
+        # Latest restore: read manifest for metadata and safety comparison.
+        db_key = f"{prefix}/{_DB_KEY}"
+        manifest_key = f"{prefix}/{_MANIFEST_KEY}"
 
-    console.print(
-        f"  Remote: {manifest.get('match_count', '?')} matches | "
-        f"SSI: {manifest.get('ssi_watermark')} | "
-        f"ipscresults: {manifest.get('ipscresults_watermark')} | "
-        f"uploaded: {manifest.get('uploaded_at', '?')[:10]}"
-    )
+        console.print("[bold]Fetching remote manifest...[/bold]")
+        try:
+            resp = s3.get_object(Bucket=bucket, Key=manifest_key)
+            display_info = json.loads(resp["Body"].read())
+        except ClientError as e:
+            code = e.response["Error"]["Code"]
+            if code in ("NoSuchKey", "404"):
+                console.print("[red]No manifest found — has db-push been run yet?[/red]")
+            else:
+                console.print(f"[red]Failed to fetch manifest: {e}[/red]")
+            raise typer.Exit(1) from e
+
+        console.print(
+            f"  Remote: {display_info.get('match_count', '?')} matches | "
+            f"SSI: {display_info.get('ssi_watermark')} | "
+            f"ipscresults: {display_info.get('ipscresults_watermark')} | "
+            f"uploaded: {str(display_info.get('uploaded_at', '?'))[:10]}"
+        )
 
     # Safety check: warn if local DB exists and appears newer.
     if db_path.exists():
@@ -877,25 +947,31 @@ def db_pull(
             f"SSI: {local['ssi_watermark']} | "
             f"ipscresults: {local['ipscresults_watermark']}"
         )
-        if _local_is_newer(local, manifest):
-            console.print(
-                "[bold yellow]Warning:[/bold yellow] "
-                "local DB appears to have more or newer data than the remote bootstrap."
+        if _local_is_newer(local, display_info):
+            msg = (
+                f"local DB appears to have more or newer data than the "
+                f"{'selected version' if version else 'remote bootstrap'}."
             )
+            console.print(f"[bold yellow]Warning:[/bold yellow] {msg}")
             if not yes and not typer.confirm("Overwrite local DB anyway?", default=False):
                 console.print("[dim]Aborted.[/dim]")
                 raise typer.Exit(0)
 
     # Download to a temp file, then atomically replace.
-    compressed_mb = manifest.get("compressed_size_bytes", 0) / 1_048_576
-    console.print(
-        f"[bold]Downloading s3://{bucket}/{db_key} "
-        f"({compressed_mb:.1f} MB)...[/bold]"
-    )
+    compressed_mb = display_info.get("compressed_size_bytes", 0) / 1_048_576
+    size_str = f" ({compressed_mb:.1f} MB)" if compressed_mb else ""
+    console.print(f"[bold]Downloading s3://{bucket}/{db_key}{size_str}...[/bold]")
     tmp_gz = Path(tempfile.mktemp(suffix=".duckdb.gz", dir=db_path.parent))
     tmp_db = Path(tempfile.mktemp(suffix=".duckdb.tmp", dir=db_path.parent))
     try:
-        s3.download_file(bucket, db_key, str(tmp_gz))
+        try:
+            s3.download_file(bucket, db_key, str(tmp_gz))
+        except ClientError as e:
+            if e.response["Error"]["Code"] in ("NoSuchKey", "404"):
+                console.print(f"[red]Version '{version}' not found in S3.[/red]")
+                console.print("[dim]Run 'rating db-versions' to see available versions.[/dim]")
+                raise typer.Exit(1) from e
+            raise
 
         console.print("[bold]Decompressing...[/bold]")
         with gzip.open(tmp_gz, "rb") as src, open(tmp_db, "wb") as dst:
@@ -910,7 +986,7 @@ def db_pull(
     final_mb = db_path.stat().st_size / 1_048_576
     console.print(
         f"[bold green]Done.[/bold green] "
-        f"{manifest.get('match_count', '?')} matches, "
+        f"{display_info.get('match_count', '?')} matches, "
         f"{final_mb:.1f} MB at {db_path}"
     )
 
