@@ -284,15 +284,18 @@ class IpscResultsSyncer:
                         )
                     else:
                         # No usable data (empty divisions etc.) — record to skip next time.
-                        self.store.skip_match("ipscresults", 0, m.id, m.name)
+                        self.store.skip_match(
+                            "ipscresults", 0, m.id, m.name, reason="no divisions or results"
+                        )
                         progress.update(task, advance=1, description=f"[yellow]{m.name}[/yellow]")
                 except httpx.HTTPStatusError as e:
                     # Server-side error for this specific match (e.g. 500 on DivisionList).
                     # Record as skipped so we don't retry on every subsequent sync.
+                    reason = f"HTTP {e.response.status_code}: {e.request.url}"
                     console.print(
                         f"  [yellow]HTTP {e.response.status_code} for {m.name} — skipping[/yellow]"
                     )
-                    self.store.skip_match("ipscresults", 0, m.id, m.name)
+                    self.store.skip_match("ipscresults", 0, m.id, m.name, reason=reason)
                     skipped_errors += 1
                     progress.update(task, advance=1)
                 except Exception as e:

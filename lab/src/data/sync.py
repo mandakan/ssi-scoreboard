@@ -180,7 +180,9 @@ class SyncClient:
                 except httpx.HTTPStatusError as e:
                     if e.response.status_code == 404:
                         # No scorecard data on SSI — record as known so we don't retry
-                        self.store.skip_match("ssi", m.ct, m.match_id, m.name)
+                        self.store.skip_match(
+                            "ssi", m.ct, m.match_id, m.name, reason="HTTP 404: no scorecard data"
+                        )
                         console.print(f"  [yellow]Skipped {m.name} (no data on SSI)[/yellow]")
                     else:
                         console.print(

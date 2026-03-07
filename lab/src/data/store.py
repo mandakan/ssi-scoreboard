@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS matches (
   ct INTEGER, match_id TEXT, name TEXT, date TIMESTAMP, level TEXT,
   region TEXT, competitor_count INTEGER, stage_count INTEGER,
   scoring_completed INTEGER, stored_at TIMESTAMP, synced_at TIMESTAMP,
+  skip_reason TEXT,   -- non-NULL when the match was skipped (e.g. HTTP error message)
   PRIMARY KEY (source, ct, match_id)
 );
 
@@ -143,13 +144,17 @@ class Store:
         ).fetchone()
         current = row[0] if row else "1"
         if current == SCHEMA_VERSION:
-            # Schema is current; apply any additive column migrations for v1→v2 partial upgrades.
+            # Additive column migrations — safe to apply on every startup.
             for col in ["region TEXT", "region_display TEXT", "category TEXT"]:
                 with contextlib.suppress(Exception):
                     self.db.execute(f"ALTER TABLE competitors ADD COLUMN IF NOT EXISTS {col}")
             for col in ["region TEXT", "category TEXT"]:
                 with contextlib.suppress(Exception):
                     self.db.execute(f"ALTER TABLE shooter_ratings ADD COLUMN IF NOT EXISTS {col}")
+            with contextlib.suppress(Exception):
+                self.db.execute(
+                    "ALTER TABLE matches ADD COLUMN IF NOT EXISTS skip_reason TEXT"
+                )
             return
 
         # Version mismatch — drop all data tables and recreate.
@@ -200,18 +205,22 @@ class Store:
         ).fetchone()
         return row is not None
 
-    def skip_match(self, source: str, ct: int, match_id: str, name: str) -> None:
-        """Record a match as known but without results (e.g. no scorecards).
+    def skip_match(
+        self, source: str, ct: int, match_id: str, name: str, reason: str = ""
+    ) -> None:
+        """Record a match as seen but without results.
 
-        Prevents the sync from retrying it on every run.
+        Prevents the sync from retrying it on every run. Pass reason= with a
+        human-readable explanation (e.g. the HTTP error message) so failures
+        are visible and auditable via the matches table.
         """
         synced_at = datetime.now(UTC).isoformat()
         self.db.execute(
             """INSERT OR IGNORE INTO matches
                (source, ct, match_id, name, date, level, region,
-                competitor_count, stage_count, scoring_completed, synced_at)
-               VALUES (?, ?, ?, ?, NULL, NULL, NULL, 0, 0, 0, ?)""",
-            [source, ct, match_id, name, synced_at],
+                competitor_count, stage_count, scoring_completed, synced_at, skip_reason)
+               VALUES (?, ?, ?, ?, NULL, NULL, NULL, 0, 0, 0, ?, ?)""",
+            [source, ct, match_id, name, synced_at, reason or None],
         )
 
     def store_match_results(self, results: MatchResults) -> None:
