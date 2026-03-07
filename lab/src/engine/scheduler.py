@@ -33,14 +33,14 @@ def _recalc(db_path: Path, app_url: str, token: str) -> None:
         algorithms = get_algorithms()
         matches = store.get_matches_chronological()
         for algo in algorithms:
-            for ct, match_id, match_date, match_level in matches:
-                results = store.get_stage_results_for_match(ct, match_id)
-                comp_map = store.get_competitor_shooter_map(ct, match_id)
+            for source, ct, match_id, match_date, match_level in matches:
+                results = store.get_stage_results_for_match(source, ct, match_id)
+                comp_map = store.get_canonical_competitor_map(source, ct, match_id)
                 if results:
-                    name_map = store.get_competitor_name_map(ct, match_id)
-                    div_map = store.get_competitor_division_map(ct, match_id)
-                    region_map = store.get_competitor_region_map(ct, match_id)
-                    cat_map = store.get_competitor_category_map(ct, match_id)
+                    name_map = store.get_competitor_name_map(source, ct, match_id)
+                    div_map = store.get_competitor_division_map(source, ct, match_id)
+                    region_map = store.get_competitor_region_map(source, ct, match_id)
+                    cat_map = store.get_competitor_category_map(source, ct, match_id)
                     algo.process_match_data(
                         ct, match_id, match_date, results, comp_map,
                         name_map=name_map, division_map=div_map,

@@ -43,6 +43,9 @@ class CompetitorMeta(BaseModel):
 
     competitor_id: int
     shooter_id: int | None = None
+    # Stable lookup key for identity resolution.
+    # SSI: str(shooter_id) when available. ipscresults: name fingerprint "normalized|REG".
+    identity_key: str | None = None
     name: str
     club: str | None = None
     division: str | None = None
@@ -85,6 +88,8 @@ class MatchResultsMeta(BaseModel):
     level: str | None = None
     region: str | None = None
     scoring_completed: int = 0
+    # Data origin: 'ssi' (ShootNScoreIt) or 'ipscresults'.
+    source: str = "ssi"
 
 
 class MatchResults(BaseModel):

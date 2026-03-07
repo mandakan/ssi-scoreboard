@@ -100,7 +100,7 @@ def _export_shooters(store: Store) -> list[dict[str, Any]]:
 def _export_matches(store: Store) -> list[dict[str, Any]]:
     rows = store.db.execute(
         """
-        SELECT ct, match_id, name, date, level, competitor_count
+        SELECT source, ct, match_id, name, date, level, competitor_count
         FROM matches
         WHERE date IS NOT NULL
         ORDER BY date DESC
@@ -108,12 +108,13 @@ def _export_matches(store: Store) -> list[dict[str, Any]]:
     ).fetchall()
     return [
         {
-            "ct": int(row[0]),
-            "id": str(row[1]),
-            "name": str(row[2]) if row[2] else None,
-            "date": str(row[3])[:10] if row[3] else None,
-            "level": str(row[4]) if row[4] else None,
-            "competitors": int(row[5]) if row[5] else None,
+            "source": str(row[0]),
+            "ct": int(row[1]),
+            "id": str(row[2]),
+            "name": str(row[3]) if row[3] else None,
+            "date": str(row[4])[:10] if row[4] else None,
+            "level": str(row[5]) if row[5] else None,
+            "competitors": int(row[6]) if row[6] else None,
         }
         for row in rows
     ]

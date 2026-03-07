@@ -147,7 +147,7 @@ class SyncClient:
 
     def sync(self, full: bool = False, force: bool = False) -> int:
         """Run incremental (or full) sync. Returns number of new matches synced."""
-        since = None if (full or force) else self.store.get_sync_watermark()
+        since = None if (full or force) else self.store.get_sync_watermark(source="ssi")
 
         mode = "force re-download" if force else "full sync" if full else f"since {since}" if since else "initial sync"  # noqa: E501
         console.print(f"[bold]Fetching match list[/bold] ({mode})...")
@@ -160,7 +160,7 @@ class SyncClient:
             # Filter out matches we already have
             new_matches = [
                 m for m in listing.matches
-                if not self.store.has_match(m.ct, m.match_id)
+                if not self.store.has_match("ssi", m.ct, m.match_id)
             ]
         console.print(f"  {len(new_matches)} matches to sync")
 
@@ -180,7 +180,7 @@ class SyncClient:
                 except httpx.HTTPStatusError as e:
                     if e.response.status_code == 404:
                         # No scorecard data on SSI — record as known so we don't retry
-                        self.store.skip_match(m.ct, m.match_id, m.name)
+                        self.store.skip_match("ssi", m.ct, m.match_id, m.name)
                         console.print(f"  [yellow]Skipped {m.name} (no data on SSI)[/yellow]")
                     else:
                         console.print(
@@ -200,7 +200,7 @@ class SyncClient:
         if listing.matches:
             latest = max(m.stored_at for m in listing.matches if m.stored_at)
             if latest:
-                self.store.set_sync_watermark(latest)
+                self.store.set_sync_watermark(latest, source="ssi")
 
         console.print(f"[bold green]Synced {synced} new matches.[/bold green]")
         console.print(f"  Total matches in store: {self.store.get_match_count()}")

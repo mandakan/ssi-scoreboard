@@ -7,14 +7,25 @@ Next.js app — different language, toolchain, and runtime.
 
 ```bash
 cd lab
-uv sync                        # install/update deps
-uv run rating sync --full      # pull data from app
-uv run rating train            # train all algorithms
-uv run rating benchmark        # compare algorithms
-uv run rating serve            # start FastAPI server on :8000
-uv run pytest                  # run tests
-uv run ruff check src/         # lint
-uv run mypy src/               # type check
+uv sync                                       # install/update deps
+
+# Sync data (both sources)
+uv run rating sync --token $CACHE_PURGE_SECRET              # pull SSI match data
+uv run rating sync-ipscresults                              # pull ipscresults.org data
+uv run rating link                                          # resolve identities + deduplicate
+
+# Or run everything in one go
+uv run rating pipeline --token $CACHE_PURGE_SECRET
+
+# Train, benchmark, serve
+uv run rating train                           # train all algorithms
+uv run rating benchmark                       # compare algorithms
+uv run rating serve                           # start FastAPI server on :8000
+
+# Checks
+uv run pytest                                 # run tests
+uv run ruff check src/                        # lint
+uv run mypy src/                              # type check
 ```
 
 ## Project Structure
@@ -22,11 +33,16 @@ uv run mypy src/               # type check
 ```
 lab/
 ├── src/
-│   ├── cli.py              # typer CLI: sync, train, benchmark, serve
+│   ├── cli.py              # typer CLI: sync, sync-ipscresults, link, train, benchmark, serve
 │   ├── data/
-│   │   ├── models.py       # Pydantic models
-│   │   ├── sync.py         # httpx client, incremental sync
-│   │   └── store.py        # DuckDB local store
+│   │   ├── models.py       # Pydantic models (MatchResults, CompetitorMeta, etc.)
+│   │   ├── sync.py         # SSI scoreboard HTTP sync client
+│   │   ├── ipscresults.py  # ipscresults.org OData sync client
+│   │   ├── ipscresults_models.py  # Pydantic models for ipscresults OData API
+│   │   ├── identity.py     # Cross-source shooter identity resolution
+│   │   ├── match_dedup.py  # Cross-source match deduplication
+│   │   ├── store.py        # DuckDB local store (multi-source, schema v2)
+│   │   └── exporter.py     # Export ratings + matches to JSON for static site
 │   ├── algorithms/
 │   │   ├── base.py         # ABC: process_match, get_ratings, predict_rank
 │   │   ├── openskill_pl.py # OpenSkill Plackett-Luce
@@ -39,46 +55,95 @@ lab/
 │       ├── main.py         # FastAPI rating server
 │       └── scheduler.py    # APScheduler recalc
 ├── tests/
+│   ├── test_store.py           # DuckDB store (multi-source, identity, dedup)
+│   ├── test_identity.py        # Cross-source identity resolution
+│   ├── test_match_dedup.py     # Match deduplication heuristics
+│   ├── test_ipscresults.py     # ipscresults OData client + syncer
+│   ├── test_algorithms.py      # Rating algorithm correctness
+│   └── test_metrics.py         # Benchmark metric functions
 ├── notebooks/
 └── data/                   # DuckDB files (gitignored)
 ```
 
-## Data Source
+## Data Sources
 
-Match data comes from the main app's admin-only API:
+### SSI Scoreboard (primary)
+Match data from the main app's admin-only API:
 - `GET /api/data/matches` — list cached matches with metadata
-- `GET /api/data/match/{ct}/{id}/results` — full stage results for all competitors
+- `GET /api/data/match/{ct}/{id}/results` — full stage results
 
-Auth: `Authorization: Bearer <CACHE_PURGE_SECRET>` (same secret as cache admin).
-These endpoints are read-only — they never trigger GraphQL calls to the upstream API.
+Auth: `Authorization: Bearer <CACHE_PURGE_SECRET>`
+Mostly L2 (Regional) matches with rich per-field data. Uses stable integer `shooter_id`.
+
+### ipscresults.org (secondary)
+Public OData v4 API at `https://ipscresults.org/odata/` — no authentication required.
+Covers L3–L5 (National/Continental/World) matches globally, back to 2009.
+No global shooter IDs — competitors are identified by name + region only.
+
+After syncing both sources, run `rating link` to resolve shooter identities across
+sources and mark cross-source duplicate matches for deduplication during training.
 
 ## Key Concepts
 
-- **shooter_id** is the globally stable identity key across matches (from SSI's ShooterNode)
-- **competitor_id** is per-match (a competitor in match X has a different ID than in match Y)
+- **canonical_id** — globally stable identity key used for ratings. For SSI shooters
+  this equals their `shooter_id`. ipscresults-only shooters get IDs ≥ 2,000,000.
+- **shooter_id** — SSI-specific stable integer for a real-world person
+- **competitor_id** — per-match (a competitor in match X has a different ID than in match Y)
+- **identity_key** — `str(shooter_id)` for SSI; `"normalized_name|REGION"` fingerprint for ipscresults
 - **hit_factor** = points / time — the primary performance metric in IPSC
 - Rankings use hit factor, not raw points (points are not comparable across divisions/stages)
 - DQ = disqualified (HF treated as 0), DNF = did not fire (excluded from rankings)
 
+## Identity Resolution
+
+`rating link` runs `IdentityResolver` which maps source-specific identities to a
+single `canonical_id` per real-world person:
+
+1. **Bootstrap SSI** — each SSI `shooter_id` becomes a `canonical_id`. All name variants
+   seen for that `shooter_id` are registered as fingerprints under `source='ssi_fp'`.
+2. **Link ipscresults** — for each unlinked (name, region) pair:
+   - Exact fingerprint match against SSI fingerprints → assign their `canonical_id`
+   - Fuzzy name match (SequenceMatcher ≥ 0.85) within the same region
+   - No match → create a new `canonical_id` ≥ 2,000,000
+3. **Manual overrides** — `rating link-shooter` creates `method='manual'` links that
+   are never overwritten by automatic resolution. Use this for name changes or
+   mismatches the fuzzy matcher cannot resolve.
+
+## Match Deduplication
+
+The same L3+ match can appear in both SSI and ipscresults. `rating link` detects these
+via name similarity (SequenceMatcher ≥ 0.80) + date proximity (±3 days) across sources.
+Confirmed duplicates are stored in `match_links` with a preferred side. The non-preferred
+copy is added to the dedup skip set and excluded from training automatically.
+
 ## Algorithm Convention
 
 All algorithms implement `RatingAlgorithm` ABC from `src/algorithms/base.py`:
-- `process_match(match)` — update ratings from one match's results
-- `get_ratings()` → dict[shooter_id, Rating]
+- `process_match_data(ct, match_id, date, results, comp_map, ...)` — update ratings
+- `get_ratings()` → `dict[canonical_id, Rating]`
 - `predict_rank(shooter_ids)` → predicted ordering
 - `save_state(path)` / `load_state(path)` — serialize/deserialize
 
-Matches are fed chronologically. Each stage is an independent ranking event.
+Matches are fed chronologically from all sources combined. Canonical IDs unify
+competitors across SSI and ipscresults — algorithms see only integers, not sources.
 
-## DuckDB Schema
+## DuckDB Schema (v2)
 
-Local analytical database in `data/lab.duckdb`. Tables:
-- `matches` — match metadata (PK: ct, match_id)
-- `competitors` — per-match competitors with shooter_id (PK: ct, match_id, competitor_id)
-- `stages` — stage metadata (PK: ct, match_id, stage_id)
-- `stage_results` — per-competitor per-stage results (PK: ct, match_id, competitor_id, stage_id)
+Local analytical database in `data/lab.duckdb`. All data tables include a `source` column.
+
+**Data tables** (dropped and recreated on `SCHEMA_VERSION` bump):
+- `matches` — match metadata (PK: **source**, ct, match_id)
+- `competitors` — per-match competitors; `identity_key` is the cross-source join key (PK: source, ct, match_id, competitor_id)
+- `stages` — stage metadata (PK: source, ct, match_id, stage_id)
+- `stage_results` — per-competitor per-stage results (PK: source, ct, match_id, competitor_id, stage_id)
+- `shooter_identities` — one row per canonical person (PK: canonical_id)
+- `shooter_identity_links` — maps source-specific key → canonical_id (PK: source, source_key)
+- `match_links` — cross-source duplicate pairs with preferred side (PK: source_a, match_id_a, source_b, match_id_b)
 - `shooter_ratings` — computed ratings per algorithm (PK: algorithm, shooter_id)
 - `rating_history` — rating snapshots after each match
+
+**Persistent table** (never dropped):
+- `sync_state` — sync watermarks per source (`last_sync_ssi`, `last_sync_ipscresults`), schema version, identity sequence counter
 
 ## Code Conventions
 
@@ -86,3 +151,4 @@ Local analytical database in `data/lab.duckdb`. Tables:
 - Pydantic v2 for data validation
 - Type hints on all function signatures
 - Tests in `tests/` using pytest
+- `source` is always the first parameter to all store methods that are source-scoped
