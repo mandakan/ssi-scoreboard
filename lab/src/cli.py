@@ -641,6 +641,29 @@ def _local_is_newer(local: dict[str, Any], remote: dict[str, Any]) -> bool:
 _DB_KEY = "lab.duckdb.gz"
 _MANIFEST_KEY = "manifest.json"
 
+
+def _prune_versions(s3: Any, bucket: str, prefix: str, max_versions: int) -> None:
+    """Delete old versioned backups beyond max_versions, keeping the newest ones.
+
+    Versions live at {prefix}/versions/lab.duckdb.YYYYMMDDTHHMMSS.gz.
+    Sorting by key name is equivalent to sorting by upload time (ISO timestamp).
+    """
+    versions_prefix = f"{prefix}/versions/"
+    paginator = s3.get_paginator("list_objects_v2")
+    keys: list[str] = []
+    for page in paginator.paginate(Bucket=bucket, Prefix=versions_prefix):
+        for obj in page.get("Contents", []):
+            keys.append(obj["Key"])
+
+    keys.sort()  # oldest first (lexicographic = chronological for ISO timestamps)
+    to_delete = keys[:-max_versions] if len(keys) > max_versions else []
+    if to_delete:
+        s3.delete_objects(
+            Bucket=bucket,
+            Delete={"Objects": [{"Key": k} for k in to_delete]},
+        )
+        console.print(f"  Pruned {len(to_delete)} old version(s) (kept {max_versions})")
+
 S3_BUCKET_OPTION = typer.Option(..., envvar="LAB_S3_BUCKET", help="S3/R2 bucket name")
 S3_PREFIX_OPTION = typer.Option(
     "lab", envvar="LAB_S3_PREFIX", help="Key prefix inside the bucket (default: lab)"
@@ -658,11 +681,18 @@ def db_push(
     bucket: str = S3_BUCKET_OPTION,
     prefix: str = S3_PREFIX_OPTION,
     endpoint: str = S3_ENDPOINT_OPTION,
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
+    max_versions: int = typer.Option(
+        10, help="Number of versioned backups to keep in S3 (0 to disable versioning)"
+    ),
 ) -> None:
     """Compress and upload the local DuckDB to S3/R2 as a shared bootstrap.
 
-    Reads match counts and watermarks from the DB, stores them in a manifest
-    alongside the compressed file so db-pull can do a safe comparison.
+    Checks the remote manifest first — if the remote DB appears newer than
+    the local one, a confirmation prompt is shown (bypass with --yes).
+
+    Also saves a versioned copy under {prefix}/versions/ and prunes old
+    versions beyond --max-versions (default 10), providing a rolling backup.
 
     Required env vars: LAB_S3_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
     For Cloudflare R2: also set LAB_S3_ENDPOINT to your R2 endpoint URL.
@@ -681,6 +711,8 @@ def db_push(
     import tempfile
     from datetime import UTC, datetime
 
+    from botocore.exceptions import ClientError
+
     _require_boto3()
 
     if not db_path.exists():
@@ -697,7 +729,35 @@ def db_push(
 
     db_key = f"{prefix}/{_DB_KEY}"
     manifest_key = f"{prefix}/{_MANIFEST_KEY}"
+    s3 = _s3_client(endpoint)
+
+    # Safety check: warn if the remote DB appears newer than local.
+    console.print("[bold]Checking remote manifest...[/bold]")
+    try:
+        resp = s3.get_object(Bucket=bucket, Key=manifest_key)
+        remote: dict[str, Any] = json.loads(resp["Body"].read())
+        console.print(
+            f"  Remote: {remote.get('match_count', '?')} matches | "
+            f"SSI: {remote.get('ssi_watermark')} | "
+            f"ipscresults: {remote.get('ipscresults_watermark')} | "
+            f"uploaded: {str(remote.get('uploaded_at', '?'))[:10]}"
+        )
+        if _local_is_newer(remote, stats):
+            console.print(
+                "[bold yellow]Warning:[/bold yellow] "
+                "the remote DB appears to have more or newer data than your local copy."
+            )
+            if not yes and not typer.confirm("Overwrite remote DB anyway?", default=False):
+                console.print("[dim]Aborted.[/dim]")
+                raise typer.Exit(0)
+    except ClientError as e:
+        if e.response["Error"]["Code"] in ("NoSuchKey", "404"):
+            console.print("  No existing remote manifest — first push.")
+        else:
+            console.print(f"[yellow]Warning: could not fetch remote manifest: {e}[/yellow]")
+
     original_bytes = db_path.stat().st_size
+    now_ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
 
     console.print(
         f"[bold]Compressing {db_path.name} "
@@ -713,10 +773,16 @@ def db_push(
             f"  Compressed to {compressed_bytes / 1_048_576:.1f} MB ({ratio:.0f}%)"
         )
 
-        s3 = _s3_client(endpoint)
-
+        # Upload the latest copy.
         console.print(f"[bold]Uploading to s3://{bucket}/{db_key}...[/bold]")
         s3.upload_file(str(tmp_gz), bucket, db_key)
+
+        # Upload a versioned copy.
+        if max_versions > 0:
+            version_key = f"{prefix}/versions/lab.duckdb.{now_ts}.gz"
+            console.print(f"  Versioned copy → s3://{bucket}/{version_key}")
+            s3.upload_file(str(tmp_gz), bucket, version_key)
+            _prune_versions(s3, bucket, prefix, max_versions)
 
         manifest: dict[str, Any] = {
             **stats,
