@@ -439,7 +439,7 @@ def _print_results_table(results: list[TuneResult], top_n: int = 20) -> None:
 
 def run_sweep(
     db_path: Path,
-    scoring: str = "stage_hf",
+    scoring: str = "match_pct",
     split_ratio: float = 0.7,
     workers: int | None = None,
     cons_z: float = _CONS_Z_DEFAULT,

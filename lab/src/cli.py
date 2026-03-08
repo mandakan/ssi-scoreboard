@@ -645,7 +645,7 @@ def benchmark(
 
 @app.command()
 def tune(
-    scoring: str = typer.Option("stage_hf", help="Scoring mode: stage_hf or match_pct"),
+    scoring: str = typer.Option("match_pct", help="Scoring mode: match_pct or stage_hf"),
     split: float = typer.Option(0.7, help="Train/test split ratio"),
     workers: int | None = typer.Option(None, help="Max parallel workers (default: CPU-1)"),
     db_path: Path = DB_PATH_OPTION,
