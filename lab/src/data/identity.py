@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 _PLACEHOLDER_TOKENS = frozenset({"notknown", "unknown", "noname"})
+_PURELY_NUMERIC_RE = re.compile(r"^\d+$")
 
 # Characters that do NOT decompose under NFD (no combining mark to strip) but
 # still have a natural ASCII equivalent. Must be handled before NFD normalisation.
@@ -94,17 +95,23 @@ def name_fingerprint(display_name: str, region: str) -> str:
 
     Format: ``"normalized_name|REGION"``
 
-    Normalization: lowercase, strip diacritics, remove placeholder tokens.
+    Normalization: lowercase, strip diacritics, remove placeholder tokens,
+    and drop purely-numeric tokens (e.g. registration numbers used as middle
+    names in ipscresults: "Anders 1406 Svensson" → "anders svensson|SWE").
     The display_name should already be in "First Last" format (via normalize_name).
 
     Examples::
 
-        name_fingerprint("Martin Hollertz", "SWE") → "martin hollertz|SWE"
-        name_fingerprint("Saša Petrović",   "SRB") → "sasa petrovic|SRB"
-        name_fingerprint("Adrian H",        "NOR") → "adrian h|NOR"
+        name_fingerprint("Martin Hollertz",      "SWE") → "martin hollertz|SWE"
+        name_fingerprint("Saša Petrović",         "SRB") → "sasa petrovic|SRB"
+        name_fingerprint("Anders 1406 Svensson",  "SWE") → "anders svensson|SWE"
+        name_fingerprint("Adrian H",              "NOR") → "adrian h|NOR"
     """
     normalized = strip_diacritics(display_name).lower().strip()
-    tokens = [t for t in normalized.split() if t not in _PLACEHOLDER_TOKENS]
+    tokens = [
+        t for t in normalized.split()
+        if t not in _PLACEHOLDER_TOKENS and not _PURELY_NUMERIC_RE.match(t)
+    ]
     return f"{' '.join(tokens)}|{region.upper()}"
 
 

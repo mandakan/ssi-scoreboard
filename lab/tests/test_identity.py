@@ -57,6 +57,14 @@ def test_name_fingerprint_strips_placeholder_tokens() -> None:
     assert name_fingerprint("John noname", "USA") == "john|USA"
 
 
+def test_name_fingerprint_strips_numeric_middle_names() -> None:
+    # ipscresults sometimes uses registration numbers as middle tokens
+    assert name_fingerprint("Anders 1406 Svensson", "SWE") == "anders svensson|SWE"
+    assert name_fingerprint("Anna 42 Larsen", "NOR") == "anna larsen|NOR"
+    # Digits embedded in a token are preserved (handled by per-token strip in matching)
+    assert name_fingerprint("Anders1406 Svensson", "SWE") == "anders1406 svensson|SWE"
+
+
 def test_pick_primary_name_prefers_non_placeholder() -> None:
     names = ["NotKnown Smith", "Alice Smith"]
     assert _pick_primary_name(names) == "Alice Smith"
