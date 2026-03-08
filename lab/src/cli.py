@@ -149,6 +149,14 @@ def _train_single_algo(
     return (stored_name, rating_data, n_shooters, len(ratings), skipped)
 
 
+def _default_workers() -> int:
+    """Return a sensible default worker count: CPU cores minus 1, clamped to [1, 8]."""
+    import os
+    cores = os.cpu_count() or 1
+    # Leave one core free for the parent process and system responsiveness.
+    return max(1, min(cores - 1, 8))
+
+
 def _run_train_mode(
     store: Any,
     algorithms: Any,
@@ -157,12 +165,16 @@ def _run_train_mode(
     skip_set: set[tuple[str, int, str]] | None = None,
     name_suffix: str = "",
     db_path: Path | None = None,
+    workers: int | None = None,
 ) -> None:
     """Train all algorithm instances on matches for one scoring mode and save ratings.
 
     When db_path is provided and there are multiple algorithms, training runs in
     parallel using one subprocess per algorithm (each opens a read-only DuckDB
     connection). Results are batch-written sequentially at the end.
+
+    workers: max number of parallel subprocesses. None = auto (CPU count - 1).
+             0 or 1 = force sequential mode.
     """
     from concurrent.futures import ProcessPoolExecutor
 
@@ -174,10 +186,12 @@ def _run_train_mode(
         suffix += f"_{name_suffix}"
     skip = skip_set or set()
 
-    # Parallel path: multiple algorithms + db_path available for read-only workers.
-    if db_path is not None and len(algorithms) > 1:
+    effective_workers = workers if workers is not None else _default_workers()
+
+    # Parallel path: multiple algorithms, db_path available, workers > 1.
+    if db_path is not None and len(algorithms) > 1 and effective_workers > 1:
         algo_names = [a.name for a in algorithms]
-        n_workers = min(len(algo_names), 4)
+        n_workers = min(len(algo_names), effective_workers)
         console.print(f"  [dim]Training {len(algo_names)} algorithms in parallel "
                        f"({n_workers} workers)[/dim]")
 
@@ -492,6 +506,13 @@ def train(
             "Auto-generated from --date-from/--date-to when omitted."
         ),
     ),
+    workers: int | None = typer.Option(
+        None,
+        help=(
+            "Max parallel worker processes for multi-algorithm training. "
+            "Default: CPU cores − 1. Set to 1 for sequential mode."
+        ),
+    ),
     db_path: Path = DB_PATH_OPTION,
 ) -> None:
     """Train rating algorithms on synced match data.
@@ -549,7 +570,8 @@ def train(
 
         _run_train_mode(
             store, algorithms, matches, scoring,
-            skip_set=skip_set, name_suffix=name_suffix, db_path=db_path,
+            skip_set=skip_set, name_suffix=name_suffix,
+            db_path=db_path, workers=workers,
         )
     finally:
         store.close()
