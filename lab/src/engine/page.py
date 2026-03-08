@@ -558,7 +558,8 @@ _HTML = r"""<!DOCTYPE html>
               <th class="pb-2 pr-4">Region</th>
               <th class="pb-2 pr-4">ipscresults name</th>
               <th class="pb-2 pr-6">SSI name (matched to)</th>
-              <th class="pb-2">Div rank</th>
+              <th class="pb-2 pr-4">Div rank</th>
+              <th class="pb-2">IPR exposure</th>
             </tr>
           </thead>
           <tbody>
@@ -571,7 +572,7 @@ _HTML = r"""<!DOCTYPE html>
                 <td class="py-1.5 pr-4 text-gray-500 text-xs" x-text="lnk.region||'—'"></td>
                 <td class="py-1.5 pr-4 font-medium" x-text="lnk.ipr"></td>
                 <td class="py-1.5 pr-6 text-gray-600" x-text="lnk.ssi"></td>
-                <td class="py-1.5 text-xs">
+                <td class="py-1.5 pr-4 text-xs">
                   <template x-if="lnk.rank != null">
                     <span :class="lnk.rank <= 10 ? 'text-red-600 font-semibold' : lnk.rank <= 20 ? 'text-amber-600 font-medium' : 'text-gray-500'"
                       x-text="'#' + lnk.rank + ' / ' + lnk.div_n + ' · ' + lnk.div"></span>
@@ -580,10 +581,21 @@ _HTML = r"""<!DOCTYPE html>
                     <span class="text-gray-300">—</span>
                   </template>
                 </td>
+                <td class="py-1.5 text-xs">
+                  <template x-if="lnk.ipr_m > 0">
+                    <span :title="'ipscresults: ' + lnk.ipr_m + ' of ' + (lnk.total_m ?? '?') + ' total matches · last: ' + (lnk.ipr_last ?? 'unknown')">
+                      <span :class="iprExposureClass(lnk)"
+                        x-text="lnk.ipr_m + ' / ' + (lnk.total_m ?? '?') + ' · ' + (lnk.ipr_last ? lnk.ipr_last.slice(0,4) : '?')"></span>
+                    </span>
+                  </template>
+                  <template x-if="!lnk.ipr_m">
+                    <span class="text-gray-300">—</span>
+                  </template>
+                </td>
               </tr>
             </template>
             <tr x-show="idFiltered.length===0">
-              <td colspan="5" class="py-6 text-center text-gray-400 text-sm">No matches found</td>
+              <td colspan="6" class="py-6 text-center text-gray-400 text-sm">No matches found</td>
             </tr>
           </tbody>
         </table>
@@ -755,6 +767,28 @@ document.addEventListener('alpine:init', () => {
       return this.D.algorithms.map(a => ({ v: a, l: ALGO_DISPLAY[a] ?? a }));
     },
 
+    // Score a fuzzy link by how much it likely influences current ratings.
+    // Higher = more worrying. Factors: div rank, recency, volume vs total.
+    _iprImpactScore(lnk) {
+      const rankScore = lnk.rank != null ? 1 / lnk.rank : 0;
+      const thisYear = new Date().getFullYear();
+      const lastYear = lnk.ipr_last ? parseInt(lnk.ipr_last.slice(0, 4)) : 0;
+      const recencyScore = lastYear > 0 ? Math.max(0, 1 - (thisYear - lastYear) / 10) : 0;
+      const ratio = lnk.total_m ? lnk.ipr_m / lnk.total_m : 0;
+      return rankScore * 2 + recencyScore + ratio;
+    },
+
+    iprExposureClass(lnk) {
+      const thisYear = new Date().getFullYear();
+      const lastYear = lnk.ipr_last ? parseInt(lnk.ipr_last.slice(0, 4)) : 0;
+      const age = thisYear - lastYear;
+      const ratio = lnk.total_m ? lnk.ipr_m / lnk.total_m : 0;
+      // High exposure: recent matches AND large fraction of total
+      if (age <= 2 && ratio >= 0.3) return 'text-red-600 font-medium';
+      if (age <= 4 && ratio >= 0.15) return 'text-amber-600';
+      return 'text-gray-400';
+    },
+
     get idFiltered() {
       const q = this.id_q.toLowerCase();
       const minConf = parseFloat(this.id_conf) || 0;
@@ -766,11 +800,7 @@ document.addEventListener('alpine:init', () => {
         return true;
       });
       if (this.id_sort === 'impact') {
-        links = [...links].sort((a, b) => {
-          const ra = a.rank ?? 99999, rb = b.rank ?? 99999;
-          if (ra !== rb) return ra - rb;
-          return a.conf - b.conf;
-        });
+        links = [...links].sort((a, b) => this._iprImpactScore(b) - this._iprImpactScore(a));
       }
       return links;
     },

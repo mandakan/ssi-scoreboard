@@ -213,10 +213,46 @@ def _export_fuzzy_links(store: Store) -> list[dict[str, Any]]:
         for r in rank_rows:
             rank_map[int(r[0])] = (int(r[2]), str(r[1]), int(r[3]))
 
+    # For each fuzzy-matched person: how many ipscresults matches contributed
+    # to their rating, and when was the most recent one?
+    # ipr_m  — match count from ipscresults (potentially wrong source)
+    # ipr_last — ISO date of most recent ipscresults match
+    # total_m — total matches across all sources (from shooter_ratings.matches_played)
+    # Together these show whether a shaky link has real influence: a person with
+    # 1 ipscresults match from 2018 and 40 SSI matches is low risk even if ranked #2.
+    ipr_stats: dict[int, tuple[int, str | None]] = {}
+    ipr_rows = store.db.execute(
+        """
+        SELECT sil.canonical_id,
+               COUNT(DISTINCT c.source || '|' || c.ct || '|' || c.match_id) AS ipr_m,
+               MAX(m.date)                                                    AS ipr_last
+        FROM shooter_identity_links sil
+        JOIN competitors c
+          ON c.source = 'ipscresults' AND c.identity_key = sil.source_key
+        JOIN matches m
+          ON m.source = 'ipscresults' AND m.ct = c.ct AND m.match_id = c.match_id
+        WHERE sil.source = 'ipscresults' AND sil.method = 'auto_fuzzy'
+        GROUP BY sil.canonical_id
+        """
+    ).fetchall()
+    for r in ipr_rows:
+        ipr_stats[int(r[0])] = (
+            int(r[1]),
+            str(r[2])[:10] if r[2] else None,
+        )
+
+    # Total matches per canonical_id (across all sources, any algorithm).
+    total_m_rows = store.db.execute(
+        "SELECT shooter_id, MAX(matches_played) FROM shooter_ratings GROUP BY shooter_id"
+    ).fetchall()
+    total_m_map: dict[int, int] = {int(r[0]): int(r[1]) for r in total_m_rows}
+
     result = []
     for row in rows:
         cid = int(row[4])
         rank_info = rank_map.get(cid)
+        ipr_m, ipr_last = ipr_stats.get(cid, (0, None))
+        total_m = total_m_map.get(cid)
         result.append({
             "ipr": str(row[0]),
             "conf": round(float(row[1]), 3),
@@ -227,6 +263,10 @@ def _export_fuzzy_links(store: Store) -> list[dict[str, Any]]:
             "rank": rank_info[0] if rank_info else None,
             "div": rank_info[1] if rank_info else None,
             "div_n": rank_info[2] if rank_info else None,
+            # ipscresults match exposure
+            "ipr_m": ipr_m,          # matches from the fuzzy-linked source
+            "ipr_last": ipr_last,    # most recent ipscresults match date
+            "total_m": total_m,      # total matches across all sources
         })
     return result
 
