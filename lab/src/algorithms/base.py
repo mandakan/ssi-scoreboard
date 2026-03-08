@@ -162,9 +162,9 @@ def get_algorithms(name: str | None = None) -> list[RatingAlgorithm]:
 
     # Recommended algorithms — trained and exported by default.
     default_algos: list[RatingAlgorithm] = [
-        OpenSkillBTLvl(),
         OpenSkillPLDecay(),
         OpenSkillBTLvlDecay(),
+        OpenSkillBTLvl(),
     ]
 
     # Baseline/experimental algorithms — available via --algorithm all or by name.

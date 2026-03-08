@@ -508,8 +508,8 @@ def train(
         "default",
         help=(
             "Which algorithms to train. "
-            "'default' = recommended set (openskill_bt_lvl, openskill_pl_decay, "
-            "openskill_bt_lvl_decay). "
+            "'default' = recommended set (openskill_pl_decay, openskill_bt_lvl_decay, "
+            "openskill_bt_lvl). "
             "'all' = also includes baselines (openskill, openskill_bt, elo). "
             "Pass a single algorithm name to train just that one."
         ),

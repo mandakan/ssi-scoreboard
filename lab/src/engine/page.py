@@ -54,23 +54,33 @@ ALGO_DESCRIPTION: dict[str, str] = {
         "at identifying the very top shooters. Recommended as the base model if level "
         "weighting is not needed."
     ),
-    "openskill_bt_lvl": (
-        "BradleyTerry pairwise model with match-level scaling. A World Shoot result "
-        "(large field, high variance) changes ratings more conservatively than a regional "
-        "match where results are more predictable. Best at reliably identifying top "
-        "performers in our benchmark tests. Recommended for team selection."
-    ),
     "openskill_pl_decay": (
-        "Bayesian full-ranking model with an inactivity penalty: a shooter who has not "
-        "competed in months gains extra uncertainty. When they return, a few good results "
-        "will quickly reduce that uncertainty. Prevents retired shooters from permanently "
-        "blocking active ones in the ranking."
+        "Bayesian full-ranking model with inactivity penalty. Best overall predictive "
+        "accuracy in the March 2026 tuning (τ=0.40, Top-5=35.3%) using match-percentage "
+        "scoring. Inactive shooters accumulate uncertainty; returning to competition "
+        "restores confidence quickly. Recommended for team selection. "
+        "The decay parameter (τ) currently has negligible effect because the dataset is "
+        "dense enough that most active shooters compete regularly — but it provides "
+        "important insurance for long-term use as retired shooters accumulate in the "
+        "database. Future work: test with longer time horizons where inactivity gaps "
+        "grow, or combine decay with level-weighting (PL+LD) if international data "
+        "grows large enough to justify it."
     ),
     "openskill_bt_lvl_decay": (
         "The most complete model: pairwise comparisons + match-level scaling + inactivity "
-        "penalty. Highest overall ranking quality (best Kendall τ in benchmark tests). "
-        "Slightly lower top-5 accuracy than plain BradleyTerry because elite shooters "
-        "who compete less frequently accumulate extra uncertainty between events."
+        "penalty. Provides a complementary signal to PL+D — the pairwise model "
+        "has wider uncertainty (σ) dispersion, making its conservative ranking "
+        "(μ − z·σ) more discriminating between experienced and new shooters. "
+        "In the March 2026 tuning, BT+LD conservative ranking (τ=0.38) nearly matches "
+        "PL+D base ranking (τ=0.40), suggesting both models capture similar underlying "
+        "skill signals through different lenses. Showing both side-by-side lets users "
+        "spot competitors whose ranking is model-dependent and therefore uncertain."
+    ),
+    "openskill_bt_lvl": (
+        "BradleyTerry pairwise model with match-level scaling. A World Shoot result "
+        "(large field, high variance) changes ratings more conservatively than a regional "
+        "match where results are more predictable. Strong with conservative ranking "
+        "but lower base accuracy than Plackett-Luce on match-percentage scoring."
     ),
     # match_pct variants — same description prefixed with the key difference
     "elo_mpct": (
@@ -110,24 +120,24 @@ ALGO_DESCRIPTION: dict[str, str] = {
 # Short model names for the dropdown. Each entry starts with a short tag
 # matching the internal code so users can cross-reference with the About tab.
 BASE_ALGO_DISPLAY: dict[str, str] = {
-    "openskill_bt_lvl":       "BT+L · Pairwise + level weighting  ★",
+    "openskill_pl_decay":     "PL+D · Full ranking + decay  ★",
     "openskill_bt_lvl_decay": "BT+LD · Pairwise + level + decay",
+    "openskill_bt_lvl":       "BT+L · Pairwise + level weighting",
     "openskill_bt":           "BT · Pairwise",
-    "openskill_pl_decay":     "PL+D · Full ranking + decay",
     "openskill":              "PL · Full ranking",
     "elo":                    "ELO · Classic baseline",
 }
 
 # Preferred display order — recommended algorithms first, _mpct variants after their base.
 _ALGO_ORDER: list[str] = [
-    "openskill_bt_lvl",
-    "openskill_bt_lvl_mpct",
-    "openskill_bt_lvl_decay",
-    "openskill_bt_lvl_decay_mpct",
-    "openskill_bt",
-    "openskill_bt_mpct",
     "openskill_pl_decay",
     "openskill_pl_decay_mpct",
+    "openskill_bt_lvl_decay",
+    "openskill_bt_lvl_decay_mpct",
+    "openskill_bt_lvl",
+    "openskill_bt_lvl_mpct",
+    "openskill_bt",
+    "openskill_bt_mpct",
     "openskill",
     "openskill_mpct",
     "elo",
@@ -709,7 +719,7 @@ const ALGO_DESC         = ALGO_DESC_PLACEHOLDER;
 const BASE_ALGO_DISPLAY = BASE_ALGO_DISPLAY_PLACEHOLDER;
 const ALGO_ORDER        = ALGO_ORDER_PLACEHOLDER;
 
-const _BASE_ORDER = ['openskill_bt_lvl','openskill_bt_lvl_decay','openskill_bt','openskill_pl_decay','openskill','elo'];
+const _BASE_ORDER = ['openskill_pl_decay','openskill_bt_lvl_decay','openskill_bt_lvl','openskill_bt','openskill','elo'];
 const CY = new Date().getFullYear();
 
 document.addEventListener('alpine:init', () => {
