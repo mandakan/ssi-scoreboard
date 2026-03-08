@@ -675,6 +675,75 @@ _HTML = r"""<!DOCTYPE html>
       </div>
     </div>
 
+    <template x-if="D.tuning">
+    <div class="bg-white rounded-xl shadow-sm p-6">
+      <h2 class="text-lg font-bold mb-1">Latest tuning results</h2>
+      <p class="text-sm text-gray-500 mb-4">
+        Automated hyperparameter sweep on <span x-text="D.tuning.timestamp?.slice(0,10)||'—'"></span>
+        — <span x-text="D.tuning.total_matches||0"></span> matches,
+        <span x-text="D.tuning.configs_evaluated||0"></span> configurations tested
+        using <span x-text="D.tuning.scoring==='match_pct'?'match percentage':'stage hit factor'"></span> scoring
+        (<span x-text="D.tuning.train_matches||0"></span> train / <span x-text="D.tuning.test_matches||0"></span> test).
+      </p>
+
+      <!-- Data quality badges -->
+      <div class="flex flex-wrap gap-2 mb-4">
+        <span class="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-lg">
+          Identity coverage: <span x-text="(D.tuning.data_quality?.identity_coverage*100||0).toFixed(1)+'%'"></span>
+        </span>
+        <span class="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-lg">
+          Avg field: <span x-text="(D.tuning.data_quality?.avg_competitors_per_match||0).toFixed(0)"></span> competitors
+        </span>
+        <span class="text-xs px-2 py-1 rounded-lg"
+          :class="(D.tuning.data_quality?.fuzzy_link_low_conf||0)>20?'bg-amber-50 text-amber-700':'bg-green-50 text-green-700'">
+          Fuzzy links: <span x-text="D.tuning.data_quality?.fuzzy_link_count||0"></span>
+          (<span x-text="D.tuning.data_quality?.fuzzy_link_low_conf||0"></span> low confidence)
+        </span>
+      </div>
+
+      <!-- Results table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-gray-200 text-left text-gray-500">
+              <th class="pb-2 pr-3">#</th>
+              <th class="pb-2 pr-3">Configuration</th>
+              <th class="pb-2 pr-3 text-right">Kendall &tau;</th>
+              <th class="pb-2 pr-3 text-right">Top-5</th>
+              <th class="pb-2 pr-3 text-right">Top-10</th>
+              <th class="pb-2 text-right">MRR</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="(r,i) in D.tuning.top_results||[]" :key="r.label">
+              <tr class="border-b border-gray-50"
+                :class="r.is_default?'bg-blue-50/50':''">
+                <td class="py-1.5 pr-3 text-gray-400" x-text="i+1"></td>
+                <td class="py-1.5 pr-3 font-mono text-xs">
+                  <span x-text="r.label"></span>
+                  <template x-if="r.is_default"><span class="text-blue-600 font-sans text-xs ml-1">&#9733;</span></template>
+                </td>
+                <td class="py-1.5 pr-3 text-right tabular-nums"
+                  :class="r.best_tau?'font-bold text-green-700':''"
+                  x-text="r.tau.toFixed(4)"></td>
+                <td class="py-1.5 pr-3 text-right tabular-nums"
+                  :class="r.best_top5?'font-bold text-green-700':''"
+                  x-text="(r.top5*100).toFixed(1)+'%'"></td>
+                <td class="py-1.5 pr-3 text-right tabular-nums"
+                  :class="r.best_top10?'font-bold text-green-700':''"
+                  x-text="(r.top10*100).toFixed(1)+'%'"></td>
+                <td class="py-1.5 text-right tabular-nums"
+                  :class="r.best_mrr?'font-bold text-green-700':''"
+                  x-text="r.mrr.toFixed(4)"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-gray-400 mt-2">&#9733; = current default parameters. Best values highlighted in green.</p>
+    </div>
+    </template>
+
     <div class="bg-white rounded-xl shadow-sm p-6 text-sm text-gray-700 space-y-3">
       <h2 class="text-lg font-bold text-gray-900">How the ratings are calculated</h2>
       <p>
@@ -923,9 +992,71 @@ def _build_manifest(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def generate_site(data: dict[str, Any], output_dir: Path) -> None:
+def _load_tuning_summary(data_dir: Path) -> dict[str, Any] | None:
+    """Load tuning results and return a compact summary for the static site."""
+    tune_path = data_dir / "tune_results.json"
+    if not tune_path.exists():
+        return None
+
+    raw = json.loads(tune_path.read_text())
+    results = raw.get("results", [])
+    if not results:
+        return None
+
+    # Default labels for highlighting
+    default_labels = {
+        "elo(K=32.0,min=16.0,decay=20)",
+        "bt_lvl(scale=1.0)",
+        "pl_decay(\u03c4=0.083)",
+        "bt_lvl_decay(scale=1.0,\u03c4=0.083)",
+        "openskill(baseline)",
+        "openskill_bt(baseline)",
+    }
+
+    # Top 15 results (already sorted by tau desc in the file)
+    top = results[:15]
+    best_tau = max(r["metrics"]["kendall_tau"] for r in top)
+    best_top5 = max(r["metrics"]["top_5_accuracy"] for r in top)
+    best_top10 = max(r["metrics"]["top_10_accuracy"] for r in top)
+    best_mrr = max(r["metrics"]["mrr"] for r in top)
+
+    top_results = []
+    for r in top:
+        m = r["metrics"]
+        top_results.append({
+            "label": r["label"],
+            "tau": m["kendall_tau"],
+            "top5": m["top_5_accuracy"],
+            "top10": m["top_10_accuracy"],
+            "mrr": m["mrr"],
+            "is_default": r["label"] in default_labels,
+            "best_tau": abs(m["kendall_tau"] - best_tau) < 1e-6,
+            "best_top5": abs(m["top_5_accuracy"] - best_top5) < 1e-6,
+            "best_top10": abs(m["top_10_accuracy"] - best_top10) < 1e-6,
+            "best_mrr": abs(m["mrr"] - best_mrr) < 1e-6,
+        })
+
+    return {
+        "timestamp": raw.get("timestamp"),
+        "scoring": raw.get("scoring"),
+        "total_matches": raw.get("train_matches", 0) + raw.get("test_matches", 0),
+        "train_matches": raw.get("train_matches"),
+        "test_matches": raw.get("test_matches"),
+        "configs_evaluated": len(results),
+        "data_quality": raw.get("data_quality"),
+        "top_results": top_results,
+    }
+
+
+def generate_site(data: dict[str, Any], output_dir: Path, data_dir: Path | None = None) -> None:
     """Write the static explorer to output_dir/index.html and manifest.json."""
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Inject tuning results if available.
+    if data_dir is not None:
+        tuning = _load_tuning_summary(data_dir)
+        if tuning:
+            data["tuning"] = tuning
 
     # Sort algorithms by preferred order; unknowns go to the end alphabetically.
     order = {a: i for i, a in enumerate(_ALGO_ORDER)}

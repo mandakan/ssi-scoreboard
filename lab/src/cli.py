@@ -687,7 +687,7 @@ def export(
     store = Store(db_path)
     try:
         data = export_data(store)
-        generate_site(data, output_dir)
+        generate_site(data, output_dir, data_dir=db_path.parent)
         console.print(f"\n[bold]Open locally:[/bold] {output_dir / 'index.html'}")
         console.print(
             "[dim]Tip: commit site/ and push — "
@@ -770,7 +770,7 @@ def pipeline(
 
         console.rule("[bold blue]Step 5/5 — Export[/bold blue]")
         data = export_data(store)
-        generate_site(data, output_dir)
+        generate_site(data, output_dir, data_dir=db_path.parent)
         console.print("\n[bold green]Pipeline complete![/bold green]")
     finally:
         store.close()
