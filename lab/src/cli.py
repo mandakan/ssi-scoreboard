@@ -644,6 +644,30 @@ def benchmark(
 
 
 @app.command()
+def tune(
+    scoring: str = typer.Option("stage_hf", help="Scoring mode: stage_hf or match_pct"),
+    split: float = typer.Option(0.7, help="Train/test split ratio"),
+    workers: int | None = typer.Option(None, help="Max parallel workers (default: CPU-1)"),
+    db_path: Path = DB_PATH_OPTION,
+) -> None:
+    """Run automated hyperparameter grid search.
+
+    Evaluates all algorithm x parameter combinations using a chronological
+    train/test split. Results are saved to data/tune_results.json and printed
+    as a ranked table. Designed to run unattended on a server.
+    """
+    from src.tuning.sweep import run_sweep
+
+    _warn_if_fresh_db(db_path)
+    run_sweep(
+        db_path=db_path,
+        scoring=scoring,
+        split_ratio=split,
+        workers=workers,
+    )
+
+
+@app.command()
 def export(
     output_dir: Path = typer.Option(Path("site"), help="Output directory for the static explorer"),  # noqa: B008
     db_path: Path = DB_PATH_OPTION,

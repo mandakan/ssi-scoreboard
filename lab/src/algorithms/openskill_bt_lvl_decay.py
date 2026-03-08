@@ -49,10 +49,17 @@ def _parse_date(date_str: str) -> date | None:
 class OpenSkillBTLvlDecay(RatingAlgorithm):
     """BradleyTerryPart with level-scaled beta and per-(shooter, division) sigma decay."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        tau: float | None = None,
+        level_scale: float = 1.0,
+    ) -> None:
         self._model = BradleyTerryPart()
+        self._tau = tau if tau is not None else _TAU
+        self._level_beta = {k: v * level_scale for k, v in _LEVEL_BETA.items()}
         self._level_models = {
-            lvl: BradleyTerryPart(beta=beta) for lvl, beta in _LEVEL_BETA.items()
+            lvl: BradleyTerryPart(beta=beta) for lvl, beta in self._level_beta.items()
         }
 
         self._ratings: dict[DivKey, tuple[float, float]] = {}
@@ -92,7 +99,7 @@ class OpenSkillBTLvlDecay(RatingAlgorithm):
             return
 
         mu, sigma = self._get_rating(shooter_id, division)
-        self._ratings[key] = (mu, min(sigma + _TAU * days, _DEFAULT_SIGMA))
+        self._ratings[key] = (mu, min(sigma + self._tau * days, _DEFAULT_SIGMA))
 
     def process_match_data(
         self,

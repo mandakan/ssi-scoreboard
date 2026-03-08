@@ -42,12 +42,14 @@ _LEVEL_BETA: dict[str, float] = {
 class OpenSkillBTLvl(RatingAlgorithm):
     """BradleyTerryPart with match-level beta scaling, per-division ratings."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, level_scale: float = 1.0) -> None:
         # Main model: creates ratings and is used when level is unknown.
         self._model = BradleyTerryPart()
+        # Apply level_scale to all beta values.
+        self._level_beta = {k: v * level_scale for k, v in _LEVEL_BETA.items()}
         # Per-level models: used only for the rate() call.
         self._level_models = {
-            lvl: BradleyTerryPart(beta=beta) for lvl, beta in _LEVEL_BETA.items()
+            lvl: BradleyTerryPart(beta=beta) for lvl, beta in self._level_beta.items()
         }
 
         self._ratings: dict[DivKey, tuple[float, float]] = {}

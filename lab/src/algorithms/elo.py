@@ -30,7 +30,16 @@ K_DECAY_MATCHES = 20  # K decays from DEFAULT_K to MIN_K over this many matches
 class MultiElo(RatingAlgorithm):
     """Multi-player ELO with pairwise stage comparisons, per-division ratings."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        default_k: float = DEFAULT_K,
+        min_k: float = MIN_K,
+        k_decay_matches: int = K_DECAY_MATCHES,
+    ) -> None:
+        self._default_k = default_k
+        self._min_k = min_k
+        self._k_decay_matches = k_decay_matches
         self._ratings: dict[DivKey, float] = {}
         self._names: dict[int, str] = {}
         self._regions: dict[int, str | None] = {}
@@ -45,10 +54,10 @@ class MultiElo(RatingAlgorithm):
     def _k_factor(self, key: DivKey) -> float:
         """Adaptive K-factor that decreases with experience."""
         matches = self._matches.get(key, 0)
-        if matches >= K_DECAY_MATCHES:
-            return MIN_K
-        t = matches / K_DECAY_MATCHES
-        return DEFAULT_K - (DEFAULT_K - MIN_K) * t
+        if matches >= self._k_decay_matches:
+            return self._min_k
+        t = matches / self._k_decay_matches
+        return self._default_k - (self._default_k - self._min_k) * t
 
     def _expected_score(self, ra: float, rb: float) -> float:
         """Expected score of player A vs player B."""

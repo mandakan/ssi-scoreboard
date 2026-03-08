@@ -48,8 +48,9 @@ def _parse_date(date_str: str) -> date | None:
 class OpenSkillPLDecay(RatingAlgorithm):
     """PlackettLuce with per-(shooter, division) inactivity sigma decay."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, tau: float | None = None) -> None:
         self.model = PlackettLuce()
+        self._tau = tau if tau is not None else _TAU
         self._ratings: dict[DivKey, tuple[float, float]] = {}
         self._names: dict[int, str] = {}
         self._regions: dict[int, str | None] = {}
@@ -89,7 +90,7 @@ class OpenSkillPLDecay(RatingAlgorithm):
             return
 
         mu, sigma = self._get_rating(shooter_id, division)
-        self._ratings[key] = (mu, min(sigma + _TAU * days, _DEFAULT_SIGMA))
+        self._ratings[key] = (mu, min(sigma + self._tau * days, _DEFAULT_SIGMA))
 
     def process_match_data(
         self,
