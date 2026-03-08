@@ -1,11 +1,9 @@
 name: Warm Cache
 
 on:
-  # Nightly incremental warm against production (03:15 UTC).
-  # Skips already-cached entries in milliseconds — steady-state runtime is ~2-5 min.
-  # Handles newly-completed matches automatically without any manual intervention.
-  schedule:
-    - cron: '15 3 * * *'
+  # Nightly schedule disabled — uncomment to re-enable:
+  # schedule:
+  #   - cron: '15 3 * * *'
 
   workflow_dispatch:
     inputs:
