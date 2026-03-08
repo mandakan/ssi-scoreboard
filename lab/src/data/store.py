@@ -693,20 +693,53 @@ class Store:
 
         Keys: (shooter_id, division) — division=None is stored as '' (empty string sentinel).
         Values: (name, division, region, category, mu, sigma, matches_played, last_match_date).
+
+        Uses DELETE + bulk INSERT via a temporary table for DuckDB-optimal speed.
         """
+        import pyarrow as pa  # type: ignore[import-not-found]
+
         updated_at = datetime.now(UTC).isoformat()
+        self.db.execute(
+            "DELETE FROM shooter_ratings WHERE algorithm = ?", [algorithm]
+        )
+
+        # Build a PyArrow table — DuckDB ingests this columnar data orders of
+        # magnitude faster than row-by-row executemany.
+        algorithms, sids, divs = [], [], []
+        names, regions, categories = [], [], []
+        mus, sigmas, playeds, last_dates, updated_ats = [], [], [], [], []
+
         for (sid, div), (name, _div, region, category, mu, sigma, played, last_date) in (
             ratings.items()
         ):
-            db_div = div or ""
-            self.db.execute(
-                """INSERT OR REPLACE INTO shooter_ratings
-                   (algorithm, shooter_id, division, name, region, category, mu, sigma,
-                    matches_played, last_match_date, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                [algorithm, sid, db_div, name, region, category, mu, sigma, played,
-                 last_date, updated_at],
-            )
+            algorithms.append(algorithm)
+            sids.append(sid)
+            divs.append(div or "")
+            names.append(name)
+            regions.append(region)
+            categories.append(category)
+            mus.append(mu)
+            sigmas.append(sigma)
+            playeds.append(played)
+            last_dates.append(last_date)
+            updated_ats.append(updated_at)
+
+        tbl = pa.table({  # noqa: F841 — DuckDB references local vars by name in SQL
+            "algorithm": pa.array(algorithms, type=pa.string()),
+            "shooter_id": pa.array(sids, type=pa.int64()),
+            "division": pa.array(divs, type=pa.string()),
+            "name": pa.array(names, type=pa.string()),
+            "region": pa.array(regions, type=pa.string()),
+            "category": pa.array(categories, type=pa.string()),
+            "mu": pa.array(mus, type=pa.float64()),
+            "sigma": pa.array(sigmas, type=pa.float64()),
+            "matches_played": pa.array(playeds, type=pa.int64()),
+            "last_match_date": pa.array(last_dates, type=pa.string()),
+            "updated_at": pa.array(updated_ats, type=pa.string()),
+        })
+        self.db.execute(
+            "INSERT INTO shooter_ratings SELECT * FROM tbl"
+        )
 
     def save_rating_snapshot(
         self,

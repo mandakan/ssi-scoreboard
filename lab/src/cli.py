@@ -89,15 +89,18 @@ def _train_single_algo(
         tuple[int, str | None],
         tuple[str, str | None, str | None, str | None, float, float, int, str | None],
     ],
-    int, int, int,
+    int, int, int, float,
 ]:
     """Train one algorithm in a subprocess with a read-only DB connection.
 
-    Returns (stored_name, rating_data, n_shooters, n_entries, skipped).
+    Returns (stored_name, rating_data, n_shooters, n_entries, skipped, elapsed_s).
     """
+    import time
+
     from src.algorithms.base import get_algorithms
     from src.data.store import Store
 
+    t0 = time.monotonic()
     algo = get_algorithms(algo_name)[0]
     store = Store(db_path, read_only=True)
     shooter_last_date: dict[int, str] = {}
@@ -146,7 +149,8 @@ def _train_single_algo(
         )
         for (sid, div), r in ratings.items()
     }
-    return (stored_name, rating_data, n_shooters, len(ratings), skipped)
+    elapsed = time.monotonic() - t0
+    return (stored_name, rating_data, n_shooters, len(ratings), skipped, elapsed)
 
 
 def _default_workers() -> int:
@@ -176,7 +180,8 @@ def _run_train_mode(
     workers: max number of parallel subprocesses. None = auto (CPU count - 1).
              0 or 1 = force sequential mode.
     """
-    from concurrent.futures import ProcessPoolExecutor
+    import time
+    from concurrent.futures import ProcessPoolExecutor, as_completed
 
     from src.algorithms.base import DivKey
     from src.data.store import RatingRow
@@ -202,6 +207,7 @@ def _run_train_mode(
         store.close()
 
         results: list[Any] = []
+        t_start = time.monotonic()
         try:
             with ProcessPoolExecutor(max_workers=n_workers) as pool:
                 futures = {
@@ -210,14 +216,27 @@ def _run_train_mode(
                     ): name
                     for name in algo_names
                 }
-                for future in futures:
-                    results.append(future.result())
+                for future in as_completed(futures):
+                    name = futures[future]
+                    result = future.result()
+                    results.append(result)
+                    console.print(
+                        f"  [dim]✓ {name} finished in {result[-1]:.1f}s[/dim]"
+                    )
         finally:
             # Reopen the store with write access for batch-writing results
             # and so the caller's `store.close()` in the finally block still works.
             store.__init__(db_path)
 
-        for stored_name, rating_data, n_shooters, n_entries, skipped in results:
+        wall_time = time.monotonic() - t_start
+        total_cpu = sum(r[-1] for r in results)
+        console.print(
+            f"\n  [dim]Wall time: {wall_time:.1f}s "
+            f"(total CPU: {total_cpu:.1f}s, "
+            f"speedup: {total_cpu / wall_time:.1f}×)[/dim]"
+        )
+
+        for stored_name, rating_data, n_shooters, n_entries, skipped, _elapsed in results:
             algo_base = stored_name.replace(suffix, "") if suffix else stored_name
             console.print(f"\n[cyan]{algo_base}[/cyan]")
             if skipped:
@@ -225,8 +244,12 @@ def _run_train_mode(
             console.print(
                 f"  Rated {n_shooters} shooters ({n_entries} division entries)"
             )
+            t_save = time.monotonic()
             store.save_ratings(stored_name, rating_data)
-            console.print(f"  [green]Saved ratings for {stored_name}[/green]")
+            console.print(
+                f"  [green]Saved ratings for {stored_name} "
+                f"({time.monotonic() - t_save:.1f}s)[/green]"
+            )
         return
 
     # Sequential fallback: single algorithm or no db_path.
