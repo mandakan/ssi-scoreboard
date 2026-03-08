@@ -447,13 +447,15 @@ class Store:
     def get_competitor_division_map(
         self, source: str, ct: int, match_id: str
     ) -> dict[int, str | None]:
-        """Return competitor_id → division mapping for a match."""
+        """Return competitor_id → normalized division mapping for a match."""
+        from src.data.divisions import normalize_division
+
         rows = self.db.execute(
             "SELECT competitor_id, division FROM competitors"
             " WHERE source = ? AND ct = ? AND match_id = ?",
             [source, ct, match_id],
         ).fetchall()
-        return {r[0]: r[1] for r in rows}
+        return {r[0]: normalize_division(r[1]) for r in rows}
 
     def get_competitor_name_map(
         self, source: str, ct: int, match_id: str
