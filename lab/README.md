@@ -101,3 +101,79 @@ After syncing both sources, run `rating link` to:
 
 Training always uses canonical IDs — algorithms see a single unified set of
 shooters regardless of which source(s) they appeared in.
+
+#### How identity resolution works (detail)
+
+**Phase 1 — Bootstrap SSI** (`_bootstrap_ssi` in `identity.py`)
+
+Every SSI competitor has a stable integer `shooter_id`. This phase:
+- Reads all `(shooter_id, name, region)` rows from the `competitors` table
+- Groups name variants by `(shooter_id, region)` — a shooter may appear with
+  different spellings across matches
+- Picks the best primary name (longest non-placeholder, alphabetical tiebreak)
+- Writes one `shooter_identities` row per `(shooter_id, region)` pair and one
+  `shooter_identity_links` row per name fingerprint (`source='ssi_fp'`)
+
+This creates the lookup table used by Phase 2.
+
+**Phase 2 — Link ipscresults** (`_link_ipscresults` in `identity.py`)
+
+ipscresults competitors have no global ID — they are identified by
+`(name, region)` only. For each unlinked competitor:
+
+1. **Name normalisation** — `normalize_name()` converts `"Last, First"` format
+   to `"First Last"`. `strip_diacritics()` maps combining marks (ö→o) and
+   non-decomposing Nordic characters (Ø→O, Æ→AE, Å→A, ß→ss) to ASCII.
+   `name_fingerprint()` lowercases, strips placeholder tokens, and appends the
+   region: `"martin hollertz|SWE"`.
+
+2. **Exact match** — the fingerprint is looked up directly in the `ssi_fp` link
+   table. If found, the competitor is linked with `confidence=1.0, method='auto_exact'`.
+
+3. **Fuzzy match** — if no exact match, the normalised name is compared against
+   all SSI fingerprints in the same region using `difflib.SequenceMatcher`.
+   A match is accepted only if **both** of the following hold:
+   - **Overall ratio ≥ 0.85** (the threshold at which roughly 2 characters differ
+     in a typical 10-character name)
+   - **Per-token minimum > 0.75** — the first (given name) and last (family name)
+     tokens are compared independently; both must exceed 0.75. This prevents
+     false matches where two people share only a first name (`Thomas Larsen` ≠
+     `Thomas Olaussen`) or only a last name (`Øyvind Kristiansen` ≠
+     `Vidar Kristiansen`) because common Scandinavian suffixes (-ssen, -berg,
+     -ström) make the overall ratio misleadingly high. Digit sequences are
+     stripped from tokens before this check to handle ipscresults names with
+     embedded registration numbers (`Anders1406` → `Anders`).
+   - Saved with `confidence=<ratio>, method='auto_fuzzy'`.
+
+4. **New identity** — if no match, a new `canonical_id ≥ 2,000,000` is
+   allocated and a new `shooter_identities` row is created.
+
+The fuzzy matching phase runs in parallel across CPU workers (one chunk of
+competitors per worker) for speed. Only DB writes are sequential.
+
+**Manual corrections** — `rating link-shooter` creates a `method='manual'`
+link that is **never** overwritten by automatic re-resolution. Use it to fix
+wrong fuzzy matches.
+
+**Transparency** — the static explorer (`rating export`) includes an **Identity**
+tab listing all fuzzy-matched links sorted by confidence ascending. This makes
+it easy to spot errors before they affect ratings.
+
+**Known limitations / deferred work**
+- Common Scandinavian surnames with shared suffixes (-berg, -ström, -sen) can
+  still produce false positives near the 0.75 per-token boundary. The Identity
+  tab is the first line of defence.
+- `Optics`, `Open Semi-Auto`, `Standard Semi-Auto`, `Standard Manual` divisions
+  are intentionally not merged — see `src/data/divisions.py` for full rationale.
+- ipscresults name data sometimes contains embedded registration numbers or
+  OCR-style digit substitutions (0 for O). Strip logic handles known patterns
+  but edge cases may slip through.
+
+**Match deduplication** (`match_dedup.py`)
+
+The same L3+ competition often appears in both SSI and ipscresults. Deduplication:
+- Compares match names across sources using `SequenceMatcher` (threshold 0.80)
+- Requires dates within ±3 days
+- Prefers the richer source (more stages > more competitors > SSI > ipscresults)
+- Marks the non-preferred copy with `skip_reason='duplicate'`; it is excluded
+  from training automatically via the dedup skip set.

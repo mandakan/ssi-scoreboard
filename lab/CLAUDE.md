@@ -108,13 +108,37 @@ single `canonical_id` per real-world person:
 
 1. **Bootstrap SSI** — each SSI `shooter_id` becomes a `canonical_id`. All name variants
    seen for that `shooter_id` are registered as fingerprints under `source='ssi_fp'`.
-2. **Link ipscresults** — for each unlinked (name, region) pair:
-   - Exact fingerprint match against SSI fingerprints → assign their `canonical_id`
-   - Fuzzy name match (SequenceMatcher ≥ 0.85) within the same region
-   - No match → create a new `canonical_id` ≥ 2,000,000
+   Written via PyArrow bulk insert (fast — ~0.5s for 7,500 shooters).
+2. **Link ipscresults** — for each unlinked `(name, region)` pair:
+   - **Name normalisation**: `"Last, First"` → `"First Last"`, then `strip_diacritics()`
+     (handles NFD combining marks *and* non-decomposing Nordic chars: Ø→O, Æ→AE, Å→A,
+     ß→ss), then lowercase + `name_fingerprint()` → `"normalized name|REGION"`
+   - **Exact match**: fingerprint looked up in `ssi_fp` link table → `confidence=1.0`
+   - **Fuzzy match**: `difflib.SequenceMatcher` against all SSI fingerprints in the same
+     region. Accepted only if **both** hold:
+     - Overall ratio **≥ 0.85** (`_FUZZY_THRESHOLD`)
+     - Per-token minimum **> 0.75** (`_TOKEN_MIN_RATIO`, strictly greater): first (given)
+       and last (family) name tokens compared independently; digit sequences stripped first
+       to handle embedded registration numbers (`Anders1406` → `Anders`). This prevents
+       false matches where people share only a first or only a last name — a common failure
+       mode with Scandinavian surnames that share suffixes (-berg, -ström, -ssen).
+     - Saved with `confidence=<ratio>, method='auto_fuzzy'`
+   - **New identity**: allocate `canonical_id ≥ 2,000,000`; saved as `method='auto_exact'`
+   - Fuzzy matching runs in **parallel workers** (one chunk per CPU core) for speed.
 3. **Manual overrides** — `rating link-shooter` creates `method='manual'` links that
-   are never overwritten by automatic resolution. Use this for name changes or
+   are never overwritten by automatic resolution. Use for name changes, aliases, or
    mismatches the fuzzy matcher cannot resolve.
+
+**Transparency**: `rating export` includes an **Identity tab** in the static explorer
+listing all `auto_fuzzy` links sorted by confidence ascending. Review low-confidence
+entries (< 0.90, shown in red) and correct them with `rating link-shooter`.
+
+**Key constants** (all in `src/data/identity.py`):
+- `_FUZZY_THRESHOLD = 0.85` — minimum overall SequenceMatcher ratio
+- `_TOKEN_MIN_RATIO = 0.75` — minimum per-token ratio (strictly greater than)
+
+**Deferred ambiguous divisions** — see `src/data/divisions.py` for a documented list of
+division name variants that are not yet merged and the rationale for each.
 
 ## Match Deduplication
 

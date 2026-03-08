@@ -25,6 +25,7 @@ a manual override that is never overwritten by subsequent auto-resolution runs.
 from __future__ import annotations
 
 import difflib
+import re
 import unicodedata
 from collections import defaultdict
 from dataclasses import dataclass
@@ -48,9 +49,35 @@ if TYPE_CHECKING:
 
 _PLACEHOLDER_TOKENS = frozenset({"notknown", "unknown", "noname"})
 
+# Characters that do NOT decompose under NFD (no combining mark to strip) but
+# still have a natural ASCII equivalent. Must be handled before NFD normalisation.
+# Covers the Scandinavian letters most common in our data.
+_NON_DECOMPOSING: dict[str, str] = {
+    "Ø": "O", "ø": "o",
+    "Æ": "AE", "æ": "ae",
+    "Å": "A", "å": "a",   # Å does decompose in NFD, but map it explicitly too
+    "Ð": "D", "ð": "d",
+    "Þ": "TH", "þ": "th",
+    "ß": "ss",
+    "Ł": "L", "ł": "l",
+}
+_NON_DECOMPOSING_RE = re.compile("|".join(re.escape(k) for k in _NON_DECOMPOSING))
+
 
 def strip_diacritics(s: str) -> str:
-    """Remove combining diacritical marks, e.g. 'Sjöberg' → 'Sjoberg'."""
+    """Remove diacritical marks and replace non-decomposing characters.
+
+    Handles both standard combining marks (ö→o, ã→a) via NFD decomposition
+    and Nordic/special characters that don't decompose in NFD (Ø→O, Æ→AE, ß→ss).
+
+    Examples::
+
+        strip_diacritics("Sjöberg") → "Sjoberg"
+        strip_diacritics("Lønn")   → "Lonn"
+        strip_diacritics("Ærø")    → "AEro"
+        strip_diacritics("Ångström") → "Angstrom"
+    """
+    s = _NON_DECOMPOSING_RE.sub(lambda m: _NON_DECOMPOSING[m.group()], s)
     return "".join(
         c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn"
     )
@@ -94,9 +121,20 @@ def name_fingerprint(display_name: str, region: str) -> str:
 # Resolver
 # ---------------------------------------------------------------------------
 
-# Minimum similarity ratio (difflib) to auto-link as fuzzy.
+# Minimum overall similarity ratio (difflib SequenceMatcher) to auto-link.
 # 0.85 ≈ Levenshtein distance ≤ 2 on typical 8–15 char names.
 _FUZZY_THRESHOLD = 0.85
+
+# Per-token minimum: for names with ≥2 tokens, both the first (given) and
+# last (family) name tokens must individually exceed this ratio. Strictly
+# greater-than (> not >=) to reject 0.750 edge cases such as "Sandberg" vs
+# "Lundberg" which share the common Scandinavian suffix "-ndberg".
+_TOKEN_MIN_RATIO = 0.75
+
+# Matches embedded registration numbers in ipscresults names, e.g. "Anders1406"
+# or "PATRIK    1312 SELINDER". Stripped before per-token comparison so the
+# number doesn't penalise what is otherwise an exact name match.
+_DIGITS_RE = re.compile(r"\d+")
 
 
 @dataclass
@@ -308,6 +346,29 @@ class IdentityResolver:
 _ResolveResult = tuple[str, str, str, str, int | None, float]
 
 
+def _per_token_min(name_a: str, name_b: str) -> float:
+    """Return the minimum per-token similarity for first and last name tokens.
+
+    For names with ≥2 tokens, compares the first (given name) and last
+    (family name) tokens independently. Digit sequences are stripped before
+    comparison to handle registration numbers embedded in ipscresults names
+    (e.g. "Anders1406" → "Anders" before comparing against "Anders").
+
+    Returns 1.0 for single-token names — no per-token constraint is applied.
+    """
+    ta = name_a.split()
+    tb = name_b.split()
+    if len(ta) < 2 or len(tb) < 2:
+        return 1.0
+    a_first = _DIGITS_RE.sub("", ta[0]) or ta[0]
+    b_first = _DIGITS_RE.sub("", tb[0]) or tb[0]
+    a_last  = _DIGITS_RE.sub("", ta[-1]) or ta[-1]
+    b_last  = _DIGITS_RE.sub("", tb[-1]) or tb[-1]
+    r_first = difflib.SequenceMatcher(None, a_first, b_first).ratio()
+    r_last  = difflib.SequenceMatcher(None, a_last,  b_last).ratio()
+    return min(r_first, r_last)
+
+
 def _fuzzy_match_chunk(
     chunk: list[tuple[str, str | None]],
     ssi_fp_exact: dict[str, int],
@@ -332,6 +393,7 @@ def _fuzzy_match_chunk(
         # 2. Fuzzy match within same region
         candidates = ssi_fp_by_region.get(region.upper(), [])
         best_ratio = 0.0
+        best_token_min = 0.0
         best_canonical: int | None = None
         normalized_name_part = fp.partition("|")[0]
 
@@ -342,8 +404,13 @@ def _fuzzy_match_chunk(
             if ratio > best_ratio:
                 best_ratio = ratio
                 best_canonical = ssi_canonical
+                best_token_min = _per_token_min(normalized_name_part, ssi_name_part)
 
-        if best_ratio >= _FUZZY_THRESHOLD and best_canonical is not None:
+        if (
+            best_ratio >= _FUZZY_THRESHOLD
+            and best_token_min > _TOKEN_MIN_RATIO
+            and best_canonical is not None
+        ):
             results.append(
                 (fp, display, region, "fuzzy", best_canonical, round(best_ratio, 3))
             )
