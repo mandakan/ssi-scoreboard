@@ -157,7 +157,7 @@ _HTML = r"""<!DOCTYPE html>
 
   <!-- Tab bar -->
   <nav class="flex gap-1 mb-6 bg-white rounded-xl shadow-sm p-1 w-fit">
-    <template x-for="t in [{id:'team',l:'Team Selection'},{id:'rankings',l:'Rankings'},{id:'matches',l:'Matches'},{id:'about',l:'About'}]" :key="t.id">
+    <template x-for="t in [{id:'team',l:'Team Selection'},{id:'rankings',l:'Rankings'},{id:'matches',l:'Matches'},{id:'identity',l:'Identity'},{id:'about',l:'About'}]" :key="t.id">
       <button
         @click="tab=t.id"
         :class="tab===t.id ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'"
@@ -499,6 +499,73 @@ _HTML = r"""<!DOCTYPE html>
     </div>
   </section>
 
+  <!-- ── IDENTITY ── -->
+  <section x-show="tab==='identity'" class="space-y-6">
+    <div class="bg-white rounded-xl shadow-sm p-6">
+      <h2 class="text-lg font-bold mb-1">Fuzzy-matched identities</h2>
+      <p class="text-sm text-gray-500 mb-2">
+        Competitors from <strong>ipscresults.org</strong> have no global ID — they are matched to SSI
+        shooters by name similarity within the same region. The table below shows all
+        <strong x-text="D.fuzzy_links.length"></strong> automatic fuzzy matches, sorted by confidence
+        (lowest first). Low-confidence matches are the most likely to be wrong and should be
+        reviewed. Use <code class="bg-gray-100 px-1 rounded text-xs">rating link-shooter</code> to
+        create a manual override for any incorrect link.
+      </p>
+      <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+        A confidence of 1.00 = exact name match after normalisation. Below 0.90 = names differ
+        by more than a middle name or diacritic — check carefully.
+      </p>
+
+      <!-- Filter -->
+      <div class="flex flex-wrap gap-3 mb-4">
+        <input x-model="id_q" type="search" placeholder="Filter by name…"
+          class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <select x-model="id_region" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">All regions</option>
+          <template x-for="r in D.regions" :key="r">
+            <option :value="r" x-text="r"></option>
+          </template>
+        </select>
+        <select x-model="id_conf" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="0">Any confidence</option>
+          <option value="0.90">Below 0.90 (suspicious)</option>
+          <option value="0.95">Below 0.95</option>
+        </select>
+        <span class="text-sm text-gray-400 self-center"
+          x-text="idFiltered.length + ' / ' + D.fuzzy_links.length + ' shown'"></span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-gray-100 text-left text-xs text-gray-500 uppercase tracking-wide">
+              <th class="pb-2 pr-4">Conf</th>
+              <th class="pb-2 pr-4">Region</th>
+              <th class="pb-2 pr-4">ipscresults name</th>
+              <th class="pb-2">SSI name (matched to)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="(lnk, i) in idFiltered" :key="i">
+              <tr class="border-b border-gray-50 hover:bg-gray-50">
+                <td class="py-1.5 pr-4">
+                  <span :class="lnk.conf < 0.90 ? 'text-red-600 font-semibold' : lnk.conf < 0.95 ? 'text-amber-600' : 'text-gray-700'"
+                    x-text="lnk.conf.toFixed(3)"></span>
+                </td>
+                <td class="py-1.5 pr-4 text-gray-500 text-xs" x-text="lnk.region||'—'"></td>
+                <td class="py-1.5 pr-4 font-medium" x-text="lnk.ipr"></td>
+                <td class="py-1.5 text-gray-600" x-text="lnk.ssi"></td>
+              </tr>
+            </template>
+            <tr x-show="idFiltered.length===0">
+              <td colspan="4" class="py-6 text-center text-gray-400 text-sm">No matches found</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <!-- ── ABOUT ── -->
   <section x-show="tab==='about'" class="space-y-6">
 
@@ -625,6 +692,7 @@ document.addEventListener('alpine:init', () => {
       scoring: D.algorithms.some(a => a.endsWith('_mpct')) ? 'mpct' : 'hf',
       div: '', region: '', cat: '', sort: 'conservative', q: '',
     },
+    id_q: '', id_region: '', id_conf: '0',
 
     _resolveAlgo(base, scoring) {
       const full = scoring === 'mpct' ? base + '_mpct' : base;
@@ -649,6 +717,17 @@ document.addEventListener('alpine:init', () => {
     // Full algo list used only in the About tab.
     get algoOpts() {
       return this.D.algorithms.map(a => ({ v: a, l: ALGO_DISPLAY[a] ?? a }));
+    },
+
+    get idFiltered() {
+      const q = this.id_q.toLowerCase();
+      const minConf = parseFloat(this.id_conf) || 0;
+      return (this.D.fuzzy_links || []).filter(lnk => {
+        if (minConf > 0 && lnk.conf >= minConf) return false;
+        if (this.id_region && lnk.region !== this.id_region) return false;
+        if (q && !lnk.ipr.toLowerCase().includes(q) && !lnk.ssi.toLowerCase().includes(q)) return false;
+        return true;
+      });
     },
 
     scoreVal(s) {

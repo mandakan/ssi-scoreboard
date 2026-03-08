@@ -20,6 +20,7 @@ def export_data(store: Store) -> dict[str, Any]:
         "categories": _export_categories(store),
         "shooters": _export_shooters(store),
         "matches": _export_matches(store),
+        "fuzzy_links": _export_fuzzy_links(store),
     }
 
 
@@ -151,6 +152,40 @@ def _export_shooters(store: Store) -> list[dict[str, Any]]:
         }
 
     return list(shooters.values())
+
+
+def _export_fuzzy_links(store: Store) -> list[dict[str, Any]]:
+    """Return all auto-fuzzy identity links for human review.
+
+    Each entry shows the ipscresults name that was matched to an SSI shooter
+    along with the confidence score. Sorted by confidence ascending so the
+    most dubious matches appear first.
+    """
+    rows = store.db.execute(
+        """
+        SELECT
+            sil.name_variant   AS ipr_name,
+            sil.confidence,
+            sil.source_key,
+            si.primary_name    AS ssi_name,
+            si.canonical_id,
+            si.region
+        FROM shooter_identity_links sil
+        JOIN shooter_identities si ON si.canonical_id = sil.canonical_id
+        WHERE sil.source = 'ipscresults' AND sil.method = 'auto_fuzzy'
+        ORDER BY sil.confidence ASC, si.region, sil.name_variant
+        """
+    ).fetchall()
+    return [
+        {
+            "ipr": str(row[0]),
+            "conf": round(float(row[1]), 3),
+            "ssi": str(row[3]),
+            "id": int(row[4]),
+            "region": str(row[5]) if row[5] else None,
+        }
+        for row in rows
+    ]
 
 
 def _export_matches(store: Store) -> list[dict[str, Any]]:
