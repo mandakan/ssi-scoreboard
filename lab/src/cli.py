@@ -76,6 +76,79 @@ def _filter_matches_by_date(
     return filtered
 
 
+def _train_single_algo(
+    algo_name: str,
+    db_path: Path,
+    matches: list[tuple[str, int, str, str | None, str | None]],
+    scoring: str,
+    skip_set: set[tuple[str, int, str]],
+    suffix: str,
+) -> tuple[
+    str,
+    dict[
+        tuple[int, str | None],
+        tuple[str, str | None, str | None, str | None, float, float, int, str | None],
+    ],
+    int, int, int,
+]:
+    """Train one algorithm in a subprocess with a read-only DB connection.
+
+    Returns (stored_name, rating_data, n_shooters, n_entries, skipped).
+    """
+    from src.algorithms.base import get_algorithms
+    from src.data.store import Store
+
+    algo = get_algorithms(algo_name)[0]
+    store = Store(db_path, read_only=True)
+    shooter_last_date: dict[int, str] = {}
+    skipped = 0
+
+    try:
+        for source, ct, match_id, match_date, match_level in matches:
+            if (source, ct, match_id) in skip_set:
+                skipped += 1
+                continue
+
+            if scoring == "stage_hf":
+                results = store.get_stage_results_for_match(source, ct, match_id)
+            else:
+                scores = store.get_match_scores(source, ct, match_id)
+                results = [
+                    (cid, 0, pts, is_dq, False, is_zeroed)
+                    for cid, pts, is_dq, is_zeroed in scores
+                ]
+            comp_map = store.get_canonical_competitor_map(source, ct, match_id)
+            if not results:
+                continue
+            algo.process_match_data(
+                ct, match_id, match_date, results, comp_map,
+                name_map=store.get_competitor_name_map(source, ct, match_id),
+                division_map=store.get_competitor_division_map(source, ct, match_id),
+                region_map=store.get_competitor_region_map(source, ct, match_id),
+                category_map=store.get_competitor_category_map(source, ct, match_id),
+                match_level=match_level,
+            )
+            if match_date:
+                for sid in comp_map.values():
+                    if sid is not None:
+                        shooter_last_date[sid] = match_date
+    finally:
+        store.close()
+
+    ratings = algo.get_ratings()
+    n_shooters = len({sid for sid, _ in ratings})
+    stored_name = f"{algo.name}{suffix}"
+    rating_data = {
+        (sid, div): (
+            r.name, div, r.region, r.category,
+            r.mu, r.sigma, r.matches_played,
+            shooter_last_date.get(sid),
+        )
+        for (sid, div), r in ratings.items()
+    }
+    return (stored_name, rating_data, n_shooters, len(ratings), skipped)
+
+
 def _run_train_mode(
     store: Any,
     algorithms: Any,
@@ -83,8 +156,16 @@ def _run_train_mode(
     scoring: str,
     skip_set: set[tuple[str, int, str]] | None = None,
     name_suffix: str = "",
+    db_path: Path | None = None,
 ) -> None:
-    """Train all algorithm instances on matches for one scoring mode and save ratings."""
+    """Train all algorithm instances on matches for one scoring mode and save ratings.
+
+    When db_path is provided and there are multiple algorithms, training runs in
+    parallel using one subprocess per algorithm (each opens a read-only DuckDB
+    connection). Results are batch-written sequentially at the end.
+    """
+    from concurrent.futures import ProcessPoolExecutor
+
     from src.algorithms.base import DivKey
     from src.data.store import RatingRow
 
@@ -93,6 +174,34 @@ def _run_train_mode(
         suffix += f"_{name_suffix}"
     skip = skip_set or set()
 
+    # Parallel path: multiple algorithms + db_path available for read-only workers.
+    if db_path is not None and len(algorithms) > 1:
+        algo_names = [a.name for a in algorithms]
+        n_workers = min(len(algo_names), 4)
+        console.print(f"  [dim]Training {len(algo_names)} algorithms in parallel "
+                       f"({n_workers} workers)[/dim]")
+
+        with ProcessPoolExecutor(max_workers=n_workers) as pool:
+            futures = {
+                pool.submit(
+                    _train_single_algo, name, db_path, matches, scoring, skip, suffix
+                ): name
+                for name in algo_names
+            }
+            for future in futures:
+                name = futures[future]
+                stored_name, rating_data, n_shooters, n_entries, skipped = future.result()
+                console.print(f"\n[cyan]{name}[/cyan]")
+                if skipped:
+                    console.print(f"  Skipped {skipped} deduplicated matches")
+                console.print(
+                    f"  Rated {n_shooters} shooters ({n_entries} division entries)"
+                )
+                store.save_ratings(stored_name, rating_data)
+                console.print(f"  [green]Saved ratings for {stored_name}[/green]")
+        return
+
+    # Sequential fallback: single algorithm or no db_path.
     for algo in algorithms:
         console.print(f"\n[cyan]{algo.name}[/cyan]")
         shooter_last_date: dict[int, str] = {}
@@ -134,7 +243,7 @@ def _run_train_mode(
         n_shooters = len({sid for sid, _ in ratings})
         console.print(f"  Rated {n_shooters} shooters ({len(ratings)} division entries)")
         stored_name = f"{algo.name}{suffix}"
-        rating_data: dict[DivKey, RatingRow] = {
+        rating_data_seq: dict[DivKey, RatingRow] = {
             (sid, div): (
                 r.name, div, r.region, r.category,
                 r.mu, r.sigma, r.matches_played,
@@ -142,7 +251,7 @@ def _run_train_mode(
             )
             for (sid, div), r in ratings.items()
         }
-        store.save_ratings(stored_name, rating_data)
+        store.save_ratings(stored_name, rating_data_seq)
         console.print(f"  [green]Saved ratings for {stored_name}[/green]")
 
 
@@ -439,7 +548,8 @@ def train(
             console.print(f"  Storing as: [cyan]<algo>_{name_suffix}[/cyan]")
 
         _run_train_mode(
-            store, algorithms, matches, scoring, skip_set=skip_set, name_suffix=name_suffix
+            store, algorithms, matches, scoring,
+            skip_set=skip_set, name_suffix=name_suffix, db_path=db_path,
         )
     finally:
         store.close()
@@ -570,7 +680,10 @@ def pipeline(
             f"  {len(matches)} matches · {len(skip_set)} skipped (dedup)"
             " · scoring: match %"
         )
-        _run_train_mode(store, get_algorithms(), matches, "match_pct", skip_set=skip_set)
+        _run_train_mode(
+            store, get_algorithms(), matches, "match_pct",
+            skip_set=skip_set, db_path=db_path,
+        )
 
         console.rule("[bold blue]Step 5/5 — Export[/bold blue]")
         data = export_data(store)

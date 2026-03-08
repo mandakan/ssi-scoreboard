@@ -134,7 +134,13 @@ CREATE TABLE IF NOT EXISTS rating_history (
 class Store:
     """DuckDB-backed local store for match data and ratings."""
 
-    def __init__(self, db_path: Path = DEFAULT_DB_PATH) -> None:
+    def __init__(
+        self, db_path: Path = DEFAULT_DB_PATH, *, read_only: bool = False
+    ) -> None:
+        self._read_only = read_only
+        if read_only:
+            self.db = duckdb.connect(str(db_path), read_only=True)
+            return
         db_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             self.db = duckdb.connect(str(db_path))
@@ -214,7 +220,8 @@ class Store:
         )
 
     def close(self) -> None:
-        self.db.execute("CHECKPOINT")
+        if not self._read_only:
+            self.db.execute("CHECKPOINT")
         self.db.close()
 
     # ------------------------------------------------------------------
