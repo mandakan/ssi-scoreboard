@@ -552,6 +552,68 @@ class Store:
         ).fetchone()
         return int(row[0]) if row else None
 
+    def bulk_save_identities(
+        self,
+        rows: list[tuple[int, str, str | None]],
+    ) -> None:
+        """Bulk upsert canonical identity rows via PyArrow.
+
+        rows: list of (canonical_id, primary_name, region).
+        """
+        if not rows:
+            return
+        import pyarrow as pa  # type: ignore[import-untyped]
+
+        now = datetime.now(UTC).isoformat()
+        tbl = pa.table({  # noqa: F841
+            "canonical_id": pa.array([r[0] for r in rows], type=pa.int64()),
+            "primary_name": pa.array([r[1] for r in rows], type=pa.string()),
+            "region": pa.array([r[2] for r in rows], type=pa.string()),
+            "created_at": pa.array([now] * len(rows), type=pa.string()),
+        })
+        self.db.execute(
+            "INSERT OR REPLACE INTO shooter_identities SELECT * FROM tbl"
+        )
+
+    def bulk_save_identity_links(
+        self,
+        rows: list[tuple[str, str, int, str, float, str]],
+    ) -> None:
+        """Bulk upsert identity links via PyArrow, respecting manual overrides.
+
+        rows: list of (source, source_key, canonical_id, name_variant, confidence, method).
+        Manual links already in the DB are preserved.
+        """
+        if not rows:
+            return
+        import pyarrow as pa
+
+        # Load existing manual links to exclude them from the bulk upsert.
+        manual_keys: set[tuple[str, str]] = set()
+        manual_rows = self.db.execute(
+            "SELECT source, source_key FROM shooter_identity_links WHERE method = 'manual'"
+        ).fetchall()
+        for r in manual_rows:
+            manual_keys.add((str(r[0]), str(r[1])))
+
+        filtered = [r for r in rows if (r[0], r[1]) not in manual_keys]
+        if not filtered:
+            return
+
+        now = datetime.now(UTC).isoformat()
+        tbl = pa.table({  # noqa: F841
+            "source": pa.array([r[0] for r in filtered], type=pa.string()),
+            "source_key": pa.array([r[1] for r in filtered], type=pa.string()),
+            "canonical_id": pa.array([r[2] for r in filtered], type=pa.int64()),
+            "name_variant": pa.array([r[3] for r in filtered], type=pa.string()),
+            "confidence": pa.array([r[4] for r in filtered], type=pa.float64()),
+            "method": pa.array([r[5] for r in filtered], type=pa.string()),
+            "linked_at": pa.array([now] * len(filtered), type=pa.string()),
+        })
+        self.db.execute(
+            "INSERT OR REPLACE INTO shooter_identity_links SELECT * FROM tbl"
+        )
+
     def get_all_ssi_competitors(
         self,
     ) -> list[tuple[int, str, str | None]]:
@@ -696,7 +758,7 @@ class Store:
 
         Uses DELETE + bulk INSERT via a temporary table for DuckDB-optimal speed.
         """
-        import pyarrow as pa  # type: ignore[import-not-found]
+        import pyarrow as pa
 
         updated_at = datetime.now(UTC).isoformat()
         self.db.execute(
