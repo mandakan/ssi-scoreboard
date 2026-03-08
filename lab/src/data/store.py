@@ -510,6 +510,24 @@ class Store:
         )
         return seq
 
+    def _allocate_canonical_ids(self, count: int) -> range:
+        """Atomically allocate `count` new canonical IDs and return them as a range.
+
+        Reads the sequence counter once, bumps it by count, and writes it back.
+        Far faster than calling _next_canonical_id() in a loop for bulk operations.
+        """
+        if count == 0:
+            return range(0, 0)
+        row = self.db.execute(
+            "SELECT value FROM sync_state WHERE key = 'identity_seq'"
+        ).fetchone()
+        start = int(row[0]) if row else 2_000_000
+        self.db.execute(
+            "INSERT OR REPLACE INTO sync_state (key, value) VALUES ('identity_seq', ?)",
+            [str(start + count)],
+        )
+        return range(start, start + count)
+
     def ensure_canonical_identity(
         self, canonical_id: int, primary_name: str, region: str | None
     ) -> None:

@@ -31,15 +31,6 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    TimeElapsedColumn,
-)
-
 if TYPE_CHECKING:
     from src.data.store import Store
 
@@ -274,67 +265,40 @@ class IdentityResolver:
             unlinked, ssi_fp_exact, dict(ssi_fp_by_region)
         )
 
-        # Phase 2: apply results to the database sequentially.
-        exact_count = fuzzy_count = new_count = 0
+        # Phase 2: bulk write all results.
+        # Separate "new" identities (need allocated IDs) from known links.
+        new_entries: list[tuple[str, str, str]] = []  # (fp, display, region)
+        known_links: list[_ResolveResult] = []
+        for entry in resolved:
+            if entry[3] == "new":
+                new_entries.append((entry[0], entry[1], entry[2]))
+            else:
+                known_links.append(entry)
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            MofNCompleteColumn(),
-            TextColumn("[cyan]{task.fields[stats]}[/cyan]"),
-            TimeElapsedColumn(),
-        ) as progress:
-            task = progress.add_task(
-                "Writing identity links…",
-                total=len(resolved),
-                stats="",
-            )
+        # Allocate all new canonical IDs in one atomic DB operation.
+        new_ids = store._allocate_canonical_ids(len(new_entries))
 
-            for fp, display, region, match_type, canonical_id, confidence in resolved:
-                if match_type == "exact":
-                    assert canonical_id is not None
-                    store.save_identity_link(
-                        source="ipscresults",
-                        source_key=fp,
-                        canonical_id=canonical_id,
-                        name_variant=display,
-                        confidence=1.0,
-                        method="auto_exact",
-                    )
-                    exact_count += 1
-                elif match_type == "fuzzy":
-                    assert canonical_id is not None
-                    store.save_identity_link(
-                        source="ipscresults",
-                        source_key=fp,
-                        canonical_id=canonical_id,
-                        name_variant=display,
-                        confidence=confidence,
-                        method="auto_fuzzy",
-                    )
-                    fuzzy_count += 1
-                else:  # "new"
-                    new_canonical = store._next_canonical_id()
-                    store.ensure_canonical_identity(
-                        new_canonical, display, region or None
-                    )
-                    store.save_identity_link(
-                        source="ipscresults",
-                        source_key=fp,
-                        canonical_id=new_canonical,
-                        name_variant=display,
-                        confidence=1.0,
-                        method="auto_exact",
-                    )
-                    new_count += 1
+        # Build identity rows for new ipscresults-only shooters.
+        identity_rows: list[tuple[int, str, str | None]] = [
+            (new_id, display, region or None)
+            for (fp, display, region), new_id in zip(new_entries, new_ids, strict=True)
+        ]
 
-                progress.advance(task)
-                progress.update(
-                    task,
-                    stats=f"exact={exact_count} fuzzy={fuzzy_count} new={new_count}",
-                )
+        # Build link rows for all entries.
+        link_rows: list[tuple[str, str, int, str, float, str]] = []
+        for fp, display, _region, match_type, canonical_id, confidence in known_links:
+            assert canonical_id is not None
+            method = "auto_exact" if match_type == "exact" else "auto_fuzzy"
+            link_rows.append(("ipscresults", fp, canonical_id, display, confidence, method))
+        for (fp, display, _region), new_id in zip(new_entries, new_ids, strict=True):
+            link_rows.append(("ipscresults", fp, new_id, display, 1.0, "auto_exact"))
 
+        store.bulk_save_identities(identity_rows)
+        store.bulk_save_identity_links(link_rows)
+
+        exact_count = sum(1 for e in known_links if e[3] == "exact")
+        fuzzy_count = sum(1 for e in known_links if e[3] == "fuzzy")
+        new_count = len(new_entries)
         return exact_count, fuzzy_count, new_count
 
 
