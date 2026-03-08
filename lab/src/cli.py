@@ -189,30 +189,44 @@ def _run_train_mode(
     effective_workers = workers if workers is not None else _default_workers()
 
     # Parallel path: multiple algorithms, db_path available, workers > 1.
+    # DuckDB does not allow concurrent connections while a write lock is held,
+    # so close the parent's connection before spawning read-only workers and
+    # reopen it afterwards for the batch write phase.
     if db_path is not None and len(algorithms) > 1 and effective_workers > 1:
         algo_names = [a.name for a in algorithms]
         n_workers = min(len(algo_names), effective_workers)
         console.print(f"  [dim]Training {len(algo_names)} algorithms in parallel "
                        f"({n_workers} workers)[/dim]")
 
-        with ProcessPoolExecutor(max_workers=n_workers) as pool:
-            futures = {
-                pool.submit(
-                    _train_single_algo, name, db_path, matches, scoring, skip, suffix
-                ): name
-                for name in algo_names
-            }
-            for future in futures:
-                name = futures[future]
-                stored_name, rating_data, n_shooters, n_entries, skipped = future.result()
-                console.print(f"\n[cyan]{name}[/cyan]")
-                if skipped:
-                    console.print(f"  Skipped {skipped} deduplicated matches")
-                console.print(
-                    f"  Rated {n_shooters} shooters ({n_entries} division entries)"
-                )
-                store.save_ratings(stored_name, rating_data)
-                console.print(f"  [green]Saved ratings for {stored_name}[/green]")
+        # Release the parent's write lock so workers can open read-only connections.
+        store.close()
+
+        results: list[Any] = []
+        try:
+            with ProcessPoolExecutor(max_workers=n_workers) as pool:
+                futures = {
+                    pool.submit(
+                        _train_single_algo, name, db_path, matches, scoring, skip, suffix
+                    ): name
+                    for name in algo_names
+                }
+                for future in futures:
+                    results.append(future.result())
+        finally:
+            # Reopen the store with write access for batch-writing results
+            # and so the caller's `store.close()` in the finally block still works.
+            store.__init__(db_path)
+
+        for stored_name, rating_data, n_shooters, n_entries, skipped in results:
+            algo_base = stored_name.replace(suffix, "") if suffix else stored_name
+            console.print(f"\n[cyan]{algo_base}[/cyan]")
+            if skipped:
+                console.print(f"  Skipped {skipped} deduplicated matches")
+            console.print(
+                f"  Rated {n_shooters} shooters ({n_entries} division entries)"
+            )
+            store.save_ratings(stored_name, rating_data)
+            console.print(f"  [green]Saved ratings for {stored_name}[/green]")
         return
 
     # Sequential fallback: single algorithm or no db_path.
