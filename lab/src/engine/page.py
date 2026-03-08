@@ -434,7 +434,14 @@ _HTML = r"""<!DOCTYPE html>
             <template x-for="(s, i) in ranked" :key="s.key">
               <tr class="border-t border-gray-100 hover:bg-gray-50">
                 <td class="px-4 py-2.5 text-right text-gray-400 text-xs" x-text="i+1"></td>
-                <td class="px-4 py-2.5 font-medium" x-text="s.name"></td>
+                <td class="px-4 py-2.5 font-medium">
+                  <span x-text="s.name"></span>
+                  <template x-if="fuzzyById.has(s.id)">
+                    <span :title="'Identity uncertain — matched by name similarity (conf ' + fuzzyById.get(s.id).conf.toFixed(3) + '). Click the Identity tab to review.'"
+                      :class="fuzzyById.get(s.id).conf < 0.90 ? 'text-red-500' : 'text-amber-400'"
+                      class="ml-1 text-xs cursor-help" aria-label="Uncertain identity match">⚠</span>
+                  </template>
+                </td>
                 <td class="px-4 py-2.5 text-gray-500 text-xs" x-text="s.division||'—'"></td>
                 <td class="px-4 py-2.5 text-gray-400 text-xs" x-text="s.category||'—'"></td>
                 <td class="px-4 py-2.5 text-gray-500 text-xs" x-text="s.region||'—'"></td>
@@ -531,6 +538,14 @@ _HTML = r"""<!DOCTYPE html>
           <option value="0.90">Below 0.90 (suspicious)</option>
           <option value="0.95">Below 0.95</option>
         </select>
+        <select x-model="id_sort" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="conf">Sort: lowest confidence first</option>
+          <option value="impact">Sort: highest rating impact first</option>
+        </select>
+        <label class="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer select-none">
+          <input type="checkbox" x-model="id_high_impact" class="rounded">
+          High-impact only (top 20 in division)
+        </label>
         <span class="text-sm text-gray-400 self-center"
           x-text="idFiltered.length + ' / ' + D.fuzzy_links.length + ' shown'"></span>
       </div>
@@ -542,23 +557,33 @@ _HTML = r"""<!DOCTYPE html>
               <th class="pb-2 pr-4">Conf</th>
               <th class="pb-2 pr-4">Region</th>
               <th class="pb-2 pr-4">ipscresults name</th>
-              <th class="pb-2">SSI name (matched to)</th>
+              <th class="pb-2 pr-6">SSI name (matched to)</th>
+              <th class="pb-2">Div rank</th>
             </tr>
           </thead>
           <tbody>
             <template x-for="(lnk, i) in idFiltered" :key="i">
-              <tr class="border-b border-gray-50 hover:bg-gray-50">
+              <tr :class="(lnk.conf < 0.90 && lnk.rank != null && lnk.rank <= 20) ? 'bg-red-50 border-b border-red-100' : 'border-b border-gray-50 hover:bg-gray-50'">
                 <td class="py-1.5 pr-4">
                   <span :class="lnk.conf < 0.90 ? 'text-red-600 font-semibold' : lnk.conf < 0.95 ? 'text-amber-600' : 'text-gray-700'"
                     x-text="lnk.conf.toFixed(3)"></span>
                 </td>
                 <td class="py-1.5 pr-4 text-gray-500 text-xs" x-text="lnk.region||'—'"></td>
                 <td class="py-1.5 pr-4 font-medium" x-text="lnk.ipr"></td>
-                <td class="py-1.5 text-gray-600" x-text="lnk.ssi"></td>
+                <td class="py-1.5 pr-6 text-gray-600" x-text="lnk.ssi"></td>
+                <td class="py-1.5 text-xs">
+                  <template x-if="lnk.rank != null">
+                    <span :class="lnk.rank <= 10 ? 'text-red-600 font-semibold' : lnk.rank <= 20 ? 'text-amber-600 font-medium' : 'text-gray-500'"
+                      x-text="'#' + lnk.rank + ' / ' + lnk.div_n + ' · ' + lnk.div"></span>
+                  </template>
+                  <template x-if="lnk.rank == null">
+                    <span class="text-gray-300">—</span>
+                  </template>
+                </td>
               </tr>
             </template>
             <tr x-show="idFiltered.length===0">
-              <td colspan="4" class="py-6 text-center text-gray-400 text-sm">No matches found</td>
+              <td colspan="5" class="py-6 text-center text-gray-400 text-sm">No matches found</td>
             </tr>
           </tbody>
         </table>
@@ -692,7 +717,18 @@ document.addEventListener('alpine:init', () => {
       scoring: D.algorithms.some(a => a.endsWith('_mpct')) ? 'mpct' : 'hf',
       div: '', region: '', cat: '', sort: 'conservative', q: '',
     },
-    id_q: '', id_region: '', id_conf: '0',
+    id_q: '', id_region: '', id_conf: '0', id_sort: 'conf', id_high_impact: false,
+
+    // Map of shooter canonical_id → fuzzy link entry (lowest conf wins if multiple).
+    // Used to flag uncertain identity matches in the rankings and team tables.
+    get fuzzyById() {
+      const m = new Map();
+      for (const lnk of (this.D.fuzzy_links || [])) {
+        const existing = m.get(lnk.id);
+        if (!existing || lnk.conf < existing.conf) m.set(lnk.id, lnk);
+      }
+      return m;
+    },
 
     _resolveAlgo(base, scoring) {
       const full = scoring === 'mpct' ? base + '_mpct' : base;
@@ -722,12 +758,21 @@ document.addEventListener('alpine:init', () => {
     get idFiltered() {
       const q = this.id_q.toLowerCase();
       const minConf = parseFloat(this.id_conf) || 0;
-      return (this.D.fuzzy_links || []).filter(lnk => {
+      let links = (this.D.fuzzy_links || []).filter(lnk => {
         if (minConf > 0 && lnk.conf >= minConf) return false;
         if (this.id_region && lnk.region !== this.id_region) return false;
+        if (this.id_high_impact && (lnk.rank == null || lnk.rank > 20)) return false;
         if (q && !lnk.ipr.toLowerCase().includes(q) && !lnk.ssi.toLowerCase().includes(q)) return false;
         return true;
       });
+      if (this.id_sort === 'impact') {
+        links = [...links].sort((a, b) => {
+          const ra = a.rank ?? 99999, rb = b.rank ?? 99999;
+          if (ra !== rb) return ra - rb;
+          return a.conf - b.conf;
+        });
+      }
+      return links;
     },
 
     scoreVal(s) {

@@ -158,8 +158,10 @@ def _export_fuzzy_links(store: Store) -> list[dict[str, Any]]:
     """Return all auto-fuzzy identity links for human review.
 
     Each entry shows the ipscresults name that was matched to an SSI shooter
-    along with the confidence score. Sorted by confidence ascending so the
-    most dubious matches appear first.
+    along with the confidence score and the person's best division rank in the
+    ratings (so high-ranking competitors with shaky identity links can be
+    prioritised for manual review). Sorted by confidence ascending so the most
+    dubious matches appear first.
     """
     rows = store.db.execute(
         """
@@ -176,16 +178,57 @@ def _export_fuzzy_links(store: Store) -> list[dict[str, Any]]:
         ORDER BY sil.confidence ASC, si.region, sil.name_variant
         """
     ).fetchall()
-    return [
-        {
+
+    # Build a rank map: canonical_id → (best_div_rank, division, div_size).
+    # Uses whichever algorithm has the most rating rows as a stable reference.
+    rank_map: dict[int, tuple[int, str, int]] = {}
+    ref_row = store.db.execute(
+        "SELECT algorithm FROM shooter_ratings"
+        " GROUP BY algorithm ORDER BY COUNT(*) DESC LIMIT 1"
+    ).fetchone()
+    if ref_row:
+        rank_rows = store.db.execute(
+            f"""
+            WITH ranked AS (
+                SELECT shooter_id, division,
+                       RANK() OVER (
+                           PARTITION BY division
+                           ORDER BY (mu - {_CONS_Z} * sigma) DESC
+                       ) AS rk,
+                       COUNT(*) OVER (PARTITION BY division) AS sz
+                FROM shooter_ratings
+                WHERE algorithm = ? AND division != ''
+            ),
+            best AS (
+                SELECT shooter_id, division, rk, sz,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY shooter_id ORDER BY rk ASC, sz DESC
+                       ) AS n
+                FROM ranked
+            )
+            SELECT shooter_id, division, rk, sz FROM best WHERE n = 1
+            """,
+            [str(ref_row[0])],
+        ).fetchall()
+        for r in rank_rows:
+            rank_map[int(r[0])] = (int(r[2]), str(r[1]), int(r[3]))
+
+    result = []
+    for row in rows:
+        cid = int(row[4])
+        rank_info = rank_map.get(cid)
+        result.append({
             "ipr": str(row[0]),
             "conf": round(float(row[1]), 3),
             "ssi": str(row[3]),
-            "id": int(row[4]),
+            "id": cid,
             "region": str(row[5]) if row[5] else None,
-        }
-        for row in rows
-    ]
+            # Rating impact — None if this person has no ratings yet
+            "rank": rank_info[0] if rank_info else None,
+            "div": rank_info[1] if rank_info else None,
+            "div_n": rank_info[2] if rank_info else None,
+        })
+    return result
 
 
 def _export_matches(store: Store) -> list[dict[str, Any]]:
