@@ -75,7 +75,7 @@ def _export_shooters(store: Store) -> list[dict[str, Any]]:
 
     recent_rows = store.db.execute(
         """
-        SELECT sil.canonical_id,
+        SELECT COALESCE(CAST(sil.canonical_id AS INTEGER), c.shooter_id) AS cid,
                COUNT(DISTINCT CASE WHEN m.date >= ?
                     THEN c.source || '|' || c.match_id END)     AS m12,
                COUNT(DISTINCT CASE WHEN m.date BETWEEN ? AND ?
@@ -83,12 +83,13 @@ def _export_shooters(store: Store) -> list[dict[str, Any]]:
                COUNT(DISTINCT CASE WHEN m.date BETWEEN ? AND ?
                     THEN c.source || '|' || c.match_id END)     AS mprev
         FROM competitors c
-        JOIN shooter_identity_links sil
+        LEFT JOIN shooter_identity_links sil
           ON sil.source = c.source AND sil.source_key = c.identity_key
         JOIN matches m
           ON m.source = c.source AND m.ct = c.ct AND m.match_id = c.match_id
         WHERE m.date >= ?
-        GROUP BY sil.canonical_id
+          AND COALESCE(CAST(sil.canonical_id AS INTEGER), c.shooter_id) IS NOT NULL
+        GROUP BY cid
         """,
         [since_12m, curr_year_start, curr_year_end,
          prev_year_start, prev_year_end, prev_year_start],
