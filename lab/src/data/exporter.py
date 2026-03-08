@@ -10,15 +10,24 @@ from src.data.store import Store
 _CONS_Z = 0.5244005122401781
 
 
-def export_data(store: Store) -> dict[str, Any]:
-    """Return all data needed for the static explorer as a JSON-serialisable dict."""
+def export_data(store: Store, *, ssi_only: bool = True) -> dict[str, Any]:
+    """Return all data needed for the static explorer as a JSON-serialisable dict.
+
+    Args:
+        ssi_only: When True (default), exclude shooters whose canonical_id >= 2_000_000
+            (ipscresults-only identities with no SSI registration). Their match results
+            are still used for calibrating SSI shooters' ratings but their names and
+            personal data are not published. Recommended for any public-facing deployment.
+            Set to False only for internal/research use.
+    """
     return {
         "generated_at": date.today().isoformat(),
+        "ssi_only": ssi_only,
         "algorithms": _export_algorithms(store),
         "divisions": _export_divisions(store),
         "regions": _export_regions(store),
         "categories": _export_categories(store),
-        "shooters": _export_shooters(store),
+        "shooters": _export_shooters(store, ssi_only=ssi_only),
         "matches": _export_matches(store),
         "fuzzy_links": _export_fuzzy_links(store),
     }
@@ -56,7 +65,10 @@ def _export_categories(store: Store) -> list[str]:
     return [str(r[0]) for r in rows]
 
 
-def _export_shooters(store: Store) -> list[dict[str, Any]]:
+_IPR_ONLY_ID_THRESHOLD = 2_000_000  # canonical_ids >= this are ipscresults-only
+
+
+def _export_shooters(store: Store, *, ssi_only: bool = True) -> list[dict[str, Any]]:
     # Precompute recent match participation counts per canonical shooter.
     # Source: competitors + shooter_identity_links + matches — always available after sync.
     # rating_history is not used here: it is only populated by the serve scheduler,
@@ -117,6 +129,8 @@ def _export_shooters(store: Store) -> list[dict[str, Any]]:
     shooters: dict[tuple[int, str], dict[str, Any]] = {}
     for row in rows:
         sid = int(row[0])
+        if ssi_only and sid >= _IPR_ONLY_ID_THRESHOLD:
+            continue
         div_db = str(row[2]) if row[2] else ""
         algo = str(row[5])
         mu = float(row[6])

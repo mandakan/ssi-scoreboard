@@ -779,6 +779,24 @@ _HTML = r"""<!DOCTYPE html>
     </div>
 
   </section>
+
+  <!-- Footer note -->
+  <footer class="mt-8 text-xs text-gray-400 text-center space-y-1">
+    <template x-if="D.ssi_only">
+      <p>
+        Rankings include only competitors registered with SSI.
+        International match data is used for calibration but not published.
+        Run <code class="bg-gray-100 px-1 rounded">rating export --include-ipscresults</code>
+        for the full dataset (internal use only).
+      </p>
+    </template>
+    <template x-if="!D.ssi_only">
+      <p class="text-amber-500">
+        &#9888; Full dataset mode — includes competitors from ipscresults.org.
+        Do not publish this export publicly.
+      </p>
+    </template>
+  </footer>
 </div>
 
 <script>

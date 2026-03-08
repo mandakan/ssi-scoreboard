@@ -670,6 +670,16 @@ def tune(
 @app.command()
 def export(
     output_dir: Path = typer.Option(Path("site"), help="Output directory for the static explorer"),  # noqa: B008
+    ssi_only: bool = typer.Option(
+        True,
+        "--ssi-only/--include-ipscresults",
+        help=(
+            "SSI-only mode (default): exclude shooters who have no SSI registration "
+            "(canonical_id >= 2,000,000). Their match data still calibrates SSI shooters' "
+            "ratings but their names are not published. Use --include-ipscresults for "
+            "internal or research use only."
+        ),
+    ),
     db_path: Path = DB_PATH_OPTION,
 ) -> None:
     """Export ratings to a self-contained static HTML explorer.
@@ -686,7 +696,7 @@ def export(
 
     store = Store(db_path)
     try:
-        data = export_data(store)
+        data = export_data(store, ssi_only=ssi_only)
         generate_site(data, output_dir, data_dir=db_path.parent)
         console.print(f"\n[bold]Open locally:[/bold] {output_dir / 'index.html'}")
         console.print(
@@ -708,6 +718,14 @@ def pipeline(
     delay: float = typer.Option(2.0, help="Delay between requests in seconds"),
     skip_ipscresults: bool = typer.Option(
         False, help="Skip ipscresults.org sync (useful when already synced)"
+    ),
+    ssi_only: bool = typer.Option(
+        True,
+        "--ssi-only/--include-ipscresults",
+        help=(
+            "SSI-only mode (default): exclude shooters with no SSI registration from "
+            "the published site. Use --include-ipscresults for internal/research use only."
+        ),
     ),
     output_dir: Path = typer.Option(Path("site"), help="Output directory for the static explorer"),  # noqa: B008
     db_path: Path = DB_PATH_OPTION,
@@ -769,7 +787,7 @@ def pipeline(
         )
 
         console.rule("[bold blue]Step 5/5 — Export[/bold blue]")
-        data = export_data(store)
+        data = export_data(store, ssi_only=ssi_only)
         generate_site(data, output_dir, data_dir=db_path.parent)
         console.print("\n[bold green]Pipeline complete![/bold green]")
     finally:
