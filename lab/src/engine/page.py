@@ -16,20 +16,22 @@ console = Console()
 # Human-readable names for the dropdown and About tab.
 # _mpct suffix = trained on total match points (one event per match)
 # instead of per-stage hit factor (one event per stage).
+# Human-readable names for the About tab.
+# Tags (ELO, PL, BT, etc.) match the dropdown for easy cross-reference.
 ALGO_DISPLAY: dict[str, str] = {
-    "elo": "ELO (classic baseline)",
-    "openskill": "Bayesian — full ranking",
-    "openskill_bt": "Bayesian — pairwise",
-    "openskill_bt_lvl": "Bayesian — pairwise + level weighting",
-    "openskill_pl_decay": "Bayesian — full ranking + activity decay",
-    "openskill_bt_lvl_decay": "Bayesian — pairwise + level weighting + activity decay",
+    "elo": "ELO · Classic baseline",
+    "openskill": "PL · Bayesian full ranking",
+    "openskill_bt": "BT · Bayesian pairwise",
+    "openskill_bt_lvl": "BT+L · Bayesian pairwise + level weighting",
+    "openskill_pl_decay": "PL+D · Bayesian full ranking + activity decay",
+    "openskill_bt_lvl_decay": "BT+LD · Bayesian pairwise + level weighting + activity decay",
     # match_pct variants — same models trained on total match points per official IPSC scoring
-    "elo_mpct": "ELO (classic baseline) · match %",
-    "openskill_mpct": "Bayesian — full ranking · match %",
-    "openskill_bt_mpct": "Bayesian — pairwise · match %",
-    "openskill_bt_lvl_mpct": "Bayesian — pairwise + level weighting · match %",
-    "openskill_pl_decay_mpct": "Bayesian — full ranking + activity decay · match %",
-    "openskill_bt_lvl_decay_mpct": "Bayesian — pairwise + level weighting + activity decay · match %",
+    "elo_mpct": "ELO · Classic baseline · match %",
+    "openskill_mpct": "PL · Bayesian full ranking · match %",
+    "openskill_bt_mpct": "BT · Bayesian pairwise · match %",
+    "openskill_bt_lvl_mpct": "BT+L · Bayesian pairwise + level weighting · match %",
+    "openskill_pl_decay_mpct": "PL+D · Bayesian full ranking + activity decay · match %",
+    "openskill_bt_lvl_decay_mpct": "BT+LD · Bayesian pairwise + level weighting + activity decay · match %",
 }
 
 ALGO_DESCRIPTION: dict[str, str] = {
@@ -105,14 +107,15 @@ ALGO_DESCRIPTION: dict[str, str] = {
     ),
 }
 
-# Short, non-technical model names for the two-step picker dropdown.
+# Short model names for the dropdown. Each entry starts with a short tag
+# matching the internal code so users can cross-reference with the About tab.
 BASE_ALGO_DISPLAY: dict[str, str] = {
-    "openskill_bt_lvl":       "Recommended — pairwise + match level",
-    "openskill_bt_lvl_decay": "Recommended + activity decay",
-    "openskill_bt":           "Pairwise (simpler)",
-    "openskill_pl_decay":     "Basic Bayesian + activity decay",
-    "openskill":              "Basic Bayesian",
-    "elo":                    "Classic ELO",
+    "openskill_bt_lvl":       "BT+L · Pairwise + level weighting  ★",
+    "openskill_bt_lvl_decay": "BT+LD · Pairwise + level + decay",
+    "openskill_bt":           "BT · Pairwise",
+    "openskill_pl_decay":     "PL+D · Full ranking + decay",
+    "openskill":              "PL · Full ranking",
+    "elo":                    "ELO · Classic baseline",
 }
 
 # Preferred display order — recommended algorithms first, _mpct variants after their base.
@@ -704,6 +707,7 @@ const D                 = DATA_PLACEHOLDER;
 const ALGO_DISPLAY      = ALGO_DISPLAY_PLACEHOLDER;
 const ALGO_DESC         = ALGO_DESC_PLACEHOLDER;
 const BASE_ALGO_DISPLAY = BASE_ALGO_DISPLAY_PLACEHOLDER;
+const ALGO_ORDER        = ALGO_ORDER_PLACEHOLDER;
 
 const _BASE_ORDER = ['openskill_bt_lvl','openskill_bt_lvl_decay','openskill_bt','openskill_pl_decay','openskill','elo'];
 const CY = new Date().getFullYear();
@@ -763,8 +767,16 @@ document.addEventListener('alpine:init', () => {
     },
 
     // Full algo list used only in the About tab.
+    // Sorted by the preferred display order so it matches the dropdown ordering.
     get algoOpts() {
-      return this.D.algorithms.map(a => ({ v: a, l: ALGO_DISPLAY[a] ?? a }));
+      const order = ALGO_ORDER;
+      const sorted = [...this.D.algorithms].sort((a, b) => {
+        const ia = order.indexOf(a), ib = order.indexOf(b);
+        if (ia === -1 && ib === -1) return a.localeCompare(b);
+        if (ia === -1) return 1; if (ib === -1) return -1;
+        return ia - ib;
+      });
+      return sorted.map(a => ({ v: a, l: ALGO_DISPLAY[a] ?? a }));
     },
 
     // Score a fuzzy link by how much it likely influences current ratings.
@@ -918,6 +930,7 @@ def generate_site(data: dict[str, Any], output_dir: Path) -> None:
     # (ALGO_DISPLAY_PLACEHOLDER is a substring of BASE_ALGO_DISPLAY_PLACEHOLDER)
     html = html.replace("DATA_PLACEHOLDER",              json.dumps(data,             separators=sep))
     html = html.replace("BASE_ALGO_DISPLAY_PLACEHOLDER", json.dumps(BASE_ALGO_DISPLAY, separators=sep))
+    html = html.replace("ALGO_ORDER_PLACEHOLDER",        json.dumps(_ALGO_ORDER,       separators=sep))
     html = html.replace("ALGO_DISPLAY_PLACEHOLDER",      json.dumps(ALGO_DISPLAY,     separators=sep))
     html = html.replace("ALGO_DESC_PLACEHOLDER",         json.dumps(ALGO_DESCRIPTION, separators=sep))
 
