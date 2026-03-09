@@ -640,7 +640,11 @@ def train(
 
     store = Store(db_path)
     try:
-        algorithms = get_algorithms() if algorithm == "all" else get_algorithms(algorithm)
+        algorithms = get_algorithms("all") if algorithm == "all" else get_algorithms(algorithm)
+        # ICS handles division weighting internally — running it with
+        # match_pct_combined would double-normalise scores. Exclude it.
+        if scoring == "match_pct_combined":
+            algorithms = [a for a in algorithms if a.name != "ics"]
         all_matches = store.get_matches_chronological()
         matches = _filter_matches_by_date(all_matches, date_from, date_to)
         skip_set = store.get_dedup_skip_set()
