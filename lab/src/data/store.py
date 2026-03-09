@@ -395,6 +395,77 @@ class Store:
             for r in rows
         ]
 
+    def get_match_scores_pct(
+        self, source: str, ct: int, match_id: str
+    ) -> list[tuple[int, float, bool, bool, str | None]]:
+        """Return (competitor_id, avg_overall_percent, is_dq, is_zeroed, division).
+
+        Used for match_pct_combined scoring. DNF competitors are excluded.
+        DQ competitors get avg_overall_percent=0.0. overall_percent is the
+        per-stage % vs the stage winner across all competitors (cross-division).
+        """
+        from src.data.divisions import normalize_division
+
+        rows = self.db.execute(
+            """SELECT sr.competitor_id,
+                      AVG(COALESCE(sr.overall_percent, 0.0)) AS avg_pct,
+                      BOOL_OR(sr.dq)     AS is_dq,
+                      BOOL_OR(sr.zeroed) AS is_zeroed,
+                      c.division
+               FROM stage_results sr
+               JOIN competitors c
+                 ON c.source = sr.source AND c.ct = sr.ct
+                AND c.match_id = sr.match_id
+                AND c.competitor_id = sr.competitor_id
+               WHERE sr.source = ? AND sr.ct = ? AND sr.match_id = ?
+                 AND sr.dnf = false
+               GROUP BY sr.competitor_id, c.division""",
+            [source, ct, match_id],
+        ).fetchall()
+        return [
+            (
+                int(r[0]),
+                0.0 if r[2] else float(r[1]),
+                bool(r[2]),
+                bool(r[3]),
+                normalize_division(r[4]),
+            )
+            for r in rows
+        ]
+
+    def get_overall_pct_by_division(
+        self, match_keys: list[tuple[str, int, str]]
+    ) -> dict[str | None, list[float]]:
+        """Return per-division lists of avg_overall_percent across a set of matches.
+
+        Used to compute division weight factors for match_pct_combined scoring.
+        DNF competitors are excluded. DQ/zeroed competitors contribute 0.0.
+        """
+        from collections import defaultdict
+
+        from src.data.divisions import normalize_division
+
+        result: dict[str | None, list[float]] = defaultdict(list)
+        for source, ct, match_id in match_keys:
+            rows = self.db.execute(
+                """SELECT c.division,
+                          AVG(CASE WHEN sr.dq OR sr.zeroed THEN 0.0
+                                   ELSE COALESCE(sr.overall_percent, 0.0) END) AS avg_pct
+                   FROM stage_results sr
+                   JOIN competitors c
+                     ON c.source = sr.source AND c.ct = sr.ct
+                    AND c.match_id = sr.match_id
+                    AND c.competitor_id = sr.competitor_id
+                   WHERE sr.source = ? AND sr.ct = ? AND sr.match_id = ?
+                     AND sr.dnf = false
+                   GROUP BY sr.competitor_id, c.division""",
+                [source, ct, match_id],
+            ).fetchall()
+            for div_raw, avg_pct in rows:
+                if avg_pct is not None:
+                    result[normalize_division(div_raw)].append(float(avg_pct))
+        return dict(result)
+
     def get_stage_results_for_match(
         self, source: str, ct: int, match_id: str
     ) -> list[tuple[int, int, float | None, bool, bool, bool]]:

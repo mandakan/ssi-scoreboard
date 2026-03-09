@@ -11,6 +11,9 @@ researchers, data quality considerations, and the automated tuning methodology.
 1. [The core idea: what is a skill rating?](#the-core-idea-what-is-a-skill-rating)
 2. [How performance is measured in IPSC](#how-performance-is-measured-in-ipsc)
 3. [Scoring modes](#scoring-modes)
+   - [Stage HF](#stage-hf-stage_hf)
+   - [Match Percentage](#match-percentage-match_pct)
+   - [Combined Match Percentage](#combined-match-percentage-match_pct_combined)
 4. [The algorithms](#the-algorithms)
    - [ELO — the classic baseline](#elo-elo--the-classic-baseline)
    - [OpenSkill Plackett-Luce](#openskill-plackett-luce-openskill--the-full-ranking-model)
@@ -102,12 +105,56 @@ signal per match.
 **Disadvantages:** Fewer data points per match (1 vs N stages). Less granular — cannot
 distinguish between "consistently mediocre" and "brilliant on 9 stages, DQ on 1".
 
+### Combined Match Percentage (match_pct_combined)
+
+The entire match is one ranking event, like `match_pct`, but all divisions compete
+**on a single combined scale** instead of being rated independently. Each competitor's
+metric is their average `overall_percent` (percentage of the stage winner's hit factor
+across all competitors), normalised by a **division weight factor**.
+
+Division weights are computed from a set of anchor matches (high-level events) and
+represent the Nth percentile of performance within each division:
+
+    weight(division) = Nth percentile of avg_overall_percent for division competitors
+                       measured across anchor events
+
+    normalised_score = competitor_avg_overall_percent / weight(division) × 100
+
+A normalised score of 100 means the competitor performed at the anchor percentile for
+their division. This collapses Open, Production, Standard, etc. onto a single axis —
+enabling cross-division comparisons and career ratings that don't require division choice.
+
+**Anchor hyperparameters (tunable):**
+
+| Parameter | Values | Description |
+|---|---|---|
+| `anchor_percentile` | 50, 60, 67, 75, 80 | Percentile used as the division weight. 67 mirrors the Swedish ICS 2.0 system. |
+| `anchor_source` | `l4plus`, `l3plus` | Which matches to use as anchors. `l4plus` = World/Continental (L4–L5); `l3plus` = National+ (L3–L5). |
+
+**Advantages:** Enables cross-division career ratings; directly answers "who is the
+best shooter overall regardless of division?"; comparable to the Swedish ICS 2.0 national
+team selection methodology.
+
+**Disadvantages:** Ratings depend on the anchor event quality and percentile choice.
+Divisions with few anchor-event competitors get less reliable weights. A new algorithm
+entry — ratings are stored with a `_combined` suffix so they coexist with per-division
+modes.
+
+**Design note:** When a competitor's division is missing from the anchor data, a neutral
+weight of 100.0 is used (no normalisation). All competitors rank in a single group with
+`division=None` key in the ratings store.
+
 ### Which to use?
 
 For **national team selection** (the primary use case), `match_pct` is recommended
 as the default because it aligns with how matches are officially scored and how
 selectors think about performance. A shooter's overall match result — not individual
 stage hit factors — determines standings in real competitions.
+
+Use `match_pct_combined` when you need **cross-division comparison** — for example,
+when the selection committee wants to rank the top N Swedish shooters across all
+divisions rather than selecting separately per division. Benchmark results for this
+mode are under active development; see the tuning report for the latest findings.
 
 `stage_hf` remains available for research and may perform better on certain metrics
 due to higher data volume per match.
