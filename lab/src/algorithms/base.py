@@ -187,10 +187,11 @@ def get_algorithms(name: str | None = None) -> list[RatingAlgorithm]:
     """Get algorithm instances by name.
 
     None or 'default' → recommended algorithms only (bt_lvl, pl_decay, bt_lvl_decay).
-    'all' → all algorithms including baselines (elo, openskill, openskill_bt).
+    'all' → all algorithms including baselines (elo, openskill, openskill_bt, ics).
     Any other string → the single algorithm with that name.
     """
     from src.algorithms.elo import MultiElo
+    from src.algorithms.ics import ICSAlgorithm
     from src.algorithms.openskill_bt import OpenSkillBT
     from src.algorithms.openskill_bt_lvl import OpenSkillBTLvl
     from src.algorithms.openskill_bt_lvl_decay import OpenSkillBTLvlDecay
@@ -209,6 +210,7 @@ def get_algorithms(name: str | None = None) -> list[RatingAlgorithm]:
         OpenSkillPL(),
         OpenSkillBT(),
         MultiElo(),
+        ICSAlgorithm(),
     ]
 
     all_algos = default_algos + extra_algos
