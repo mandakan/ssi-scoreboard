@@ -1015,7 +1015,7 @@ ICS is only evaluated with `match_pct` scoring — it handles division weighting
 internally, so running it with `match_pct_combined` (which pre-normalises scores)
 would double-normalise and produce incorrect results.
 
-### Parallelisation
+### Within-machine parallelisation
 
 Each configuration is independent — it opens its own read-only database connection,
 trains from scratch, and evaluates. Configurations run in parallel via Python's
@@ -1028,15 +1028,26 @@ trains from scratch, and evaluates. Configurations run in parallel via Python's
 
 ### Output
 
-Results are saved to `data/tune_results.json` with:
+Each run saves to `data/tune_results_{scoring}.json` (one file per scoring mode),
+so runs for different scoring modes never overwrite each other:
+
+| Scoring mode | Output file |
+|---|---|
+| `match_pct` | `data/tune_results_match_pct.json` |
+| `stage_hf` | `data/tune_results_stage_hf.json` |
+| `match_pct_combined` | `data/tune_results_match_pct_combined.json` |
+
+Each file contains:
 
 - All configurations ranked by Kendall tau (descending)
 - Both base and conservative (+cons) metrics for each configuration
 - Data quality metrics for the run
 - Timestamp, scoring mode, split ratio, and conservative z-score
 
-A Rich table is printed showing the top 20 results with the best values highlighted
-in green and current default parameters marked with *.
+A Rich table is printed after each run showing the top 20 results with the best
+values highlighted in green and current default parameters marked with *.
+
+A custom path can be specified with `--output` to collect results from remote runs.
 
 ### Running the sweep
 
@@ -1044,12 +1055,70 @@ in green and current default parameters marked with *.
 # Default: match_pct scoring, 70/30 split, auto worker count
 uv run rating tune
 
-# Custom options
-uv run rating tune --scoring stage_hf --split 0.8 --workers 4
+# Specific scoring modes
+uv run rating tune --scoring stage_hf
+uv run rating tune --scoring match_pct_combined
+
+# Custom split and worker count
+uv run rating tune --scoring match_pct --split 0.8 --workers 4
 ```
 
-The sweep takes approximately 10-30 minutes depending on CPU count and dataset size.
-Designed to run unattended on a server.
+The sweep takes approximately 10–30 minutes per scoring mode depending on CPU count
+and dataset size. Designed to run unattended on a server.
+
+### Distributed execution across machines
+
+The three scoring modes are fully independent and can run simultaneously on
+different machines. The only shared resource is the DuckDB database file, which
+each machine needs a copy of (read-only during the sweep).
+
+**Step 1 — distribute the database:**
+
+```bash
+# Push the current DB to shared storage (S3/R2)
+uv run rating db-push
+
+# On each remote machine, pull a copy
+uv run rating db-pull
+```
+
+**Step 2 — run one scoring mode per machine:**
+
+```bash
+# Machine A
+uv run rating tune --scoring match_pct
+
+# Machine B
+uv run rating tune --scoring stage_hf
+
+# Machine C
+uv run rating tune --scoring match_pct_combined
+```
+
+**Step 3 — collect and merge results:**
+
+Copy the three JSON files to a single machine (any location), then:
+
+```bash
+# Auto-discovers all data/tune_results_*.json in the current directory
+uv run rating tune-merge
+
+# Or pass paths explicitly if files are in different locations
+uv run rating tune-merge \
+  results/tune_results_match_pct.json \
+  results/tune_results_stage_hf.json \
+  results/tune_results_match_pct_combined.json
+```
+
+`tune-merge` prints a combined table with a **Scoring** column so you can
+immediately compare configs across all three modes. The best values across the
+entire merged set are highlighted in green. De-duplication is by `(label, scoring)`
+— if the same config appears in multiple files, the last file wins.
+
+**Note on ICS:** ICS is only present in the `match_pct` results (20 configs).
+It is automatically excluded from `match_pct_combined` to prevent double-normalisation,
+and not applicable to `stage_hf` (which operates on per-stage hit factors, not
+match-level percentages).
 
 ---
 
