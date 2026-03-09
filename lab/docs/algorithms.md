@@ -21,6 +21,7 @@ researchers, data quality considerations, and the automated tuning methodology.
    - [BradleyTerry with Level-Scaled Beta](#bradleyterry-with-level-scaled-beta-openskill_bt_lvl)
    - [Plackett-Luce with Inactivity Decay](#plackett-luce-with-inactivity-decay-openskill_pl_decay)
    - [BradleyTerry with Level Scaling + Decay](#bradleyterry-with-level-scaling--decay-openskill_bt_lvl_decay)
+   - [ICS 2.0 — Swedish federation team selection benchmark](#ics-20-ics--swedish-federation-team-selection-benchmark)
 5. [Conservative ranking](#conservative-ranking-cons)
 6. [Percentile score (0–100)](#percentile-score-0100)
 7. [Cross-division fairness](#cross-division-fairness)
@@ -464,6 +465,204 @@ but is a real limitation in the benchmark's test window.
 
 ---
 
+### ICS 2.0 (`ics`) — Swedish federation team selection benchmark
+
+**Reference:** https://ics2.pages.dev/
+
+**What it is:** The method used by the Swedish IPSC federation for 2026 national
+team selection. It is included here as a **benchmark baseline** — not because we
+necessarily think it is the best approach, but because having hard numbers enables
+a genuine conversation: "here is where ICS is stronger; here is where our Bayesian
+approaches are stronger."
+
+ICS 2.0 is **fundamentally different** from all the other algorithms in this lab.
+It is *not* a skill model that learns over time. It does not update a shooter's
+belief incrementally after every match. Instead, it is a **batch peer-comparison
+system**: for each match, it asks: *"How would this shooter have performed at the
+World Shoot, based on how they did here relative to World Shoot participants who
+also competed in this match?"*
+
+#### Plain-language walkthrough
+
+**Step 1 — Anchor event.**
+The most recent L4 or L5 match (World/Continental Championship) is the *anchor*.
+Every competitor at that event gets a **reference score** representing their
+normalised performance. This reference score is the fixed "gold standard" against
+which all future results are measured.
+
+**Step 2 — Division weighting.**
+Different IPSC divisions produce different score levels by design — an Open shooter
+hitting 85% is not the same as a Production shooter hitting 85%, because Open allows
+optical sights, compensators, and higher-capacity magazines. To compare them fairly,
+ICS first establishes each division's *typical level* at the anchor event:
+
+> The division weight is the **67th percentile** of all competitors' scores in that
+> division at the anchor. If Production shooters typically score around 78% at the
+> World Shoot, then 78% is the Production benchmark.
+
+A competitor's **combined score** (comb) at any match is then:
+
+    comb = their avg_overall_percent / division_weight × 100
+
+A Production shooter who scores exactly at the 67th-percentile level gets comb = 100.
+A stronger shooter gets comb > 100. This normalisation collapses Open, Production,
+Standard etc. onto a single shared scale.
+
+**Step 3 — Peer comparison at each match.**
+At a regular ranking match, some of the competitors were also at the anchor event
+(they have a known reference score). For each such "reference competitor" B:
+
+    contrib(A, B) = (A's comb at this match / B's comb at this match) × B's comb at anchor
+
+Plain language: if A outperformed B by 10% at this match, and B scored 88% at the
+World Shoot, then A would have scored approximately 88% × 1.10 = 96.8% at the World
+Shoot. Each reference competitor B provides one such estimate. They are averaged to
+produce A's **match weighted score**.
+
+**Step 4 — Final ranking.**
+A shooter's final ICS score is the **average of their best `top_n` match weighted
+scores** (default: 3). The idea is similar to track and field rankings — your best
+three results count, not your average over everything.
+
+#### Worked example
+
+Suppose the World Shoot anchor establishes these division weights:
+
+- Production: 67th percentile = 78%
+- Open: 67th percentile = 82%
+
+Two World Shoot participants who will appear as references:
+
+- David (Production): scored 88% at the World Shoot → comb_anchor = 88/78 × 100 = 112.8
+- Erik (Open): scored 84% at the World Shoot → comb_anchor = 84/82 × 100 = 102.4
+
+Now Anton (Production) competes at a regional match alongside David and Erik:
+
+| Shooter | Division | % at regional | comb at regional |
+|---|---|---|---|
+| Anton | Production | 90% | 90/78 × 100 = 115.4 |
+| David | Production | 85% | 85/78 × 100 = 109.0 |
+| Erik | Open | 80% | 80/82 × 100 = 97.6 |
+
+**contrib(Anton, David)** = (115.4 / 109.0) × 112.8 = **119.5**
+> Anton outperformed David by 5.9% at this match. Scaled to David's World Shoot
+> level (112.8), that puts Anton at ≈ 119.5.
+
+**contrib(Anton, Erik)** = (115.4 / 97.6) × 102.4 = **121.1**
+> Anton outperformed Erik by 18.2% at this match. Scaled to Erik's World Shoot
+> level (102.4), that puts Anton at ≈ 121.1.
+
+**Anton's match score** = (119.5 + 121.1) / 2 = **120.3**
+
+After several matches, Anton's final ICS score is the average of his three best
+match scores. A score around 100 means "World-Shoot-level performance in this
+division." A score above 100 means better than the 67th percentile at the World Shoot.
+
+#### Mathematical formulation
+
+**Division weight:**
+
+    weight(D) = pth percentile of {avg_overall_percent of all competitors
+                                   in division D at the anchor event}
+
+Default p = 67 (tunable: 50, 60, 67, 75, 80).
+
+**Normalised combined score:**
+
+    comb(competitor, match) = avg_overall_percent / weight(division) × 100
+
+**Peer contribution:**
+
+    contrib(A, B) = comb(A, current_match) / comb(B, current_match) × comb(B, anchor)
+
+This can be rewritten as:
+
+    contrib(A, B) = (A's performance relative to B at this match) × B's known World-Shoot level
+
+**Match weighted score:**
+
+    weighted(A, match) = mean of contrib(A, B) for all reference competitors B
+                         present in this match who have an anchor score
+
+**Final ICS score:**
+
+    ICS(A) = mean of top top_n values in {weighted(A, match) for all matches A has played}
+
+**Special case — anchor event itself:**
+At the anchor event, every competitor is also a reference competitor. Since each
+competitor's current-match comb equals their anchor comb, the contribution formula
+simplifies:
+
+    contrib(A, B) = comb(A, anchor) / comb(B, anchor) × comb(B, anchor) = comb(A, anchor)
+
+So at the anchor event every competitor's match score equals their own normalised score.
+This is mathematically consistent and exactly what ICS intends.
+
+**Fallback — no reference competitors:**
+If no anchor event has been processed yet, or if no reference competitors happen to
+appear in a particular match, the normalised comb score is used directly as the match
+score. This ensures the algorithm degrades gracefully on early historical data.
+
+#### How this benchmark adaptation differs from real ICS 2.0
+
+The official ICS 2.0 uses a single fixed anchor: World Shoot 2025. In this benchmark:
+
+- **Rolling anchor:** whenever an L4 or L5 match is processed chronologically, it
+  becomes the new anchor and replaces the previous one. This is necessary because the
+  dataset spans 2004–2026 with multiple World Shoots.
+- **No manual override list:** the official system uses a hand-curated list of 11
+  ranking matches for 2026 selection. Here, all L2+ matches feed the algorithm.
+- **Continuous vs batch:** the official system is recalculated in a single batch at
+  the end of the selection period. Here, matches are processed one-by-one in
+  chronological order (required by the benchmark framework).
+
+These adaptations are necessary for a fair apples-to-apples benchmark but mean the
+benchmark ICS results are an approximation of the official method, not an exact replica.
+
+#### Tunable parameters
+
+| Parameter | Default | Values tested | What it controls |
+|---|---|---|---|
+| `anchor_percentile` | 67 | 50, 60, 67, 75, 80 | Which percentile to use as the division weight. 67 mirrors the official ICS 2.0 specification. A higher percentile raises the bar, making scores lower overall. |
+| `top_n` | 3 | 2, 3, 4, 5 | How many best results count. Official ICS 2.0 uses 3. More results averages out single-match luck but dilutes peak performance. |
+
+The sweep tests all 20 combinations (5 × 4) with `match_pct` scoring.
+
+#### Strengths
+
+- **Transparent and interpretable:** every number in the ranking can be traced
+  directly to specific match results. There is no statistical black box.
+- **Cross-division by design:** the division weighting explicitly handles Open vs
+  Production vs Standard — no approximations needed.
+- **Familiar to the federation:** since this is the actual selection method, results
+  can be directly discussed with federation officials.
+- **Rewards peak performance:** the top-N structure means one exceptional match at a
+  major event can carry a shooter, which many selectors feel is appropriate.
+
+#### Weaknesses
+
+- **Not a skill model:** it produces no uncertainty estimate (sigma). Conservative
+  ranking cannot differentiate between a shooter with 1 result and one with 20.
+- **Anchor dependency:** all scores depend on the quality and composition of the
+  anchor event. A rolling anchor that changes mid-season can cause discontinuities.
+- **Sparse reference links:** at any given match, most competitors are *not* World
+  Shoot participants. If only 2 out of 80 competitors have anchor scores, those 2
+  people's results dominate A's match score. Results from low-reference-density
+  matches may be unreliable.
+- **No recency:** a result from 5 years ago counts the same as one from last month,
+  as long as it is in the top N. The Bayesian models with decay handle this better.
+- **Not online:** designed as a batch calculation over a fixed season, not as a
+  running ranking. Adapting it to the chronological benchmark framework requires
+  approximations (see above).
+
+**Why does ICS matter for this project?**
+The Swedish IPSC community deserves a data-driven comparison between ICS and the
+Bayesian approaches — not just opinions. Benchmark numbers showing "ICS has 0.45 Kendall
+tau while BT+LD has 0.52, but ICS has better top-5 accuracy for the Open division"
+enable a constructive, specific conversation rather than a philosophical debate.
+
+---
+
 ## Conservative ranking (+cons)
 
 Every algorithm above produces two ranking signals:
@@ -790,7 +989,7 @@ benchmark.
 
 ### Grid search space
 
-The search space covers approximately 80 configurations:
+The search space covers approximately 100 configurations for `match_pct` scoring:
 
 | Algorithm | Parameters | Combinations |
 |---|---|---|
@@ -800,6 +999,7 @@ The search space covers approximately 80 configurations:
 | BT+Level+Decay | level_scale x tau | 36 |
 | PL (baseline) | — | 1 |
 | BT (baseline) | — | 1 |
+| ICS 2.0 | anchor_percentile x top_n | 20 |
 
 **ELO grid:** K_default in {24, 32, 40, 48}, K_min in {8, 12, 16}, K_decay_matches in
 {15, 20, 30}. Combinations where K_min >= K_default are excluded (invalid).
@@ -809,6 +1009,11 @@ The search space covers approximately 80 configurations:
 **PL+Decay grid:** tau in {0.04, 0.06, 0.083, 0.10, 0.12, 0.15}.
 
 **BT+Level+Decay grid:** Full cross-product of level_scale x tau (36 combinations).
+
+**ICS 2.0 grid:** anchor_percentile in {50, 60, 67, 75, 80} x top_n in {2, 3, 4, 5}.
+ICS is only evaluated with `match_pct` scoring — it handles division weighting
+internally, so running it with `match_pct_combined` (which pre-normalises scores)
+would double-normalise and produce incorrect results.
 
 ### Parallelisation
 
@@ -850,19 +1055,23 @@ Designed to run unattended on a server.
 
 ## Summary table
 
-| Short tag | Algorithm | Model | Level weighting | Recency decay | Best at |
-|---|---|---|---|---|---|
-| ELO | `elo` | ELO | No | No | Simple baseline |
-| PL | `openskill` | Plackett-Luce | No | No | Starting point |
-| BT | `openskill_bt` | BradleyTerry | No | No | Top-5/Top-10 accuracy |
-| BT+L | `openskill_bt_lvl` | BradleyTerry | Yes | No | Best for current data |
-| PL+D | `openskill_pl_decay` | Plackett-Luce | No | Yes | Recency-aware PL |
-| BT+LD | `openskill_bt_lvl_decay` | BradleyTerry | Yes | Yes | Most complete model |
+| Short tag | Algorithm | Model type | Level weighting | Recency decay | Uncertainty (sigma) | Best at |
+|---|---|---|---|---|---|---|
+| ELO | `elo` | Pairwise ELO | No | No | No | Simple baseline |
+| PL | `openskill` | Bayesian Plackett-Luce | No | No | Yes | Starting point |
+| BT | `openskill_bt` | Bayesian BradleyTerry | No | No | Yes | Top-5/Top-10 accuracy |
+| BT+L | `openskill_bt_lvl` | Bayesian BradleyTerry | Yes | No | Yes | Best for current data |
+| PL+D | `openskill_pl_decay` | Bayesian Plackett-Luce | No | Yes | Yes | Recency-aware PL |
+| BT+LD | `openskill_bt_lvl_decay` | Bayesian BradleyTerry | Yes | Yes | Yes | Most complete Bayesian model |
+| ICS | `ics` | Peer comparison | No (div-weighted) | No | No | Federation benchmark |
 
 **Recommended for national team selection:** `openskill_bt_lvl` base ranking
 or `openskill_bt_lvl_decay +cons` (conservative) — the former identifies top
 performers most reliably; the latter is the most principled approach for long-term
 ranking where recency and experience level should count.
+
+**ICS 2.0** is included as the federation baseline. See benchmark results for a
+direct numerical comparison of where ICS and the Bayesian approaches differ.
 
 ---
 
@@ -874,3 +1083,10 @@ The level-scaled beta values and inactivity decay formula used in `openskill_bt_
 licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
 Only the algorithmic ideas were borrowed; all code was written independently to fit
 this project's architecture and conventions.
+
+The ICS 2.0 algorithm (`ics`) is the Swedish IPSC federation's national team selection
+method. The specification and formula were reconstructed from the publicly available
+description at [ics2.pages.dev](https://ics2.pages.dev/). The implementation here is
+an independent reconstruction for benchmarking purposes; it is not the official ICS
+software. Any discrepancies between this implementation and the official results should
+be reported so they can be corrected.

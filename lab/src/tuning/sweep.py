@@ -74,6 +74,7 @@ class DataQuality:
 def _make_algo(config: TuneConfig) -> RatingAlgorithm:
     """Instantiate an algorithm with the given hyperparameters."""
     from src.algorithms.elo import MultiElo
+    from src.algorithms.ics import ICSAlgorithm
     from src.algorithms.openskill_bt import OpenSkillBT
     from src.algorithms.openskill_bt_lvl import OpenSkillBTLvl
     from src.algorithms.openskill_bt_lvl_decay import OpenSkillBTLvlDecay
@@ -82,6 +83,7 @@ def _make_algo(config: TuneConfig) -> RatingAlgorithm:
 
     mapping: dict[str, type[RatingAlgorithm]] = {
         "elo": MultiElo,
+        "ics": ICSAlgorithm,
         "openskill": OpenSkillPL,
         "openskill_bt": OpenSkillBT,
         "openskill_bt_lvl": OpenSkillBTLvl,
@@ -149,6 +151,20 @@ def get_search_space(scoring: str = "match_pct") -> list[TuneConfig]:
     # Baselines (no tunable params -- included for comparison)
     configs.append(TuneConfig("openskill", {}, "openskill(baseline)"))
     configs.append(TuneConfig("openskill_bt", {}, "openskill_bt(baseline)"))
+
+    # ICS 2.0: anchor_percentile × top_n.
+    # Only evaluated with match_pct scoring (ICS handles division weighting
+    # internally; stage_hf and match_pct_combined would double-normalise).
+    if scoring == "match_pct":
+        for ap in [50, 60, 67, 75, 80]:
+            for n in [2, 3, 4, 5]:
+                configs.append(
+                    TuneConfig(
+                        algo_class="ics",
+                        params={"anchor_percentile": float(ap), "top_n": n},
+                        label=f"ics(p={ap},n={n})",
+                    )
+                )
 
     if scoring != "match_pct_combined":
         return configs
@@ -506,6 +522,8 @@ _DEFAULT_LABELS: set[str] = {
     "bt_lvl_decay(scale=1.0,\u03c4=0.083)",
     "openskill(baseline)",
     "openskill_bt(baseline)",
+    # ICS 2.0 defaults: 67th-percentile anchor, top-3 results
+    "ics(p=67,n=3)",
     # match_pct_combined defaults (ICS 2.0-style: 67th percentile, L4+ anchor)
     "pl_decay(\u03c4=0.083,p=67,l4plus)",
     "bt_lvl_decay(scale=1.0,\u03c4=0.083,p=67,l4plus)",

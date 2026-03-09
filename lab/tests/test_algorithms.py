@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from src.algorithms.elo import MultiElo
+from src.algorithms.ics import ICSAlgorithm
 from src.algorithms.openskill_bt import OpenSkillBT
 from src.algorithms.openskill_bt_lvl import OpenSkillBTLvl
 from src.algorithms.openskill_bt_lvl_decay import OpenSkillBTLvlDecay
@@ -260,6 +261,156 @@ class TestMultiElo:
         algo2 = MultiElo()
         algo2.load_state(path)
         assert algo.get_ratings()[(100, None)].mu == pytest.approx(algo2.get_ratings()[(100, None)].mu)
+
+
+class TestICSAlgorithm:
+    def test_name(self) -> None:
+        assert ICSAlgorithm().name == "ics"
+
+    def test_per_division_false(self) -> None:
+        assert ICSAlgorithm().per_division is False
+
+    def test_process_match_no_anchor(self) -> None:
+        """Without an anchor event, falls back to normalised score (div_weight=100)."""
+        algo = ICSAlgorithm()
+        algo.process_match_data(22, "M1", "2026-01-01", STAGE_RESULTS, COMP_MAP)
+        ratings = algo.get_ratings()
+        # Keys use None division (cross-division algorithm)
+        assert (100, None) in ratings
+        assert (200, None) in ratings
+        # Winner (shooter 100) should score higher
+        assert ratings[(100, None)].mu > ratings[(200, None)].mu
+
+    def test_predict_rank(self) -> None:
+        algo = ICSAlgorithm()
+        algo.process_match_data(22, "M1", "2026-01-01", STAGE_RESULTS, COMP_MAP)
+        assert algo.predict_rank([100, 200]) == [100, 200]
+
+    def test_predict_rank_with_unknown_shooter(self) -> None:
+        """Shooters with no score are ranked last."""
+        algo = ICSAlgorithm()
+        algo.process_match_data(22, "M1", "2026-01-01", STAGE_RESULTS, COMP_MAP)
+        predicted = algo.predict_rank([999, 100, 200])
+        assert predicted[0] == 100
+        assert predicted[-1] == 999
+
+    def test_anchor_event_enables_peer_comparison(self) -> None:
+        """After an L4 anchor match, subsequent matches use peer comparison."""
+        # 3 shooters: 100 wins, 200 mid, 300 loses at the anchor (L4).
+        anchor_results: list[tuple[int, int, float | None, bool, bool, bool]] = [
+            (1, 0, 90.0, False, False, False),  # shooter 100 → 90%
+            (2, 0, 75.0, False, False, False),  # shooter 200 → 75%
+            (3, 0, 60.0, False, False, False),  # shooter 300 → 60%
+        ]
+        anchor_map: dict[int, int | None] = {1: 100, 2: 200, 3: 300}
+        anchor_div: dict[int, str | None] = {1: "Production", 2: "Production", 3: "Production"}
+
+        algo = ICSAlgorithm()
+        algo.process_match_data(22, "A1", "2025-01-01", anchor_results, anchor_map,
+                                division_map=anchor_div, match_level="l4")
+
+        # Sanity: anchor_perf is populated
+        assert 100 in algo._anchor_perf
+        assert 200 in algo._anchor_perf
+        assert 300 in algo._anchor_perf
+
+        # Regular match: shooters 100, 200 compete (300 absent).
+        reg_results: list[tuple[int, int, float | None, bool, bool, bool]] = [
+            (1, 0, 80.0, False, False, False),
+            (2, 0, 70.0, False, False, False),
+        ]
+        algo.process_match_data(22, "M1", "2025-06-01", reg_results, {1: 100, 2: 200},
+                                division_map={1: "Production", 2: "Production"})
+
+        ratings = algo.get_ratings()
+        # Shooter 100 scored better at the regular match → should rank higher
+        assert ratings[(100, None)].mu > ratings[(200, None)].mu
+
+    def test_anchor_event_self_score(self) -> None:
+        """At the anchor event, each competitor's score equals their normalised pct."""
+        anchor_results: list[tuple[int, int, float | None, bool, bool, bool]] = [
+            (1, 0, 90.0, False, False, False),
+            (2, 0, 60.0, False, False, False),
+        ]
+        anchor_map: dict[int, int | None] = {1: 100, 2: 200}
+        anchor_div: dict[int, str | None] = {1: "Open", 2: "Open"}
+
+        algo = ICSAlgorithm(anchor_percentile=67.0, top_n=3)
+        algo.process_match_data(22, "A1", "2025-01-01", anchor_results, anchor_map,
+                                division_map=anchor_div, match_level="l5")
+
+        # At the anchor event there are no prior reference scores; both
+        # competitors are each other's reference. Since b_comb == b_vm at
+        # the anchor event (same match), contrib(A, B) = a_comb for any B.
+        # Therefore weighted(A) = a_comb = normalised score.
+        ratings = algo.get_ratings()
+        assert ratings[(100, None)].mu > ratings[(200, None)].mu
+
+    def test_top_n_averaging(self) -> None:
+        """Final score is the average of the best top_n results."""
+        algo = ICSAlgorithm(top_n=2)
+        comp_map: dict[int, int | None] = {1: 100}
+
+        # Three matches with decreasing scores (no anchor, direct normalised).
+        for i, score in enumerate([80.0, 60.0, 40.0]):
+            results: list[tuple[int, int, float | None, bool, bool, bool]] = [
+                (1, 0, score, False, False, False),
+            ]
+            algo.process_match_data(22, f"M{i}", f"2026-0{i+1}-01", results, comp_map)
+
+        # top_n=2: average of the two best = (80 + 60) / 2 = 70
+        ratings = algo.get_ratings()
+        assert ratings[(100, None)].mu == pytest.approx(70.0)
+
+    def test_idempotent(self) -> None:
+        algo = ICSAlgorithm()
+        algo.process_match_data(22, "M1", "2026-01-01", STAGE_RESULTS, COMP_MAP)
+        mu1 = algo.get_ratings()[(100, None)].mu
+        algo.process_match_data(22, "M1", "2026-01-01", STAGE_RESULTS, COMP_MAP)
+        assert algo.get_ratings()[(100, None)].mu == mu1
+
+    def test_dnf_excluded(self) -> None:
+        results: list[tuple[int, int, float | None, bool, bool, bool]] = [
+            (1, 0, 80.0, False, False, False),
+            (2, 0, 0.0, False, True, False),  # DNF
+        ]
+        algo = ICSAlgorithm()
+        algo.process_match_data(22, "M1", None, results, COMP_MAP)
+        ratings = algo.get_ratings()
+        assert not any(k[0] == 200 for k in ratings)
+
+    def test_save_load_state(self, tmp_path: Path) -> None:
+        algo = ICSAlgorithm(anchor_percentile=75.0, top_n=2)
+        algo.process_match_data(22, "M1", "2026-01-01", STAGE_RESULTS, COMP_MAP,
+                                match_level="l4")
+        path = tmp_path / "ics_state.json"
+        algo.save_state(path)
+
+        algo2 = ICSAlgorithm()
+        algo2.load_state(path)
+        assert algo2.anchor_percentile == 75.0
+        assert algo2.top_n == 2
+        assert algo.get_ratings()[(100, None)].mu == algo2.get_ratings()[(100, None)].mu
+        assert algo2._anchor_perf == algo._anchor_perf
+
+    def test_save_load_state_none_division_weight(self, tmp_path: Path) -> None:
+        """Division weights with None key round-trip correctly through JSON."""
+        anchor_results: list[tuple[int, int, float | None, bool, bool, bool]] = [
+            (1, 0, 85.0, False, False, False),
+            (2, 0, 70.0, False, False, False),
+        ]
+        # No division_map → division=None for all competitors
+        algo = ICSAlgorithm()
+        algo.process_match_data(22, "A1", "2025-01-01", anchor_results,
+                                {1: 100, 2: 200}, match_level="l4")
+        assert None in algo._div_weights
+
+        path = tmp_path / "ics_none_div.json"
+        algo.save_state(path)
+        algo2 = ICSAlgorithm()
+        algo2.load_state(path)
+        assert None in algo2._div_weights
+        assert algo2._div_weights[None] == pytest.approx(algo._div_weights[None])
 
 
 class TestPerDivisionRatings:
