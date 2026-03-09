@@ -8,7 +8,6 @@ import type { ShooterProfile } from "@/lib/shooter-index";
 import { parseRawScorecards } from "@/lib/scorecard-data";
 import { extractDivision } from "@/lib/divisions";
 import { computeAggregateStats } from "@/lib/shooter-stats";
-import { CACHE_SCHEMA_VERSION } from "@/lib/constants";
 import { evaluateAchievements } from "@/lib/achievements/evaluate";
 import type {
   ShooterDashboardResponse,
@@ -259,8 +258,12 @@ export async function GET(
 
         try {
           const matchEntry = JSON.parse(matchRaw) as CacheEntry<RawMatchData>;
-          // Only process entries with the current schema version (need shooter.id)
-          if (matchEntry.v !== CACHE_SCHEMA_VERSION) return null;
+          // Require at least v6, when shooter { id } was added to IpscCompetitorNode.
+          // Entries older than v6 cannot identify the shooter and must be skipped.
+          // We intentionally allow any version ≥ 6 so that D1 entries stored before
+          // a recent schema bump are still usable — fields added in later versions
+          // are accessed safely and extractDivision() has fallbacks for pre-v8 data.
+          if (!matchEntry.v || matchEntry.v < 6) return null;
           if (!matchEntry.data?.event) return null;
 
           const ev = matchEntry.data.event;
@@ -377,7 +380,7 @@ export async function GET(
 
     try {
       const matchEntry = JSON.parse(matchRaw) as CacheEntry<RawMatchData>;
-      if (matchEntry.v !== CACHE_SCHEMA_VERSION) continue;
+      if (!matchEntry.v || matchEntry.v < 6) continue;
       if (!matchEntry.data?.event) continue;
 
       const ev = matchEntry.data.event;
