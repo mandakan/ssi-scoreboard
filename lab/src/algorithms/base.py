@@ -60,6 +60,43 @@ def group_stage_by_division(
     return by_div, match_keys
 
 
+def compute_division_weights(
+    pct_by_division: dict[str | None, list[float]],
+    percentile: float = 67.0,
+) -> dict[str | None, float]:
+    """Compute division weight factors as the Nth percentile of avg_overall_percent.
+
+    Used for ``match_pct_combined`` scoring to normalise per-division performance
+    onto a single cross-division scale. The weight for a division is the Nth
+    percentile of competitors' average overall_percent values observed at the
+    anchor events. A higher weight means the division historically scores higher
+    percentages, so normalising by this weight equalises divisions.
+
+    Args:
+        pct_by_division: division → list of avg_overall_percent values from anchor matches.
+        percentile: The percentile to use as the weight (0–100). Default 67.
+
+    Returns:
+        division → weight. Falls back to 100.0 for divisions with no anchor data.
+
+    Example (ICS 2.0 style):
+        weights = compute_division_weights(pct_by_div, percentile=67)
+        normalized = competitor_avg_pct / weights.get(division, 100.0) * 100.0
+    """
+    weights: dict[str | None, float] = {}
+    for div, pcts in pct_by_division.items():
+        if not pcts:
+            continue
+        sorted_pcts = sorted(pcts)
+        n = len(sorted_pcts)
+        idx = (percentile / 100.0) * (n - 1)
+        lo = int(idx)
+        hi = min(lo + 1, n - 1)
+        frac = idx - lo
+        weights[div] = sorted_pcts[lo] + frac * (sorted_pcts[hi] - sorted_pcts[lo])
+    return weights
+
+
 # ---------------------------------------------------------------------------
 # Abstract base class
 # ---------------------------------------------------------------------------

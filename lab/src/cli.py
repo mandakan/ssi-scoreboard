@@ -83,6 +83,7 @@ def _train_single_algo(
     scoring: str,
     skip_set: set[tuple[str, int, str]],
     suffix: str,
+    division_weights: dict[str | None, float] | None = None,
 ) -> tuple[
     str,
     dict[
@@ -105,6 +106,7 @@ def _train_single_algo(
     store = Store(db_path, read_only=True)
     shooter_last_date: dict[int, str] = {}
     skipped = 0
+    weights = division_weights or {}
 
     try:
         for source, ct, match_id, match_date, match_level in matches:
@@ -114,19 +116,29 @@ def _train_single_algo(
 
             if scoring == "stage_hf":
                 results = store.get_stage_results_for_match(source, ct, match_id)
+                div_map = store.get_competitor_division_map(source, ct, match_id)
+            elif scoring == "match_pct_combined":
+                pct_scores = store.get_match_scores_pct(source, ct, match_id)
+                results = []
+                for cid, avg_pct, is_dq, is_zeroed, division in pct_scores:
+                    w = weights.get(division, 100.0)
+                    normalized = (avg_pct / w * 100.0) if w > 0 else avg_pct
+                    results.append((cid, 0, normalized, is_dq, False, is_zeroed))
+                div_map = None  # all in one combined group
             else:
                 scores = store.get_match_scores(source, ct, match_id)
                 results = [
                     (cid, 0, pts, is_dq, False, is_zeroed)
                     for cid, pts, is_dq, is_zeroed in scores
                 ]
+                div_map = store.get_competitor_division_map(source, ct, match_id)
             comp_map = store.get_canonical_competitor_map(source, ct, match_id)
             if not results:
                 continue
             algo.process_match_data(
                 ct, match_id, match_date, results, comp_map,
                 name_map=store.get_competitor_name_map(source, ct, match_id),
-                division_map=store.get_competitor_division_map(source, ct, match_id),
+                division_map=div_map,
                 region_map=store.get_competitor_region_map(source, ct, match_id),
                 category_map=store.get_competitor_category_map(source, ct, match_id),
                 match_level=match_level,
@@ -186,10 +198,31 @@ def _run_train_mode(
     from src.algorithms.base import DivKey
     from src.data.store import RatingRow
 
-    suffix = "" if scoring == "stage_hf" else "_mpct"
+    if scoring == "stage_hf":
+        suffix = ""
+    elif scoring == "match_pct_combined":
+        suffix = "_combined"
+    else:
+        suffix = "_mpct"
     if name_suffix:
         suffix += f"_{name_suffix}"
     skip = skip_set or set()
+
+    # Pre-compute division weights for combined scoring (needs full match list).
+    division_weights: dict[str | None, float] | None = None
+    if scoring == "match_pct_combined":
+        from src.algorithms.base import compute_division_weights
+
+        all_keys = [(s, ct, mid) for s, ct, mid, _d, _l in matches if (s, ct, mid) not in skip]
+        pct_by_div = store.get_overall_pct_by_division(all_keys)
+        division_weights = compute_division_weights(pct_by_div, percentile=67.0)
+        console.print(
+            "  Division weights (p=67): "
+            + ", ".join(
+                f"{d or 'None'}={w:.1f}"
+                for d, w in sorted(division_weights.items(), key=lambda x: x[1], reverse=True)
+            )
+        )
 
     effective_workers = workers if workers is not None else _default_workers()
 
@@ -212,7 +245,8 @@ def _run_train_mode(
             with ProcessPoolExecutor(max_workers=n_workers) as pool:
                 futures = {
                     pool.submit(
-                        _train_single_algo, name, db_path, matches, scoring, skip, suffix
+                        _train_single_algo, name, db_path, matches, scoring, skip, suffix,
+                        division_weights,
                     ): name
                     for name in algo_names
                 }
@@ -265,19 +299,30 @@ def _run_train_mode(
 
             if scoring == "stage_hf":
                 results = store.get_stage_results_for_match(source, ct, match_id)
+                div_map = store.get_competitor_division_map(source, ct, match_id)
+            elif scoring == "match_pct_combined":
+                weights = division_weights or {}
+                pct_scores = store.get_match_scores_pct(source, ct, match_id)
+                results = []
+                for cid, avg_pct, is_dq, is_zeroed, division in pct_scores:
+                    w = weights.get(division, 100.0)
+                    normalized = (avg_pct / w * 100.0) if w > 0 else avg_pct
+                    results.append((cid, 0, normalized, is_dq, False, is_zeroed))
+                div_map = None  # all in one combined group
             else:
                 scores = store.get_match_scores(source, ct, match_id)
                 results = [
                     (cid, 0, pts, is_dq, False, is_zeroed)
                     for cid, pts, is_dq, is_zeroed in scores
                 ]
+                div_map = store.get_competitor_division_map(source, ct, match_id)
             comp_map = store.get_canonical_competitor_map(source, ct, match_id)
             if not results:
                 continue
             algo.process_match_data(
                 ct, match_id, match_date, results, comp_map,
                 name_map=store.get_competitor_name_map(source, ct, match_id),
-                division_map=store.get_competitor_division_map(source, ct, match_id),
+                division_map=div_map,
                 region_map=store.get_competitor_region_map(source, ct, match_id),
                 category_map=store.get_competitor_category_map(source, ct, match_id),
                 match_level=match_level,
@@ -516,7 +561,11 @@ def train(
     ),
     scoring: str = typer.Option(
         "match_pct",
-        help="Scoring mode: match_pct (whole-match points, default) or stage_hf (per-stage HF)",
+        help=(
+            "Scoring mode: match_pct (whole-match points, default), "
+            "stage_hf (per-stage HF), or match_pct_combined (division-weight-normalised "
+            "cross-division scoring)."
+        ),
     ),
     date_from: str | None = typer.Option(
         None,
@@ -580,8 +629,11 @@ def train(
     from src.algorithms.base import get_algorithms
     from src.data.store import Store
 
-    if scoring not in ("stage_hf", "match_pct"):
-        console.print(f"[red]Unknown scoring mode '{scoring}'. Use stage_hf or match_pct.[/red]")
+    if scoring not in ("stage_hf", "match_pct", "match_pct_combined"):
+        console.print(
+            f"[red]Unknown scoring mode '{scoring}'. "
+            "Use stage_hf, match_pct, or match_pct_combined.[/red]"
+        )
         raise typer.Exit(1)
 
     name_suffix = label if label is not None else _date_label(date_from, date_to)
@@ -593,7 +645,10 @@ def train(
         matches = _filter_matches_by_date(all_matches, date_from, date_to)
         skip_set = store.get_dedup_skip_set()
         n_algo, n_match = len(algorithms), len(matches)
-        mode_label = "stage HF" if scoring == "stage_hf" else "match %"
+        _mode_labels = {
+            "stage_hf": "stage HF", "match_pct": "match %", "match_pct_combined": "combined %"
+        }
+        mode_label = _mode_labels.get(scoring, scoring)
 
         date_range = ""
         if date_from or date_to:
@@ -645,7 +700,10 @@ def benchmark(
 
 @app.command()
 def tune(
-    scoring: str = typer.Option("match_pct", help="Scoring mode: match_pct or stage_hf"),
+    scoring: str = typer.Option(
+        "match_pct",
+        help="Scoring mode: match_pct, stage_hf, or match_pct_combined",
+    ),
     split: float = typer.Option(0.7, help="Train/test split ratio"),
     workers: int | None = typer.Option(None, help="Max parallel workers (default: CPU-1)"),
     db_path: Path = DB_PATH_OPTION,

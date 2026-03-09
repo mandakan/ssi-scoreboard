@@ -13,6 +13,10 @@ from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.data.store import Store
 
 from rich.console import Console
 from rich.table import Table
@@ -35,7 +39,10 @@ class TuneConfig:
 
     algo_class: str  # e.g. "elo", "openskill_bt_lvl"
     params: dict[str, float | int]
-    label: str  # human-readable label for the results table
+    label: str
+    # Scoring-mode-specific parameters (e.g. anchor_percentile for match_pct_combined).
+    # These are separate from algo hyperparams and not passed to the algorithm constructor.
+    scoring_params: dict[str, str | float] = field(default_factory=dict)
 
 
 @dataclass
@@ -85,8 +92,13 @@ def _make_algo(config: TuneConfig) -> RatingAlgorithm:
     return cls(**config.params)
 
 
-def get_search_space() -> list[TuneConfig]:
-    """Define the full hyperparameter grid."""
+def get_search_space(scoring: str = "match_pct") -> list[TuneConfig]:
+    """Define the full hyperparameter grid.
+
+    For ``match_pct_combined`` scoring, returns algorithm configs cross-producted
+    with anchor hyperparameters (percentile × source filter). For other scoring
+    modes the anchor params are ignored and not included.
+    """
     configs: list[TuneConfig] = []
 
     # ELO: default_k x min_k x k_decay_matches
@@ -138,7 +150,98 @@ def get_search_space() -> list[TuneConfig]:
     configs.append(TuneConfig("openskill", {}, "openskill(baseline)"))
     configs.append(TuneConfig("openskill_bt", {}, "openskill_bt(baseline)"))
 
-    return configs
+    if scoring != "match_pct_combined":
+        return configs
+
+    # match_pct_combined: cross-product of top algorithms × anchor hyperparameters.
+    # We sweep anchor_percentile and anchor_source; algo params use their default values.
+    # The per-mode configs above are NOT used for combined scoring (they have no
+    # scoring_params), so we build a fresh combined list here and return it.
+    combined: list[TuneConfig] = []
+    anchor_percentiles = [50, 60, 67, 75, 80]
+    anchor_sources = ["l4plus", "l3plus"]
+
+    # PL+Decay — best algorithm for match_pct; sweep tau × anchor hyperparams.
+    for tau in [0.04, 0.083, 0.15]:
+        for ap in anchor_percentiles:
+            for asrc in anchor_sources:
+                combined.append(
+                    TuneConfig(
+                        algo_class="openskill_pl_decay",
+                        params={"tau": tau},
+                        label=f"pl_decay(\u03c4={tau},p={ap},{asrc})",
+                        scoring_params={"anchor_percentile": ap, "anchor_source": asrc},
+                    )
+                )
+
+    # BT+Level+Decay — second-best; sweep a representative scale × tau × anchor params.
+    for scale in [1.0, 1.5]:
+        for tau in [0.083, 0.15]:
+            for ap in anchor_percentiles:
+                for asrc in anchor_sources:
+                    combined.append(
+                        TuneConfig(
+                            algo_class="openskill_bt_lvl_decay",
+                            params={"level_scale": scale, "tau": tau},
+                            label=f"bt_lvl_decay(scale={scale},\u03c4={tau},p={ap},{asrc})",
+                            scoring_params={"anchor_percentile": ap, "anchor_source": asrc},
+                        )
+                    )
+
+    # Baselines with default anchor settings for combined mode.
+    for ap in [67]:
+        for asrc in anchor_sources:
+            combined.append(
+                TuneConfig(
+                    "openskill",
+                    {},
+                    f"openskill(baseline,p={ap},{asrc})",
+                    scoring_params={"anchor_percentile": ap, "anchor_source": asrc},
+                )
+            )
+            combined.append(
+                TuneConfig(
+                    "openskill_bt",
+                    {},
+                    f"openskill_bt(baseline,p={ap},{asrc})",
+                    scoring_params={"anchor_percentile": ap, "anchor_source": asrc},
+                )
+            )
+
+    return combined
+
+
+def _compute_division_weights_for_sweep(
+    store: Store,
+    train_matches: list[tuple[str, int, str, str | None, str | None]],
+    anchor_percentile: float,
+    anchor_source: str,
+) -> dict[str | None, float]:
+    """Pre-compute division weights from a filtered subset of training matches.
+
+    anchor_source:
+      "l4plus"  — use only L4/L5 matches (World/Continental championships).
+      "l3plus"  — use L3, L4, and L5 matches (National + above).
+
+    Falls back to all training matches if no anchor matches qualify under the filter.
+    """
+    from src.algorithms.base import compute_division_weights
+
+    if anchor_source == "l4plus":
+        anchor_keys = [
+            (s, ct, mid) for s, ct, mid, _d, lvl in train_matches if lvl in ("l4", "l5")
+        ]
+    else:  # l3plus
+        anchor_keys = [
+            (s, ct, mid) for s, ct, mid, _d, lvl in train_matches if lvl in ("l3", "l4", "l5")
+        ]
+
+    if not anchor_keys:
+        # No qualifying matches — fall back to the full training set.
+        anchor_keys = [(s, ct, mid) for s, ct, mid, _d, _l in train_matches]
+
+    pct_by_div = store.get_overall_pct_by_division(anchor_keys)
+    return compute_division_weights(pct_by_div, anchor_percentile)
 
 
 def _conservative_rank(
@@ -197,16 +300,36 @@ def _evaluate_config(
     store = Store(db_path, read_only=True)
 
     try:
+        # Pre-compute division weights for combined scoring (before the training loop).
+        division_weights: dict[str | None, float] = {}
+        if scoring == "match_pct_combined":
+            anchor_percentile = float(config.scoring_params.get("anchor_percentile", 67.0))
+            anchor_source = str(config.scoring_params.get("anchor_source", "l4plus"))
+            division_weights = _compute_division_weights_for_sweep(
+                store, train_matches, anchor_percentile, anchor_source
+            )
+
         # Train phase
         for source, ct, match_id, match_date, match_level in train_matches:
             if scoring == "stage_hf":
                 results = store.get_stage_results_for_match(source, ct, match_id)
+                division_map_arg = store.get_competitor_division_map(source, ct, match_id)
+            elif scoring == "match_pct_combined":
+                pct_scores = store.get_match_scores_pct(source, ct, match_id)
+                results = []
+                for cid, avg_pct, is_dq, is_zeroed, division in pct_scores:
+                    w = division_weights.get(division, 100.0)
+                    normalized = (avg_pct / w * 100.0) if w > 0 else avg_pct
+                    results.append((cid, 0, normalized, is_dq, False, is_zeroed))
+                # Pass division_map=None so all competitors rank in one combined group.
+                division_map_arg = None
             else:
                 scores = store.get_match_scores(source, ct, match_id)
                 results = [
                     (cid, 0, pts, is_dq, False, is_zeroed)
                     for cid, pts, is_dq, is_zeroed in scores
                 ]
+                division_map_arg = store.get_competitor_division_map(source, ct, match_id)
             comp_map = store.get_canonical_competitor_map(source, ct, match_id)
             if not results:
                 continue
@@ -216,7 +339,7 @@ def _evaluate_config(
                 match_date,
                 results,
                 comp_map,
-                division_map=store.get_competitor_division_map(source, ct, match_id),
+                division_map=division_map_arg,
                 match_level=match_level,
             )
 
@@ -271,12 +394,22 @@ def _evaluate_config(
 
             if scoring == "stage_hf":
                 results = store.get_stage_results_for_match(source, ct, match_id)
+                test_div_map = store.get_competitor_division_map(source, ct, match_id)
+            elif scoring == "match_pct_combined":
+                pct_scores = store.get_match_scores_pct(source, ct, match_id)
+                results = []
+                for cid, avg_pct, is_dq, is_zeroed, division in pct_scores:
+                    w = division_weights.get(division, 100.0)
+                    normalized = (avg_pct / w * 100.0) if w > 0 else avg_pct
+                    results.append((cid, 0, normalized, is_dq, False, is_zeroed))
+                test_div_map = None
             else:
                 scores = store.get_match_scores(source, ct, match_id)
                 results = [
                     (cid, 0, pts, is_dq, False, is_zeroed)
                     for cid, pts, is_dq, is_zeroed in scores
                 ]
+                test_div_map = store.get_competitor_division_map(source, ct, match_id)
             if results:
                 algo.process_match_data(
                     ct,
@@ -284,7 +417,7 @@ def _evaluate_config(
                     match_date,
                     results,
                     comp_map,
-                    division_map=store.get_competitor_division_map(source, ct, match_id),
+                    division_map=test_div_map,
                     match_level=match_level,
                 )
     finally:
@@ -373,6 +506,9 @@ _DEFAULT_LABELS: set[str] = {
     "bt_lvl_decay(scale=1.0,\u03c4=0.083)",
     "openskill(baseline)",
     "openskill_bt(baseline)",
+    # match_pct_combined defaults (ICS 2.0-style: 67th percentile, L4+ anchor)
+    "pl_decay(\u03c4=0.083,p=67,l4plus)",
+    "bt_lvl_decay(scale=1.0,\u03c4=0.083,p=67,l4plus)",
 }
 
 
@@ -492,7 +628,7 @@ def run_sweep(
     console.print(f"  Train: {len(train_matches)} | Test: {len(test_matches)}")
     console.print(f"  Workers: {effective_workers}")
 
-    configs = get_search_space()
+    configs = get_search_space(scoring)
     console.print(f"  Configurations: {len(configs)}")
 
     results: list[TuneResult] = []
@@ -544,6 +680,7 @@ def run_sweep(
                 "label": r.config.label,
                 "algo_class": r.config.algo_class,
                 "params": r.config.params,
+                "scoring_params": r.config.scoring_params,
                 "scoring": r.scoring,
                 "elapsed_s": round(r.elapsed_s, 2),
                 "metrics": {k: round(v, 6) for k, v in r.metrics.items()},

@@ -88,20 +88,44 @@ def _actual_ranking_by_division(
 
 
 def _get_results(
-    store: Store, source: str, ct: int, match_id: str, scoring: str
-) -> list[tuple[int, int, float | None, bool, bool, bool]]:
-    """Return stage results in the format expected by process_match_data.
+    store: Store,
+    source: str,
+    ct: int,
+    match_id: str,
+    scoring: str,
+    division_weights: dict[str | None, float] | None = None,
+) -> tuple[list[tuple[int, int, float | None, bool, bool, bool]], dict[int, str | None] | None]:
+    """Return (stage_results, division_map) in the format expected by process_match_data.
 
-    stage_hf  — one row per stage per competitor (hit factor as metric).
-    match_pct — one synthetic row per competitor; metric is total match points.
-                Treating the whole match as a single ranking event aligns with
-                how IPSC officially scores competitors.
+    stage_hf          — one row per stage per competitor (hit factor as metric).
+    match_pct         — one synthetic row per competitor; metric is total match points.
+    match_pct_combined — one synthetic row per competitor; metric is division-weight-
+                         normalised avg overall_percent. All competitors rank in one
+                         combined group (division_map=None).
+
+    Returns a (results, division_map) tuple so callers can pass both to process_match_data.
     """
     if scoring == "stage_hf":
-        return store.get_stage_results_for_match(source, ct, match_id)
+        return (
+            store.get_stage_results_for_match(source, ct, match_id),
+            store.get_competitor_division_map(source, ct, match_id),
+        )
+    if scoring == "match_pct_combined":
+        weights = division_weights or {}
+        pct_scores = store.get_match_scores_pct(source, ct, match_id)
+        combined: list[tuple[int, int, float | None, bool, bool, bool]] = []
+        for cid, avg_pct, is_dq, is_zeroed, division in pct_scores:
+            w = weights.get(division, 100.0)
+            normalized: float | None = (avg_pct / w * 100.0) if w > 0 else avg_pct
+            combined.append((cid, 0, normalized, is_dq, False, is_zeroed))
+        return combined, None  # None division_map → single combined group
+    # match_pct
     scores = store.get_match_scores(source, ct, match_id)
     # Synthetic stage_id = 0; dnf=False because absent competitors are already excluded
-    return [(cid, 0, pts, is_dq, False, is_zeroed) for cid, pts, is_dq, is_zeroed in scores]
+    return (
+        [(cid, 0, pts, is_dq, False, is_zeroed) for cid, pts, is_dq, is_zeroed in scores],
+        store.get_competitor_division_map(source, ct, match_id),
+    )
 
 
 def _empty_metrics() -> dict[str, list[float]]:
@@ -129,20 +153,40 @@ def _run_mode(
     """Train and evaluate all algorithms for one scoring mode.
 
     Returns (algo_metrics, division_taus) with algorithm names suffixed by
-    '_mpct' when scoring == 'match_pct' so both modes can coexist in one table.
+    '_mpct' / '_combined' when scoring != 'stage_hf' so both modes can coexist.
     """
+    from src.algorithms.base import compute_division_weights
+
     algo_metrics: dict[str, dict[str, list[float]]] = {}
     division_taus: dict[str, dict[str, list[float]]] = {}
+
+    # Pre-compute division weights for combined scoring using all training matches.
+    division_weights: dict[str | None, float] = {}
+    if scoring == "match_pct_combined":
+        anchor_keys = [(s, ct, mid) for s, ct, mid, _d, _l in train_matches]
+        pct_by_div = store.get_overall_pct_by_division(anchor_keys)
+        division_weights = compute_division_weights(pct_by_div, percentile=67.0)
+        console.print(
+            "  Division weights (p=67): "
+            + ", ".join(
+                f"{d or 'None'}={w:.1f}"
+                for d, w in sorted(
+                    division_weights.items(), key=lambda x: x[1], reverse=True
+                )
+            )
+        )
 
     for algo in get_algorithms():
         console.print(f"\n[cyan]Training {algo.name}[/cyan] ({scoring})")
 
         for source, ct, match_id, match_date, match_level in train_matches:
-            results = _get_results(store, source, ct, match_id, scoring)
+            results, div_map = _get_results(store, source, ct, match_id, scoring, division_weights)
             comp_map = store.get_canonical_competitor_map(source, ct, match_id)
             if results:
                 algo.process_match_data(
-                    ct, match_id, match_date, results, comp_map, match_level=match_level
+                    ct, match_id, match_date, results, comp_map,
+                    division_map=div_map,
+                    match_level=match_level,
                 )
 
         all_ratings = algo.get_ratings()
@@ -174,14 +218,21 @@ def _run_mode(
                 if len(div_predicted) >= 2:
                     algo_div_taus[div].append(kendall_tau(div_predicted, div_actual))
 
-            results = _get_results(store, source, ct, match_id, scoring)
+            results, div_map = _get_results(store, source, ct, match_id, scoring, division_weights)
             comp_map = store.get_canonical_competitor_map(source, ct, match_id)
             if results:
                 algo.process_match_data(
-                    ct, match_id, match_date, results, comp_map, match_level=match_level
+                    ct, match_id, match_date, results, comp_map,
+                    division_map=div_map,
+                    match_level=match_level,
                 )
 
-        suffix = "" if scoring == "stage_hf" else "_mpct"
+        if scoring == "stage_hf":
+            suffix = ""
+        elif scoring == "match_pct_combined":
+            suffix = "_combined"
+        else:
+            suffix = "_mpct"
         name = f"{algo.name}{suffix}"
         algo_metrics[name] = base_m
         algo_metrics[f"{name}+cons"] = cons_m
@@ -221,7 +272,10 @@ def run_benchmark(
     test_matches = matches[split_idx:]
 
     modes = ["stage_hf", "match_pct"] if scoring == "all" else [scoring]
-    mode_label = " + ".join("stage HF" if m == "stage_hf" else "match %" for m in modes)
+    _mode_labels = {
+        "stage_hf": "stage HF", "match_pct": "match %", "match_pct_combined": "combined %"
+    }
+    mode_label = " + ".join(_mode_labels.get(m, m) for m in modes)
     console.print(f"[bold]Benchmark: {len(matches)} matches — scoring: {mode_label}[/bold]")
     console.print(f"  Train: {len(train_matches)} | Test: {len(test_matches)}")
 
