@@ -246,6 +246,7 @@ def run_benchmark(
     store: Store,
     split_ratio: float = 0.7,
     scoring: str = "stage_hf",
+    disciplines: set[str] | None = None,
 ) -> dict[str, dict[str, list[float]]]:
     """Run chronological train/test benchmark for all algorithms.
 
@@ -256,13 +257,18 @@ def run_benchmark(
                   Aligns with IPSC's official scoring; fewer but holistic signals.
       all       — run both modes and show them side-by-side in one combined table.
 
+    disciplines:
+      Set of discipline strings to include (e.g. {"Handgun"}). Pass None (default)
+      to include all disciplines. Matches with no discipline value are excluded
+      when a filter is active.
+
     For each algorithm × scoring mode, measures:
     - Base: algorithm's own predict_rank() (mu-ordered)
     - Conservative (+cons): mu − z×σ at 70th percentile
 
     Also produces a per-division Kendall τ breakdown for cross-division fairness.
     """
-    matches = store.get_matches_chronological()
+    matches = store.get_matches_chronological(disciplines=disciplines)
     if not matches:
         console.print("[red]No matches in store. Run sync first.[/red]")
         return {}

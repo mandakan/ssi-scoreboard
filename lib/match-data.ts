@@ -6,7 +6,7 @@ import { cache } from "react";
 import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
 import cacheAdapter from "@/lib/cache-impl";
 import { computeMatchTtl } from "@/lib/match-ttl";
-import { formatDivisionDisplay } from "@/lib/divisions";
+import { extractDivision } from "@/lib/divisions";
 import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
 import { afterResponse } from "@/lib/background-impl";
 import { persistToMatchStore } from "@/lib/match-data-store";
@@ -37,6 +37,8 @@ interface RawCompetitor {
   last_name?: string;
   number?: string;
   club?: string | null;
+  /** Universal division display field — populated for all IPSC disciplines. Added in cache schema v8. */
+  get_division_display?: string | null;
   handgun_div?: string | null;
   get_handgun_div_display?: string | null;
   shoots_handgun_major?: boolean | null;
@@ -67,6 +69,7 @@ export interface RawMatchData {
     scoring_completed?: string | number | null;
     region?: string | null;
     sub_rule?: string | null;
+    get_full_rule_display?: string | null;
     level?: string | null;
     stages_count?: number;
     competitors_count?: number;
@@ -178,10 +181,7 @@ export async function fetchMatchData(
     name: [c.first_name, c.last_name].filter(Boolean).join(" ") || "Unknown",
     competitor_number: c.number ?? "",
     club: c.club ?? null,
-    division: formatDivisionDisplay(
-      c.get_handgun_div_display ?? c.handgun_div,
-      c.shoots_handgun_major,
-    ),
+    division: extractDivision(c),
     region: c.region || null,
     region_display: c.get_region_display || null,
     category: c.category || null,
@@ -215,6 +215,7 @@ export async function fetchMatchData(
     date: ev.starts ?? null,
     level: ev.level ?? null,
     sub_rule: ev.sub_rule ?? null,
+    discipline: ev.get_full_rule_display ?? null,
     region: ev.region ?? null,
     stages_count: ev.stages_count ?? stages.length,
     competitors_count: ev.competitors_count ?? competitors.length,

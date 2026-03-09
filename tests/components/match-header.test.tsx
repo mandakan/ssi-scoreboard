@@ -10,6 +10,7 @@ const baseMatch: MatchResponse = {
   date: "2026-03-15T09:00:00+00:00",
   level: "l2",
   sub_rule: "nm",
+  discipline: "IPSC Handgun & PCC",
   region: "SWE",
   stages_count: 8,
   competitors_count: 105,

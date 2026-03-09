@@ -2,7 +2,7 @@
 // Uses cached data (GraphQL cache for matches, Redis index for shooters).
 
 import { fetchRawMatchData } from "@/lib/match-data";
-import { formatDivisionDisplay } from "@/lib/divisions";
+import { extractDivision } from "@/lib/divisions";
 import { decodeShooterId } from "@/lib/shooter-index";
 import cache from "@/lib/cache-impl";
 import db from "@/lib/db-impl";
@@ -80,10 +80,7 @@ async function fetchOgMatchDataImpl(
       name: [c.first_name, c.last_name].filter(Boolean).join(" ") || "Unknown",
       competitor_number: c.number ?? "",
       club: c.club ?? null,
-      division: formatDivisionDisplay(
-        c.get_handgun_div_display ?? c.handgun_div,
-        c.shoots_handgun_major,
-      ),
+      division: extractDivision(c),
       region: c.region || null,
       region_display: c.get_region_display || null,
       category: c.category || null,

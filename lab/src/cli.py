@@ -646,6 +646,15 @@ def train(
             "Has no effect on non-ICS algorithms."
         ),
     ),
+    discipline: str | None = typer.Option(
+        None,
+        "--discipline",
+        help=(
+            "Comma-separated discipline filter, e.g. 'Handgun' or 'Handgun,PCC'. "
+            "Only matches whose discipline matches one of the values are included. "
+            "Leave empty (default) to train on all disciplines."
+        ),
+    ),
     db_path: Path = DB_PATH_OPTION,
 ) -> None:
     """Train rating algorithms on synced match data.
@@ -710,7 +719,10 @@ def train(
                 if a.name == "ics" else a
                 for a in algorithms
             ]
-        all_matches = store.get_matches_chronological()
+        disc_set: set[str] | None = (
+            {d.strip() for d in discipline.split(",") if d.strip()} if discipline else None
+        )
+        all_matches = store.get_matches_chronological(disciplines=disc_set)
         matches = _filter_matches_by_date(all_matches, date_from, date_to)
         # Apply curated match-ID filter when provided (Gap 3 — ICS 2026 specific list).
         if match_ids_file is not None:
@@ -758,6 +770,15 @@ def benchmark(
         "match_pct",
         help="Scoring mode: match_pct (default), stage_hf, or all (runs both, combined table)",
     ),
+    discipline: str | None = typer.Option(
+        None,
+        "--discipline",
+        help=(
+            "Comma-separated discipline filter, e.g. 'Handgun' or 'Handgun,PCC'. "
+            "Only matches whose discipline matches one of the values are included. "
+            "Leave empty (default) to benchmark on all disciplines."
+        ),
+    ),
     db_path: Path = DB_PATH_OPTION,
 ) -> None:
     """Run benchmark comparing all algorithms (base + conservative ranking variants).
@@ -770,9 +791,12 @@ def benchmark(
     from src.benchmark.runner import run_benchmark
     from src.data.store import Store
 
+    disc_set: set[str] | None = (
+        {d.strip() for d in discipline.split(",") if d.strip()} if discipline else None
+    )
     store = Store(db_path)
     try:
-        algo_metrics = run_benchmark(store, split_ratio=split, scoring=scoring)
+        algo_metrics = run_benchmark(store, split_ratio=split, scoring=scoring, disciplines=disc_set)
         if chart and algo_metrics:
             save_chart(algo_metrics, output_path=str(db_path.parent / "benchmark.png"))
     finally:
@@ -794,6 +818,15 @@ def tune(
             "so runs for different scoring modes don't overwrite each other."
         ),
     ),
+    discipline: str | None = typer.Option(
+        None,
+        "--discipline",
+        help=(
+            "Comma-separated discipline filter, e.g. 'Handgun' or 'Handgun,PCC'. "
+            "Only matches whose discipline matches one of the values are included. "
+            "Leave empty (default) to sweep on all disciplines."
+        ),
+    ),
     db_path: Path = DB_PATH_OPTION,
 ) -> None:
     """Run automated hyperparameter grid search.
@@ -807,6 +840,9 @@ def tune(
     """
     from src.tuning.sweep import run_sweep
 
+    disc_set: set[str] | None = (
+        {d.strip() for d in discipline.split(",") if d.strip()} if discipline else None
+    )
     _warn_if_fresh_db(db_path)
     run_sweep(
         db_path=db_path,
@@ -814,6 +850,7 @@ def tune(
         split_ratio=split,
         workers=workers,
         output_path=output,
+        disciplines=disc_set,
     )
 
 

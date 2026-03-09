@@ -14,6 +14,7 @@ import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY, SCORECARDS_QUERY } from "
 import { computeMatchTtl } from "@/lib/match-ttl";
 import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
 import { parseMatchUrl } from "@/lib/utils";
+import { extractDivision } from "@/lib/divisions";
 import type { RawMatchData } from "@/lib/match-data";
 
 interface RawScorecardsResponse {
@@ -101,7 +102,7 @@ export async function POST(
     shooterId: decodeShooterId(c.shooter?.id),
     name: [c.first_name, c.last_name].filter(Boolean).join(" ") || "Unknown",
     club: c.club ?? null,
-    division: c.get_handgun_div_display ?? c.handgun_div ?? null,
+    division: extractDivision(c),
   }));
 
   indexMatchShooters(ct, id, matchData.event.starts ?? null, competitors);

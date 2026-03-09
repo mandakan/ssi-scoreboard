@@ -9,6 +9,7 @@ const MOCK_MATCH: MatchResponse = {
   date: "2026-03-01T09:00:00+00:00",
   level: "l2",
   sub_rule: "nm",
+  discipline: "IPSC Handgun & PCC",
   region: "SWE",
   stages_count: 3,
   competitors_count: 10,

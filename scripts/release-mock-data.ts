@@ -21,6 +21,7 @@ export const MOCK_MATCH: MatchResponse = {
   date: "2026-03-01T09:00:00+01:00",
   level: "l3",
   sub_rule: "nm",
+  discipline: "IPSC Handgun",
   region: "SWE",
   stages_count: 6,
   competitors_count: 48,

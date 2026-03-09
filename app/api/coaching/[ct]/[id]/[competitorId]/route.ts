@@ -14,7 +14,7 @@ import {
   computeStylePercentiles,
 } from "@/app/api/compare/logic";
 import { computeMatchTtl } from "@/lib/match-ttl";
-import { formatDivisionDisplay } from "@/lib/divisions";
+import { extractDivision } from "@/lib/divisions";
 import { decodeShooterId } from "@/lib/shooter-index";
 import cache from "@/lib/cache-impl";
 import type { CoachingTipResponse, CompetitorInfo } from "@/lib/types";
@@ -25,6 +25,7 @@ interface RawCompetitor {
   last_name?: string;
   number?: string;
   club?: string | null;
+  get_division_display?: string | null;
   handgun_div?: string | null;
   get_handgun_div_display?: string | null;
   shoots_handgun_major?: boolean | null;
@@ -160,10 +161,7 @@ export async function GET(
       "Unknown",
     competitor_number: rawComp.number ?? "",
     club: rawComp.club ?? null,
-    division: formatDivisionDisplay(
-      rawComp.get_handgun_div_display ?? rawComp.handgun_div,
-      rawComp.shoots_handgun_major,
-    ),
+    division: extractDivision(rawComp),
     region: null,
     region_display: null,
     category: null,
@@ -195,7 +193,7 @@ export async function GET(
   const divisionMap = new Map<number, string | null>(
     allCompetitors.map((c) => [
       parseInt(c.id, 10),
-      c.get_handgun_div_display ?? c.handgun_div ?? null,
+      c.get_division_display || c.get_handgun_div_display || c.handgun_div || null,
     ]),
   );
   const fieldPoints = computeAllFingerprintPoints(rawScorecards, divisionMap);

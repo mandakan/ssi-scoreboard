@@ -104,6 +104,14 @@ export async function executeQuery<T>(
 //
 // `competitor(content_type, id)` at the top level returns 404 in practice.
 // All competitor/scorecard data is fetched via the event node.
+//
+// Multi-discipline note: all IPSC disciplines (Handgun, Rifle, Shotgun, PCC,
+// Mini Rifle, Precision Rifle, Air) share the same ct=22, IpscMatchNode, and
+// IpscCompetitorNode types. `get_division_display` is the universal division
+// field that returns the correct value for any discipline. Discipline-specific
+// raw fields (handgun_div, rifle_div, etc.) are also available on the same
+// node — `get_division_display` is preferred and the others are kept only for
+// backward compatibility with entries cached before schema v8.
 export const MATCH_QUERY = `
   query GetMatch($ct: Int!, $id: String!) {
     event(content_type: $ct, id: $id) {
@@ -118,6 +126,7 @@ export const MATCH_QUERY = `
       ... on IpscMatchNode {
         region
         sub_rule
+        get_full_rule_display
         level
         stages_count
         competitors_count
@@ -151,6 +160,7 @@ export const MATCH_QUERY = `
             last_name
             number
             club
+            get_division_display
             handgun_div
             get_handgun_div_display
             shoots_handgun_major
@@ -179,11 +189,11 @@ export const MATCH_QUERY = `
   }
 `;
 
-// ─── Query: list IPSC handgun events ─────────────────────────────────────────
+/// ─── Query: list IPSC events ──────────────────────────────────────────────────
 // Returns all publicly-visible IPSC matches filtered by optional free-text
 // search, date range, and firearms type.
 // Results include both IpscMatchNode (ct=22) and IpscSerieNode (ct=43) —
-// filter to ct=22 in the route handler.
+// filter to ct=22 in the route handler (all IPSC disciplines share ct=22).
 // `region` is an ISO 3166-1 alpha-3 country code (e.g. "SWE", "NOR", "DNK",
 // "FIN"). Country filtering is done server-side in the route handler after
 // the GraphQL response is received — the SSI API has no region filter param.
@@ -329,6 +339,7 @@ export const SCORECARDS_QUERY = `
                   last_name
                   number
                   club
+                  get_division_display
                   handgun_div
                   get_handgun_div_display
                   region

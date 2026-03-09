@@ -6,7 +6,7 @@ import { getMatchDataWithFallback } from "@/lib/match-data-store";
 import { decodeShooterId } from "@/lib/shooter-index";
 import type { ShooterProfile } from "@/lib/shooter-index";
 import { parseRawScorecards } from "@/lib/scorecard-data";
-import { formatDivisionDisplay } from "@/lib/divisions";
+import { extractDivision } from "@/lib/divisions";
 import { computeAggregateStats } from "@/lib/shooter-stats";
 import { CACHE_SCHEMA_VERSION } from "@/lib/constants";
 import { evaluateAchievements } from "@/lib/achievements/evaluate";
@@ -37,6 +37,7 @@ interface RawCompetitor {
   first_name?: string;
   last_name?: string;
   club?: string | null;
+  get_division_display?: string | null;
   handgun_div?: string | null;
   get_handgun_div_display?: string | null;
   shoots_handgun_major?: boolean | null;
@@ -272,22 +273,15 @@ export async function GET(
           if (!competitor) return null;
 
           const competitorId = parseInt(competitor.id, 10);
-          const division = formatDivisionDisplay(
-            competitor.get_handgun_div_display ?? competitor.handgun_div,
-            competitor.shoots_handgun_major,
-          );
+          const division = extractDivision(competitor);
 
           // Count competitors in the same formatted division
           const allCompetitors = ev.competitors_approved_w_wo_results_not_dnf ?? [];
           let competitorsInDivision: number | null = null;
           if (division) {
-            competitorsInDivision = allCompetitors.filter((c) => {
-              const cDiv = formatDivisionDisplay(
-                c.get_handgun_div_display ?? c.handgun_div,
-                c.shoots_handgun_major,
-              );
-              return cDiv === division;
-            }).length;
+            competitorsInDivision = allCompetitors.filter(
+              (c) => extractDivision(c) === division,
+            ).length;
           }
 
           // Compute stats from scorecards if available
@@ -399,10 +393,7 @@ export async function GET(
         date: ev.starts ?? null,
         venue: ev.venue ?? null,
         level: ev.level ?? null,
-        division: formatDivisionDisplay(
-          competitor.get_handgun_div_display ?? competitor.handgun_div,
-          competitor.shoots_handgun_major,
-        ),
+        division: extractDivision(competitor),
         competitorId: parseInt(competitor.id, 10),
       });
     } catch { /* skip on parse error */ }

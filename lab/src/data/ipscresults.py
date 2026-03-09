@@ -417,6 +417,7 @@ class IpscResultsSyncer:
             date=m.date,
             level=level_str,
             region=m.region_name,
+            discipline=m.discipline,
             scoring_completed=100,
             source="ipscresults",
         )

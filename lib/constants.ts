@@ -17,5 +17,7 @@ export const MAX_COMPETITORS = 12;
  *   5 → added procedure, firearm_condition, course, get_course_display to IpscStageNode in MATCH_QUERY
  *   6 → added shooter { id } to IpscCompetitorNode in MATCH_QUERY; shooterId on CompetitorInfo
  *   7 → added region, get_region_display, category, ics_alias, license to IpscCompetitorNode
+ *   8 → added get_division_display to IpscCompetitorNode in MATCH_QUERY + SCORECARDS_QUERY;
+ *       added get_full_rule_display to IpscMatchNode (multi-discipline support)
  */
-export const CACHE_SCHEMA_VERSION = 7;
+export const CACHE_SCHEMA_VERSION = 8;

@@ -12,7 +12,7 @@ from src.data.models import MatchResults
 
 # Bump this whenever the schema of any data table changes (not sync_state).
 # On version mismatch, all data tables are dropped and recreated; sync from scratch.
-SCHEMA_VERSION = "3"
+SCHEMA_VERSION = "4"
 
 # (name, division, region, category, mu, sigma, matches_played, last_match_date)
 RatingRow = tuple[str, str | None, str | None, str | None, float, float, int, str | None]
@@ -32,7 +32,7 @@ _DATA_SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS matches (
   source TEXT NOT NULL,
   ct INTEGER, match_id TEXT, name TEXT, date TIMESTAMP, level TEXT,
-  region TEXT, competitor_count INTEGER, stage_count INTEGER,
+  region TEXT, discipline TEXT, competitor_count INTEGER, stage_count INTEGER,
   scoring_completed INTEGER, stored_at TIMESTAMP, synced_at TIMESTAMP,
   skip_reason TEXT,   -- non-NULL when the match was skipped (e.g. HTTP error message)
   PRIMARY KEY (source, ct, match_id)
@@ -169,16 +169,26 @@ class Store:
             for col in ["region TEXT", "region_display TEXT", "category TEXT"]:
                 with contextlib.suppress(Exception):
                     self.db.execute(f"ALTER TABLE competitors ADD COLUMN IF NOT EXISTS {col}")
-            with contextlib.suppress(Exception):
-                self.db.execute(
-                    "ALTER TABLE matches ADD COLUMN IF NOT EXISTS skip_reason TEXT"
-                )
+            for col in ["skip_reason TEXT", "discipline TEXT"]:
+                with contextlib.suppress(Exception):
+                    self.db.execute(f"ALTER TABLE matches ADD COLUMN IF NOT EXISTS {col}")
             return
 
-        # v2 → v3: only shooter_ratings and rating_history changed (division added to PK).
-        # All sync data (matches, competitors, stages, stage_results) and identity tables
-        # are unchanged — preserve them so no re-sync is required.
-        if current == "2" and SCHEMA_VERSION == "3":
+        # v3 → v4: added discipline TEXT to matches. All other tables unchanged.
+        if current == "3" and SCHEMA_VERSION == "4":
+            with contextlib.suppress(Exception):
+                self.db.execute(
+                    "ALTER TABLE matches ADD COLUMN IF NOT EXISTS discipline TEXT"
+                )
+            self.db.execute(
+                "INSERT OR REPLACE INTO sync_state (key, value) VALUES ('schema_version', ?)",
+                [SCHEMA_VERSION],
+            )
+            return
+
+        # v2 → v3 → v4: rebuild shooter_ratings/rating_history (division added to PK in v3),
+        # then add discipline column to matches (v4). Sync data preserved throughout.
+        if current == "2":
             for tbl in ["shooter_ratings", "rating_history"]:
                 self.db.execute(f"DROP TABLE IF EXISTS {tbl}")
             self.db.execute("""
@@ -198,6 +208,10 @@ class Store:
                   PRIMARY KEY (algorithm, shooter_id, division, match_source, match_ct, match_id)
                 )
             """)
+            with contextlib.suppress(Exception):
+                self.db.execute(
+                    "ALTER TABLE matches ADD COLUMN IF NOT EXISTS discipline TEXT"
+                )
             self.db.execute(
                 "INSERT OR REPLACE INTO sync_state (key, value) VALUES ('schema_version', ?)",
                 [SCHEMA_VERSION],
@@ -282,12 +296,12 @@ class Store:
         # Upsert match metadata
         self.db.execute(
             """INSERT OR REPLACE INTO matches
-               (source, ct, match_id, name, date, level, region,
+               (source, ct, match_id, name, date, level, region, discipline,
                 competitor_count, stage_count, scoring_completed, synced_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 source, meta.ct, meta.match_id, meta.name,
-                meta.date, meta.level, meta.region,
+                meta.date, meta.level, meta.region, meta.discipline,
                 len(results.competitors), len(results.stages),
                 meta.scoring_completed, synced_at,
             ],
@@ -353,24 +367,36 @@ class Store:
         return row[0] if row else 0
 
     def get_matches_chronological(
-        self, source: str | None = None
+        self,
+        source: str | None = None,
+        disciplines: set[str] | None = None,
     ) -> list[tuple[str, int, str, str | None, str | None]]:
         """Return (source, ct, match_id, date, level) tuples sorted by date ascending.
 
         Pass source='ssi' or source='ipscresults' to restrict to one source.
-        The default (None) returns all sources combined.
+        Pass disciplines={'Handgun', 'Rifle'} to filter by discipline value.
+        The default (None) for each returns all sources / all disciplines combined.
+
+        Matches with discipline=NULL are excluded when a discipline filter is active.
         """
+        conditions: list[str] = ["skip_reason IS NULL"]
+        params: list[object] = []
+
         if source is not None:
-            rows = self.db.execute(
-                "SELECT source, ct, match_id, date, level FROM matches"
-                " WHERE source = ? ORDER BY date ASC NULLS LAST",
-                [source],
-            ).fetchall()
-        else:
-            rows = self.db.execute(
-                "SELECT source, ct, match_id, date, level FROM matches"
-                " ORDER BY date ASC NULLS LAST"
-            ).fetchall()
+            conditions.append("source = ?")
+            params.append(source)
+
+        if disciplines:
+            placeholders = ", ".join("?" * len(disciplines))
+            conditions.append(f"discipline IN ({placeholders})")
+            params.extend(sorted(disciplines))
+
+        where = " AND ".join(conditions)
+        sql = (
+            f"SELECT source, ct, match_id, date, level FROM matches"
+            f" WHERE {where} ORDER BY date ASC NULLS LAST"
+        )
+        rows = self.db.execute(sql, params).fetchall()
         return [
             (str(r[0]), int(r[1]), str(r[2]), str(r[3]) if r[3] else None, r[4])
             for r in rows

@@ -67,6 +67,8 @@ export interface MatchResponse {
   date: string | null;
   level: string | null;
   sub_rule: string | null;
+  /** Human-readable discipline string, e.g. "IPSC Rifle", "IPSC Shotgun", "IPSC Handgun & PCC". */
+  discipline: string | null;
   region: string | null;
   stages_count: number;
   competitors_count: number;
@@ -302,7 +304,7 @@ export type ShooterArchetype = "Gunslinger" | "Surgeon" | "Speed Demon" | "Grind
 // Used to render the background cohort cloud on the scatter chart.
 export interface FieldFingerprintPoint {
   competitorId: number;
-  division: string | null;   // handgun division string (e.g. "production") for cohort filtering
+  division: string | null;   // division string (e.g. "Production", "Semi-Auto Open") for cohort filtering
   alphaRatio: number;        // total_A / (total_A + total_C + total_D)
   pointsPerSecond: number;   // total_points / total_time
   penaltyRate: number;       // total_penalties / total_rounds_fired

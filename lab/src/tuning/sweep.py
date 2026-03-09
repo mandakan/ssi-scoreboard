@@ -738,6 +738,7 @@ def run_sweep(
     workers: int | None = None,
     cons_z: float = _CONS_Z_DEFAULT,
     output_path: Path | None = None,
+    disciplines: set[str] | None = None,
 ) -> list[TuneResult]:
     """Run the full hyperparameter grid search.
 
@@ -760,7 +761,7 @@ def run_sweep(
     # Load matches and split
     store = Store(db_path, read_only=True)
     try:
-        all_matches = store.get_matches_chronological()
+        all_matches = store.get_matches_chronological(disciplines=disciplines)
         skip_set = store.get_dedup_skip_set()
     finally:
         store.close()

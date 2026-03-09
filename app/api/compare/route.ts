@@ -6,7 +6,7 @@ import { computeMatchTtl } from "@/lib/match-ttl";
 import { persistToMatchStore } from "@/lib/match-data-store";
 import { afterResponse } from "@/lib/background-impl";
 
-import { formatDivisionDisplay } from "@/lib/divisions";
+import { extractDivision } from "@/lib/divisions";
 import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, computeStageDegradationData } from "@/app/api/compare/logic";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
 import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
@@ -19,6 +19,7 @@ interface RawCompetitor {
   last_name?: string;
   number?: string;
   club?: string | null;
+  get_division_display?: string | null;
   handgun_div?: string | null;
   get_handgun_div_display?: string | null;
   shoots_handgun_major?: boolean | null;
@@ -185,7 +186,7 @@ export async function GET(req: Request) {
         name: [c.first_name, c.last_name].filter(Boolean).join(" ") || "Unknown",
         competitor_number: c.number ?? "",
         club: c.club ?? null,
-        division: formatDivisionDisplay(c.get_handgun_div_display ?? c.handgun_div, c.shoots_handgun_major),
+        division: extractDivision(c),
         region: c.region || null,
         region_display: c.get_region_display || null,
         category: c.category || null,

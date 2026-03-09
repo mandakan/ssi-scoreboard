@@ -27,6 +27,7 @@ export interface RawScCard {
     last_name?: string;
     number?: string;
     club?: string | null;
+    get_division_display?: string | null;
     handgun_div?: string | null;
     get_handgun_div_display?: string | null;
   } | null;
@@ -74,7 +75,10 @@ export function parseRawScorecards(data: RawScorecardsData): RawScorecard[] {
       rawScorecards.push({
         competitor_id: compId,
         competitor_division:
-          sc.competitor.get_handgun_div_display ?? sc.competitor.handgun_div ?? null,
+          sc.competitor.get_division_display ||
+          sc.competitor.get_handgun_div_display ||
+          sc.competitor.handgun_div ||
+          null,
         stage_id: stageId,
         stage_number: stage.number,
         stage_name: stage.name,

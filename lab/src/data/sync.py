@@ -91,6 +91,7 @@ class SyncClient:
             date=meta_raw.get("date"),
             level=meta_raw.get("level"),
             region=meta_raw.get("region"),
+            discipline=meta_raw.get("discipline"),
             scoring_completed=meta_raw.get("scoringCompleted", 0),
         )
 

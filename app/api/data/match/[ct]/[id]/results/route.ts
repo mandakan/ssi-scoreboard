@@ -15,6 +15,7 @@ interface RawMatchData {
     starts: string | null;
     level?: string | null;
     region?: string | null;
+    get_full_rule_display?: string | null;
     scoring_completed?: string | number | null;
     stages?: Array<{
       id: string;
@@ -27,6 +28,7 @@ interface RawMatchData {
       first_name?: string;
       last_name?: string;
       club?: string | null;
+      get_division_display?: string | null;
       handgun_div?: string | null;
       get_handgun_div_display?: string | null;
       shooter?: { id: string } | null;
@@ -91,7 +93,7 @@ export async function GET(
     shooterId: decodeShooterId(c.shooter?.id) ?? null,
     name: [c.first_name, c.last_name].filter(Boolean).join(" "),
     club: c.club ?? null,
-    division: c.get_handgun_div_display ?? c.handgun_div ?? null,
+    division: c.get_division_display || c.get_handgun_div_display || c.handgun_div || null,
     region: c.region ?? null,
     regionDisplay: c.get_region_display ?? null,
     category: c.category ?? null,
@@ -136,6 +138,7 @@ export async function GET(
       date: ev.starts ?? null,
       level: ev.level ?? null,
       region: ev.region ?? null,
+      discipline: ev.get_full_rule_display ?? null,
       scoringCompleted: Math.round(parseFloat(String(ev.scoring_completed ?? 0))),
     },
     stages,

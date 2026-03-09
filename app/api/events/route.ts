@@ -125,7 +125,8 @@ export async function GET(req: Request) {
   }
 
   const events: EventSummary[] = rawEvents
-    // Only include match nodes (ct=22), not series (ct=43)
+    // All IPSC disciplines (Handgun, Rifle, Shotgun, PCC, etc.) share ct=22.
+    // Exclude series nodes (ct=43) — those are event series, not scoreable matches.
     .filter((e) => e.get_content_type_key === 22)
     // Filter by country/region if specified
     .filter((e) => !country || e.region.toUpperCase() === country.toUpperCase())

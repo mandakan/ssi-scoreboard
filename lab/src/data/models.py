@@ -87,6 +87,7 @@ class MatchResultsMeta(BaseModel):
     date: str | None = None
     level: str | None = None
     region: str | None = None
+    discipline: str | None = None
     scoring_completed: int = 0
     # Data origin: 'ssi' (ShootNScoreIt) or 'ipscresults'.
     source: str = "ssi"
