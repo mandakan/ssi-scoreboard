@@ -34,6 +34,14 @@ export function MatchHeader({ match }: MatchHeaderProps) {
   const pct = match.scoring_completed ?? 0;
   const isComplete = match.results_status === "all" || pct >= 100;
 
+  // For Handgun matches the sub_rule badge (Standard / PCC) is the meaningful
+  // differentiator. For all other disciplines (Rifle, Shotgun, …) show the
+  // discipline name instead — sub_rule adds no further info there.
+  const isHandgun = match.discipline?.includes("Handgun") ?? true;
+  const disciplineBadge = !isHandgun && match.discipline
+    ? match.discipline.replace(/^IPSC /, "")
+    : null;
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-start gap-2">
@@ -44,10 +52,14 @@ export function MatchHeader({ match }: MatchHeaderProps) {
               {LEVEL_LABELS[match.level] ?? match.level.toUpperCase()}
             </Badge>
           )}
-          {match.sub_rule && (
-            <Badge variant="outline">
-              {SUBRULE_LABELS[match.sub_rule] ?? match.sub_rule.toUpperCase()}
-            </Badge>
+          {disciplineBadge ? (
+            <Badge variant="outline">{disciplineBadge}</Badge>
+          ) : (
+            match.sub_rule && (
+              <Badge variant="outline">
+                {SUBRULE_LABELS[match.sub_rule] ?? match.sub_rule.toUpperCase()}
+              </Badge>
+            )
           )}
           {match.region && (
             <Badge variant="outline">{match.region}</Badge>

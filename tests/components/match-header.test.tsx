@@ -74,6 +74,40 @@ describe("MatchHeader", () => {
     expect(screen.getByText(/105 competitors/)).toBeInTheDocument();
   });
 
+  it("shows sub_rule badge for Handgun matches", () => {
+    render(<MatchHeader match={baseMatch} />);
+    expect(screen.getByText("Standard")).toBeInTheDocument();
+  });
+
+  it("shows discipline badge for Rifle matches instead of sub_rule", () => {
+    render(
+      <MatchHeader
+        match={{ ...baseMatch, discipline: "IPSC Rifle", sub_rule: "rifle" }}
+      />
+    );
+    expect(screen.getByText("Rifle")).toBeInTheDocument();
+    expect(screen.queryByText("Standard")).not.toBeInTheDocument();
+  });
+
+  it("shows discipline badge for Shotgun matches", () => {
+    render(
+      <MatchHeader
+        match={{ ...baseMatch, discipline: "IPSC Shotgun", sub_rule: "shotgun" }}
+      />
+    );
+    expect(screen.getByText("Shotgun")).toBeInTheDocument();
+  });
+
+  it("strips 'IPSC ' prefix from discipline badge", () => {
+    render(
+      <MatchHeader
+        match={{ ...baseMatch, discipline: "IPSC Mini Rifle", sub_rule: null }}
+      />
+    );
+    expect(screen.getByText("Mini Rifle")).toBeInTheDocument();
+    expect(screen.queryByText("IPSC Mini Rifle")).not.toBeInTheDocument();
+  });
+
   it("renders SSI link when ssi_url is provided", () => {
     render(<MatchHeader match={baseMatch} />);
     const link = screen.getByRole("link", { name: /ShootNScoreIt/i });
