@@ -22,12 +22,13 @@ researchers, data quality considerations, and the automated tuning methodology.
    - [Plackett-Luce with Inactivity Decay](#plackett-luce-with-inactivity-decay-openskill_pl_decay)
    - [BradleyTerry with Level Scaling + Decay](#bradleyterry-with-level-scaling--decay-openskill_bt_lvl_decay)
 5. [Conservative ranking](#conservative-ranking-cons)
-6. [Cross-division fairness](#cross-division-fairness)
-7. [Data quality and identity resolution](#data-quality-and-identity-resolution)
-8. [Benchmark methodology](#benchmark-methodology)
-9. [Automated hyperparameter tuning](#automated-hyperparameter-tuning)
-10. [Summary table](#summary-table)
-11. [Attribution](#attribution)
+6. [Percentile score (0–100)](#percentile-score-0100)
+7. [Cross-division fairness](#cross-division-fairness)
+8. [Data quality and identity resolution](#data-quality-and-identity-resolution)
+9. [Benchmark methodology](#benchmark-methodology)
+10. [Automated hyperparameter tuning](#automated-hyperparameter-tuning)
+11. [Summary table](#summary-table)
+12. [Attribution](#attribution)
 
 ---
 
@@ -106,6 +107,17 @@ signal per match.
 distinguish between "consistently mediocre" and "brilliant on 9 stages, DQ on 1".
 
 ### Combined Match Percentage (match_pct_combined)
+
+> **Plain language:** "We want to compare Open, Production, and Standard shooters
+> against each other — not just within their own division."
+>
+> The problem: an Open shooter scoring 85% at a match sounds similar to a Production
+> shooter scoring 85%, but they are not directly comparable because the two divisions
+> use different equipment and produce systematically different score levels.
+>
+> The solution: measure what "85%" means *relative to that division's typical level*,
+> then place everyone on one shared scale. This is the same approach used by the Swedish
+> federation's ICS 2.0 national team selection system.
 
 The entire match is one ranking event, like `match_pct`, but all divisions compete
 **on a single combined scale** instead of being rated independently. Each competitor's
@@ -460,6 +472,79 @@ Every algorithm above produces two ranking signals:
 2. **Conservative ranking (+cons)** — sorted by mu - z * sigma. This is the "70th
    percentile" estimate: we're 70% confident the shooter's true skill is *at least
    this high.*
+
+---
+
+## Percentile score (0–100)
+
+### Plain-language summary
+
+> **"What percentage of rated competitors in my division am I better than?"**
+
+The percentile score converts the raw rating numbers (which require statistical knowledge
+to interpret) into a single easy-to-read number between 0 and 100.
+
+| Percentile | What it means |
+|---|---|
+| **100** | Best rated competitor in the division |
+| **90** | Better than 90% of all rated competitors — top 10% |
+| **50** | Right in the middle of the pack |
+| **0** | Lowest rated competitor in the division |
+
+For example, a Production shooter with a percentile of **87.4** is better than 87.4%
+of all rated Production competitors. No statistics required to understand this — higher
+is always better.
+
+### How it is calculated
+
+The percentile is computed as a **post-processing presentation layer** after all mu/sigma
+values have been calculated. It does not change the underlying ratings in any way.
+
+Steps:
+
+1. For each *(algorithm, division)* combination, collect all shooters with a rating.
+2. Sort them by their conservative rating (CR = mu − z·sigma) from lowest to highest.
+3. Assign each shooter a position: 0% = worst CR in the group, 100% = best CR.
+4. Ties (same CR value) are handled by averaging their shared positions.
+
+Mathematical formula for a shooter at rank *r* (1 = best) in a group of *N* shooters:
+
+    pct = (N - r) / (N - 1) × 100         (when N > 1)
+    pct = 100                               (when N = 1)
+
+Equivalently, counting how many shooters are below:
+
+    pct = (shooters_with_lower_CR + half_of_tied_shooters) / (N - 1) × 100
+
+### Why within-division only?
+
+Percentile is always computed **within the same division** — an Open shooter is compared
+only to other Open shooters. This is by design: different divisions use different
+equipment and have different characteristic score ranges, making raw point totals
+incomparable across divisions. Ranking Open vs Production by raw numbers would systematically
+favour one division over the other depending on match composition.
+
+For cross-division comparison, use the *match_pct_combined* scoring mode instead, which
+explicitly normalises results across divisions using an anchor-event reference.
+
+### Why based on conservative rating (CR), not raw mu?
+
+The percentile is derived from CR (mu − z·sigma) rather than raw mu because CR already
+accounts for experience:
+
+- A shooter with 2 matches has high sigma → lower CR → lower percentile
+- A shooter with 50 matches has low sigma → CR close to mu → percentile reflects sustained performance
+
+This prevents new shooters from dominating the rankings after one excellent match.
+
+### Reference population
+
+The current implementation uses **all rated shooters in the division** as the reference
+population, regardless of activity level. Applying the "minimum matches" filter in the
+explorer restricts the *displayed* list but does not change the percentile score — it is
+always computed against the full rated population.
+
+---
 
 ### Mathematical formulation
 

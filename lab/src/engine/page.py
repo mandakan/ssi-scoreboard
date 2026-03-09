@@ -32,6 +32,13 @@ ALGO_DISPLAY: dict[str, str] = {
     "openskill_bt_lvl_mpct": "BT+L · Bayesian pairwise + level weighting · match %",
     "openskill_pl_decay_mpct": "PL+D · Bayesian full ranking + activity decay · match %",
     "openskill_bt_lvl_decay_mpct": "BT+LD · Bayesian pairwise + level weighting + activity decay · match %",
+    # match_pct_combined variants — cross-division scoring (division-weight-normalised)
+    "elo_combined": "ELO · Classic baseline · cross-division",
+    "openskill_combined": "PL · Bayesian full ranking · cross-division",
+    "openskill_bt_combined": "BT · Bayesian pairwise · cross-division",
+    "openskill_bt_lvl_combined": "BT+L · Bayesian pairwise + level weighting · cross-division",
+    "openskill_pl_decay_combined": "PL+D · Bayesian full ranking + activity decay · cross-division",
+    "openskill_bt_lvl_decay_combined": "BT+LD · Bayesian pairwise + level weighting + activity decay · cross-division",
 }
 
 ALGO_DESCRIPTION: dict[str, str] = {
@@ -115,6 +122,48 @@ ALGO_DESCRIPTION: dict[str, str] = {
         "Use this alongside openskill_bt_lvl_decay to compare how the choice of "
         "scoring method (hit factor vs match points) affects the final ranking."
     ),
+    # match_pct_combined variants — cross-division (ICS-style division folding)
+    "elo_combined": (
+        "Classic ELO baseline with cross-division scoring. Each competitor's match result "
+        "is normalised by their division's weight factor (67th percentile of that division "
+        "at anchor events) before ranking, placing all divisions on a single scale. "
+        "Division column will show '—' — all competitors are rated together regardless of division."
+    ),
+    "openskill_combined": (
+        "Bayesian full-ranking model with cross-division scoring (ICS-style division folding). "
+        "Division weight factors normalise each division's typical score level so that "
+        "Open, Production, Standard and all other divisions compete on one unified scale. "
+        "The percentile score for this algorithm answers: "
+        "'what fraction of ALL rated shooters, across every division, am I better than?' "
+        "Division column will show '—'."
+    ),
+    "openskill_bt_combined": (
+        "BradleyTerry pairwise model with cross-division scoring. "
+        "Better at identifying the very top shooters than the Plackett-Luce variant. "
+        "Division weight factors (67th percentile at anchor events) collapse all divisions "
+        "into one unified ranking. Division column will show '—'."
+    ),
+    "openskill_bt_lvl_combined": (
+        "BradleyTerry pairwise model with match-level scaling and cross-division scoring. "
+        "Combines two fairness mechanisms: level-scaled rating updates (World Shoot results "
+        "carry more weight than regional matches) and division-weight normalisation "
+        "(all divisions compete on a single scale). Division column will show '—'."
+    ),
+    "openskill_pl_decay_combined": (
+        "Bayesian full-ranking model with inactivity decay and cross-division scoring. "
+        "The recommended algorithm for cross-division team selection: division weight factors "
+        "normalise results across Open, Production, Standard, etc., and the decay parameter "
+        "ensures inactive shooters accumulate uncertainty over time. "
+        "The percentile score is particularly meaningful here — it directly answers "
+        "'where does this shooter rank among ALL Swedish shooters?' "
+        "Division column will show '—'."
+    ),
+    "openskill_bt_lvl_decay_combined": (
+        "The most complete cross-division model: pairwise comparisons + match-level scaling "
+        "+ inactivity penalty + division-weight normalisation. "
+        "Provides a complementary signal to PL+D combined — compare both to spot competitors "
+        "whose cross-division ranking is model-dependent. Division column will show '—'."
+    ),
 }
 
 # Short model names for the dropdown. Each entry starts with a short tag
@@ -126,22 +175,35 @@ BASE_ALGO_DISPLAY: dict[str, str] = {
     "openskill_bt":           "BT · Pairwise",
     "openskill":              "PL · Full ranking",
     "elo":                    "ELO · Classic baseline",
+    # _combined base names (cross-division)
+    "openskill_pl_decay_combined":     "PL+D · Cross-division  ★",
+    "openskill_bt_lvl_decay_combined": "BT+LD · Cross-division + level + decay",
+    "openskill_bt_lvl_combined":       "BT+L · Cross-division + level",
+    "openskill_bt_combined":           "BT · Cross-division",
+    "openskill_combined":              "PL · Cross-division",
+    "elo_combined":                    "ELO · Cross-division",
 }
 
-# Preferred display order — recommended algorithms first, _mpct variants after their base.
+# Preferred display order — recommended algorithms first, _mpct and _combined variants after base.
 _ALGO_ORDER: list[str] = [
     "openskill_pl_decay",
     "openskill_pl_decay_mpct",
+    "openskill_pl_decay_combined",
     "openskill_bt_lvl_decay",
     "openskill_bt_lvl_decay_mpct",
+    "openskill_bt_lvl_decay_combined",
     "openskill_bt_lvl",
     "openskill_bt_lvl_mpct",
+    "openskill_bt_lvl_combined",
     "openskill_bt",
     "openskill_bt_mpct",
+    "openskill_bt_combined",
     "openskill",
     "openskill_mpct",
+    "openskill_combined",
     "elo",
     "elo_mpct",
+    "elo_combined",
 ]
 
 _HTML = r"""<!DOCTYPE html>
@@ -214,6 +276,7 @@ _HTML = r"""<!DOCTYPE html>
           <select x-model="ts.sort" class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="conservative">Reliability score</option>
             <option value="mu">Raw rating (μ)</option>
+            <option value="pct">Percentile (0–100)</option>
           </select>
         </div>
         <div>
@@ -284,7 +347,9 @@ _HTML = r"""<!DOCTYPE html>
                 <tr class="bg-gray-50 text-xs text-gray-400 uppercase">
                   <th class="px-3 py-2 text-left w-6">#</th>
                   <th class="px-3 py-2 text-left">Name</th>
-                  <th class="px-3 py-2 text-right" title="Reliability score (conservative rating)">Score</th>
+                  <th class="px-3 py-2 text-right"
+                    :title="ts.sort==='pct' ? 'Percentile within division (0–100)' : ts.sort==='conservative' ? 'Reliability score (conservative rating)' : 'Raw skill estimate (μ)'"
+                    x-text="ts.sort==='pct' ? 'Pct' : 'Score'"></th>
                   <th class="px-3 py-2 text-right" title="Matches played">M</th>
                 </tr>
               </thead>
@@ -300,7 +365,7 @@ _HTML = r"""<!DOCTYPE html>
                         x-text="'(' + s.category + ')'"></span>
                     </td>
                     <td class="px-3 py-2 text-right font-mono text-xs"
-                      x-text="scoreVal(s).toFixed(2)"></td>
+                      x-text="ts.sort==='pct' ? scoreVal(s).toFixed(1) : scoreVal(s).toFixed(2)"></td>
                     <td class="px-3 py-2 text-right text-gray-400 text-xs"
                       x-text="s.ratings[tsAlgo].m"></td>
                   </tr>
@@ -332,7 +397,8 @@ _HTML = r"""<!DOCTYPE html>
                   <th class="px-3 py-2 text-left w-6">#</th>
                   <th class="px-3 py-2 text-left">Name</th>
                   <th class="px-3 py-2 text-left">Division</th>
-                  <th class="px-3 py-2 text-right">Score</th>
+                  <th class="px-3 py-2 text-right"
+                    x-text="ts.sort==='pct' ? 'Pct' : 'Score'"></th>
                   <th class="px-3 py-2 text-right">M</th>
                 </tr>
               </thead>
@@ -346,7 +412,7 @@ _HTML = r"""<!DOCTYPE html>
                     </td>
                     <td class="px-3 py-2 text-gray-500 text-xs" x-text="s.division||'—'"></td>
                     <td class="px-3 py-2 text-right font-mono text-xs"
-                      x-text="scoreVal(s).toFixed(2)"></td>
+                      x-text="ts.sort==='pct' ? scoreVal(s).toFixed(1) : scoreVal(s).toFixed(2)"></td>
                     <td class="px-3 py-2 text-right text-gray-400 text-xs"
                       x-text="s.ratings[tsAlgo].m"></td>
                   </tr>
@@ -423,6 +489,12 @@ _HTML = r"""<!DOCTYPE html>
           class="px-3 py-1 rounded-lg text-sm font-medium transition-colors">
           Raw rating (μ)
         </button>
+        <button @click="rk.sort='pct'"
+          :class="rk.sort==='pct' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+          class="px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+          title="Percentile within division (0–100): how this shooter ranks among all rated shooters in the same division">
+          Percentile
+        </button>
         <span class="ml-auto text-sm text-gray-400" x-text="ranked.length + ' shooters'"></span>
       </div>
     </div>
@@ -439,6 +511,7 @@ _HTML = r"""<!DOCTYPE html>
               <th class="px-4 py-3 text-left">Region</th>
               <th class="px-4 py-3 text-right">Rating (μ)</th>
               <th class="px-4 py-3 text-right">Reliability</th>
+              <th class="px-4 py-3 text-right" title="Percentile within division (0–100): 100 = top of division">Pct</th>
               <th class="px-4 py-3 text-right">Matches</th>
               <th class="px-4 py-3 text-right">Last match</th>
             </tr>
@@ -462,6 +535,9 @@ _HTML = r"""<!DOCTYPE html>
                   x-text="s.ratings[rkAlgo].mu.toFixed(2)"></td>
                 <td class="px-4 py-2.5 text-right font-mono text-xs font-semibold text-blue-700"
                   x-text="s.ratings[rkAlgo].cr.toFixed(2)"></td>
+                <td class="px-4 py-2.5 text-right font-mono text-xs"
+                  :class="s.ratings[rkAlgo].pct != null ? (s.ratings[rkAlgo].pct >= 90 ? 'text-green-700 font-semibold' : s.ratings[rkAlgo].pct >= 70 ? 'text-blue-600' : 'text-gray-500') : 'text-gray-300'"
+                  x-text="s.ratings[rkAlgo].pct != null ? s.ratings[rkAlgo].pct.toFixed(1) : '—'"></td>
                 <td class="px-4 py-2.5 text-right text-gray-500 text-xs"
                   x-text="s.ratings[rkAlgo].m"></td>
                 <td class="px-4 py-2.5 text-right text-gray-400 text-xs"
@@ -621,7 +697,7 @@ _HTML = r"""<!DOCTYPE html>
 
     <div class="bg-white rounded-xl shadow-sm p-6">
       <h2 class="text-lg font-bold mb-4">How to read the scores</h2>
-      <div class="grid md:grid-cols-3 gap-4">
+      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="bg-blue-50 rounded-xl p-4">
           <div class="font-semibold text-blue-900 mb-1">Rating (μ)</div>
           <div class="text-sm text-blue-800">
@@ -636,6 +712,14 @@ _HTML = r"""<!DOCTYPE html>
             Rating minus an uncertainty penalty. A shooter with 15 matches and rating 28 scores
             higher than one with 2 matches and rating 30. Use this for team selection — it
             rewards consistent performance over time.
+          </div>
+        </div>
+        <div class="bg-purple-50 rounded-xl p-4">
+          <div class="font-semibold text-purple-900 mb-1">Percentile (Pct, 0–100)</div>
+          <div class="text-sm text-purple-800">
+            "What % of rated competitors in my division am I better than?" — 100 = top of division,
+            50 = middle, 0 = bottom. Uses the reliability score internally, so experience counts.
+            For cross-division algorithms, compares across <em>all</em> divisions at once.
           </div>
         </div>
         <div class="bg-gray-50 rounded-xl p-4">
@@ -653,6 +737,41 @@ _HTML = r"""<!DOCTYPE html>
         Bob looks better by raw rating, but Alice is the safer pick — she has demonstrated
         consistent excellence across 20 competitions.
       </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm p-6">
+      <h2 class="text-lg font-bold mb-3">Cross-division scoring ("cross-division" algorithms)</h2>
+      <p class="text-sm text-gray-600 mb-4">
+        Standard algorithms rate shooters <strong>within their own division</strong> (Open vs Open,
+        Production vs Production). This is statistically correct but makes it hard to answer:
+        <em>"Who is Sweden's best shooter overall, regardless of which division they compete in?"</em>
+      </p>
+      <div class="grid md:grid-cols-2 gap-4 mb-4">
+        <div class="bg-gray-50 rounded-xl p-4 text-sm text-gray-700">
+          <div class="font-semibold mb-2">The problem</div>
+          An Open shooter scoring 85% at a match sounds similar to a Production shooter at 85%,
+          but they are <strong>not directly comparable</strong>. Open uses compensators and optics;
+          Production does not. The typical score level differs between divisions.
+        </div>
+        <div class="bg-blue-50 rounded-xl p-4 text-sm text-blue-800">
+          <div class="font-semibold mb-2">The solution: division weight factors</div>
+          We measure the <strong>67th percentile</strong> score level for each division across
+          major matches (this mirrors the Swedish ICS 2.0 method). Each competitor's result
+          is divided by their division's weight, putting everyone on a single shared scale.
+          A score of 100 means "performed at the typical top-third level for your division."
+        </div>
+      </div>
+      <div class="p-4 bg-green-50 border border-green-200 rounded-xl text-sm text-green-900">
+        <strong>What the percentile means for cross-division algorithms:</strong><br>
+        A Production shooter with percentile <strong>82</strong> is better than 82% of
+        <em>all rated Swedish shooters across every division</em>. This is a single unified
+        ladder — exactly the kind of number a selection committee can use to compare an
+        Open shooter against a Standard or Classic shooter side by side.
+      </div>
+      <p class="text-xs text-gray-400 mt-3">
+        Division column shows "—" for cross-division algorithms because all shooters
+        are rated together, not separated by division.
+      </p>
     </div>
 
     <div class="bg-white rounded-xl shadow-sm p-6">
@@ -776,6 +895,42 @@ _HTML = r"""<!DOCTYPE html>
         The <strong>reliability score</strong> is the 70th-percentile lower bound of the rating:
         we are 70% confident the shooter's true skill is at least that high.
       </p>
+      <hr class="border-gray-200">
+      <h3 class="font-semibold text-gray-900 mt-2">Percentile score (0–100)</h3>
+      <p>
+        The <strong>percentile score</strong> converts the raw rating numbers into a single easy-to-read
+        number between 0 and 100. It answers the question: <em>"What percentage of rated
+        competitors in my division am I better than?"</em>
+      </p>
+      <ul class="list-disc pl-5 space-y-1">
+        <li><strong>100</strong> — best rated competitor in the division.</li>
+        <li><strong>90</strong> — better than 90% of all rated competitors in the division (top 10%).</li>
+        <li><strong>50</strong> — right in the middle of the pack.</li>
+        <li><strong>0</strong> — lowest rated in the division.</li>
+      </ul>
+      <p>
+        For <strong>per-division algorithms</strong> (any model without "cross-division" in the name),
+        the comparison is always <strong>within the same division</strong> — an Open shooter's
+        percentile is calculated only against other Open shooters. This is intentional:
+        divisions use different equipment rules that make raw scores incomparable across divisions.
+      </p>
+      <p>
+        For <strong>cross-division algorithms</strong> (models labelled "cross-division"), the
+        percentile answers a different question: <em>"what fraction of ALL rated shooters,
+        across every division, am I better than?"</em> This is the closest equivalent to the
+        ICS 2.0 "Rank %" used in Swedish national team selection — a single number that
+        places every shooter on a unified cross-division ladder.
+      </p>
+      <p>
+        The percentile is derived from the reliability score (μ − z·σ), not the raw rating (μ),
+        so shooters with very few matches are naturally ranked lower — their uncertainty is
+        high and their reliability score is therefore more conservative.
+      </p>
+      <p class="text-gray-500 text-xs">
+        Tip: select <strong>Sort by → Percentile (0–100)</strong> in the Team Selection or Rankings
+        tab to rank by this score. The Percentile column in the Rankings table is colour-coded:
+        green = top 10%, blue = top 30%.
+      </p>
     </div>
 
   </section>
@@ -806,7 +961,7 @@ const ALGO_DESC         = ALGO_DESC_PLACEHOLDER;
 const BASE_ALGO_DISPLAY = BASE_ALGO_DISPLAY_PLACEHOLDER;
 const ALGO_ORDER        = ALGO_ORDER_PLACEHOLDER;
 
-const _BASE_ORDER = ['openskill_pl_decay','openskill_bt_lvl_decay','openskill_bt_lvl','openskill_bt','openskill','elo'];
+const _BASE_ORDER = ['openskill_pl_decay','openskill_bt_lvl_decay','openskill_bt_lvl','openskill_bt','openskill','elo','openskill_pl_decay_combined','openskill_bt_lvl_decay_combined','openskill_bt_lvl_combined','openskill_bt_combined','openskill_combined','elo_combined'];
 const CY = new Date().getFullYear();
 
 document.addEventListener('alpine:init', () => {
@@ -917,6 +1072,7 @@ document.addEventListener('alpine:init', () => {
     scoreVal(s) {
       const r = s.ratings[this.tsAlgo];
       if (!r) return 0;
+      if (this.ts.sort === 'pct') return r.pct ?? 0;
       return this.ts.sort === 'conservative' ? r.cr : r.mu;
     },
 
@@ -936,6 +1092,7 @@ document.addEventListener('alpine:init', () => {
       const { sort } = this.ts;
       return [...list].sort((a, b) => {
         const ra = a.ratings[algo], rb = b.ratings[algo];
+        if (sort === 'pct') return (rb.pct ?? 0) - (ra.pct ?? 0);
         return sort === 'conservative' ? rb.cr - ra.cr : rb.mu - ra.mu;
       });
     },
@@ -982,6 +1139,7 @@ document.addEventListener('alpine:init', () => {
       });
       list.sort((a, b) => {
         const ra = a.ratings[algo], rb = b.ratings[algo];
+        if (sort === 'pct') return (rb.pct ?? 0) - (ra.pct ?? 0);
         return sort === 'conservative' ? rb.cr - ra.cr : rb.mu - ra.mu;
       });
       return list.slice(0, 300);
