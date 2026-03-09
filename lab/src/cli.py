@@ -710,13 +710,23 @@ def tune(
     ),
     split: float = typer.Option(0.7, help="Train/test split ratio"),
     workers: int | None = typer.Option(None, help="Max parallel workers (default: CPU-1)"),
+    output: Path | None = typer.Option(  # noqa: B008
+        None,
+        help=(
+            "Output JSON path. Defaults to data/tune_results_{scoring}.json "
+            "so runs for different scoring modes don't overwrite each other."
+        ),
+    ),
     db_path: Path = DB_PATH_OPTION,
 ) -> None:
     """Run automated hyperparameter grid search.
 
     Evaluates all algorithm x parameter combinations using a chronological
-    train/test split. Results are saved to data/tune_results.json and printed
-    as a ranked table. Designed to run unattended on a server.
+    train/test split. Results are saved to data/tune_results_{scoring}.json
+    (one file per scoring mode) and printed as a ranked table.
+
+    To distribute across machines, copy the same DuckDB to each machine, run
+    one scoring mode per machine, then combine with: rating tune-merge
     """
     from src.tuning.sweep import run_sweep
 
@@ -726,7 +736,52 @@ def tune(
         scoring=scoring,
         split_ratio=split,
         workers=workers,
+        output_path=output,
     )
+
+
+@app.command("tune-merge")
+def tune_merge(
+    files: list[Path] = typer.Argument(  # noqa: B008
+        None,
+        help=(
+            "tune_results JSON files to merge. "
+            "Defaults to all data/tune_results_*.json files."
+        ),
+    ),
+    top: int = typer.Option(30, help="Number of rows to show in the merged table"),  # noqa: B008
+) -> None:
+    """Combine and display results from multiple tuning runs.
+
+    Useful when sweeps are distributed across machines (one per scoring mode)
+    or run at different times. Each result is uniquely keyed by (label, scoring)
+    — if the same config appears in multiple files the last file wins.
+
+    Examples:
+
+        # After running all three scoring modes:
+        rating tune-merge
+
+        # From files on different machines, copied locally:
+        rating tune-merge results_match_pct.json results_stage_hf.json results_combined.json
+    """
+    from src.tuning.sweep import merge_results
+
+    if not files:
+        # Auto-discover all tune_results_*.json files in data/
+        discovered = sorted(Path("data").glob("tune_results_*.json"))
+        if not discovered:
+            console.print(
+                "[red]No tune_results_*.json files found in data/. "
+                "Run 'rating tune' first or pass file paths explicitly.[/red]"
+            )
+            raise typer.Exit(1)
+        console.print(f"[dim]Auto-discovered {len(discovered)} file(s):[/dim]")
+        for p in discovered:
+            console.print(f"  [dim]{p}[/dim]")
+        files = discovered
+
+    merge_results(list(files), top_n=top)
 
 
 @app.command()

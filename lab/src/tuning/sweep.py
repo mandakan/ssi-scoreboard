@@ -591,12 +591,153 @@ def _print_results_table(results: list[TuneResult], top_n: int = 20) -> None:
     console.print("[dim]* = current default parameters[/dim]")
 
 
+def load_results(path: Path) -> list[TuneResult]:
+    """Load TuneResult objects from a previously saved JSON file.
+
+    This is the inverse of the JSON block written at the end of run_sweep.
+    It is used by merge_results to combine runs from different machines or
+    different scoring modes into a single analysis.
+    """
+    raw = json.loads(path.read_text())
+    results: list[TuneResult] = []
+    for r in raw.get("results", []):
+        config = TuneConfig(
+            algo_class=r["algo_class"],
+            params=r["params"],
+            label=r["label"],
+            scoring_params=r.get("scoring_params", {}),
+        )
+        results.append(
+            TuneResult(
+                config=config,
+                scoring=r["scoring"],
+                metrics=r["metrics"],
+                cons_metrics=r["cons_metrics"],
+                elapsed_s=r.get("elapsed_s", 0.0),
+            )
+        )
+    return results
+
+
+def merge_results(paths: list[Path], top_n: int = 30) -> list[TuneResult]:
+    """Load, de-duplicate, and display results from multiple tune JSON files.
+
+    Intended for combining runs across scoring modes or across machines.
+    Each result is uniquely identified by (label, scoring) — later files
+    take precedence over earlier ones if the same config appears twice.
+
+    The printed table includes a Scoring column so cross-mode comparisons
+    are immediately visible. Results are sorted by Kendall tau descending
+    within each scoring group, then the groups are interleaved by rank so
+    the best configs from every mode appear near the top.
+
+    Args:
+        paths: Paths to tune_results.json files to merge (order matters for
+               de-duplication precedence).
+        top_n: Number of rows to show in the printed table.
+
+    Returns:
+        The full merged and sorted result list.
+    """
+    # De-duplicate: (label, scoring) → TuneResult; later file wins.
+    seen: dict[tuple[str, str], TuneResult] = {}
+    for path in paths:
+        for r in load_results(path):
+            seen[(r.config.label, r.scoring)] = r
+
+    if not seen:
+        console.print("[red]No results found in the provided files.[/red]")
+        return []
+
+    all_results = list(seen.values())
+
+    # Print summary of what was loaded.
+    scoring_counts: dict[str, int] = {}
+    for r in all_results:
+        scoring_counts[r.scoring] = scoring_counts.get(r.scoring, 0) + 1
+    console.print(f"\n[bold]Merged Tuning Results[/bold]  ({len(all_results)} configurations)")
+    for scoring_mode, count in sorted(scoring_counts.items()):
+        console.print(f"  {scoring_mode}: {count} configs")
+
+    # Print combined table (sorted by Kendall tau, with Scoring column).
+    _print_merged_table(all_results, top_n=top_n)
+
+    return all_results
+
+
+def _print_merged_table(results: list[TuneResult], top_n: int = 30) -> None:
+    """Print a combined table for results from multiple scoring modes."""
+    sorted_results = sorted(
+        results, key=lambda r: r.metrics.get("kendall_tau", 0.0), reverse=True
+    )
+
+    table = Table(
+        title=f"Merged Hyperparameter Results — Top {min(top_n, len(sorted_results))}",
+        show_lines=True,
+    )
+    table.add_column("#", justify="right", style="dim", width=4)
+    table.add_column("Scoring", style="yellow", no_wrap=True, width=10)
+    table.add_column("Configuration", style="cyan", no_wrap=True)
+    table.add_column("Kendall τ", justify="right")
+    table.add_column("Top-5", justify="right")
+    table.add_column("Top-10", justify="right")
+    table.add_column("MRR", justify="right")
+    table.add_column("Cons τ", justify="right")
+
+    if not sorted_results:
+        console.print("[red]No results to display.[/red]")
+        return
+
+    best_tau = max(r.metrics.get("kendall_tau", 0.0) for r in sorted_results)
+    best_top5 = max(r.metrics.get("top_5_accuracy", 0.0) for r in sorted_results)
+    best_top10 = max(r.metrics.get("top_10_accuracy", 0.0) for r in sorted_results)
+    best_mrr = max(r.metrics.get("mrr", 0.0) for r in sorted_results)
+    best_cons_tau = max(r.cons_metrics.get("kendall_tau", 0.0) for r in sorted_results)
+
+    def _fmt(val: float, best: float, *, pct: bool = False) -> str:
+        s = f"{val * 100:.1f}%" if pct else f"{val:.4f}"
+        if abs(val - best) < 1e-9:
+            return f"[bold green]{s}[/bold green]"
+        return s
+
+    # Short labels for scoring mode column.
+    _scoring_short = {
+        "match_pct": "match%",
+        "match_pct_combined": "combined",
+        "stage_hf": "stage_hf",
+    }
+
+    for rank, r in enumerate(sorted_results[:top_n], 1):
+        label = r.config.label
+        is_default = label in _DEFAULT_LABELS
+        style = "on grey15" if is_default else ""
+        marker = " *" if is_default else ""
+        scoring_label = _scoring_short.get(r.scoring, r.scoring)
+
+        table.add_row(
+            str(rank),
+            scoring_label,
+            f"{label}{marker}",
+            _fmt(r.metrics.get("kendall_tau", 0.0), best_tau),
+            _fmt(r.metrics.get("top_5_accuracy", 0.0), best_top5, pct=True),
+            _fmt(r.metrics.get("top_10_accuracy", 0.0), best_top10, pct=True),
+            _fmt(r.metrics.get("mrr", 0.0), best_mrr),
+            _fmt(r.cons_metrics.get("kendall_tau", 0.0), best_cons_tau),
+            style=style,
+        )
+
+    console.print()
+    console.print(table)
+    console.print("[dim]* = current default parameters[/dim]")
+
+
 def run_sweep(
     db_path: Path,
     scoring: str = "match_pct",
     split_ratio: float = 0.7,
     workers: int | None = None,
     cons_z: float = _CONS_Z_DEFAULT,
+    output_path: Path | None = None,
 ) -> list[TuneResult]:
     """Run the full hyperparameter grid search.
 
@@ -681,8 +822,10 @@ def run_sweep(
         db_path, all_matches, train_matches, test_matches, test_match_keys
     )
 
-    # Save to JSON
-    output_path = Path("data/tune_results.json")
+    # Save to JSON — default filename encodes the scoring mode so multiple
+    # runs can coexist without overwriting each other.
+    if output_path is None:
+        output_path = Path(f"data/tune_results_{scoring}.json")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     output = {
