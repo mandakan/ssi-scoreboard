@@ -98,20 +98,52 @@ comb, so the formula simplifies to contrib(A, B) = comb(A, anchor) for every B.
 The match score equals the shooter's own normalised score. This is mathematically
 consistent and exactly what ICS intends.
 
-Benchmark adaptation notes
----------------------------
-The official ICS 2.0 uses a single fixed anchor (World Shoot 2025) and a
-hand-curated list of 11 ranking matches. This implementation differs in:
+Operating modes
+---------------
+This class supports two distinct modes selected by the ``anchor_match_id``
+constructor parameter:
 
-- Rolling anchor: whenever an L4/L5 match is processed chronologically it
-  becomes the new anchor, replacing the previous one. Required because the
-  benchmark spans 2004-2026 with multiple World Shoots.
-- All L2+ matches are used, not a hand-curated list.
-- Matches are processed one-by-one in time order (online approximation of
-  the official batch calculation).
+**Benchmark mode** (``anchor_match_id=None``, the default)
+    Used for head-to-head algorithm comparison across the full 2004–2026 history.
+    Differs from the official ICS 2.0 in three ways:
 
-These differences mean benchmark ICS results are an approximation of the
-official method, not an exact replica.
+    1. *Rolling anchor* — every L4/L5 match becomes the new anchor as it is
+       processed chronologically, replacing the previous one. Required because
+       the benchmark spans multiple World Shoots.
+    2. *All L2+ matches* — every match in the dataset feeds the algorithm, not
+       a curated list of 11 federation-approved events.
+    3. *Online processing* — matches are processed one-by-one in time order
+       rather than as a single batch calculation at the end of the season.
+
+    These adaptations are necessary for a fair comparison but mean benchmark ICS
+    results are an approximation of the official method, not an exact replica.
+
+**Faithful mode** (``anchor_match_id="<ws2025_match_id>"``)
+    Reproduces the official Swedish federation ICS 2.0 for 2026 team selection.
+    Close all three gaps by combining this parameter with CLI flags:
+
+    - Gap 1 (fixed anchor): pass ``anchor_match_id`` — the anchor is frozen
+      after the designated match is processed; subsequent L4/L5 events use the
+      fixed WS2025 reference pool instead of refreshing the anchor.
+    - Gap 2 (date window): use ``--date-from`` / ``--date-to`` to restrict
+      training to the selection period (e.g. 2024-10-01 → 2026-06-30).
+    - Gap 3 (curated match list): use ``--match-ids-file`` with a text file
+      listing the 11 approved match IDs; all others are silently skipped.
+
+    Example CLI invocation::
+
+        uv run rating train --algorithm ics --scoring match_pct \\
+          --date-from 2024-10-01 --date-to 2026-06-30 \\
+          --ics-anchor-match-id <ws2025_match_id> \\
+          --match-ids-file data/ics2026_match_ids.txt \\
+          --label ics2026
+        # → stored as ics_mpct_ics2026
+
+    The WS2025 match ID can be looked up with::
+
+        SELECT match_id, name, date
+        FROM matches
+        WHERE level = 'l5' AND date >= '2025-01-01';
 
 Full documentation: docs/algorithms.md — section "ICS 2.0"
 """
@@ -156,13 +188,28 @@ class ICSAlgorithm(RatingAlgorithm):
         Number of best match results to average for the final ranking score.
         ICS 2.0 specification uses 3 (default). More results dampens the
         impact of a single exceptional performance. Tunable range: {2, 3, 4, 5}.
+    anchor_match_id:
+        Pin the anchor to a single fixed match ID (e.g. the World Shoot 2025
+        match ID from the database). When set, the anchor state is updated
+        **only** when this exact match_id is processed; all subsequent L4/L5
+        events are treated like regular matches (using the fixed reference pool
+        rather than refreshing the anchor). This faithfully reproduces the
+        official ICS 2.0 behaviour where WS2025 is the sole anchor event.
+
+        When ``None`` (default), the rolling-anchor benchmark mode is used:
+        every L4/L5 event replaces the previous anchor, which is appropriate
+        for evaluating ICS across a multi-year history with many World Shoots.
     """
 
     def __init__(
-        self, anchor_percentile: float = 67.0, top_n: int = 3
+        self,
+        anchor_percentile: float = 67.0,
+        top_n: int = 3,
+        anchor_match_id: str | None = None,
     ) -> None:
         self.anchor_percentile = anchor_percentile
         self.top_n = top_n
+        self.anchor_match_id = anchor_match_id
 
         # Shooter metadata (name, region, category) — updated as matches are processed.
         self._names: dict[int, str] = {}
@@ -172,6 +219,11 @@ class ICSAlgorithm(RatingAlgorithm):
         self._matches: dict[DivKey, int] = defaultdict(int)
         # Idempotency guard: skip matches already processed.
         self._seen_matches: set[str] = set()
+
+        # Fixed-anchor guard: True once the pinned anchor_match_id has been processed.
+        # Subsequent L4/L5 events are skipped for anchor updates but still generate
+        # match scores using the fixed reference pool from the pinned event.
+        self._anchor_locked: bool = False
 
         # Division weight factors derived from the most recent anchor (L4/L5) event.
         # Keys are division strings (e.g. "Production") or None if no division was recorded.
@@ -285,18 +337,37 @@ class ICSAlgorithm(RatingAlgorithm):
         # within the same match. At the anchor event itself this causes each
         # competitor's match score to equal their own comb (see module docstring
         # for the mathematical proof).
+        #
+        # Fixed-anchor mode: when anchor_match_id is set, only the designated
+        # match triggers an anchor update. Subsequent L4/L5 events are processed
+        # normally (match scores computed, reference pool used) but the anchor
+        # reference scores and division weights remain frozen.
         if match_level in ("l4", "l5"):
-            # Collect raw scores by division to compute percentile weights.
-            pcts_by_div: dict[str | None, list[float]] = defaultdict(list)
-            for _sid, avg_pct, div in entries:
-                pcts_by_div[div].append(avg_pct)
-            # compute_division_weights returns the Nth percentile per division.
-            self._div_weights = compute_division_weights(
-                dict(pcts_by_div), self.anchor_percentile
-            )
-            # Store each competitor's normalised score as their anchor reference.
-            for sid, avg_pct, div in entries:
-                self._anchor_perf[sid] = self._normalize(avg_pct, div)
+            if self.anchor_match_id is not None:
+                # Fixed-anchor: update only if this is the pinned event and it
+                # has not been processed yet.
+                should_update_anchor = (
+                    match_id == self.anchor_match_id and not self._anchor_locked
+                )
+            else:
+                # Rolling-anchor (benchmark default): every L4/L5 replaces the anchor.
+                should_update_anchor = True
+
+            if should_update_anchor:
+                # Collect raw scores by division to compute percentile weights.
+                pcts_by_div: dict[str | None, list[float]] = defaultdict(list)
+                for _sid, avg_pct, div in entries:
+                    pcts_by_div[div].append(avg_pct)
+                # compute_division_weights returns the Nth percentile per division.
+                self._div_weights = compute_division_weights(
+                    dict(pcts_by_div), self.anchor_percentile
+                )
+                # Store each competitor's normalised score as their anchor reference.
+                for sid, avg_pct, div in entries:
+                    self._anchor_perf[sid] = self._normalize(avg_pct, div)
+                if self.anchor_match_id is not None:
+                    # Lock the anchor so no further L4/L5 events change it.
+                    self._anchor_locked = True
 
         # ── Step 3: compute each competitor's normalised combined score here ──
         # comb = avg_pct / division_weight * 100
@@ -386,6 +457,8 @@ class ICSAlgorithm(RatingAlgorithm):
         state = {
             "anchor_percentile": self.anchor_percentile,
             "top_n": self.top_n,
+            "anchor_match_id": self.anchor_match_id,
+            "anchor_locked": self._anchor_locked,
             "names": {str(k): v for k, v in self._names.items()},
             "regions": {str(k): v for k, v in self._regions.items()},
             "categories": {str(k): v for k, v in self._categories.items()},
@@ -410,6 +483,8 @@ class ICSAlgorithm(RatingAlgorithm):
             state.get("anchor_percentile", self.anchor_percentile)
         )
         self.top_n = int(state.get("top_n", self.top_n))
+        self.anchor_match_id = state.get("anchor_match_id")
+        self._anchor_locked = bool(state.get("anchor_locked", False))
         self._names = {int(k): v for k, v in state.get("names", {}).items()}
         self._regions = {int(k): v for k, v in state.get("regions", {}).items()}
         self._categories = {

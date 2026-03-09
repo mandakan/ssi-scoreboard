@@ -603,21 +603,69 @@ If no anchor event has been processed yet, or if no reference competitors happen
 appear in a particular match, the normalised comb score is used directly as the match
 score. This ensures the algorithm degrades gracefully on early historical data.
 
-#### How this benchmark adaptation differs from real ICS 2.0
+#### Operating modes: benchmark vs faithful reproduction
 
-The official ICS 2.0 uses a single fixed anchor: World Shoot 2025. In this benchmark:
+`ICSAlgorithm` supports two modes depending on whether `anchor_match_id` is set.
 
-- **Rolling anchor:** whenever an L4 or L5 match is processed chronologically, it
-  becomes the new anchor and replaces the previous one. This is necessary because the
-  dataset spans 2004–2026 with multiple World Shoots.
-- **No manual override list:** the official system uses a hand-curated list of 11
-  ranking matches for 2026 selection. Here, all L2+ matches feed the algorithm.
-- **Continuous vs batch:** the official system is recalculated in a single batch at
-  the end of the selection period. Here, matches are processed one-by-one in
-  chronological order (required by the benchmark framework).
+**Benchmark mode** (default, `anchor_match_id=None`) is used for head-to-head
+algorithm comparison across the full dataset. It differs from official ICS 2.0 in
+three ways:
 
-These adaptations are necessary for a fair apples-to-apples benchmark but mean the
+| Gap | Official ICS 2.0 | Benchmark mode | Why the benchmark differs |
+|---|---|---|---|
+| **Anchor** | Fixed: World Shoot 2025 only | Rolling: every L4/L5 replaces the previous anchor | Dataset spans 2004–2026 with multiple World Shoots |
+| **Match list** | 11 curated federation-approved events | All L2+ matches | Required for fair comparison across algorithms |
+| **Processing** | Single batch at end of selection period | One-by-one chronologically | Required by the benchmark's online evaluation framework |
+
+These adaptations are necessary for a fair apples-to-apples comparison but mean
 benchmark ICS results are an approximation of the official method, not an exact replica.
+
+---
+
+**Faithful mode** (`anchor_match_id="<ws2025_match_id>"`) closes all three gaps and
+reproduces the official Swedish federation ICS 2.0 for 2026 national team selection.
+
+Each gap has a specific fix:
+
+- **Gap 1 — fixed anchor** (`anchor_match_id` parameter): the anchor is updated
+  exactly once, when the designated match ID is processed. All subsequent L4/L5
+  events use the frozen WS2025 reference pool and division weights. This also fixes
+  Gap 4 (reference pool) as a direct consequence: once the anchor is pinned to
+  WS2025, only WS2025 participants serve as references.
+
+- **Gap 2 — date window** (`--date-from` / `--date-to` flags, no code change):
+  restricting training to the official selection period (approximately Halloween Shoot
+  2024 → Chapter V 2026) replicates the federation's rolling 12–18 month window.
+
+- **Gap 3 — curated match list** (`--match-ids-file` flag): a text file listing the
+  11 approved match IDs causes all other matches in the date window to be silently
+  skipped, exactly as in the official system.
+
+**Reproducibility — how to train the faithful ICS 2026 model:**
+
+Step 1 — look up the WS2025 match ID:
+```sql
+SELECT match_id, name, date
+FROM matches
+WHERE level = 'l5' AND date >= '2025-01-01';
+```
+
+Step 2 — create `data/ics2026_match_ids.txt` with one match ID per line (the 11
+federation-approved ranking matches for the 2026 selection period).
+
+Step 3 — train:
+```bash
+uv run rating train --algorithm ics --scoring match_pct \
+  --date-from 2024-10-01 --date-to 2026-06-30 \
+  --ics-anchor-match-id <ws2025_match_id> \
+  --match-ids-file data/ics2026_match_ids.txt \
+  --label ics2026
+# → stored as ics_mpct_ics2026
+```
+
+The resulting model coexists with the benchmark model in the explorer, labelled
+`ics_mpct_ics2026`, and can be compared against the published ICS 2.0 standings at
+https://ics2.pages.dev/ to validate the reproduction.
 
 #### Tunable parameters
 
@@ -625,8 +673,11 @@ benchmark ICS results are an approximation of the official method, not an exact 
 |---|---|---|---|
 | `anchor_percentile` | 67 | 50, 60, 67, 75, 80 | Which percentile to use as the division weight. 67 mirrors the official ICS 2.0 specification. A higher percentile raises the bar, making scores lower overall. |
 | `top_n` | 3 | 2, 3, 4, 5 | How many best results count. Official ICS 2.0 uses 3. More results averages out single-match luck but dilutes peak performance. |
+| `anchor_match_id` | `None` | any match ID string | Pins the anchor to a single fixed event (faithful mode). `None` = rolling benchmark mode. Not part of the hyperparameter sweep. |
 
-The sweep tests all 20 combinations (5 × 4) with `match_pct` scoring.
+The sweep tests all 20 combinations (5 × 4 of `anchor_percentile` × `top_n`) in
+benchmark mode with `match_pct` scoring. The faithful model (`ics_mpct_ics2026`) is
+trained separately with fixed parameters rather than swept.
 
 #### Strengths
 

@@ -412,6 +412,89 @@ class TestICSAlgorithm:
         assert None in algo2._div_weights
         assert algo2._div_weights[None] == pytest.approx(algo._div_weights[None])
 
+    def test_fixed_anchor_only_updates_on_pinned_match(self) -> None:
+        """With anchor_match_id set, only that match updates the anchor state."""
+        anchor_results: list[tuple[int, int, float | None, bool, bool, bool]] = [
+            (1, 0, 90.0, False, False, False),  # shooter 100
+            (2, 0, 60.0, False, False, False),  # shooter 200
+        ]
+        comp_map: dict[int, int | None] = {1: 100, 2: 200}
+        div_map: dict[int, str | None] = {1: "Production", 2: "Production"}
+
+        algo = ICSAlgorithm(anchor_match_id="WS2025")
+        # Process the pinned anchor event → should set the anchor.
+        algo.process_match_data(22, "WS2025", "2025-08-01", anchor_results, comp_map,
+                                division_map=div_map, match_level="l5")
+        assert 100 in algo._anchor_perf
+        assert 200 in algo._anchor_perf
+        assert algo._anchor_locked is True
+
+        # Record anchor state after WS2025.
+        anchor_perf_after_ws = dict(algo._anchor_perf)
+        div_weights_after_ws = dict(algo._div_weights)
+
+        # Process a DIFFERENT L5 event → anchor must NOT change.
+        other_l5: list[tuple[int, int, float | None, bool, bool, bool]] = [
+            (1, 0, 50.0, False, False, False),  # shooter 100 performs worse
+            (2, 0, 95.0, False, False, False),  # shooter 200 performs better
+        ]
+        algo.process_match_data(22, "OTHER_L5", "2025-11-01", other_l5, comp_map,
+                                division_map=div_map, match_level="l5")
+
+        # Anchor state must remain identical to what it was after WS2025.
+        assert algo._anchor_perf == anchor_perf_after_ws
+        assert algo._div_weights == div_weights_after_ws
+        assert algo._anchor_locked is True
+
+    def test_fixed_anchor_rolling_mode_still_updates(self) -> None:
+        """Without anchor_match_id (rolling mode), subsequent L4/L5 events update anchor."""
+        comp_map: dict[int, int | None] = {1: 100, 2: 200}
+        div_map: dict[int, str | None] = {1: "Production", 2: "Production"}
+
+        algo = ICSAlgorithm()  # rolling mode (anchor_match_id=None)
+
+        first_anchor: list[tuple[int, int, float | None, bool, bool, bool]] = [
+            (1, 0, 90.0, False, False, False),
+            (2, 0, 60.0, False, False, False),
+        ]
+        algo.process_match_data(22, "L4_A", "2023-01-01", first_anchor, comp_map,
+                                division_map=div_map, match_level="l4")
+        weights_after_first = dict(algo._div_weights)
+
+        second_anchor: list[tuple[int, int, float | None, bool, bool, bool]] = [
+            (1, 0, 70.0, False, False, False),
+            (2, 0, 70.0, False, False, False),
+        ]
+        algo.process_match_data(22, "L5_B", "2025-01-01", second_anchor, comp_map,
+                                division_map=div_map, match_level="l5")
+
+        # Rolling mode: second L5 replaces the anchor — weights must differ.
+        assert algo._div_weights != weights_after_first
+        assert algo._anchor_locked is False  # never locked in rolling mode
+
+    def test_fixed_anchor_save_load_round_trips(self, tmp_path: Path) -> None:
+        """anchor_match_id and _anchor_locked survive a save/load cycle."""
+        anchor_results: list[tuple[int, int, float | None, bool, bool, bool]] = [
+            (1, 0, 80.0, False, False, False),
+            (2, 0, 50.0, False, False, False),
+        ]
+        comp_map: dict[int, int | None] = {1: 100, 2: 200}
+
+        algo = ICSAlgorithm(anchor_match_id="WS2025", top_n=2)
+        algo.process_match_data(22, "WS2025", "2025-08-01", anchor_results, comp_map,
+                                match_level="l5")
+        assert algo._anchor_locked is True
+
+        path = tmp_path / "ics_fixed.json"
+        algo.save_state(path)
+
+        algo2 = ICSAlgorithm()
+        algo2.load_state(path)
+        assert algo2.anchor_match_id == "WS2025"
+        assert algo2._anchor_locked is True
+        assert algo2.top_n == 2
+        assert algo2._anchor_perf == algo._anchor_perf
+
 
 class TestPerDivisionRatings:
     """Verify that competitors in different divisions don't affect each other."""

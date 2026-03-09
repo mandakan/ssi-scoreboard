@@ -76,6 +76,25 @@ def _filter_matches_by_date(
     return filtered
 
 
+def _load_match_ids_file(path: Path) -> set[str]:
+    """Load a set of match IDs from a JSON array or newline-separated text file.
+
+    Supported formats:
+    - JSON array of strings:  ["uuid1", "uuid2", ...]
+    - JSON array of objects:  [{"match_id": "uuid1"}, ...]  (match_id key extracted)
+    - Plain text, one match ID per line (blank lines ignored)
+    """
+    import json as _json
+
+    content = path.read_text().strip()
+    if content.startswith("["):
+        data = _json.loads(content)
+        if data and isinstance(data[0], dict):
+            return {str(item["match_id"]) for item in data}
+        return {str(item) for item in data}
+    return {line.strip() for line in content.splitlines() if line.strip()}
+
+
 def _train_single_algo(
     algo_name: str,
     db_path: Path,
@@ -84,6 +103,7 @@ def _train_single_algo(
     skip_set: set[tuple[str, int, str]],
     suffix: str,
     division_weights: dict[str | None, float] | None = None,
+    ics_anchor_match_id: str | None = None,
 ) -> tuple[
     str,
     dict[
@@ -103,6 +123,10 @@ def _train_single_algo(
 
     t0 = time.monotonic()
     algo = get_algorithms(algo_name)[0]
+    # For ICS with a pinned anchor, override the default instance.
+    if algo_name == "ics" and ics_anchor_match_id is not None:
+        from src.algorithms.ics import ICSAlgorithm
+        algo = ICSAlgorithm(anchor_match_id=ics_anchor_match_id)
     store = Store(db_path, read_only=True)
     shooter_last_date: dict[int, str] = {}
     skipped = 0
@@ -182,6 +206,7 @@ def _run_train_mode(
     name_suffix: str = "",
     db_path: Path | None = None,
     workers: int | None = None,
+    ics_anchor_match_id: str | None = None,
 ) -> None:
     """Train all algorithm instances on matches for one scoring mode and save ratings.
 
@@ -246,7 +271,7 @@ def _run_train_mode(
                 futures = {
                     pool.submit(
                         _train_single_algo, name, db_path, matches, scoring, skip, suffix,
-                        division_weights,
+                        division_weights, ics_anchor_match_id,
                     ): name
                     for name in algo_names
                 }
@@ -599,6 +624,28 @@ def train(
             "Default: CPU cores − 1. Set to 1 for sequential mode."
         ),
     ),
+    match_ids_file: Path | None = typer.Option(  # noqa: B008
+        None,
+        "--match-ids-file",
+        help=(
+            "Path to a file listing the allowed match IDs. Only matches whose match_id "
+            "appears in this file are included in training — all others are skipped. "
+            "Supports JSON array of strings ([\"id1\", \"id2\"]) or one ID per line. "
+            "Use this to restrict ICS training to the 11 official ICS 2026 ranking matches."
+        ),
+    ),
+    ics_anchor_match_id: str | None = typer.Option(
+        None,
+        "--ics-anchor-match-id",
+        help=(
+            "Pin the ICS algorithm's anchor to a single fixed match ID "
+            "(e.g. the World Shoot 2025 match_id from the database). "
+            "When set, the anchor is frozen after that match is processed; "
+            "subsequent L4/L5 events use the fixed reference pool instead of "
+            "refreshing the anchor. Faithfully reproduces official ICS 2.0 behaviour. "
+            "Has no effect on non-ICS algorithms."
+        ),
+    ),
     db_path: Path = DB_PATH_OPTION,
 ) -> None:
     """Train rating algorithms on synced match data.
@@ -623,6 +670,15 @@ def train(
         rating train --date-from 2025-01-01 --date-to 2025-12-31
         # → same suffix (full-year detected automatically)
 
+    To train a faithful ICS 2026 model (Gap 1–3 from the ICS 2.0 spec):
+
+        rating train --algorithm ics --scoring match_pct \\
+          --date-from 2024-10-01 --date-to 2026-06-30 \\
+          --ics-anchor-match-id <ws2025_match_id> \\
+          --match-ids-file data/ics2026_match_ids.txt \\
+          --label ics2026
+        # → stored as ics_mpct_ics2026
+
     Tip: run 'rating link' before training to resolve cross-source shooter identities
     and exclude duplicate matches from the training set.
     """
@@ -645,8 +701,26 @@ def train(
         # match_pct_combined would double-normalise scores. Exclude it.
         if scoring == "match_pct_combined":
             algorithms = [a for a in algorithms if a.name != "ics"]
+        # For ICS with a pinned anchor, replace the default ICS instance so
+        # the sequential training path also gets the correct anchor_match_id.
+        if ics_anchor_match_id is not None and scoring != "match_pct_combined":
+            from src.algorithms.ics import ICSAlgorithm
+            algorithms = [
+                ICSAlgorithm(anchor_match_id=ics_anchor_match_id)
+                if a.name == "ics" else a
+                for a in algorithms
+            ]
         all_matches = store.get_matches_chronological()
         matches = _filter_matches_by_date(all_matches, date_from, date_to)
+        # Apply curated match-ID filter when provided (Gap 3 — ICS 2026 specific list).
+        if match_ids_file is not None:
+            allowed_ids = _load_match_ids_file(match_ids_file)
+            before = len(matches)
+            matches = [m for m in matches if m[2] in allowed_ids]
+            console.print(
+                f"  [dim]Match-ID filter: {len(allowed_ids)} allowed IDs → "
+                f"{len(matches)} matches (was {before})[/dim]"
+            )
         skip_set = store.get_dedup_skip_set()
         n_algo, n_match = len(algorithms), len(matches)
         _mode_labels = {
@@ -663,11 +737,14 @@ def train(
         )
         if name_suffix:
             console.print(f"  Storing as: [cyan]<algo>_{name_suffix}[/cyan]")
+        if ics_anchor_match_id:
+            console.print(f"  ICS anchor pinned to: [cyan]{ics_anchor_match_id}[/cyan]")
 
         _run_train_mode(
             store, algorithms, matches, scoring,
             skip_set=skip_set, name_suffix=name_suffix,
             db_path=db_path, workers=workers,
+            ics_anchor_match_id=ics_anchor_match_id,
         )
     finally:
         store.close()
