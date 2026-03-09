@@ -165,7 +165,66 @@ def _export_shooters(store: Store, *, ssi_only: bool = True) -> list[dict[str, A
             "d": last_date,
         }
 
+    _add_percentiles(shooters)
     return list(shooters.values())
+
+
+def _add_percentiles(shooters: dict[tuple[int, str], dict[str, Any]]) -> None:
+    """Add percentile scores (0–100) to each shooter's rating entries.
+
+    Percentile is computed within each (algorithm, division) reference group:
+    the best conservative rating (CR = μ − z·σ) in the group gets 100, the
+    worst gets 0, and the rest are linearly interpolated between them.
+
+    The score is purely a **presentation layer** — the underlying μ/σ/CR values
+    are unchanged. It answers: "what fraction of rated shooters in this division
+    are below this shooter?" in plain-language terms.
+
+    Edge cases:
+    - Single shooter in a group → pct = 100.0
+    - Missing rating for a group → no pct field added
+    """
+    # Collect CR values per (algo, division) group.
+    # group_crs: (algo, div_db) → sorted list of CR values (ascending)
+    from collections import defaultdict
+
+    group_crs: dict[tuple[str, str], list[float]] = defaultdict(list)
+    for (_sid, div_db), shooter in shooters.items():
+        for algo, rating in shooter["ratings"].items():
+            group_crs[(algo, div_db)].append(rating["cr"])
+
+    # Sort each group ascending (index 0 = worst, index -1 = best).
+    sorted_crs: dict[tuple[str, str], list[float]] = {
+        k: sorted(v) for k, v in group_crs.items()
+    }
+
+    # Assign percentile to each shooter's rating using linear interpolation.
+    for (_sid, div_db), shooter in shooters.items():
+        for algo, rating in shooter["ratings"].items():
+            crs = sorted_crs.get((algo, div_db))
+            if not crs:
+                continue
+            n = len(crs)
+            if n == 1:
+                rating["pct"] = 100.0
+                continue
+            cr = rating["cr"]
+            # Binary-search position in sorted list; interpolate for ties.
+            lo, hi = 0, n - 1
+            while lo < hi:
+                mid = (lo + hi) // 2
+                if crs[mid] < cr:
+                    lo = mid + 1
+                else:
+                    hi = mid
+            # lo is the index of the first element >= cr.
+            # Count how many are strictly below cr for a cleaner metric.
+            below = lo  # number of shooters with CR < cr
+            # Handle ties: count equal entries and distribute evenly.
+            eq = sum(1 for v in crs if v == cr)
+            # Percentile = fraction of population below this shooter (0–100).
+            pct = (below + (eq - 1) / 2) / (n - 1) * 100
+            rating["pct"] = round(min(100.0, max(0.0, pct)), 1)
 
 
 def _export_fuzzy_links(store: Store) -> list[dict[str, Any]]:
