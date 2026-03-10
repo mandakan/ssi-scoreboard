@@ -1,7 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, User, Star, UserCheck, ExternalLink, Loader2, Search } from "lucide-react";
+import {
+  X,
+  User,
+  Star,
+  UserCheck,
+  ExternalLink,
+  Loader2,
+  Search,
+  Smartphone,
+} from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import Link from "next/link";
 import {
   Sheet,
@@ -16,6 +26,7 @@ import { useTrackedShooters } from "@/lib/hooks/use-tracked-shooters";
 import { useShooterSearchQuery } from "@/lib/queries";
 import type { ShooterSearchResult } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { collectSyncPayload, SYNC_TTL_SECONDS } from "@/lib/sync";
 
 interface TrackedShootersSheetProps {
   open: boolean;
@@ -130,13 +141,73 @@ export function TrackedShootersSheet({
 
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [syncCode, setSyncCode] = useState<string | null>(null);
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncCountdown, setSyncCountdown] = useState(0);
 
   function handleOpenChange(isOpen: boolean) {
     if (!isOpen) {
       setSearchInput("");
       setDebouncedSearch("");
+      setSyncCode(null);
+      setSyncError(null);
+      setSyncLoading(false);
     }
     onOpenChange(isOpen);
+  }
+
+  // Countdown timer for sync code expiry
+  useEffect(() => {
+    if (syncCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setSyncCountdown((prev) => {
+        if (prev <= 1) {
+          setSyncCode(null);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [syncCountdown]);
+
+  async function handleGenerateSyncCode() {
+    setSyncLoading(true);
+    setSyncError(null);
+    setSyncCode(null);
+
+    const payload = collectSyncPayload();
+    if (!payload) {
+      setSyncError("Could not read settings from this device.");
+      setSyncLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setSyncError(
+          (body as { error?: string })?.error ?? "Failed to generate code",
+        );
+        setSyncLoading(false);
+        return;
+      }
+
+      const { code } = (await res.json()) as { code: string };
+      setSyncCode(code);
+      setSyncCountdown(SYNC_TTL_SECONDS);
+    } catch {
+      setSyncError("Network error. Please try again.");
+    } finally {
+      setSyncLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -343,6 +414,88 @@ export function TrackedShootersSheet({
               Clear all
             </Button>
           )}
+
+          {/* ── Sync to another device ── */}
+          <section aria-labelledby="sync-heading">
+            <h3
+              id="sync-heading"
+              className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2"
+            >
+              Sync to another device
+            </h3>
+
+            {!syncCode ? (
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Transfer your identity, tracked shooters, and recent matches
+                  to another device.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGenerateSyncCode}
+                  disabled={syncLoading}
+                  className="gap-1.5"
+                >
+                  {syncLoading ? (
+                    <Loader2
+                      className="h-4 w-4 animate-spin"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <Smartphone className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  Generate sync code
+                </Button>
+                {syncError && (
+                  <p className="text-sm text-destructive" role="alert">
+                    {syncError}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3 text-center">
+                <p
+                  className="text-3xl font-mono font-bold tracking-[0.4em] select-all"
+                  aria-label={`Sync code: ${syncCode.split("").join(" ")}`}
+                >
+                  {syncCode}
+                </p>
+
+                <div className="flex justify-center">
+                  <div className="rounded-lg bg-white p-2">
+                    <QRCodeSVG
+                      value={`${typeof window !== "undefined" ? window.location.origin : ""}/sync?code=${syncCode}`}
+                      size={160}
+                      level="M"
+                      aria-label={`QR code linking to sync page with code ${syncCode}`}
+                      role="img"
+                    />
+                  </div>
+                </div>
+
+                <p className="text-sm text-muted-foreground">
+                  Scan this QR code or enter the code on your other device.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Expires in{" "}
+                  <span className="font-medium tabular-nums">
+                    {Math.floor(syncCountdown / 60)}:
+                    {String(syncCountdown % 60).padStart(2, "0")}
+                  </span>
+                </p>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGenerateSyncCode}
+                  disabled={syncLoading}
+                >
+                  Generate new code
+                </Button>
+              </div>
+            )}
+          </section>
         </div>
       </SheetContent>
     </Sheet>

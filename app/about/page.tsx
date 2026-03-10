@@ -82,6 +82,11 @@ export default function AboutPage() {
               Share your comparison in one tap — the link encodes your competitor
               selection so the recipient sees the same view immediately
             </li>
+            <li>
+              Sync between devices — transfer your identity, tracked shooters,
+              and recent matches to another phone or computer with a one-time
+              code or QR scan. No account needed.
+            </li>
             <li>No login required — paste a match URL and go</li>
           </ul>
         </section>

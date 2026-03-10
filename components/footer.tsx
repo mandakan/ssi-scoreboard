@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { BarChart2, Coffee, Crosshair, Github, UserCheck, Users } from "lucide-react";
+import { BarChart2, Coffee, Crosshair, Github, Smartphone, UserCheck, Users } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useWhatsNew } from "@/components/whats-new-provider";
 import { RELEASES } from "@/lib/releases";
@@ -86,6 +86,14 @@ export function Footer() {
             </>
           )}
         </button>
+        <Link
+          href="/sync"
+          className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+          aria-label="Sync settings between devices"
+        >
+          <Smartphone className="w-4 h-4" aria-hidden="true" />
+          <span>Sync</span>
+        </Link>
         <Link
           href="/about#install"
           className="inline-flex items-center hover:text-foreground transition-colors"
