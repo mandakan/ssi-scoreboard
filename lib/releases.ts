@@ -11,11 +11,27 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-03-05";
+export const LATEST_RELEASE_ID = "2026-03-10";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "March 10, 2026",
+    title: "Device Sync",
+    screenshotScenes: ["tracked-shooters-sheet"],
+    sections: [
+      {
+        heading: "New",
+        items: [
+          "Sync between devices: transfer your identity, tracked shooters, recent matches, and saved competitor selections from one device to another with a one-time 6-character code.",
+          "Generate a sync code from the \"My shooters\" sheet — scan the QR code or type the code on your other device to import everything instantly.",
+          "Direct sync link in the footer for quick access from any page.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-03-05",
     date: "March 5, 2026",
     title: "Find Shooter & My Shooters",
     screenshotScenes: ["tracked-shooters-sheet", "shooter-dashboard"],

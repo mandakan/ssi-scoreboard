@@ -642,6 +642,39 @@ export interface CoachingAvailability {
   available: boolean;         // true if AI provider is configured
 }
 
+// ── Device Sync ──────────────────────────────────────────────────────────────
+
+/** Payload transferred between devices via the sync feature. */
+export interface SyncPayload {
+  /** Schema version for forward compatibility. */
+  version: 1;
+  identity: MyShooterIdentity | null;
+  tracked: TrackedShooter[];
+  recentCompetitions: Array<{
+    ct: string;
+    id: string;
+    name: string;
+    venue: string | null;
+    date: string | null;
+    scoring_completed: number;
+    last_visited: number;
+  }>;
+  /** Per-match competitor selections, keyed by "ssi_competitors_{ct}_{id}". */
+  competitorSelections: Record<string, number[]>;
+  /** Per-match display mode overrides, keyed by "ssi_mode_{ct}_{id}". */
+  modeOverrides: Record<string, string>;
+  /** Event search filter preferences. */
+  eventFilters: { level: string; firearms: string; country: string } | null;
+}
+
+/** Stats summary for the sync preview UI. */
+export interface SyncStats {
+  hasIdentity: boolean;
+  trackedCount: number;
+  recentCount: number;
+  selectionsCount: number;
+}
+
 export interface ReleaseSection {
   heading: string;
   items: string[];
