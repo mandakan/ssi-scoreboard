@@ -320,9 +320,10 @@ achievement has a progressive unlock ladder — multiple tiers from beginner mil
 elite goals. Unlocked tiers are persisted in AppDatabase (`shooter_achievements` table)
 so they survive the 200-match pruning window.
 
-**Achievement categories (6 achievements, 25 tiers):**
-- **Milestone:** Competitor (1–100 matches), Stage Warrior (10–500 stages), DQ Club (1 DQ)
+**Achievement categories (10 achievements, 35 tiers):**
+- **Milestone:** Competitor (1–100 L2+ matches), Stage Warrior (10–500 L2+ stages), Championship (1–5 L4+ matches), World Shoot (1 Level V match), DQ Club (1 DQ)
 - **Accuracy:** Sharpshooter (60–85% A-zone), Bullseye (1–25 perfect stages), Clean Sheet (1–10 clean matches)
+- **Variety:** Globe Trotter (2–5 countries), Versatile (2–5 divisions)
 
 **Evaluation flow:** on each dashboard load (cache miss), `evaluateAchievements()` compares
 computed stats against tier thresholds, diffs against stored tiers, and persists new unlocks

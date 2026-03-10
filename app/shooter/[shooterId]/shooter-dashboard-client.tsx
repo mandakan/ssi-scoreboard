@@ -33,6 +33,10 @@ import {
   Crosshair,
   ShieldCheck,
   Ban,
+  Award,
+  Globe,
+  MapPin,
+  Shuffle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -43,6 +47,10 @@ const ACHIEVEMENT_ICONS: Record<string, LucideIcon> = {
   target: Target,
   "shield-check": ShieldCheck,
   ban: Ban,
+  award: Award,
+  globe: Globe,
+  "map-pin": MapPin,
+  shuffle: Shuffle,
 };
 import {
   Popover,

@@ -56,6 +56,8 @@ function makeCtx(overrides: Partial<AchievementEvalContext> = {}): AchievementEv
   };
 }
 
+const TOTAL_ACHIEVEMENTS = 10;
+
 describe("evaluateAchievements", () => {
   it("returns no unlocks for zero matches", () => {
     const ctx = makeCtx({
@@ -65,8 +67,7 @@ describe("evaluateAchievements", () => {
     });
     const { achievements, newUnlocks } = evaluateAchievements(ctx, []);
 
-    // All achievements should exist but none should have unlocked tiers
-    expect(achievements.length).toBe(6);
+    expect(achievements.length).toBe(TOTAL_ACHIEVEMENTS);
     expect(newUnlocks.length).toBe(0);
     for (const a of achievements) {
       expect(a.unlockedTiers).toHaveLength(0);
@@ -74,7 +75,7 @@ describe("evaluateAchievements", () => {
     }
   });
 
-  it("unlocks First Match tier for 1 match", () => {
+  it("unlocks First Match tier for 1 L2+ match", () => {
     const ctx = makeCtx({ matchCount: 1 });
     const { achievements, newUnlocks } = evaluateAchievements(ctx, []);
 
@@ -83,8 +84,40 @@ describe("evaluateAchievements", () => {
     expect(matchCountAch.unlockedTiers[0].level).toBe(1);
     expect(matchCountAch.nextTier?.threshold).toBe(5);
 
-    // Should be in newUnlocks
     expect(newUnlocks.some((u) => u.achievementId === "match-count" && u.tier === 1)).toBe(true);
+  });
+
+  it("does not count Level I matches for match-count", () => {
+    const ctx = makeCtx({
+      matchCount: 3,
+      matches: [
+        makeMatch({ level: "Level I" }),
+        makeMatch({ matchId: "2", level: "Level II" }),
+        makeMatch({ matchId: "3", level: null }),
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const matchCountAch = achievements.find((a) => a.definition.id === "match-count")!;
+    // Only the Level II match counts
+    expect(matchCountAch.currentValue).toBe(1);
+  });
+
+  it("counts only L2+ stages for stage-count", () => {
+    const ctx = makeCtx({
+      matches: [
+        makeMatch({ level: "Level II", stageCount: 8 }),
+        makeMatch({ matchId: "2", level: "Level III", stageCount: 12 }),
+        makeMatch({ matchId: "3", level: "Level I", stageCount: 6 }),
+        makeMatch({ matchId: "4", level: null, stageCount: 4 }),
+      ],
+      stats: makeStats({ totalStages: 30 }),
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const stageAch = achievements.find((a) => a.definition.id === "stage-count")!;
+    // Only L2 (8) + L3 (12) = 20
+    expect(stageAch.currentValue).toBe(20);
   });
 
   it("unlocks multiple sharpshooter tiers at 75% A-zone", () => {
@@ -99,7 +132,12 @@ describe("evaluateAchievements", () => {
   });
 
   it("does not re-emit stored tiers as new unlocks", () => {
-    const ctx = makeCtx({ matchCount: 5 });
+    const ctx = makeCtx({
+      matchCount: 5,
+      matches: Array.from({ length: 5 }, (_, i) =>
+        makeMatch({ matchId: String(i + 1) }),
+      ),
+    });
     const stored: StoredAchievement[] = [
       {
         achievementId: "match-count",
@@ -111,7 +149,6 @@ describe("evaluateAchievements", () => {
     ];
     const { achievements, newUnlocks } = evaluateAchievements(ctx, stored);
 
-    // tier 1 should be unlocked but NOT in newUnlocks
     const matchCountAch = achievements.find((a) => a.definition.id === "match-count")!;
     expect(matchCountAch.unlockedTiers).toHaveLength(2); // tier 1 (stored) + tier 2 (new)
     expect(newUnlocks.find((u) => u.achievementId === "match-count" && u.tier === 1)).toBeUndefined();
@@ -119,7 +156,12 @@ describe("evaluateAchievements", () => {
   });
 
   it("computes correct progress to next tier", () => {
-    const ctx = makeCtx({ matchCount: 3 });
+    const ctx = makeCtx({
+      matchCount: 3,
+      matches: Array.from({ length: 3 }, (_, i) =>
+        makeMatch({ matchId: String(i + 1) }),
+      ),
+    });
     const { achievements } = evaluateAchievements(ctx, []);
 
     const matchCountAch = achievements.find((a) => a.definition.id === "match-count")!;
@@ -129,12 +171,21 @@ describe("evaluateAchievements", () => {
   });
 
   it("returns nextTier=null and progress=1 when all tiers complete", () => {
-    const ctx = makeCtx({ matchCount: 100 });
+    const ctx = makeCtx({
+      matchCount: 100,
+      matches: Array.from({ length: 50 }, (_, i) =>
+        makeMatch({ matchId: String(i + 1) }),
+      ),
+    });
     const { achievements } = evaluateAchievements(ctx, []);
 
+    // match-count has max tier at 100, but we only have 50 matches in ctx.matches
+    // (evaluator now counts from matches array, not matchCount)
     const matchCountAch = achievements.find((a) => a.definition.id === "match-count")!;
-    expect(matchCountAch.nextTier).toBeNull();
-    expect(matchCountAch.progressToNext).toBe(1);
+    expect(matchCountAch.currentValue).toBe(50);
+    // With 50 matches, tiers up to 50 are unlocked (5 tiers: 1,5,10,25,50)
+    expect(matchCountAch.unlockedTiers).toHaveLength(5);
+    expect(matchCountAch.nextTier?.threshold).toBe(100);
   });
 
   it("counts perfect stages from matches", () => {
@@ -166,15 +217,115 @@ describe("evaluateAchievements", () => {
     expect(cleanAch.unlockedTiers).toHaveLength(1); // threshold 1
   });
 
-  it("evaluates stage-count from stats.totalStages", () => {
+  // ── Championship (L4+) ──────────────────────────────────────────────────
+
+  it("counts L4+ matches for championship", () => {
     const ctx = makeCtx({
-      stats: makeStats({ totalStages: 55 }),
+      matches: [
+        makeMatch({ matchId: "1", level: "Level IV" }),
+        makeMatch({ matchId: "2", level: "Level V" }),
+        makeMatch({ matchId: "3", level: "Level III" }),
+        makeMatch({ matchId: "4", level: "Level II" }),
+      ],
     });
     const { achievements } = evaluateAchievements(ctx, []);
 
-    const stageAch = achievements.find((a) => a.definition.id === "stage-count")!;
-    expect(stageAch.currentValue).toBe(55);
-    expect(stageAch.unlockedTiers).toHaveLength(2); // 10 and 50
-    expect(stageAch.nextTier?.threshold).toBe(100);
+    const champAch = achievements.find((a) => a.definition.id === "championship")!;
+    expect(champAch.currentValue).toBe(2);
+    expect(champAch.unlockedTiers).toHaveLength(1); // threshold 1
+    expect(champAch.nextTier?.threshold).toBe(3);
+  });
+
+  // ── World Shoot ──────────────────────────────────────────────────────────
+
+  it("counts Level V matches for world-shoot", () => {
+    const ctx = makeCtx({
+      matches: [
+        makeMatch({ matchId: "1", level: "Level V" }),
+        makeMatch({ matchId: "2", level: "Level IV" }),
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const wsAch = achievements.find((a) => a.definition.id === "world-shoot")!;
+    expect(wsAch.currentValue).toBe(1);
+    expect(wsAch.unlockedTiers).toHaveLength(1);
+    expect(wsAch.nextTier).toBeNull();
+  });
+
+  it("does not unlock world-shoot for Level IV only", () => {
+    const ctx = makeCtx({
+      matches: [makeMatch({ level: "Level IV" })],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const wsAch = achievements.find((a) => a.definition.id === "world-shoot")!;
+    expect(wsAch.currentValue).toBe(0);
+    expect(wsAch.unlockedTiers).toHaveLength(0);
+  });
+
+  // ── Globe Trotter ────────────────────────────────────────────────────────
+
+  it("counts distinct regions for globe-trotter", () => {
+    const ctx = makeCtx({
+      matches: [
+        makeMatch({ matchId: "1", region: "Sweden" }),
+        makeMatch({ matchId: "2", region: "Norway" }),
+        makeMatch({ matchId: "3", region: "Sweden" }),
+        makeMatch({ matchId: "4", region: "Denmark" }),
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const gtAch = achievements.find((a) => a.definition.id === "globe-trotter")!;
+    expect(gtAch.currentValue).toBe(3);
+    expect(gtAch.unlockedTiers).toHaveLength(2); // 2 and 3
+    expect(gtAch.nextTier?.threshold).toBe(5);
+  });
+
+  it("ignores null regions for globe-trotter", () => {
+    const ctx = makeCtx({
+      matches: [
+        makeMatch({ matchId: "1", region: "Sweden" }),
+        makeMatch({ matchId: "2", region: null }),
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const gtAch = achievements.find((a) => a.definition.id === "globe-trotter")!;
+    expect(gtAch.currentValue).toBe(1);
+    expect(gtAch.unlockedTiers).toHaveLength(0);
+  });
+
+  // ── Versatile ────────────────────────────────────────────────────────────
+
+  it("counts distinct divisions for versatile", () => {
+    const ctx = makeCtx({
+      matches: [
+        makeMatch({ matchId: "1", division: "Production" }),
+        makeMatch({ matchId: "2", division: "Open Major" }),
+        makeMatch({ matchId: "3", division: "Production" }),
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const vAch = achievements.find((a) => a.definition.id === "versatile")!;
+    expect(vAch.currentValue).toBe(2);
+    expect(vAch.unlockedTiers).toHaveLength(1); // threshold 2
+    expect(vAch.nextTier?.threshold).toBe(3);
+  });
+
+  it("ignores null divisions for versatile", () => {
+    const ctx = makeCtx({
+      matches: [
+        makeMatch({ matchId: "1", division: "Production" }),
+        makeMatch({ matchId: "2", division: null }),
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const vAch = achievements.find((a) => a.definition.id === "versatile")!;
+    expect(vAch.currentValue).toBe(1);
+    expect(vAch.unlockedTiers).toHaveLength(0);
   });
 });

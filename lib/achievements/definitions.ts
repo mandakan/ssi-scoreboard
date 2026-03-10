@@ -1,6 +1,7 @@
 // Achievement definitions and evaluators.
 
 import type { AchievementDefinition, AchievementEvalContext } from "./types";
+import type { ShooterMatchSummary } from "@/lib/types";
 
 export type Evaluator = (ctx: AchievementEvalContext) => number;
 
@@ -9,11 +10,26 @@ export interface AchievementEntry {
   evaluate: Evaluator;
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+const L2_PLUS = new Set(["Level II", "Level III", "Level IV", "Level V"]);
+const L4_PLUS = new Set(["Level IV", "Level V"]);
+
+function isL2Plus(m: ShooterMatchSummary): boolean {
+  return m.level != null && L2_PLUS.has(m.level);
+}
+
+function isL4Plus(m: ShooterMatchSummary): boolean {
+  return m.level != null && L4_PLUS.has(m.level);
+}
+
+// ── Milestone ────────────────────────────────────────────────────────────────
+
 const matchCount: AchievementEntry = {
   definition: {
     id: "match-count",
     name: "Competitor",
-    description: "Compete in matches tracked on this app.",
+    description: "Compete in Level II+ matches tracked on this app.",
     category: "milestone",
     icon: "trophy",
     tiers: [
@@ -25,14 +41,14 @@ const matchCount: AchievementEntry = {
       { level: 6, name: "Legend", threshold: 100, label: "100 matches" },
     ],
   },
-  evaluate: (ctx) => ctx.matchCount,
+  evaluate: (ctx) => ctx.matches.filter(isL2Plus).length,
 };
 
 const stageCount: AchievementEntry = {
   definition: {
     id: "stage-count",
     name: "Stage Warrior",
-    description: "Complete stages across all matches.",
+    description: "Complete stages across Level II+ matches.",
     category: "milestone",
     icon: "swords",
     tiers: [
@@ -43,8 +59,71 @@ const stageCount: AchievementEntry = {
       { level: 5, name: "Champion", threshold: 500, label: "500 stages" },
     ],
   },
-  evaluate: (ctx) => ctx.stats.totalStages,
+  evaluate: (ctx) =>
+    ctx.matches.filter(isL2Plus).reduce((sum, m) => sum + m.stageCount, 0),
 };
+
+const championship: AchievementEntry = {
+  definition: {
+    id: "championship",
+    name: "Championship",
+    description: "Compete in Level IV+ continental or world championships.",
+    category: "milestone",
+    icon: "award",
+    tiers: [
+      {
+        level: 1,
+        name: "Continental Debut",
+        threshold: 1,
+        label: "1 championship",
+      },
+      {
+        level: 2,
+        name: "Championship Regular",
+        threshold: 3,
+        label: "3 championships",
+      },
+      {
+        level: 3,
+        name: "Championship Veteran",
+        threshold: 5,
+        label: "5 championships",
+      },
+    ],
+  },
+  evaluate: (ctx) => ctx.matches.filter(isL4Plus).length,
+};
+
+const worldShoot: AchievementEntry = {
+  definition: {
+    id: "world-shoot",
+    name: "World Shoot",
+    description: "Compete in the IPSC World Shoot.",
+    category: "milestone",
+    icon: "globe",
+    tiers: [
+      { level: 1, name: "World Shooter", threshold: 1, label: "1 World Shoot" },
+    ],
+  },
+  evaluate: (ctx) =>
+    ctx.matches.filter((m) => m.level === "Level V").length,
+};
+
+const dqClub: AchievementEntry = {
+  definition: {
+    id: "dq-club",
+    name: "DQ Club",
+    description: "Been there, done that.",
+    category: "milestone",
+    icon: "ban",
+    tiers: [
+      { level: 1, name: "Been there, done that", threshold: 1, label: "1 DQ" },
+    ],
+  },
+  evaluate: (ctx) => ctx.matches.filter((m) => m.dq).length,
+};
+
+// ── Accuracy ─────────────────────────────────────────────────────────────────
 
 const sharpshooter: AchievementEntry = {
   definition: {
@@ -67,7 +146,8 @@ const perfectStages: AchievementEntry = {
   definition: {
     id: "perfect-stages",
     name: "Bullseye",
-    description: "Shoot stages with all A-zone hits and zero penalties (no C/D hits, misses, no-shoots, or procedurals).",
+    description:
+      "Shoot stages with all A-zone hits and zero penalties (no C/D hits, misses, no-shoots, or procedurals).",
     category: "accuracy",
     icon: "target",
     tiers: [
@@ -105,27 +185,75 @@ const cleanMatch: AchievementEntry = {
     ).length,
 };
 
-const dqClub: AchievementEntry = {
+// ── Variety ──────────────────────────────────────────────────────────────────
+
+const globeTrotter: AchievementEntry = {
   definition: {
-    id: "dq-club",
-    name: "DQ Club",
-    description: "Been there, done that.",
-    category: "milestone",
-    icon: "ban",
+    id: "globe-trotter",
+    name: "Globe Trotter",
+    description: "Compete in matches across different countries.",
+    category: "variety",
+    icon: "map-pin",
     tiers: [
-      { level: 1, name: "Been there, done that", threshold: 1, label: "1 DQ" },
+      { level: 1, name: "Explorer", threshold: 2, label: "2 countries" },
+      { level: 2, name: "Traveler", threshold: 3, label: "3 countries" },
+      { level: 3, name: "Globe Trotter", threshold: 5, label: "5 countries" },
     ],
   },
-  evaluate: (ctx) => ctx.matches.filter((m) => m.dq).length,
+  evaluate: (ctx) => {
+    const regions = new Set<string>();
+    for (const m of ctx.matches) {
+      if (m.region) regions.add(m.region);
+    }
+    return regions.size;
+  },
 };
+
+const versatile: AchievementEntry = {
+  definition: {
+    id: "versatile",
+    name: "Versatile",
+    description: "Compete in multiple different divisions.",
+    category: "variety",
+    icon: "shuffle",
+    tiers: [
+      { level: 1, name: "Dual Wielder", threshold: 2, label: "2 divisions" },
+      {
+        level: 2,
+        name: "Multi-Divisional",
+        threshold: 3,
+        label: "3 divisions",
+      },
+      {
+        level: 3,
+        name: "Jack of All Trades",
+        threshold: 5,
+        label: "5 divisions",
+      },
+    ],
+  },
+  evaluate: (ctx) => {
+    const divisions = new Set<string>();
+    for (const m of ctx.matches) {
+      if (m.division) divisions.add(m.division);
+    }
+    return divisions.size;
+  },
+};
+
+// ── Export ────────────────────────────────────────────────────────────────────
 
 export const ACHIEVEMENT_ENTRIES: AchievementEntry[] = [
   matchCount,
   stageCount,
+  championship,
+  worldShoot,
   sharpshooter,
   perfectStages,
   cleanMatch,
   dqClub,
+  globeTrotter,
+  versatile,
 ];
 
 export const ACHIEVEMENT_DEFINITIONS: AchievementDefinition[] =
