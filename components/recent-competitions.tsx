@@ -42,7 +42,7 @@ export function CompetitionCard({
     <div className="relative rounded-lg border bg-card p-4 hover:bg-muted/30 transition-colors group">
       {onRemove && (
         <button
-          className="absolute top-2 right-2 p-1 rounded text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+          className="absolute top-2 right-2 p-1.5 rounded text-muted-foreground hover:text-foreground sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
           aria-label={`Remove ${comp.name} from recent competitions`}
           onClick={(e) => {
             e.stopPropagation();
