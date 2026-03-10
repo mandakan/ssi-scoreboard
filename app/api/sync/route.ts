@@ -10,11 +10,21 @@ import {
 } from "@/lib/sync";
 
 function generateSyncCode(): string {
-  const bytes = randomBytes(SYNC_CODE_LENGTH);
+  const charsetLength = SYNC_CODE_CHARSET.length;
+  // Largest multiple of charsetLength less than or equal to 256
+  const maxUnbiasedValue = Math.floor(256 / charsetLength) * charsetLength;
+
   let code = "";
-  for (let i = 0; i < SYNC_CODE_LENGTH; i++) {
-    code += SYNC_CODE_CHARSET[bytes[i] % SYNC_CODE_CHARSET.length];
+  while (code.length < SYNC_CODE_LENGTH) {
+    const byte = randomBytes(1)[0];
+    // Rejection sampling: discard values that would introduce modulo bias
+    if (byte >= maxUnbiasedValue) {
+      continue;
+    }
+    const index = byte % charsetLength;
+    code += SYNC_CODE_CHARSET[index];
   }
+
   return code;
 }
 
