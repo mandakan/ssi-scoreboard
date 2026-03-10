@@ -103,6 +103,23 @@ describe("evaluateAchievements", () => {
     expect(matchCountAch.currentValue).toBe(1);
   });
 
+  it("recognises raw level codes (l2, l3, etc.) for match-count", () => {
+    const ctx = makeCtx({
+      matchCount: 4,
+      matches: [
+        makeMatch({ matchId: "1", level: "l2" }),
+        makeMatch({ matchId: "2", level: "l3" }),
+        makeMatch({ matchId: "3", level: "l1" }),
+        makeMatch({ matchId: "4", level: null }),
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const matchCountAch = achievements.find((a) => a.definition.id === "match-count")!;
+    // l2 + l3 = 2
+    expect(matchCountAch.currentValue).toBe(2);
+  });
+
   it("counts only L2+ stages for stage-count", () => {
     const ctx = makeCtx({
       matches: [
@@ -236,6 +253,20 @@ describe("evaluateAchievements", () => {
     expect(champAch.nextTier?.threshold).toBe(3);
   });
 
+  it("counts raw l4/l5 codes for championship", () => {
+    const ctx = makeCtx({
+      matches: [
+        makeMatch({ matchId: "1", level: "l4" }),
+        makeMatch({ matchId: "2", level: "l5" }),
+        makeMatch({ matchId: "3", level: "l3" }),
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const champAch = achievements.find((a) => a.definition.id === "championship")!;
+    expect(champAch.currentValue).toBe(2);
+  });
+
   // ── World Shoot ──────────────────────────────────────────────────────────
 
   it("counts Level V matches for world-shoot", () => {
@@ -251,6 +282,17 @@ describe("evaluateAchievements", () => {
     expect(wsAch.currentValue).toBe(1);
     expect(wsAch.unlockedTiers).toHaveLength(1);
     expect(wsAch.nextTier).toBeNull();
+  });
+
+  it("counts raw l5 code for world-shoot", () => {
+    const ctx = makeCtx({
+      matches: [makeMatch({ level: "l5" })],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const wsAch = achievements.find((a) => a.definition.id === "world-shoot")!;
+    expect(wsAch.currentValue).toBe(1);
+    expect(wsAch.unlockedTiers).toHaveLength(1);
   });
 
   it("does not unlock world-shoot for Level IV only", () => {

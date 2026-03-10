@@ -12,8 +12,14 @@ export interface AchievementEntry {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const L2_PLUS = new Set(["Level II", "Level III", "Level IV", "Level V"]);
-const L4_PLUS = new Set(["Level IV", "Level V"]);
+const L2_PLUS = new Set([
+  "l2", "l3", "l4", "l5",                        // raw Django choice codes
+  "Level II", "Level III", "Level IV", "Level V", // display names (legacy)
+]);
+const L4_PLUS = new Set([
+  "l4", "l5",                  // raw codes
+  "Level IV", "Level V",       // display names (legacy)
+]);
 
 function isL2Plus(m: ShooterMatchSummary): boolean {
   return m.level != null && L2_PLUS.has(m.level);
@@ -106,7 +112,7 @@ const worldShoot: AchievementEntry = {
     ],
   },
   evaluate: (ctx) =>
-    ctx.matches.filter((m) => m.level === "Level V").length,
+    ctx.matches.filter((m) => m.level === "l5" || m.level === "Level V").length,
 };
 
 const dqClub: AchievementEntry = {
