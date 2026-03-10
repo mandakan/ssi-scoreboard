@@ -123,7 +123,7 @@ describe("runBackfill", () => {
     });
   });
 
-  it("skips entries with wrong schema version", async () => {
+  it("skips entries with schema version below 6", async () => {
     const shooterId = 100;
     const deps = createMockDeps({
       scanCachedMatchKeys: vi.fn().mockResolvedValue([
@@ -141,7 +141,7 @@ describe("runBackfill", () => {
               },
             ],
           },
-          CACHE_SCHEMA_VERSION - 1,
+          5,
         ),
       ),
     });
@@ -151,6 +151,36 @@ describe("runBackfill", () => {
     expect(result.checked).toBe(1);
     expect(result.discovered).toBe(0);
     expect(deps.indexMatch).not.toHaveBeenCalled();
+  });
+
+  it("accepts entries with schema version 6 or newer", async () => {
+    const shooterId = 100;
+    const deps = createMockDeps({
+      scanCachedMatchKeys: vi.fn().mockResolvedValue([
+        'gql:GetMatch:{"ct":22,"id":"888"}',
+      ]),
+      getCachedMatch: vi.fn().mockResolvedValue(
+        makeCacheEntry(
+          {
+            competitors: [
+              {
+                id: "1",
+                first_name: "Jane",
+                last_name: "Doe",
+                shooter: { id: encodeShooterId(shooterId) },
+              },
+            ],
+          },
+          6,
+        ),
+      ),
+    });
+
+    const result = await runBackfill(deps, { shooterId });
+
+    expect(result.checked).toBe(1);
+    expect(result.discovered).toBe(1);
+    expect(deps.indexMatch).toHaveBeenCalled();
   });
 
   it("calls onProgress after each batch", async () => {

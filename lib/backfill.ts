@@ -4,7 +4,6 @@
 //
 // Dependency-injected so it can be unit-tested without a real Redis connection.
 
-import { CACHE_SCHEMA_VERSION } from "@/lib/constants";
 import { decodeShooterId } from "@/lib/shooter-index";
 import type { BackfillProgress } from "@/lib/types";
 
@@ -143,7 +142,9 @@ export async function runBackfill(
           if (!raw) return;
 
           const entry = JSON.parse(raw) as CacheEntry;
-          if (entry.v !== CACHE_SCHEMA_VERSION) return;
+          // Require at least v6, when shooter { id } was added to IpscCompetitorNode.
+          // Allow any newer version so D1 entries pre-dating a schema bump are usable.
+          if (!entry.v || entry.v < 6) return;
           if (!entry.data?.event) return;
 
           const ev = entry.data.event;

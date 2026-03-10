@@ -29,16 +29,11 @@ export async function getMatchDataWithFallback(
     if (raw) return raw;
   } catch { /* ignore Redis errors */ }
 
-  // Fall back to D1/SQLite
+  // Fall back to D1/SQLite — return whatever is stored; callers are responsible
+  // for deciding whether a given schema version is acceptable for their use case.
   try {
     const raw = await db.getMatchDataCache(cacheKey);
-    if (raw) {
-      // Validate schema version before returning
-      const meta = JSON.parse(raw) as CacheEntryMeta;
-      if (meta.v === CACHE_SCHEMA_VERSION) {
-        return raw;
-      }
-    }
+    if (raw) return raw;
   } catch { /* ignore DB errors */ }
 
   return null;
