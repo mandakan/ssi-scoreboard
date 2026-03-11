@@ -154,9 +154,24 @@ def _read_gz(path: Path) -> dict[str, Any]:
 
 
 def _write_gz(path: Path, data: dict[str, Any]) -> None:
+    """Write ``data`` as gzip-compressed JSON to ``path`` atomically.
+
+    Uses a sibling temp file + os.replace() so a kill mid-write never leaves
+    a truncated/corrupt file at the destination.
+    """
+    import os
+    import tempfile
+
     payload = json.dumps(data, ensure_ascii=False).encode()
-    with gzip.open(path, "wb", compresslevel=6) as fh:
-        fh.write(payload)
+    fd, tmp_str = tempfile.mkstemp(dir=path.parent, suffix=".json.gz.tmp")
+    tmp = Path(tmp_str)
+    try:
+        with os.fdopen(fd, "wb") as raw_fh, gzip.open(raw_fh, "wb", compresslevel=6) as gz_fh:
+            gz_fh.write(payload)
+        tmp.replace(path)  # atomic on POSIX; near-atomic on Windows
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def _is_not_found(exc: Exception) -> bool:

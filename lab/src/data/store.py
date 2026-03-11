@@ -8,7 +8,7 @@ from pathlib import Path
 
 import duckdb
 
-from src.data.models import MatchResults
+from src.data.models import MatchResults, MatchResultsMeta
 
 # Bump this whenever the schema of any data table changes (not sync_state).
 # On version mismatch, all data tables are dropped and recreated; sync from scratch.
@@ -317,11 +317,30 @@ class Store:
         )
 
     def store_match_results(self, results: MatchResults) -> None:
-        """Store a full match result set (metadata + competitors + stages + results)."""
+        """Store a full match result set (metadata + competitors + stages + results).
+
+        All writes are wrapped in a single transaction so a kill mid-write leaves
+        the database in a consistent state (either fully stored or not at all).
+        """
         meta = results.meta
         source = meta.source
         synced_at = datetime.now(UTC).isoformat()
 
+        self.db.execute("BEGIN")
+        try:
+            self._store_match_results_inner(meta, source, synced_at, results)
+            self.db.execute("COMMIT")
+        except Exception:
+            self.db.execute("ROLLBACK")
+            raise
+
+    def _store_match_results_inner(
+        self,
+        meta: MatchResultsMeta,
+        source: str,
+        synced_at: str,
+        results: MatchResults,
+    ) -> None:
         # Upsert match metadata
         self.db.execute(
             """INSERT OR REPLACE INTO matches
