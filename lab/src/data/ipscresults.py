@@ -384,10 +384,8 @@ class IpscResultsSyncer:
             new_matches = [m for m in all_matches if not self.raw_store.has_local(m.id)]
             console.print(f"  {len(new_matches)} bundles to download (raw-only mode)")
         elif not full:
-            new_matches = [
-                m for m in all_matches
-                if not self.store.has_match("ipscresults", 0, m.id)
-            ]
+            stored_ids = self.store.get_stored_match_ids("ipscresults")
+            new_matches = [m for m in all_matches if m.id not in stored_ids]
             console.print(f"  {len(new_matches)} matches to sync")
         else:
             new_matches = all_matches

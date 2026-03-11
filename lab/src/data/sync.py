@@ -159,11 +159,9 @@ class SyncClient:
         if force:
             new_matches = listing.matches
         else:
-            # Filter out matches we already have
-            new_matches = [
-                m for m in listing.matches
-                if not self.store.has_match("ssi", m.ct, m.match_id)
-            ]
+            # Filter out matches we already have — single bulk query instead of N individual ones
+            stored_ids = self.store.get_stored_match_ids("ssi")
+            new_matches = [m for m in listing.matches if m.match_id not in stored_ids]
         console.print(f"  {len(new_matches)} matches to sync")
 
         if not new_matches:

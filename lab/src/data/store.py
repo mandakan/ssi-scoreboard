@@ -298,6 +298,16 @@ class Store:
         ).fetchone()
         return row is not None
 
+    def get_stored_match_ids(self, source: str) -> set[str]:
+        """Return the set of all match_ids already stored for a source.
+
+        Use this to bulk-filter a match list instead of calling has_match() in a loop.
+        """
+        rows = self.db.execute(
+            "SELECT match_id FROM matches WHERE source = ?", [source]
+        ).fetchall()
+        return {str(r[0]) for r in rows}
+
     def skip_match(
         self, source: str, ct: int, match_id: str, name: str, reason: str = ""
     ) -> None:
@@ -355,40 +365,44 @@ class Store:
             ],
         )
 
-        # Upsert competitors
+        # Upsert competitors — batch via executemany
+        competitor_rows = []
         for c in results.competitors:
-            # For SSI: use str(shooter_id) as identity_key if available.
             if source == "ssi":
                 identity_key = str(c.shooter_id) if c.shooter_id is not None else c.identity_key
             else:
                 identity_key = c.identity_key
-
-            self.db.execute(
+            competitor_rows.append([
+                source, meta.ct, meta.match_id,
+                c.competitor_id, c.shooter_id, identity_key,
+                c.name, c.club, c.division,
+                c.region, c.region_display, c.category, c.alias,
+            ])
+        if competitor_rows:
+            self.db.executemany(
                 """INSERT OR REPLACE INTO competitors
                    (source, ct, match_id, competitor_id, shooter_id, identity_key,
                     name, club, division, region, region_display, category, alias)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                [
-                    source, meta.ct, meta.match_id,
-                    c.competitor_id, c.shooter_id, identity_key,
-                    c.name, c.club, c.division,
-                    c.region, c.region_display, c.category, c.alias,
-                ],
+                competitor_rows,
             )
 
-        # Upsert stages
-        for s in results.stages:
-            self.db.execute(
+        # Upsert stages — batch via executemany
+        if results.stages:
+            self.db.executemany(
                 """INSERT OR REPLACE INTO stages
                    (source, ct, match_id, stage_id, stage_number, stage_name, max_points)
                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                [source, meta.ct, meta.match_id,
-                 s.stage_id, s.stage_number, s.stage_name, s.max_points],
+                [
+                    [source, meta.ct, meta.match_id,
+                     s.stage_id, s.stage_number, s.stage_name, s.max_points]
+                    for s in results.stages
+                ],
             )
 
-        # Upsert stage results
-        for r in results.results:
-            self.db.execute(
+        # Upsert stage results — batch via executemany
+        if results.results:
+            self.db.executemany(
                 """INSERT OR REPLACE INTO stage_results
                    (source, ct, match_id, competitor_id, stage_id,
                     hit_factor, points, time, max_points,
@@ -399,13 +413,16 @@ class Store:
                     division_rank, division_percent)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 [
-                    source, meta.ct, meta.match_id, r.competitor_id, r.stage_id,
-                    r.hit_factor, r.points, r.time, r.max_points,
-                    r.a_hits, r.c_hits, r.d_hits,
-                    r.miss_count, r.no_shoots, r.procedurals,
-                    r.dq, r.dnf, r.zeroed,
-                    r.overall_rank, r.overall_percent,
-                    r.division_rank, r.division_percent,
+                    [
+                        source, meta.ct, meta.match_id, r.competitor_id, r.stage_id,
+                        r.hit_factor, r.points, r.time, r.max_points,
+                        r.a_hits, r.c_hits, r.d_hits,
+                        r.miss_count, r.no_shoots, r.procedurals,
+                        r.dq, r.dnf, r.zeroed,
+                        r.overall_rank, r.overall_percent,
+                        r.division_rank, r.division_percent,
+                    ]
+                    for r in results.results
                 ],
             )
 
