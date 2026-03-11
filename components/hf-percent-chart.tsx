@@ -140,8 +140,8 @@ export function HfPercentChart({ data, stages: stagesProp }: HfPercentChartProps
             labelStyle={{ color: "var(--popover-foreground)", fontWeight: 600 }}
             itemStyle={{ color: "var(--popover-foreground)" }}
             cursor={{ stroke: "var(--muted-foreground)", opacity: 0.2 }}
-            formatter={(value: number | undefined, name: string | undefined) => {
-              const id = parseInt((name ?? "").replace("hfpct_", ""), 10);
+            formatter={(value, name) => {
+              const id = parseInt(String(name ?? "").replace("hfpct_", ""), 10);
               return [
                 typeof value === "number" ? `${value.toFixed(1)}%` : "—",
                 formatLabel(id),
