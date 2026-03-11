@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -796,7 +797,9 @@ def benchmark(
     )
     store = Store(db_path)
     try:
-        algo_metrics = run_benchmark(store, split_ratio=split, scoring=scoring, disciplines=disc_set)
+        algo_metrics = run_benchmark(
+            store, split_ratio=split, scoring=scoring, disciplines=disc_set
+        )
         if chart and algo_metrics:
             save_chart(algo_metrics, output_path=str(db_path.parent / "benchmark.png"))
     finally:
@@ -1208,7 +1211,9 @@ def db_push(
         f"[bold]Compressing {db_path.name} "
         f"({original_bytes / 1_048_576:.1f} MB)...[/bold]"
     )
-    tmp_gz = Path(tempfile.mktemp(suffix=".duckdb.gz", dir=db_path.parent))
+    tmp_gz_fd, tmp_gz_str = tempfile.mkstemp(suffix=".duckdb.gz", dir=db_path.parent)
+    os.close(tmp_gz_fd)
+    tmp_gz = Path(tmp_gz_str)
     try:
         with open(db_path, "rb") as src, gzip.open(tmp_gz, "wb", compresslevel=6) as dst:
             shutil.copyfileobj(src, dst)
@@ -1406,8 +1411,12 @@ def db_pull(
     compressed_mb = display_info.get("compressed_size_bytes", 0) / 1_048_576
     size_str = f" ({compressed_mb:.1f} MB)" if compressed_mb else ""
     console.print(f"[bold]Downloading s3://{bucket}/{db_key}{size_str}...[/bold]")
-    tmp_gz = Path(tempfile.mktemp(suffix=".duckdb.gz", dir=db_path.parent))
-    tmp_db = Path(tempfile.mktemp(suffix=".duckdb.tmp", dir=db_path.parent))
+    tmp_gz_fd, tmp_gz_str = tempfile.mkstemp(suffix=".duckdb.gz", dir=db_path.parent)
+    os.close(tmp_gz_fd)
+    tmp_gz = Path(tmp_gz_str)
+    tmp_db_fd, tmp_db_str = tempfile.mkstemp(suffix=".duckdb.tmp", dir=db_path.parent)
+    os.close(tmp_db_fd)
+    tmp_db = Path(tmp_db_str)
     try:
         try:
             s3.download_file(bucket, db_key, str(tmp_gz))
