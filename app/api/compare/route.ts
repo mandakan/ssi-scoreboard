@@ -12,6 +12,7 @@ import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data
 import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
 import type { CompareMode, CompareResponse, CompetitorInfo, FieldFingerprintPoint, StageComparison, StageConditions } from "@/lib/types";
 import { fetchMatchWeatherRaw, getHourlySnapshot } from "@/lib/weather";
+import { geocodeVenueName } from "@/lib/geocoding";
 
 interface RawCompetitor {
   id: string;
@@ -39,6 +40,8 @@ interface RawMatchData {
     has_geopos?: boolean | null;
     lat?: number | string | null;
     lng?: number | string | null;
+    venue?: string | null;
+    region?: string | null;
     stages?: {
       id: string;
       number: number;
@@ -344,8 +347,23 @@ export async function GET(req: Request) {
 
     // Build per-cell conditions overlay (weather + time) — non-fatal, gracefully degrades.
     const ev = matchData.event!;
-    const venueLat = ev.has_geopos && ev.lat != null ? parseFloat(String(ev.lat)) : null;
-    const venueLng = ev.has_geopos && ev.lng != null ? parseFloat(String(ev.lng)) : null;
+    let venueLat = ev.has_geopos && ev.lat != null ? parseFloat(String(ev.lat)) : null;
+    let venueLng = ev.has_geopos && ev.lng != null ? parseFloat(String(ev.lng)) : null;
+
+    // Fallback: if the SSI event has no GPS coordinates, attempt to geocode the
+    // venue name via OpenStreetMap Nominatim (free, cached permanently).
+    if ((venueLat == null || venueLng == null) && ev.venue) {
+      try {
+        const geocoded = await geocodeVenueName(ev.venue, ev.region ?? null);
+        if (geocoded) {
+          venueLat = geocoded.lat;
+          venueLng = geocoded.lng;
+        }
+      } catch {
+        // Non-fatal — fall through without conditions
+      }
+    }
+
     if (venueLat != null && venueLng != null) {
       const firstTs = rawScorecards
         .filter((s) => s.scorecard_created != null)
