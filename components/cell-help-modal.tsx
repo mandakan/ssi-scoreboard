@@ -17,7 +17,7 @@ import {
   ShootingOrderBadge,
   StageClassificationBadge,
 } from "@/components/stage-cell-parts";
-import { ArrowUpDown, CheckCircle2, Crosshair, Flame, Focus, Hand, HandMetal, Layers, Shield, Timer, Zap } from "lucide-react";
+import { ArrowUpDown, CheckCircle2, Cloud, CloudRain, CloudSnow, CloudSun, Crosshair, Flame, Focus, Hand, HandMetal, Layers, Moon, Shield, Sun, Sunrise, Sunset, Timer, Wind, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { StageClassification } from "@/lib/types";
 
@@ -443,6 +443,84 @@ function SummaryRowDiagram() {
   );
 }
 
+function ConditionsOverlaySection() {
+  return (
+    <section>
+      <h3 className="text-sm font-semibold mb-0.5">
+        Conditions overlay{" "}
+        <span className="text-xs font-normal text-muted-foreground">(coaching mode)</span>
+      </h3>
+      <p className="text-xs text-muted-foreground mb-3">
+        Tap the{" "}
+        <span className="inline-flex items-center gap-0.5 align-middle">
+          <CloudSun className="w-3.5 h-3.5" aria-hidden="true" />
+        </span>{" "}
+        button above the table to reveal per-cell weather, time-of-day, and wind
+        icons for each stage. The button only appears in coaching mode when venue
+        coordinates are available. Tap or hover any icon cluster for full details.
+      </p>
+      <div>
+        <DiagramRow
+          visual={
+            <div className="flex items-center gap-1.5 text-muted-foreground" aria-hidden="true">
+              <Sun className="w-3.5 h-3.5 text-yellow-500" />
+              <CloudSun className="w-3.5 h-3.5" />
+              <Cloud className="w-3.5 h-3.5" />
+              <CloudRain className="w-3.5 h-3.5 text-blue-400" />
+              <CloudSnow className="w-3.5 h-3.5 text-sky-300" />
+            </div>
+          }
+          badge="W"
+          title="Weather icon"
+          description="Sky conditions at the moment this competitor shot the stage — derived from Open-Meteo historical data at the match venue. Icons cover clear, partly cloudy, overcast, drizzle, rain, snow, fog, and thunderstorm."
+        />
+        <DiagramRow
+          visual={
+            <div className="flex items-center gap-1.5 text-muted-foreground" aria-hidden="true">
+              <Sunrise className="w-3.5 h-3.5 text-orange-400" />
+              <Sun className="w-3.5 h-3.5 text-yellow-500" />
+              <Sunset className="w-3.5 h-3.5 text-orange-500" />
+              <Moon className="w-3.5 h-3.5 text-indigo-400" />
+            </div>
+          }
+          badge="T"
+          title="Time-of-day icon"
+          description="When the stage was shot (UTC): Sunrise 04–08, Daytime 09–17, Sunset 18–21, Night otherwise. Competitors in different squads shoot the same stage at different times — this makes that visible at a glance."
+        />
+        <DiagramRow
+          last
+          visual={
+            <div className="flex flex-col items-center gap-1" aria-hidden="true">
+              <span className="inline-flex items-center gap-px text-sky-400">
+                <Wind className="w-3 h-3" />
+                <span className="text-[9px] font-medium tabular-nums leading-none">4</span>
+              </span>
+              <span className="inline-flex items-center gap-px text-amber-500">
+                <Wind className="w-3 h-3" />
+                <span className="text-[9px] font-medium tabular-nums leading-none">8</span>
+              </span>
+              <span className="inline-flex items-center gap-px text-orange-500">
+                <Wind className="w-3 h-3" />
+                <span className="text-[9px] font-medium tabular-nums leading-none">12</span>
+              </span>
+            </div>
+          }
+          badge="V"
+          title="Wind speed & direction"
+          description={<>
+            Only shown when wind is ≥ 3 m/s. The number is the rounded speed in m/s — readable without relying on color alone. Color indicates intensity:{" "}
+            <span className="text-sky-400 font-medium">blue</span> light (3–5),{" "}
+            <span className="text-amber-500 font-medium">amber</span> moderate (6–9),{" "}
+            <span className="text-orange-500 font-medium">orange</span> strong (10–14),{" "}
+            <span className="text-red-500 font-medium">red</span> very strong (≥ 15).{" "}
+            Tap or hover for compass direction and gust speed.
+          </>}
+        />
+      </div>
+    </section>
+  );
+}
+
 function ViewModeNote() {
   return (
     <div className="bg-muted rounded-md px-4 py-3 text-sm">
@@ -476,6 +554,7 @@ export function CellHelpModal({
           <div className="px-6 pb-6 space-y-8 pt-4">
             <StageColumnDiagram />
             <StageCellDiagram />
+            <ConditionsOverlaySection />
             <SummaryRowDiagram />
             <ViewModeNote />
           </div>
