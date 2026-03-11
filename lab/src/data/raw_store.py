@@ -133,6 +133,16 @@ class RawMatchStore:
         """Return the number of bundle files stored locally."""
         return sum(1 for _ in self.local_dir.glob("*.json.gz"))
 
+    @property
+    def s3_configured(self) -> bool:
+        """True when an S3 client and bucket are both set."""
+        return bool(self._s3 and self._bucket)
+
+    @property
+    def s3_location(self) -> str:
+        """Human-readable S3 path prefix, e.g. 's3://bucket/lab/ipscresults/raw/'."""
+        return f"s3://{self._bucket}/{self._prefix}/ipscresults/raw/"
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------

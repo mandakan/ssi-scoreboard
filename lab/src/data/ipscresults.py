@@ -350,7 +350,25 @@ class IpscResultsSyncer:
 
         if self.raw_store is not None:
             cached = self.raw_store.local_count()
-            console.print(f"  Raw bundle cache: {cached} matches stored locally")
+            console.print(
+                f"  Bundle cache:  {self.raw_store.local_dir}  "
+                f"({cached} files stored locally)"
+            )
+            if self.raw_store.s3_configured:
+                console.print(
+                    f"                 {self.raw_store.s3_location}  "
+                    f"[green](S3/R2 sync enabled — bundles pushed after each fetch)[/green]"
+                )
+            else:
+                console.print(
+                    "                 S3/R2: [yellow]not configured[/yellow]"
+                    " — set LAB_S3_BUCKET to enable remote sync"
+                )
+        else:
+            console.print(
+                "  Bundle cache:  [yellow]disabled[/yellow]"
+                " — set --raw-dir to cache raw OData responses"
+            )
 
         if not full:
             new_matches = [
