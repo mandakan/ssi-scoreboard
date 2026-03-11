@@ -59,6 +59,11 @@ class HealthResponse(BaseModel):
     match_count: int
 
 
+class IdentityDecisionRequest(BaseModel):
+    source: str
+    source_key: str
+
+
 def _order_by(sort: str) -> str:
     if sort == "conservative":
         return f"(mu - {_CONS_Z} * sigma) DESC"
@@ -300,10 +305,6 @@ def create_app(db_path: Path = Path("data/lab.duckdb")) -> FastAPI:
             }
             for r in rows
         ]
-
-    class IdentityDecisionRequest(BaseModel):
-        source: str
-        source_key: str
 
     @app.post("/identity/approve")
     async def approve_identity(req: IdentityDecisionRequest) -> dict[str, str]:
