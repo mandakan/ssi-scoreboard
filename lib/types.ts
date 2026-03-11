@@ -451,6 +451,12 @@ export interface StageConditions {
   weatherLabel: string | null;
   /** Temperature (°C) at that hour, or null. */
   tempC: number | null;
+  /** Wind speed (m/s) at that hour, or null. */
+  windspeedMs: number | null;
+  /** Wind gust speed (m/s) at that hour, or null. */
+  windgustMs: number | null;
+  /** Wind direction as compass point ("N", "NE", …), or null. */
+  winddirectionDominant: string | null;
 }
 
 export interface CompareResponse {

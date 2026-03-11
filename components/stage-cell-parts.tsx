@@ -22,6 +22,7 @@ import {
   Sun,
   Sunrise,
   Sunset,
+  Wind,
   Zap,
 } from "lucide-react";
 import type { StageClassification, StageConditions } from "@/lib/types";
@@ -219,22 +220,53 @@ function formatHour(hourUtc: number): string {
   return `${String(hourUtc).padStart(2, "0")}:00 UTC`;
 }
 
-/** Small icon pair showing weather conditions and time-of-day for a stage cell. */
-export function ConditionsBadge({ hourUtc, weatherCode, weatherLabel, tempC }: StageConditions) {
+/** Returns a Tailwind color class for wind speed intensity (m/s). Null = calm, don't show icon. */
+function windColorClass(speedMs: number | null): string | null {
+  if (speedMs == null || speedMs < 3) return null;
+  if (speedMs < 6)  return "text-sky-400";
+  if (speedMs < 10) return "text-amber-500";
+  if (speedMs < 15) return "text-orange-500";
+  return "text-red-500";
+}
+
+/** Small icon cluster showing weather, time-of-day, and wind conditions for a stage cell. */
+export function ConditionsBadge({
+  hourUtc,
+  weatherCode,
+  weatherLabel,
+  tempC,
+  windspeedMs,
+  windgustMs,
+  winddirectionDominant,
+}: StageConditions) {
   const tooltipLines: string[] = [formatHour(hourUtc)];
   if (weatherLabel) tooltipLines.push(weatherLabel);
   if (tempC != null) tooltipLines.push(`${tempC.toFixed(1)}°C`);
+  if (windspeedMs != null && windspeedMs >= 3) {
+    const dir = winddirectionDominant ? ` ${winddirectionDominant}` : "";
+    const gustSuffix =
+      windgustMs != null && windgustMs > windspeedMs + 2
+        ? ` (gusts ${windgustMs.toFixed(1)} m/s)`
+        : "";
+    tooltipLines.push(`${windspeedMs.toFixed(1)} m/s${dir}${gustSuffix}`);
+  }
+
+  const windColor = windColorClass(windspeedMs);
+  const ariaLabel = `Conditions: ${tooltipLines.join(", ")}`;
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span
           className="inline-flex items-center gap-0.5 text-muted-foreground/70 cursor-help leading-none"
-          aria-label={`Conditions: ${tooltipLines.join(", ")}`}
+          aria-label={ariaLabel}
           role="img"
         >
           {createElement(weatherIcon(weatherCode), { className: "w-3 h-3", "aria-hidden": true })}
           {createElement(timeOfDayIcon(hourUtc), { className: "w-3 h-3", "aria-hidden": true })}
+          {windColor != null && (
+            <Wind className={cn("w-3 h-3", windColor)} aria-hidden={true} />
+          )}
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs space-y-0.5">

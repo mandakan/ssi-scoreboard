@@ -201,21 +201,39 @@ export function processWeatherResponse(
  * Look up weather conditions at a specific UTC hour from a raw response.
  * Returns null fields if the hour is not found in the data.
  */
+const COMPASS_DIRS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
+
 export function getHourlySnapshot(
   raw: OpenMeteoResponse,
   hourUtc: number,
-): { weatherCode: number | null; weatherLabel: string | null; tempC: number | null } {
+): {
+  weatherCode: number | null;
+  weatherLabel: string | null;
+  tempC: number | null;
+  windspeedMs: number | null;
+  windgustMs: number | null;
+  winddirectionDominant: string | null;
+} {
   const h = raw.hourly;
   const idx = h.time.findIndex((t) => {
     const hr = parseInt(t.split("T")[1]?.slice(0, 2) ?? "-1", 10);
     return hr === hourUtc;
   });
-  if (idx === -1) return { weatherCode: null, weatherLabel: null, tempC: null };
+  if (idx === -1) {
+    return {
+      weatherCode: null, weatherLabel: null, tempC: null,
+      windspeedMs: null, windgustMs: null, winddirectionDominant: null,
+    };
+  }
   const weatherCode = h.weathercode[idx] ?? null;
+  const windDeg = h.winddirection_10m[idx] ?? null;
   return {
     weatherCode,
     weatherLabel: weatherCode != null ? (WMO_LABELS[weatherCode] ?? `code ${weatherCode}`) : null,
     tempC: h.temperature_2m[idx] ?? null,
+    windspeedMs: h.windspeed_10m[idx] ?? null,
+    windgustMs: h.windgusts_10m[idx] ?? null,
+    winddirectionDominant: windDeg != null ? (COMPASS_DIRS[Math.round(windDeg / 45) % 8] ?? null) : null,
   };
 }
 
