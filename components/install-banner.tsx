@@ -42,7 +42,7 @@ export function InstallBanner() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed bottom-0 inset-x-0 z-40 flex items-center justify-between gap-3 px-4 py-3 bg-primary text-primary-foreground text-sm shadow-lg"
+      className="fixed bottom-14 md:bottom-0 inset-x-0 z-40 flex items-center justify-between gap-3 px-4 py-3 bg-primary text-primary-foreground text-sm shadow-lg"
     >
       {showAndroid && (
         <>
