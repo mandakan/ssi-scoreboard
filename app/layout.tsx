@@ -5,6 +5,7 @@ import { Providers } from "@/components/providers";
 import { InstallBanner } from "@/components/install-banner";
 import { UpdateBanner } from "@/components/update-banner";
 import { Footer } from "@/components/footer";
+import { BottomNav } from "@/components/bottom-nav";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -49,6 +50,7 @@ export const viewport: Viewport = {
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
     { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
   ],
+  viewportFit: "cover",
 };
 
 export default async function RootLayout({
@@ -66,6 +68,9 @@ export default async function RootLayout({
           <UpdateBanner />
           {children}
           <Footer />
+          <BottomNav />
+          {/* Spacer so content isn't hidden behind the fixed bottom nav on mobile */}
+          <div className="h-14 md:hidden" aria-hidden="true" />
         </Providers>
       </body>
     </html>
