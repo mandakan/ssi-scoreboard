@@ -707,7 +707,40 @@ export const MOCK_COMPARE: CompareResponse = {
 
   // ── Stage degradation data ──────────────────────────────────────────────────
   stageDegradationData: [DEGRADATION_STAGE_3, DEGRADATION_STAGE_1], // S3 first = selected by default
-  stageConditions: null,
+  // Realistic Swedish March conditions: overcast morning warming to light drizzle midday.
+  // Competitors shoot in different squad rotations → each shoots the same stage at different hours.
+  stageConditions: {
+    101: {
+      [ID_A]: { hourUtc: 8,  weatherCode: 3,  weatherLabel: "overcast",       tempC: 4.1 },
+      [ID_B]: { hourUtc: 11, weatherCode: 2,  weatherLabel: "partly cloudy",  tempC: 6.3 },
+      [ID_C]: { hourUtc: 13, weatherCode: 51, weatherLabel: "light drizzle",  tempC: 7.0 },
+    },
+    102: {
+      [ID_A]: { hourUtc: 11, weatherCode: 2,  weatherLabel: "partly cloudy",  tempC: 6.3 },
+      [ID_B]: { hourUtc: 8,  weatherCode: 3,  weatherLabel: "overcast",       tempC: 4.1 },
+      [ID_C]: { hourUtc: 10, weatherCode: 3,  weatherLabel: "overcast",       tempC: 5.8 },
+    },
+    103: {
+      [ID_A]: { hourUtc: 13, weatherCode: 51, weatherLabel: "light drizzle",  tempC: 7.0 },
+      [ID_B]: { hourUtc: 13, weatherCode: 51, weatherLabel: "light drizzle",  tempC: 7.0 },
+      [ID_C]: { hourUtc: 8,  weatherCode: 3,  weatherLabel: "overcast",       tempC: 4.1 },
+    },
+    104: {
+      [ID_A]: { hourUtc: 9,  weatherCode: 3,  weatherLabel: "overcast",       tempC: 4.7 },
+      [ID_B]: { hourUtc: 12, weatherCode: 51, weatherLabel: "light drizzle",  tempC: 6.8 },
+      [ID_C]: { hourUtc: 11, weatherCode: 2,  weatherLabel: "partly cloudy",  tempC: 6.3 },
+    },
+    105: {
+      [ID_A]: { hourUtc: 12, weatherCode: 51, weatherLabel: "light drizzle",  tempC: 6.8 },
+      [ID_B]: { hourUtc: 9,  weatherCode: 3,  weatherLabel: "overcast",       tempC: 4.7 },
+      [ID_C]: { hourUtc: 12, weatherCode: 51, weatherLabel: "light drizzle",  tempC: 6.8 },
+    },
+    106: {
+      [ID_A]: { hourUtc: 10, weatherCode: 3,  weatherLabel: "overcast",       tempC: 5.8 },
+      [ID_B]: { hourUtc: 10, weatherCode: 3,  weatherLabel: "overcast",       tempC: 5.8 },
+      [ID_C]: { hourUtc: 9,  weatherCode: 3,  weatherLabel: "overcast",       tempC: 4.7 },
+    },
+  },
 };
 
 // ── Shooter dashboard mock ────────────────────────────────────────────────────

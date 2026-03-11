@@ -17,12 +17,15 @@ export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
     date: "March 11, 2026",
-    title: "Penalty Rate & Consistency Trends",
-    screenshotScenes: ["shooter-dashboard"],
+    title: "Conditions Overlay, Penalty Rate & Consistency Trends",
+    screenshotScenes: ["conditions-overlay", "comparison-table", "shooter-dashboard"],
     sections: [
       {
         heading: "New",
         items: [
+          "Conditions overlay: tap the cloud icon above the comparison table (coaching mode only) to reveal per-cell weather and time-of-day icons for each stage. Competitors in different squads shoot the same stage at different times — this makes that visible at a glance.",
+          "Tap or hover any icon pair to see the exact UTC time, weather conditions, temperature, and wind speed when that competitor shot that stage.",
+          "AI coaching tips now include weather context: temperature, wind, precipitation, humidity, and elevation are woven into the coaching analysis when venue coordinates are available.",
           "Penalty rate trend: tracks misses, no-shoots, and procedurals as a percentage of total rounds fired across matches. Lower is better — a rising trend signals something worth fixing in training.",
           "Consistency index trend: measures how evenly you perform stage-to-stage within each match. Computed from the coefficient of variation of per-stage hit factors, scaled to 0–100 (higher is better). A drop flags a single blown stage rather than a bad overall match.",
         ],
