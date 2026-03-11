@@ -10,7 +10,12 @@ from src.data.store import Store
 _CONS_Z = 0.5244005122401781
 
 
-def export_data(store: Store, *, ssi_only: bool = True) -> dict[str, Any]:
+def export_data(
+    store: Store,
+    *,
+    ssi_only: bool = True,
+    algorithms: set[str] | None = None,
+) -> dict[str, Any]:
     """Return all data needed for the static explorer as a JSON-serialisable dict.
 
     Args:
@@ -19,48 +24,63 @@ def export_data(store: Store, *, ssi_only: bool = True) -> dict[str, Any]:
             are still used for calibrating SSI shooters' ratings but their names and
             personal data are not published. Recommended for any public-facing deployment.
             Set to False only for internal/research use.
+        algorithms: Optional set of algorithm names to include. When None (default),
+            all algorithms stored in shooter_ratings are exported. Pass a set to limit
+            the export to specific models (e.g. ``{"openskill_pl_decay"}``).
     """
     return {
         "generated_at": date.today().isoformat(),
         "ssi_only": ssi_only,
-        "algorithms": _export_algorithms(store),
-        "divisions": _export_divisions(store),
-        "regions": _export_regions(store),
-        "categories": _export_categories(store),
-        "shooters": _export_shooters(store, ssi_only=ssi_only),
+        "algorithms": _export_algorithms(store, algorithms=algorithms),
+        "divisions": _export_divisions(store, algorithms=algorithms),
+        "regions": _export_regions(store, algorithms=algorithms),
+        "categories": _export_categories(store, algorithms=algorithms),
+        "shooters": _export_shooters(store, ssi_only=ssi_only, algorithms=algorithms),
         "matches": _export_matches(store),
         "fuzzy_links": _export_fuzzy_links(store),
     }
 
 
-def _export_algorithms(store: Store) -> list[str]:
+def _algo_filter(algorithms: set[str] | None) -> str:
+    """Return a SQL AND clause that restricts rows to the given algorithm set, or '' for all."""
+    if not algorithms:
+        return ""
+    placeholders = ", ".join(f"'{a}'" for a in sorted(algorithms))
+    return f" AND algorithm IN ({placeholders})"
+
+
+def _export_algorithms(store: Store, algorithms: set[str] | None = None) -> list[str]:
+    filt = _algo_filter(algorithms)
     rows = store.db.execute(
-        "SELECT DISTINCT algorithm FROM shooter_ratings ORDER BY algorithm"
+        f"SELECT DISTINCT algorithm FROM shooter_ratings WHERE 1=1{filt} ORDER BY algorithm"
     ).fetchall()
     return [str(r[0]) for r in rows]
 
 
-def _export_divisions(store: Store) -> list[str]:
+def _export_divisions(store: Store, algorithms: set[str] | None = None) -> list[str]:
     # Exclude '' sentinel (cross-division / global ratings)
+    filt = _algo_filter(algorithms)
     rows = store.db.execute(
-        "SELECT DISTINCT division FROM shooter_ratings"
-        " WHERE division != '' ORDER BY division"
+        f"SELECT DISTINCT division FROM shooter_ratings"
+        f" WHERE division != ''{filt} ORDER BY division"
     ).fetchall()
     return [str(r[0]) for r in rows]
 
 
-def _export_regions(store: Store) -> list[str]:
+def _export_regions(store: Store, algorithms: set[str] | None = None) -> list[str]:
+    filt = _algo_filter(algorithms)
     rows = store.db.execute(
-        "SELECT DISTINCT region FROM shooter_ratings"
-        " WHERE region IS NOT NULL ORDER BY region"
+        f"SELECT DISTINCT region FROM shooter_ratings"
+        f" WHERE region IS NOT NULL{filt} ORDER BY region"
     ).fetchall()
     return [str(r[0]) for r in rows]
 
 
-def _export_categories(store: Store) -> list[str]:
+def _export_categories(store: Store, algorithms: set[str] | None = None) -> list[str]:
+    filt = _algo_filter(algorithms)
     rows = store.db.execute(
-        "SELECT DISTINCT category FROM shooter_ratings"
-        " WHERE category IS NOT NULL ORDER BY category"
+        f"SELECT DISTINCT category FROM shooter_ratings"
+        f" WHERE category IS NOT NULL{filt} ORDER BY category"
     ).fetchall()
     return [str(r[0]) for r in rows]
 
@@ -68,7 +88,12 @@ def _export_categories(store: Store) -> list[str]:
 _IPR_ONLY_ID_THRESHOLD = 2_000_000  # canonical_ids >= this are ipscresults-only
 
 
-def _export_shooters(store: Store, *, ssi_only: bool = True) -> list[dict[str, Any]]:
+def _export_shooters(
+    store: Store,
+    *,
+    ssi_only: bool = True,
+    algorithms: set[str] | None = None,
+) -> list[dict[str, Any]]:
     # Precompute recent match participation counts per canonical shooter.
     # Source: competitors + shooter_identity_links + matches — always available after sync.
     # rating_history is not used here: it is only populated by the serve scheduler,
@@ -113,6 +138,7 @@ def _export_shooters(store: Store, *, ssi_only: bool = True) -> list[dict[str, A
         for r in recent_rows
     }
 
+    algo_filt = _algo_filter(algorithms)
     rows = store.db.execute(
         f"""
         SELECT shooter_id, name, division, region, category,
@@ -120,6 +146,7 @@ def _export_shooters(store: Store, *, ssi_only: bool = True) -> list[dict[str, A
                (mu - {_CONS_Z} * sigma) AS cr,
                matches_played, last_match_date
         FROM shooter_ratings
+        WHERE 1=1{algo_filt}
         ORDER BY shooter_id, division, algorithm
         """
     ).fetchall()

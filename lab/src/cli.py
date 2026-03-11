@@ -962,6 +962,59 @@ def tune_merge(
     merge_results(list(files), top_n=top)
 
 
+@app.command(name="clear-ratings")
+def clear_ratings(
+    algorithm: list[str] = typer.Argument(
+        None,
+        help=(
+            "Algorithm name(s) to delete from shooter_ratings and rating_history. "
+            "Omit to list all stored algorithms without deleting anything."
+        ),
+    ),
+    db_path: Path = DB_PATH_OPTION,
+) -> None:
+    """List or delete stored model output from DuckDB.
+
+    Without arguments, lists all algorithm names currently in shooter_ratings.
+
+    With one or more algorithm names, deletes their rows from shooter_ratings
+    and rating_history (irreversible — re-run 'rating train' to regenerate).
+
+    Examples:
+
+        rating clear-ratings                         # list stored algorithms
+        rating clear-ratings openskill_2024          # delete one
+        rating clear-ratings openskill elo           # delete multiple
+    """
+    from src.data.store import Store
+
+    store = Store(db_path)
+    try:
+        stored = store.list_algorithms()
+        if not algorithm:
+            if not stored:
+                console.print("[yellow]No algorithms stored in shooter_ratings.[/yellow]")
+            else:
+                console.print("[bold]Stored algorithms:[/bold]")
+                for name in stored:
+                    console.print(f"  {name}")
+            return
+
+        unknown = [a for a in algorithm if a not in stored]
+        if unknown:
+            console.print(
+                f"[yellow]Unknown algorithm(s): {', '.join(unknown)}[/yellow]\n"
+                f"Stored: {', '.join(stored) if stored else '(none)'}"
+            )
+            raise typer.Exit(1)
+
+        for name in algorithm:
+            n = store.drop_ratings(name)
+            console.print(f"[green]Deleted[/green] {name} ({n} rows)")
+    finally:
+        store.close()
+
+
 @app.command()
 def export(
     output_dir: Path = typer.Option(Path("site"), help="Output directory for the static explorer"),  # noqa: B008
@@ -973,6 +1026,15 @@ def export(
             "(canonical_id >= 2,000,000). Their match data still calibrates SSI shooters' "
             "ratings but their names are not published. Use --include-ipscresults for "
             "internal or research use only."
+        ),
+    ),
+    algorithms: str | None = typer.Option(
+        None,
+        "--algorithms",
+        help=(
+            "Comma-separated list of algorithm names to include in the export. "
+            "Omit to export all stored algorithms. "
+            "Example: --algorithms openskill_pl_decay,openskill_bt_lvl_decay"
         ),
     ),
     db_path: Path = DB_PATH_OPTION,
@@ -989,9 +1051,13 @@ def export(
     from src.data.store import Store
     from src.engine.page import generate_site
 
+    algo_set: set[str] | None = (
+        {a.strip() for a in algorithms.split(",") if a.strip()} if algorithms else None
+    )
+
     store = Store(db_path)
     try:
-        data = export_data(store, ssi_only=ssi_only)
+        data = export_data(store, ssi_only=ssi_only, algorithms=algo_set)
         generate_site(data, output_dir, data_dir=db_path.parent)
         console.print(f"\n[bold]Open locally:[/bold] {output_dir / 'index.html'}")
         console.print(

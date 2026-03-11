@@ -952,6 +952,26 @@ class Store:
     # Rating storage
     # ------------------------------------------------------------------
 
+    def list_algorithms(self) -> list[str]:
+        """Return all algorithm names currently stored in shooter_ratings."""
+        rows = self.db.execute(
+            "SELECT DISTINCT algorithm FROM shooter_ratings ORDER BY algorithm"
+        ).fetchall()
+        return [str(r[0]) for r in rows]
+
+    def drop_ratings(self, algorithm: str) -> int:
+        """Delete all shooter_ratings and rating_history rows for ``algorithm``.
+
+        Returns the number of shooter_ratings rows deleted.
+        """
+        row = self.db.execute(
+            "SELECT COUNT(*) FROM shooter_ratings WHERE algorithm = ?", [algorithm]
+        ).fetchone()
+        count = int(row[0]) if row else 0
+        self.db.execute("DELETE FROM shooter_ratings WHERE algorithm = ?", [algorithm])
+        self.db.execute("DELETE FROM rating_history WHERE algorithm = ?", [algorithm])
+        return count
+
     def save_ratings(
         self, algorithm: str, ratings: dict[tuple[int, str | None], RatingRow]
     ) -> None:
