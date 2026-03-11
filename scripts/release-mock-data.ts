@@ -18,6 +18,8 @@ const ID_C = 1003; // C. Berg — surgical precision, slower times
 export const MOCK_MATCH: MatchResponse = {
   name: "Västra Regionmatch 2026",
   venue: "Skövde Skytteklubb",
+  lat: 58.3897,
+  lng: 13.8456,
   date: "2026-03-01T09:00:00+01:00",
   level: "l3",
   sub_rule: "nm",
@@ -705,6 +707,40 @@ export const MOCK_COMPARE: CompareResponse = {
 
   // ── Stage degradation data ──────────────────────────────────────────────────
   stageDegradationData: [DEGRADATION_STAGE_3, DEGRADATION_STAGE_1], // S3 first = selected by default
+  // Realistic Swedish March conditions: overcast morning warming to light drizzle midday.
+  // Wind picking up from SW through the day; competitors shoot in different squad rotations.
+  stageConditions: {
+    101: {
+      [ID_A]: { hourUtc: 8,  weatherCode: 3,  weatherLabel: "overcast",      tempC: 4.1, windspeedMs: 2.4, windgustMs: 4.1, winddirectionDominant: "SW" },
+      [ID_B]: { hourUtc: 11, weatherCode: 2,  weatherLabel: "partly cloudy", tempC: 6.3, windspeedMs: 6.8, windgustMs: 9.2, winddirectionDominant: "SW" },
+      [ID_C]: { hourUtc: 13, weatherCode: 51, weatherLabel: "light drizzle", tempC: 7.0, windspeedMs: 8.5, windgustMs: 12.3, winddirectionDominant: "W" },
+    },
+    102: {
+      [ID_A]: { hourUtc: 11, weatherCode: 2,  weatherLabel: "partly cloudy", tempC: 6.3, windspeedMs: 6.8, windgustMs: 9.2,  winddirectionDominant: "SW" },
+      [ID_B]: { hourUtc: 8,  weatherCode: 3,  weatherLabel: "overcast",      tempC: 4.1, windspeedMs: 2.4, windgustMs: 4.1,  winddirectionDominant: "SW" },
+      [ID_C]: { hourUtc: 10, weatherCode: 3,  weatherLabel: "overcast",      tempC: 5.8, windspeedMs: 4.9, windgustMs: 7.3,  winddirectionDominant: "SW" },
+    },
+    103: {
+      [ID_A]: { hourUtc: 13, weatherCode: 51, weatherLabel: "light drizzle", tempC: 7.0, windspeedMs: 8.5,  windgustMs: 12.3, winddirectionDominant: "W"  },
+      [ID_B]: { hourUtc: 13, weatherCode: 51, weatherLabel: "light drizzle", tempC: 7.0, windspeedMs: 8.5,  windgustMs: 12.3, winddirectionDominant: "W"  },
+      [ID_C]: { hourUtc: 8,  weatherCode: 3,  weatherLabel: "overcast",      tempC: 4.1, windspeedMs: 2.4,  windgustMs: 4.1,  winddirectionDominant: "SW" },
+    },
+    104: {
+      [ID_A]: { hourUtc: 9,  weatherCode: 3,  weatherLabel: "overcast",      tempC: 4.7, windspeedMs: 3.2, windgustMs: 5.6,  winddirectionDominant: "SW" },
+      [ID_B]: { hourUtc: 12, weatherCode: 51, weatherLabel: "light drizzle", tempC: 6.8, windspeedMs: 7.9, windgustMs: 11.4, winddirectionDominant: "W"  },
+      [ID_C]: { hourUtc: 11, weatherCode: 2,  weatherLabel: "partly cloudy", tempC: 6.3, windspeedMs: 6.8, windgustMs: 9.2,  winddirectionDominant: "SW" },
+    },
+    105: {
+      [ID_A]: { hourUtc: 12, weatherCode: 51, weatherLabel: "light drizzle", tempC: 6.8, windspeedMs: 7.9, windgustMs: 11.4, winddirectionDominant: "W"  },
+      [ID_B]: { hourUtc: 9,  weatherCode: 3,  weatherLabel: "overcast",      tempC: 4.7, windspeedMs: 3.2, windgustMs: 5.6,  winddirectionDominant: "SW" },
+      [ID_C]: { hourUtc: 12, weatherCode: 51, weatherLabel: "light drizzle", tempC: 6.8, windspeedMs: 7.9, windgustMs: 11.4, winddirectionDominant: "W"  },
+    },
+    106: {
+      [ID_A]: { hourUtc: 10, weatherCode: 3,  weatherLabel: "overcast",      tempC: 5.8, windspeedMs: 4.9, windgustMs: 7.3,  winddirectionDominant: "SW" },
+      [ID_B]: { hourUtc: 10, weatherCode: 3,  weatherLabel: "overcast",      tempC: 5.8, windspeedMs: 4.9, windgustMs: 7.3,  winddirectionDominant: "SW" },
+      [ID_C]: { hourUtc: 9,  weatherCode: 3,  weatherLabel: "overcast",      tempC: 4.7, windspeedMs: 3.2, windgustMs: 5.6,  winddirectionDominant: "SW" },
+    },
+  },
 };
 
 // ── Shooter dashboard mock ────────────────────────────────────────────────────

@@ -1,14 +1,31 @@
 "use client";
 
-import type { ComponentType } from "react";
+import { createElement, type ComponentType } from "react";
 import { cn } from "@/lib/utils";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { CheckCircle2, Flame, Shield, Zap } from "lucide-react";
-import type { StageClassification } from "@/lib/types";
+import {
+  CheckCircle2,
+  Cloud,
+  CloudDrizzle,
+  CloudFog,
+  CloudLightning,
+  CloudRain,
+  CloudSnow,
+  CloudSun,
+  Flame,
+  Moon,
+  Shield,
+  Sun,
+  Sunrise,
+  Sunset,
+  Wind,
+  Zap,
+} from "lucide-react";
+import type { StageClassification, StageConditions } from "@/lib/types";
 
 export function ordinal(n: number): string {
   const mod100 = n % 100;
@@ -169,6 +186,100 @@ export function StageClassificationBadge({
         {parts.length > 0 && (
           <div className="text-muted-foreground">{parts.join(" · ")}</div>
         )}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+// ── Conditions badge (weather + time-of-day) ──────────────────────────────────
+
+type LucideIcon = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+
+function weatherIcon(code: number | null): LucideIcon {
+  if (code == null) return Cloud;
+  if (code === 0) return Sun;
+  if (code <= 2) return CloudSun;
+  if (code === 3) return Cloud;
+  if (code <= 48) return CloudFog;
+  if (code <= 57) return CloudDrizzle;
+  if (code <= 67) return CloudRain;
+  if (code <= 77) return CloudSnow;
+  if (code <= 82) return CloudRain;
+  if (code <= 86) return CloudSnow;
+  return CloudLightning;
+}
+
+function timeOfDayIcon(hourUtc: number): LucideIcon {
+  if (hourUtc >= 4 && hourUtc <= 8) return Sunrise;
+  if (hourUtc >= 9 && hourUtc <= 17) return Sun;
+  if (hourUtc >= 18 && hourUtc <= 21) return Sunset;
+  return Moon;
+}
+
+function formatHour(hourUtc: number): string {
+  return `${String(hourUtc).padStart(2, "0")}:00 UTC`;
+}
+
+/** Returns a Tailwind color class for wind speed intensity (m/s). Null = calm, don't show icon. */
+function windColorClass(speedMs: number | null): string | null {
+  if (speedMs == null || speedMs < 3) return null;
+  if (speedMs < 6)  return "text-sky-400";
+  if (speedMs < 10) return "text-amber-500";
+  if (speedMs < 15) return "text-orange-500";
+  return "text-red-500";
+}
+
+/** Small icon cluster showing weather, time-of-day, and wind conditions for a stage cell. */
+export function ConditionsBadge({
+  hourUtc,
+  weatherCode,
+  weatherLabel,
+  tempC,
+  windspeedMs,
+  windgustMs,
+  winddirectionDominant,
+}: StageConditions) {
+  const tooltipLines: string[] = [formatHour(hourUtc)];
+  if (weatherLabel) tooltipLines.push(weatherLabel);
+  if (tempC != null) tooltipLines.push(`${tempC.toFixed(1)}°C`);
+  if (windspeedMs != null && windspeedMs >= 3) {
+    const dir = winddirectionDominant ? ` ${winddirectionDominant}` : "";
+    const gustSuffix =
+      windgustMs != null && windgustMs > windspeedMs + 2
+        ? ` (gusts ${windgustMs.toFixed(1)} m/s)`
+        : "";
+    tooltipLines.push(`${windspeedMs.toFixed(1)} m/s${dir}${gustSuffix}`);
+  }
+
+  const windColor = windColorClass(windspeedMs);
+  const ariaLabel = `Conditions: ${tooltipLines.join(", ")}`;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className="inline-flex items-center gap-0.5 text-muted-foreground/70 cursor-help leading-none"
+          aria-label={ariaLabel}
+          role="img"
+        >
+          {createElement(weatherIcon(weatherCode), { className: "w-3 h-3", "aria-hidden": true })}
+          {createElement(timeOfDayIcon(hourUtc), { className: "w-3 h-3", "aria-hidden": true })}
+          {windColor != null && (
+            // Icon + numeric speed: shape (icon+number vs icon-only vs absent) differentiates
+            // tiers independently of color, satisfying WCAG 1.4.1 (use of color).
+            <span className={cn("inline-flex items-center gap-px", windColor)} aria-hidden={true}>
+              <Wind className="w-3 h-3" />
+              <span className="text-[9px] font-medium tabular-nums leading-none">
+                {Math.round(windspeedMs!)}
+              </span>
+            </span>
+          )}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-xs space-y-0.5">
+        {tooltipLines.map((line) => (
+          <div key={line}>{line}</div>
+        ))}
       </TooltipContent>
     </Tooltip>
   );

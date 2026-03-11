@@ -6,6 +6,8 @@ const MOCK_MATCH: MatchResponse = {
   name: "Test IPSC Match",
   cacheInfo: { cachedAt: null },
   venue: "Test Range",
+  lat: null,
+  lng: null,
   date: "2026-03-01T09:00:00+00:00",
   level: "l2",
   sub_rule: "nm",
@@ -73,6 +75,7 @@ const MOCK_COMPARE: CompareResponse = {
     300: { normal: { stageCount: 2, avgGroupPercent: 93.55 }, constrained: { stageCount: 0, avgGroupPercent: null } },
   },
   stageDegradationData: null,
+  stageConditions: null,
   stages: [
     {
       stage_id: 1,

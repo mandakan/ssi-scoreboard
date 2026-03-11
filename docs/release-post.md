@@ -78,6 +78,7 @@ Every scene is captured at both **mobile** (390×844) and **desktop** (1280×900
 | Scene name | What it shows |
 |---|---|
 | `comparison-table` | Full comparison table |
+| `conditions-overlay` | Comparison table with the conditions overlay active — weather + time-of-day icons on each stage cell |
 | `degradation-chart` | Stage degradation chart with Spearman r badge |
 | `hf-level-bars` | HF Level bars |
 | `archetype-chart` | Archetype performance breakdown |

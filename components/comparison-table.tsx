@@ -12,15 +12,15 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, CheckCircle2, ChevronDown, ChevronUp, Crosshair, ExternalLink, Flame, Focus, Gauge, Hand, HandMetal, HelpCircle, Info, Layers, Shield, Target, Timer, TrendingUp, X, Zap } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, CheckCircle2, ChevronDown, ChevronUp, CloudSun, Crosshair, ExternalLink, Flame, Focus, Gauge, Hand, HandMetal, HelpCircle, Info, Layers, Shield, Target, Timer, TrendingUp, X, Zap } from "lucide-react";
 import Link from "next/link";
 import { cn, formatHF, formatTime, formatPct, computePointsDelta, formatDelta } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
 import { HitZoneBar } from "@/components/hit-zone-bar";
-import { RankBadge, PenaltyBadge, ShootingOrderBadge, StageClassificationBadge, ordinal } from "@/components/stage-cell-parts";
+import { RankBadge, PenaltyBadge, ShootingOrderBadge, StageClassificationBadge, ConditionsBadge, ordinal } from "@/components/stage-cell-parts";
 import { CellHelpModal } from "@/components/cell-help-modal";
 import { CoachingTip } from "@/components/coaching-tip";
-import type { CompareResponse, CompetitorInfo, CompetitorSummary, LossBreakdownStats, PctMode, ShooterArchetype, StageArchetype, StageComparison, StageConstraints, ViewMode, WhatIfResult } from "@/lib/types";
+import type { CompareResponse, CompetitorInfo, CompetitorSummary, LossBreakdownStats, PctMode, ShooterArchetype, StageArchetype, StageComparison, StageConditions, StageConstraints, ViewMode, WhatIfResult } from "@/lib/types";
 
 interface ComparisonTableProps {
   data: CompareResponse;
@@ -587,6 +587,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
     competitors.length < 2 ? "division" : "group"
   );
   const [viewMode, setViewMode] = useState<ViewMode>("absolute");
+  const [showConditions, setShowConditions] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [showWhatIf, setShowWhatIf] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -740,6 +741,28 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
         <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
         {viewMode === "absolute" && (
           <ModeToggle mode={mode} onChange={setMode} competitorCount={competitors.length} />
+        )}
+        {data.mode === "coaching" && data.stageConditions != null && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setShowConditions((v) => !v)}
+                aria-pressed={showConditions}
+                className={cn(
+                  "inline-flex items-center justify-center rounded p-1.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+                  showConditions
+                    ? "bg-foreground text-background"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+                aria-label={showConditions ? "Hide conditions overlay" : "Show conditions overlay"}
+              >
+                <CloudSun className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              {showConditions ? "Hide conditions" : "Show conditions"}
+            </TooltipContent>
+          </Tooltip>
         )}
         <button
           onClick={() => setHelpOpen(true)}
@@ -1093,6 +1116,9 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                 </td>
                 {competitors.map((comp) => {
                   const sc = stage.competitors[comp.id];
+                  const cellConditions = showConditions
+                    ? (data.stageConditions?.[stage.stage_id]?.[comp.id] ?? null)
+                    : null;
                   return (
                     <td key={comp.id} className="py-2 px-2 sm:px-3 text-center align-top">
                       <StageCell
@@ -1103,6 +1129,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                         groupLeaderPoints={stage.group_leader_points}
                         groupSize={competitors.length}
                         divisionName={comp.division}
+                        conditions={cellConditions}
                       />
                     </td>
                   );
@@ -1555,6 +1582,7 @@ function StageCell({
   groupLeaderPoints,
   groupSize,
   divisionName,
+  conditions,
 }: {
   sc: CompetitorSummary | undefined;
   maxPoints: number;
@@ -1563,6 +1591,7 @@ function StageCell({
   groupLeaderPoints: number | null;
   groupSize: number;
   divisionName: string | null;
+  conditions: StageConditions | null;
 }) {
   if (!sc) {
     return <span className="text-muted-foreground text-xs">—</span>;
@@ -1571,6 +1600,7 @@ function StageCell({
   if (sc.dnf) {
     return (
       <div className="flex flex-col items-center gap-0.5">
+        {conditions != null && <ConditionsBadge {...conditions} />}
         {sc.shooting_order != null && (
           <ShootingOrderBadge order={sc.shooting_order} />
         )}
@@ -1596,6 +1626,7 @@ function StageCell({
   if (sc.dq) {
     return (
       <div className="flex flex-col items-center gap-0.5">
+        {conditions != null && <ConditionsBadge {...conditions} />}
         {sc.shooting_order != null && (
           <ShootingOrderBadge order={sc.shooting_order} />
         )}
@@ -1621,6 +1652,7 @@ function StageCell({
   if (sc.zeroed) {
     return (
       <div className="flex flex-col items-center gap-0.5">
+        {conditions != null && <ConditionsBadge {...conditions} />}
         {sc.shooting_order != null && (
           <ShootingOrderBadge order={sc.shooting_order} />
         )}
@@ -1653,6 +1685,7 @@ function StageCell({
           delta != null ? deltaColorClasses(delta, maxPoints) : ""
         )}
       >
+        {conditions != null && <ConditionsBadge {...conditions} />}
         {sc.shooting_order != null && (
           <ShootingOrderBadge order={sc.shooting_order} />
         )}
@@ -1672,6 +1705,8 @@ function StageCell({
 
   return (
     <div className="flex flex-col items-center gap-0.5">
+      {/* Conditions overlay (weather + time-of-day) */}
+      {conditions != null && <ConditionsBadge {...conditions} />}
       {/* Shooting order indicator */}
       {sc.shooting_order != null && (
         <ShootingOrderBadge order={sc.shooting_order} />

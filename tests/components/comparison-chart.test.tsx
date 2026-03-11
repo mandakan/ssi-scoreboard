@@ -80,6 +80,7 @@ const baseData: CompareResponse = {
   courseLengthPerformance: {},
   constraintPerformance: {},
   stageDegradationData: null,
+  stageConditions: null,
   consistencyStats: {
     1: { coefficientOfVariation: null, label: null, stagesFired: 1 },
     2: { coefficientOfVariation: null, label: null, stagesFired: 1 },

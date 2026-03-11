@@ -20,6 +20,7 @@
  *
  * Scene catalogue:
  *   comparison-table      Full comparison table
+ *   conditions-overlay    Comparison table with conditions overlay active (weather + time icons per cell)
  *   degradation-chart     Stage degradation chart with Spearman r badge
  *   hf-level-bars         HF Level bars
  *   archetype-chart       Archetype performance breakdown
@@ -124,6 +125,23 @@ const SCENES: Scene[] = [
       await page.locator("text=Stage results").evaluate(
         (el) => el.scrollIntoView({ block: "start", behavior: "instant" })
       );
+    },
+  },
+  {
+    name: "conditions-overlay",
+    description: "Comparison table with conditions overlay active (weather + time-of-day icons per cell)",
+    suppressWhatsNew: true,
+    setup: async (page, matchPath) => {
+      await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
+      await page.waitForSelector("table", { timeout: 10000 });
+      // Activate the conditions toggle
+      const toggle = page.locator('button[aria-label="Show conditions overlay"]');
+      await toggle.waitFor({ timeout: 5000 }).catch(() => null);
+      await toggle.click().catch(() => null);
+      // Scroll table into view
+      await page.locator("text=Stage results").evaluate(
+        (el) => el.scrollIntoView({ block: "start", behavior: "instant" })
+      ).catch(() => null);
     },
   },
   {

@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { createAIProvider } from "@/lib/ai-provider";
-import { buildCoachingPrompt, buildRoastPrompt, checkCoachingEligibility } from "@/lib/coaching-prompt";
+import {
+  buildCoachingPrompt,
+  buildRoastPrompt,
+  checkCoachingEligibility,
+  COACHING_PROMPT_VERSION,
+} from "@/lib/coaching-prompt";
 import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY, SCORECARDS_QUERY } from "@/lib/graphql";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
 import {
@@ -12,12 +17,97 @@ import {
   computePercentileRank,
   assignArchetype,
   computeStylePercentiles,
+  computeCourseLengthPerformance,
+  computeConstraintPerformance,
+  computeStageDegradationData,
+  type RawScorecard,
 } from "@/app/api/compare/logic";
 import { computeMatchTtl } from "@/lib/match-ttl";
 import { extractDivision } from "@/lib/divisions";
 import { decodeShooterId } from "@/lib/shooter-index";
 import cache from "@/lib/cache-impl";
-import type { CoachingTipResponse, CompetitorInfo } from "@/lib/types";
+import { fetchMatchWeather } from "@/lib/weather";
+import type { CoachingTipResponse, CompetitorInfo, MatchWeatherData } from "@/lib/types";
+
+/**
+ * Derive temporal context from per-competitor scorecard timestamps.
+ * Time-of-day is UTC-derived and approximate (timezone unknown).
+ * Also returns UTC start/end hours and the match date for weather fetching.
+ */
+function deriveTemporalContext(
+  rawScorecards: RawScorecard[],
+  competitorId: number,
+): {
+  timeOfDayLabel: string | null;
+  sessionDurationHours: number | null;
+  matchDate: string | null;       // YYYY-MM-DD (UTC) of first scorecard
+  startHourUtc: number | null;    // UTC hour (0–23) of first stage
+  endHourUtc: number | null;      // UTC hour (0–23) of last stage
+} {
+  const timestamps = rawScorecards
+    .filter(
+      (s) => s.competitor_id === competitorId && s.scorecard_created != null,
+    )
+    .map((s) => Date.parse(s.scorecard_created!))
+    .filter((t) => !isNaN(t))
+    .sort((a, b) => a - b);
+
+  if (timestamps.length === 0)
+    return {
+      timeOfDayLabel: null,
+      sessionDurationHours: null,
+      matchDate: null,
+      startHourUtc: null,
+      endHourUtc: null,
+    };
+
+  const firstDate = new Date(timestamps[0]);
+  const lastDate = new Date(timestamps[timestamps.length - 1]);
+
+  const startHourUtc = firstDate.getUTCHours();
+  const endHourUtc = lastDate.getUTCHours();
+
+  // YYYY-MM-DD
+  const matchDate = firstDate.toISOString().slice(0, 10);
+
+  let timeOfDayLabel: string;
+  if (startHourUtc < 12) timeOfDayLabel = "morning";
+  else if (startHourUtc < 14) timeOfDayLabel = "midday";
+  else if (startHourUtc < 18) timeOfDayLabel = "afternoon";
+  else timeOfDayLabel = "evening";
+
+  const durationMs = timestamps[timestamps.length - 1] - timestamps[0];
+  // Only report duration when ≥ 30 minutes (avoids noise from single-stage matches)
+  const sessionDurationHours =
+    durationMs >= 30 * 60 * 1000 ? durationMs / 3_600_000 : null;
+
+  return { timeOfDayLabel, sessionDurationHours, matchDate, startHourUtc, endHourUtc };
+}
+
+/**
+ * Compute Stage 1 group_percent minus competitor's match average.
+ * Negative = stage 1 below average (possible first-stage nerves).
+ */
+function computeFirstStageDelta(
+  stages: { stage_num: number; competitors: Record<number, { group_percent: number | null } | undefined> }[],
+  competitorId: number,
+): number | null {
+  const sorted = stages.slice().sort((a, b) => a.stage_num - b.stage_num);
+  const stage1 = sorted.find((s) => s.stage_num === 1);
+  if (!stage1) return null;
+
+  const cs1 = stage1.competitors[competitorId];
+  if (cs1?.group_percent == null) return null;
+
+  const percents = sorted
+    .map((s) => s.competitors[competitorId]?.group_percent)
+    .filter((p): p is number => p != null);
+
+  if (percents.length < 2) return null;
+
+  const avg = percents.reduce((a, b) => a + b, 0) / percents.length;
+  return cs1.group_percent - avg;
+}
 
 interface RawCompetitor {
   id: string;
@@ -37,6 +127,9 @@ interface RawMatchData {
     name?: string | null;
     starts?: string | null;
     scoring_completed?: string | number | null;
+    has_geopos?: boolean | null;
+    lat?: number | string | null;
+    lng?: number | string | null;
     stages?: {
       id: string;
       number: number;
@@ -70,8 +163,8 @@ export async function GET(
     return NextResponse.json({ error: "Invalid parameters" }, { status: 400 });
   }
 
-  // 3. Check coaching-specific cache (key includes model + mode for auto-invalidation)
-  const coachingCacheKey = `coaching:${mode}:${ct}:${id}:${competitorId}:${provider.modelId}`;
+  // 3. Check coaching-specific cache (key includes model + mode + prompt version for auto-invalidation)
+  const coachingCacheKey = `coaching:v${COACHING_PROMPT_VERSION}:${mode}:${ct}:${id}:${competitorId}:${provider.modelId}`;
   try {
     const cached = await cache.get(coachingCacheKey);
     if (cached) {
@@ -188,6 +281,38 @@ export async function GET(
   const penaltyStats = computePenaltyStats(stages, competitorId);
   const consistencyStats = computeConsistencyStats(stages, competitorId);
   const baseFingerprint = computeStyleFingerprint(stages, competitorId);
+  const courseLengthPerformance = computeCourseLengthPerformance(stages, competitorId);
+  const constraintPerformance = computeConstraintPerformance(stages, competitorId);
+  const stageDegradationData = computeStageDegradationData(rawScorecards);
+  const firstStageDelta = computeFirstStageDelta(stages, competitorId);
+  const {
+    timeOfDayLabel,
+    sessionDurationHours,
+    matchDate: scorecardsDate,
+    startHourUtc,
+    endHourUtc,
+  } = deriveTemporalContext(rawScorecards, competitorId);
+
+  // Fetch weather — non-fatal, gracefully degrades to null if coordinates unavailable,
+  // API unreachable, or match date is too recent for the archive API.
+  const ev = matchData.event!;
+  const lat =
+    ev.has_geopos && ev.lat != null ? parseFloat(String(ev.lat)) : null;
+  const lng =
+    ev.has_geopos && ev.lng != null ? parseFloat(String(ev.lng)) : null;
+  const startsDate = typeof ev.starts === "string" ? ev.starts.slice(0, 10) : null;
+  const weatherDate = scorecardsDate ?? startsDate ?? null;
+
+  let weatherContext: MatchWeatherData | null = null;
+  if (lat != null && lng != null && weatherDate != null) {
+    weatherContext = await fetchMatchWeather(
+      lat,
+      lng,
+      weatherDate,
+      startHourUtc,
+      endHourUtc,
+    );
+  }
 
   // Enrich fingerprint with percentiles for archetype detection
   const divisionMap = new Map<number, string | null>(
@@ -233,6 +358,13 @@ export async function GET(
     styleFingerprint,
     matchName,
     fieldSize: fieldPoints.length,
+    stageDegradationData,
+    courseLengthPerformance,
+    constraintPerformance,
+    firstStageDelta,
+    timeOfDayLabel,
+    sessionDurationHours,
+    weatherContext,
   };
   const prompt =
     mode === "roast"
