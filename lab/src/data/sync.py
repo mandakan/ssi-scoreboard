@@ -115,6 +115,7 @@ class SyncClient:
                 region=c.get("region"),
                 region_display=c.get("regionDisplay"),
                 category=c.get("category"),
+                alias=c.get("icsAlias") or None,
             )
             for c in data.get("competitors", [])
         ]

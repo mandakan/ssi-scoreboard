@@ -35,6 +35,7 @@ interface RawMatchData {
       region?: string | null;
       get_region_display?: string | null;
       category?: string | null;
+      ics_alias?: string | null;
     }>;
   } | null;
 }
@@ -97,6 +98,7 @@ export async function GET(
     region: c.region ?? null,
     regionDisplay: c.get_region_display ?? null,
     category: c.category ?? null,
+    icsAlias: c.ics_alias ?? null,
   }));
 
   // Build stage metadata

@@ -326,6 +326,30 @@ def test_alias_stored_in_link(store: Store) -> None:
     assert row is not None and row[0] == "alicegun"
 
 
+def test_ssi_ics_alias_matches_ipscresults_alias(store: Store) -> None:
+    """An ipscresults competitor whose alias matches an SSI shooter's ics_alias should link."""
+    # SSI competitor with ics_alias stored as alias field
+    store.store_match_results(_ssi_match("m1", [
+        CompetitorMeta(competitor_id=1, shooter_id=42, name="Martin Hollertz",
+                       division="Production", region="SWE", alias="matusalem"),
+    ]))
+
+    # ipscresults competitor: different name spelling, same alias and region
+    ipr_fp = name_fingerprint("Hollertz Martin", "SWE")
+    ipr_comp = CompetitorMeta(
+        competitor_id=10, shooter_id=None,
+        identity_key=ipr_fp, name="Hollertz Martin",
+        division="Production", region="SWE", alias="matusalem",
+    )
+    store.store_match_results(_ipr_match("uuid-1", [ipr_comp]))
+
+    resolver = IdentityResolver()
+    report = resolver.resolve_all(store)
+
+    assert report.alias_matched == 1
+    assert store.get_identity_link("ipscresults", ipr_fp) == 42
+
+
 def test_null_alias_does_not_trigger_alias_match(store: Store) -> None:
     """Competitors with no alias should not match via alias step."""
     # First competitor with no alias → new identity

@@ -270,14 +270,27 @@ class IdentityResolver:
                 name_part, _, region = fp_str.partition("|")
                 ssi_fp_by_region[region].append((name_part, fp_str, int(canonical_id)))
 
-        # Build alias-based lookup from already-resolved ipscresults links.
+        # Build alias-based lookup for cross-source matching.
         # alias_by_region: region → alias → canonical_id
-        alias_rows = store.db.execute(
+        # Sources (lower wins so SSI ics_alias can be overridden by manual ipscresults links):
+        #   1. SSI competitors with ics_alias (stored as alias in competitors table)
+        #   2. Already-resolved ipscresults identity links with stored alias
+        alias_by_region: dict[str, dict[str, int]] = defaultdict(dict)
+
+        ssi_alias_rows = store.db.execute(
+            "SELECT DISTINCT region, alias, shooter_id FROM competitors"
+            " WHERE source = 'ssi' AND alias IS NOT NULL AND shooter_id IS NOT NULL"
+        ).fetchall()
+        for region, alias, shooter_id in ssi_alias_rows:
+            r = str(region).upper() if region else ""
+            if r and alias:
+                alias_by_region[r][str(alias)] = int(shooter_id)
+
+        ipr_alias_rows = store.db.execute(
             "SELECT source_key, canonical_id, alias FROM shooter_identity_links"
             " WHERE source = 'ipscresults' AND alias IS NOT NULL"
         ).fetchall()
-        alias_by_region: dict[str, dict[str, int]] = defaultdict(dict)
-        for source_key, canonical_id, alias in alias_rows:
+        for source_key, canonical_id, alias in ipr_alias_rows:
             region = str(source_key).rpartition("|")[2]
             if region and alias:
                 alias_by_region[region][str(alias)] = int(canonical_id)
