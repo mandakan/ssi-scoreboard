@@ -103,14 +103,14 @@ export function ComparisonChart({ data, stages: stagesProp, showBenchmark = fals
             labelStyle={{ color: "var(--popover-foreground)", fontWeight: 600 }}
             itemStyle={{ color: "var(--popover-foreground)" }}
             cursor={{ fill: "var(--muted-foreground)", opacity: 0.08 }}
-            formatter={(value: number | undefined, name: string | undefined) => {
+            formatter={(value, name) => {
               if (name === "overall_leader_hf") {
                 return [typeof value === "number" ? value.toFixed(4) : "—", "Field leader"];
               }
               if (name === "field_median_hf") {
                 return [typeof value === "number" ? value.toFixed(4) : "—", "Field median"];
               }
-              const id = parseInt((name ?? "").split("_").pop() ?? "0", 10);
+              const id = parseInt((String(name ?? "")).split("_").pop() ?? "0", 10);
               return [
                 typeof value === "number" ? value.toFixed(4) : "—",
                 formatLabel(id),

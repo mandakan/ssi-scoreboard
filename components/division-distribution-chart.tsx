@@ -176,7 +176,7 @@ export function DivisionDistributionChart({ data, stages: stagesProp }: Division
             labelStyle={{ color: "var(--popover-foreground)", fontWeight: 600 }}
             itemStyle={{ color: "var(--popover-foreground)" }}
             cursor={{ fill: "var(--muted-foreground)", opacity: 0.06 }}
-            formatter={(value: number | undefined, name: string | undefined) => {
+            formatter={(value, name) => {
               if (name === "q1_base") return [null, null];
               if (name === "div_count") {
                 return [
@@ -185,7 +185,7 @@ export function DivisionDistributionChart({ data, stages: stagesProp }: Division
                 ];
               }
               if (name === "iqr_height") {
-                if (value == null) return ["—", "IQR (Q1–Q3)"];
+                if (typeof value !== "number") return ["—", "IQR (Q1–Q3)"];
                 return [`${value.toFixed(1)}% wide`, "IQR (Q1–Q3)"];
               }
               if (name === "median_pct") {

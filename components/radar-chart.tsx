@@ -144,9 +144,9 @@ export function StageBalanceChart({ data }: StageBalanceChartProps) {
             contentStyle={popoverStyle}
             labelStyle={{ color: "var(--popover-foreground)", fontWeight: 600 }}
             itemStyle={{ color: "var(--popover-foreground)" }}
-            formatter={(value: number | undefined, name: string | undefined) => [
+            formatter={(value, name) => [
               typeof value === "number" ? `${value.toFixed(1)}%` : "—",
-              formatLabel(parseInt(name ?? "0", 10)),
+              formatLabel(typeof name === "number" ? name : parseInt(name ?? "0", 10)),
             ]}
           />
           {competitors
