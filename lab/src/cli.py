@@ -1488,6 +1488,186 @@ def db_pull(
     )
 
 
+# ---------------------------------------------------------------------------
+# raw-push / raw-pull — sync raw OData bundle files with S3/R2
+# ---------------------------------------------------------------------------
+
+@app.command(name="raw-push")
+def raw_push(
+    raw_dir: Path = RAW_DIR_OPTION,
+    bucket: str = S3_BUCKET_OPTION,
+    prefix: str = S3_PREFIX_OPTION,
+    endpoint: str = S3_ENDPOINT_OPTION,
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="List what would be uploaded without doing it"
+    ),
+) -> None:
+    """Upload local raw OData bundle files to S3/R2.
+
+    Uploads only files that are not already present in S3 (content-addressed
+    by filename — each match has a stable UUID-based name). Existing remote
+    files are never overwritten, so it is safe to run repeatedly.
+
+    Required env vars: LAB_S3_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+    For Cloudflare R2: also set LAB_S3_ENDPOINT to your R2 endpoint URL.
+
+    Example (R2)::
+
+        export LAB_S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com
+        export LAB_S3_BUCKET=my-lab-bucket
+        uv run rating raw-push
+        uv run rating raw-push --dry-run
+    """
+    _require_boto3()
+
+    if not raw_dir.exists():
+        console.print(f"[yellow]Raw dir not found:[/yellow] {raw_dir}")
+        raise typer.Exit(0)
+
+    local_files = sorted(raw_dir.glob("*.json.gz"))
+    if not local_files:
+        console.print(f"[yellow]No bundle files in {raw_dir}[/yellow]")
+        raise typer.Exit(0)
+
+    s3 = _s3_client(endpoint)
+    s3_prefix = f"{prefix}/ipscresults/raw"
+
+    # Build set of filenames already on S3.
+    console.print(f"[bold]Scanning s3://{bucket}/{s3_prefix}/...[/bold]")
+    remote_names: set[str] = set()
+    paginator = s3.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=s3_prefix + "/"):
+        for obj in page.get("Contents", []):
+            remote_names.add(obj["Key"].split("/")[-1])
+
+    to_upload = [f for f in local_files if f.name not in remote_names]
+
+    total_local = len(local_files)
+    already = total_local - len(to_upload)
+    console.print(
+        f"  {total_local} local files | {already} already on S3 | {len(to_upload)} to upload"
+    )
+
+    if not to_upload:
+        console.print("[bold green]Nothing to upload — S3 is up to date.[/bold green]")
+        raise typer.Exit(0)
+
+    if dry_run:
+        console.print("[dim]--dry-run: would upload:[/dim]")
+        for f in to_upload:
+            console.print(f"  {f.name}")
+        raise typer.Exit(0)
+
+    console.print(f"[bold]Uploading {len(to_upload)} file(s)...[/bold]")
+    uploaded = 0
+    failed = 0
+    for local in to_upload:
+        key = f"{s3_prefix}/{local.name}"
+        try:
+            s3.upload_file(str(local), bucket, key)
+            uploaded += 1
+            if uploaded % 50 == 0 or uploaded == len(to_upload):
+                console.print(f"  {uploaded}/{len(to_upload)} uploaded")
+        except Exception as exc:  # noqa: BLE001
+            console.print(f"  [red]Failed:[/red] {local.name} — {exc}")
+            failed += 1
+
+    if failed:
+        console.print(
+            f"[bold yellow]Done with {failed} error(s). {uploaded} uploaded.[/bold yellow]"
+        )
+        raise typer.Exit(1)
+
+    console.print(f"[bold green]Done.[/bold green] {uploaded} file(s) uploaded.")
+
+
+@app.command(name="raw-pull")
+def raw_pull(
+    raw_dir: Path = RAW_DIR_OPTION,
+    bucket: str = S3_BUCKET_OPTION,
+    prefix: str = S3_PREFIX_OPTION,
+    endpoint: str = S3_ENDPOINT_OPTION,
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="List what would be downloaded without doing it"
+    ),
+) -> None:
+    """Download raw OData bundle files from S3/R2 that are missing locally.
+
+    Downloads only files not already present in the local raw dir.
+    Existing local files are never overwritten.
+
+    Required env vars: LAB_S3_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+    For Cloudflare R2: also set LAB_S3_ENDPOINT to your R2 endpoint URL.
+
+    Example (R2)::
+
+        export LAB_S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com
+        export LAB_S3_BUCKET=my-lab-bucket
+        uv run rating raw-pull
+        uv run rating raw-pull --dry-run
+    """
+    _require_boto3()
+
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    s3 = _s3_client(endpoint)
+    s3_prefix = f"{prefix}/ipscresults/raw"
+
+    console.print(f"[bold]Scanning s3://{bucket}/{s3_prefix}/...[/bold]")
+    remote_files: list[tuple[str, str]] = []  # (key, filename)
+    paginator = s3.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=s3_prefix + "/"):
+        for obj in page.get("Contents", []):
+            key: str = obj["Key"]
+            name = key.split("/")[-1]
+            if name.endswith(".json.gz"):
+                remote_files.append((key, name))
+
+    if not remote_files:
+        console.print(f"[yellow]No bundle files found at s3://{bucket}/{s3_prefix}/[/yellow]")
+        raise typer.Exit(0)
+
+    local_names = {f.name for f in raw_dir.glob("*.json.gz")}
+    to_download = [(k, n) for k, n in remote_files if n not in local_names]
+
+    total_remote = len(remote_files)
+    already = total_remote - len(to_download)
+    console.print(
+        f"  {total_remote} remote files | {already} already local | {len(to_download)} to download"
+    )
+
+    if not to_download:
+        console.print("[bold green]Nothing to download — local cache is up to date.[/bold green]")
+        raise typer.Exit(0)
+
+    if dry_run:
+        console.print("[dim]--dry-run: would download:[/dim]")
+        for _key, name in to_download:
+            console.print(f"  {name}")
+        raise typer.Exit(0)
+
+    console.print(f"[bold]Downloading {len(to_download)} file(s) to {raw_dir}...[/bold]")
+    downloaded = 0
+    failed = 0
+    for key, name in to_download:
+        local_path = raw_dir / name
+        try:
+            s3.download_file(bucket, key, str(local_path))
+            downloaded += 1
+            if downloaded % 50 == 0 or downloaded == len(to_download):
+                console.print(f"  {downloaded}/{len(to_download)} downloaded")
+        except Exception as exc:  # noqa: BLE001
+            console.print(f"  [red]Failed:[/red] {name} — {exc}")
+            failed += 1
+
+    if failed:
+        console.print(
+            f"[bold yellow]Done with {failed} error(s). {downloaded} downloaded.[/bold yellow]"
+        )
+        raise typer.Exit(1)
+
+    console.print(f"[bold green]Done.[/bold green] {downloaded} file(s) downloaded to {raw_dir}.")
+
+
 @app.command()
 def serve(
     host: str = typer.Option("0.0.0.0", help="Host to bind to"),
