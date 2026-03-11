@@ -7,6 +7,8 @@ const baseMatch: MatchResponse = {
   name: "Test Championship",
   cacheInfo: { cachedAt: null },
   venue: "Shooting Range Alpha",
+  lat: null,
+  lng: null,
   date: "2026-03-15T09:00:00+00:00",
   level: "l2",
   sub_rule: "nm",

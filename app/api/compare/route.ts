@@ -10,7 +10,8 @@ import { extractDivision } from "@/lib/divisions";
 import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, computeStageDegradationData } from "@/app/api/compare/logic";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
 import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
-import type { CompareMode, CompareResponse, CompetitorInfo, FieldFingerprintPoint, StageComparison } from "@/lib/types";
+import type { CompareMode, CompareResponse, CompetitorInfo, FieldFingerprintPoint, StageComparison, StageConditions } from "@/lib/types";
+import { fetchMatchWeatherRaw, getHourlySnapshot } from "@/lib/weather";
 
 interface RawCompetitor {
   id: string;
@@ -35,6 +36,9 @@ interface RawMatchData {
   event: {
     starts?: string | null;
     scoring_completed?: string | number | null;
+    has_geopos?: boolean | null;
+    lat?: number | string | null;
+    lng?: number | string | null;
     stages?: {
       id: string;
       number: number;
@@ -320,6 +324,7 @@ export async function GET(req: Request) {
   let fieldFingerprintPoints: CompareResponse["fieldFingerprintPoints"] = null;
   let styleFingerprintStats: CompareResponse["styleFingerprintStats"] = null;
   let stageDegradationData: CompareResponse["stageDegradationData"] = null;
+  let stageConditions: CompareResponse["stageConditions"] = null;
 
   if (mode === "coaching") {
     archetypePerformance = Object.fromEntries(
@@ -336,6 +341,40 @@ export async function GET(req: Request) {
 
     whatIfStats = simulateWithoutWorstStage(stages, requestedCompetitors, rawScorecards);
     stageDegradationData = computeStageDegradationData(rawScorecards);
+
+    // Build per-cell conditions overlay (weather + time) — non-fatal, gracefully degrades.
+    const ev = matchData.event!;
+    const venueLat = ev.has_geopos && ev.lat != null ? parseFloat(String(ev.lat)) : null;
+    const venueLng = ev.has_geopos && ev.lng != null ? parseFloat(String(ev.lng)) : null;
+    if (venueLat != null && venueLng != null) {
+      const firstTs = rawScorecards
+        .filter((s) => s.scorecard_created != null)
+        .map((s) => s.scorecard_created!)
+        .sort()[0];
+      const conditionsDate = firstTs
+        ? firstTs.slice(0, 10)
+        : (typeof ev.starts === "string" ? ev.starts.slice(0, 10) : null);
+      if (conditionsDate) {
+        try {
+          const rawWeather = await fetchMatchWeatherRaw(venueLat, venueLng, conditionsDate);
+          if (rawWeather) {
+            const map: Record<number, Record<number, StageConditions>> = {};
+            for (const sc of rawScorecards) {
+              if (!sc.scorecard_created || !competitorIds.includes(sc.competitor_id)) continue;
+              const t = Date.parse(sc.scorecard_created);
+              if (isNaN(t)) continue;
+              const hourUtc = new Date(t).getUTCHours();
+              const snap = getHourlySnapshot(rawWeather, hourUtc);
+              if (!map[sc.stage_id]) map[sc.stage_id] = {};
+              map[sc.stage_id][sc.competitor_id] = { hourUtc, ...snap };
+            }
+            stageConditions = map;
+          }
+        } catch {
+          // Non-fatal — conditions overlay unavailable
+        }
+      }
+    }
   }
 
   const tPerCompetitor = performance.now();
@@ -439,6 +478,7 @@ export async function GET(req: Request) {
     courseLengthPerformance,
     constraintPerformance,
     stageDegradationData,
+    stageConditions,
     cacheInfo,
   };
 

@@ -19,5 +19,6 @@ export const MAX_COMPETITORS = 12;
  *   7 → added region, get_region_display, category, ics_alias, license to IpscCompetitorNode
  *   8 → added get_division_display to IpscCompetitorNode in MATCH_QUERY + SCORECARDS_QUERY;
  *       added get_full_rule_display to IpscMatchNode (multi-discipline support)
+ *   9 → added lat, lng to IpscMatchNode in MATCH_QUERY; lat/lng on MatchResponse (venue coordinates)
  */
-export const CACHE_SCHEMA_VERSION = 8;
+export const CACHE_SCHEMA_VERSION = 9;

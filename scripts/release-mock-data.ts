@@ -18,6 +18,8 @@ const ID_C = 1003; // C. Berg — surgical precision, slower times
 export const MOCK_MATCH: MatchResponse = {
   name: "Västra Regionmatch 2026",
   venue: "Skövde Skytteklubb",
+  lat: 58.3897,
+  lng: 13.8456,
   date: "2026-03-01T09:00:00+01:00",
   level: "l3",
   sub_rule: "nm",
@@ -705,6 +707,7 @@ export const MOCK_COMPARE: CompareResponse = {
 
   // ── Stage degradation data ──────────────────────────────────────────────────
   stageDegradationData: [DEGRADATION_STAGE_3, DEGRADATION_STAGE_1], // S3 first = selected by default
+  stageConditions: null,
 };
 
 // ── Shooter dashboard mock ────────────────────────────────────────────────────

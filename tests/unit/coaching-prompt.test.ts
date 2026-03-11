@@ -3,6 +3,7 @@ import {
   buildCoachingPrompt,
   buildRoastPrompt,
   checkCoachingEligibility,
+  formatWeatherBlock,
   type CoachingPromptInput,
 } from "@/lib/coaching-prompt";
 import type {
@@ -12,6 +13,10 @@ import type {
   ConsistencyStats,
   StyleFingerprintStats,
   CompetitorSummary,
+  CourseLengthPerformance,
+  ConstraintPerformance,
+  StageDegradationData,
+  MatchWeatherData,
 } from "@/lib/types";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -140,6 +145,42 @@ function makeStyleFingerprint(
   };
 }
 
+function makeCourseLength(overrides?: Partial<CourseLengthPerformance>): CourseLengthPerformance {
+  return {
+    courseDisplay: "Short",
+    stageCount: 2,
+    avgGroupPercent: 88.0,
+    avgDivPercent: 82.0,
+    avgOverallPercent: 78.0,
+    ...overrides,
+  };
+}
+
+function makeConstraintPerformance(
+  overrides?: Partial<ConstraintPerformance>,
+): ConstraintPerformance {
+  return {
+    normal: { stageCount: 4, avgGroupPercent: 85.0 },
+    constrained: { stageCount: 2, avgGroupPercent: 72.0 },
+    ...overrides,
+  };
+}
+
+function makeStageDegradation(overrides?: Partial<StageDegradationData>): StageDegradationData {
+  return {
+    stageId: 100,
+    stageNum: 1,
+    stageName: "Stage 1",
+    points: [
+      { competitorId: 100, shootingPosition: 1, hfPercent: 95 },
+      { competitorId: 200, shootingPosition: 2, hfPercent: 88 },
+    ],
+    spearmanR: -0.8,
+    spearmanSignificant: true,
+    ...overrides,
+  };
+}
+
 function makeInput(overrides?: Partial<CoachingPromptInput>): CoachingPromptInput {
   return {
     competitor: makeCompetitor(),
@@ -152,6 +193,14 @@ function makeInput(overrides?: Partial<CoachingPromptInput>): CoachingPromptInpu
     styleFingerprint: makeStyleFingerprint(),
     matchName: "Test Cup 2026",
     fieldSize: 30, // >= 25 so archetype is not hedged by default
+    // Phase 1 contextual data — null/empty defaults so existing tests are unaffected
+    stageDegradationData: null,
+    courseLengthPerformance: [],
+    constraintPerformance: null,
+    firstStageDelta: null,
+    timeOfDayLabel: null,
+    sessionDurationHours: null,
+    weatherContext: null,
     ...overrides,
   };
 }
@@ -382,6 +431,328 @@ describe("buildCoachingPrompt", () => {
     );
     expect(prompt).toContain("HF 4.00");
     expect(prompt).not.toContain("A:null");
+  });
+});
+
+// ── Phase 1 contextual enrichment ─────────────────────────────────────────────
+
+describe("course-length performance line", () => {
+  it("omits course-length line when fewer than 2 course types have data", () => {
+    const prompt = buildCoachingPrompt(
+      makeInput({ courseLengthPerformance: [makeCourseLength()] }),
+    );
+    expect(prompt).not.toContain("Course-length performance:");
+  });
+
+  it("includes course-length line when >= 2 course types have data", () => {
+    const prompt = buildCoachingPrompt(
+      makeInput({
+        courseLengthPerformance: [
+          makeCourseLength({ courseDisplay: "Short", avgGroupPercent: 88.0 }),
+          makeCourseLength({ courseDisplay: "Long", avgGroupPercent: 71.5 }),
+        ],
+      }),
+    );
+    expect(prompt).toContain("Course-length performance: Short 88.0% | Long 71.5%");
+  });
+
+  it("omits course type if avgGroupPercent is null", () => {
+    const prompt = buildCoachingPrompt(
+      makeInput({
+        courseLengthPerformance: [
+          makeCourseLength({ courseDisplay: "Short", avgGroupPercent: 88.0 }),
+          makeCourseLength({ courseDisplay: "Medium", avgGroupPercent: null }),
+          makeCourseLength({ courseDisplay: "Long", avgGroupPercent: 71.5 }),
+        ],
+      }),
+    );
+    // Only Short and Long have data — still >= 2 entries after filtering
+    expect(prompt).toContain("Course-length performance: Short 88.0% | Long 71.5%");
+    expect(prompt).not.toContain("Medium");
+  });
+});
+
+describe("constraint performance line", () => {
+  it("omits constraint line when constraintPerformance is null", () => {
+    const prompt = buildCoachingPrompt(makeInput({ constraintPerformance: null }));
+    expect(prompt).not.toContain("Constrained stages");
+  });
+
+  it("omits constraint line when constrained stageCount is 0", () => {
+    const prompt = buildCoachingPrompt(
+      makeInput({
+        constraintPerformance: makeConstraintPerformance({
+          constrained: { stageCount: 0, avgGroupPercent: null },
+        }),
+      }),
+    );
+    expect(prompt).not.toContain("Constrained stages");
+  });
+
+  it("includes constraint line with delta when constrained stages exist", () => {
+    const prompt = buildCoachingPrompt(
+      makeInput({ constraintPerformance: makeConstraintPerformance() }),
+    );
+    // 72% constrained vs 85% normal = -13%
+    expect(prompt).toContain("Constrained stages (weak-hand, moving targets, etc.): avg 72.0% (-13.0% vs 85.0% on normal stages)");
+  });
+
+  it("shows positive delta when constrained outperforms normal", () => {
+    const prompt = buildCoachingPrompt(
+      makeInput({
+        constraintPerformance: makeConstraintPerformance({
+          normal: { stageCount: 3, avgGroupPercent: 70.0 },
+          constrained: { stageCount: 2, avgGroupPercent: 80.0 },
+        }),
+      }),
+    );
+    expect(prompt).toContain("+10.0%");
+  });
+});
+
+describe("first-stage delta line", () => {
+  it("omits first-stage line when delta is null", () => {
+    const prompt = buildCoachingPrompt(makeInput({ firstStageDelta: null }));
+    expect(prompt).not.toContain("Stage 1 vs match average");
+  });
+
+  it("omits first-stage line when |delta| < 5", () => {
+    const prompt = buildCoachingPrompt(makeInput({ firstStageDelta: -3.0 }));
+    expect(prompt).not.toContain("Stage 1 vs match average");
+  });
+
+  it("includes first-stage line with 'possible first-stage nerves' when delta <= -10", () => {
+    const prompt = buildCoachingPrompt(makeInput({ firstStageDelta: -15.0 }));
+    expect(prompt).toContain("Stage 1 vs match average: -15.0% — possible first-stage nerves");
+  });
+
+  it("includes first-stage line with 'slightly below' when delta is -5 to -10", () => {
+    const prompt = buildCoachingPrompt(makeInput({ firstStageDelta: -7.0 }));
+    expect(prompt).toContain("Stage 1 vs match average: -7.0% — slightly below average start");
+  });
+
+  it("includes first-stage line with 'strong opener' when delta is positive", () => {
+    const prompt = buildCoachingPrompt(makeInput({ firstStageDelta: 12.0 }));
+    expect(prompt).toContain("Stage 1 vs match average: +12.0% — strong opener");
+  });
+});
+
+describe("shooting order context line", () => {
+  it("omits shooting order line when stageDegradationData is null", () => {
+    const prompt = buildCoachingPrompt(makeInput({ stageDegradationData: null }));
+    expect(prompt).not.toContain("Shooting order:");
+  });
+
+  it("omits shooting order line when competitor shot early (avg <= 50%)", () => {
+    // shooting_order = 5, field_competitor_count = 50 → 10% (early)
+    const stage = {
+      ...makeStage(1, makeSummary({ shooting_order: 5 })),
+      field_competitor_count: 50,
+    };
+    const prompt = buildCoachingPrompt(
+      makeInput({
+        stages: [stage],
+        stageDegradationData: [makeStageDegradation({ spearmanSignificant: true, spearmanR: -0.8 })],
+      }),
+    );
+    expect(prompt).not.toContain("Shooting order:");
+  });
+
+  it("omits shooting order line when no significant degradation stages", () => {
+    const stage = {
+      ...makeStage(1, makeSummary({ shooting_order: 20 })),
+      field_competitor_count: 25,
+    };
+    const prompt = buildCoachingPrompt(
+      makeInput({
+        stages: [stage],
+        stageDegradationData: [
+          makeStageDegradation({ spearmanSignificant: false, spearmanR: -0.3 }),
+        ],
+      }),
+    );
+    expect(prompt).not.toContain("Shooting order:");
+  });
+
+  it("includes shooting order line when competitor shot late AND significant degradation exists", () => {
+    // shooting_order = 18, field = 20 → 90% (late)
+    const stage = {
+      ...makeStage(1, makeSummary({ shooting_order: 18 })),
+      field_competitor_count: 20,
+    };
+    const prompt = buildCoachingPrompt(
+      makeInput({
+        stages: [stage],
+        stageDegradationData: [
+          makeStageDegradation({ spearmanSignificant: true, spearmanR: -0.75 }),
+        ],
+      }),
+    );
+    expect(prompt).toContain("Shooting order:");
+    expect(prompt).toContain("late in the field");
+    expect(prompt).toContain("degradation correlation on 1 stage");
+  });
+});
+
+describe("session timing line", () => {
+  it("omits session line when both timeOfDayLabel and sessionDurationHours are null", () => {
+    const prompt = buildCoachingPrompt(makeInput());
+    expect(prompt).not.toContain("Match timing:");
+  });
+
+  it("includes only time-of-day when sessionDurationHours is null", () => {
+    const prompt = buildCoachingPrompt(
+      makeInput({ timeOfDayLabel: "morning", sessionDurationHours: null }),
+    );
+    expect(prompt).toContain("Match timing: morning");
+    expect(prompt).not.toContain("range day");
+  });
+
+  it("includes only session duration when timeOfDayLabel is null", () => {
+    const prompt = buildCoachingPrompt(
+      makeInput({ timeOfDayLabel: null, sessionDurationHours: 5.2 }),
+    );
+    expect(prompt).toContain("Match timing: 5.2h range day");
+  });
+
+  it("includes both fields when both are set", () => {
+    const prompt = buildCoachingPrompt(
+      makeInput({ timeOfDayLabel: "afternoon", sessionDurationHours: 6.1 }),
+    );
+    expect(prompt).toContain("Match timing: afternoon, 6.1h range day");
+  });
+});
+
+// ── formatWeatherBlock + weather context in prompt ────────────────────────────
+
+function makeWeather(overrides?: Partial<MatchWeatherData>): MatchWeatherData {
+  return {
+    elevation: 82,
+    date: "2026-06-15",
+    tempRange: [12, 17],
+    apparentTempRange: [9, 14],
+    humidityAvg: 78,
+    windspeedAvg: 7.0,
+    windgustMax: 13.0,
+    winddirectionDominant: "SW",
+    precipitationTotal: 0,
+    cloudcoverAvg: 40,
+    solarRadiationAvg: 120,
+    weatherCode: 2,
+    weatherLabel: "partly cloudy",
+    wetbulbMax: 11.2,
+    snowDepthMax: null,
+    visibilityMin: 20_000,
+    sunrise: "04:38",
+    sunset: "22:02",
+    precipitationDayTotal: 0,
+    ...overrides,
+  };
+}
+
+describe("formatWeatherBlock", () => {
+  it("includes date and elevation in header", () => {
+    const block = formatWeatherBlock(makeWeather());
+    expect(block).toContain("2026-06-15");
+    expect(block).toContain("82 m elevation");
+  });
+
+  it("includes weather label and no-precipitation note", () => {
+    const block = formatWeatherBlock(makeWeather());
+    expect(block).toContain("partly cloudy");
+    expect(block).toContain("no precipitation");
+  });
+
+  it("reports precipitation when present during match hours", () => {
+    const block = formatWeatherBlock(makeWeather({ precipitationTotal: 3.2 }));
+    expect(block).toContain("3.2 mm during match hours");
+  });
+
+  it("reports full-day precipitation when no match-hour rain but day total > 0", () => {
+    const block = formatWeatherBlock(
+      makeWeather({ precipitationTotal: 0, precipitationDayTotal: 5.0 }),
+    );
+    expect(block).toContain("5.0 mm total on the day");
+  });
+
+  it("includes temperature range and feels-like", () => {
+    const block = formatWeatherBlock(makeWeather());
+    expect(block).toContain("12–17°C");
+    expect(block).toContain("feels-like 9–14°C");
+    expect(block).toContain("humidity 78%");
+  });
+
+  it("includes wind speed, gust, and direction", () => {
+    const block = formatWeatherBlock(makeWeather());
+    expect(block).toContain("7.0 m/s avg");
+    expect(block).toContain("gusting 13.0 m/s");
+    expect(block).toContain("from SW");
+  });
+
+  it("includes sunrise and sunset times", () => {
+    const block = formatWeatherBlock(makeWeather());
+    expect(block).toContain("sunrise 04:38");
+    expect(block).toContain("sunset 22:02");
+  });
+
+  it("includes solar radiation with low/no direct sun note when low", () => {
+    const block = formatWeatherBlock(makeWeather({ solarRadiationAvg: 80 }));
+    expect(block).toContain("low/no direct sun");
+  });
+
+  it("includes strong sun glare warning when radiation > 400", () => {
+    const block = formatWeatherBlock(makeWeather({ solarRadiationAvg: 500 }));
+    expect(block).toContain("glare risk");
+  });
+
+  it("omits visibility line when visibility >= 10 km", () => {
+    const block = formatWeatherBlock(makeWeather({ visibilityMin: 20_000 }));
+    expect(block).not.toContain("Visibility");
+    expect(block).not.toContain("reduced");
+  });
+
+  it("includes reduced visibility line when < 10 km", () => {
+    const block = formatWeatherBlock(makeWeather({ visibilityMin: 3_000 }));
+    expect(block).toContain("3.0 km (reduced)");
+  });
+
+  it("includes snow depth when present (converts m to cm)", () => {
+    const block = formatWeatherBlock(makeWeather({ snowDepthMax: 0.15 }));
+    expect(block).toContain("Snow depth: 15 cm");
+  });
+
+  it("omits snow line when snowDepthMax is null or 0", () => {
+    const block = formatWeatherBlock(makeWeather({ snowDepthMax: null }));
+    expect(block).not.toContain("Snow depth");
+  });
+
+  it("flags heat stress when wetbulbMax > 28", () => {
+    const block = formatWeatherBlock(makeWeather({ wetbulbMax: 29.5 }));
+    expect(block).toContain("heat stress risk");
+  });
+
+  it("does not flag heat stress when wetbulbMax <= 28", () => {
+    const block = formatWeatherBlock(makeWeather({ wetbulbMax: 22.0 }));
+    expect(block).not.toContain("heat stress");
+  });
+});
+
+describe("weather context in buildCoachingPrompt", () => {
+  it("includes weather block when weatherContext is provided", () => {
+    const prompt = buildCoachingPrompt(makeInput({ weatherContext: makeWeather() }));
+    expect(prompt).toContain("Match-day conditions");
+    expect(prompt).toContain("2026-06-15");
+    expect(prompt).toContain("partly cloudy");
+  });
+
+  it("omits weather block when weatherContext is null", () => {
+    const prompt = buildCoachingPrompt(makeInput({ weatherContext: null }));
+    expect(prompt).not.toContain("Match-day conditions");
+  });
+
+  it("weather block appears in roast prompt too", () => {
+    const prompt = buildRoastPrompt(makeInput({ weatherContext: makeWeather() }));
+    expect(prompt).toContain("Match-day conditions");
   });
 });
 

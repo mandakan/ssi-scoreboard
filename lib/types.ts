@@ -64,6 +64,10 @@ export interface CacheInfo {
 export interface MatchResponse {
   name: string;
   venue: string | null;
+  /** Latitude of the match venue; null if not set in SSI. */
+  lat: number | null;
+  /** Longitude of the match venue; null if not set in SSI. */
+  lng: number | null;
   date: string | null;
   level: string | null;
   sub_rule: string | null;
@@ -395,6 +399,60 @@ export interface StageDegradationData {
   spearmanSignificant: boolean | null;
 }
 
+/** Historical weather data for a match day, fetched from Open-Meteo. */
+export interface MatchWeatherData {
+  /** Venue elevation in metres above sea level (from Open-Meteo 90 m DEM). */
+  elevation: number;
+  /** Match date (YYYY-MM-DD). */
+  date: string;
+  /** Temperature range [min, max] °C during match hours. */
+  tempRange: [number, number] | null;
+  /** Feels-like temperature range [min, max] °C during match hours. */
+  apparentTempRange: [number, number] | null;
+  /** Average relative humidity (%) during match hours. */
+  humidityAvg: number | null;
+  /** Average wind speed (m/s) during match hours. */
+  windspeedAvg: number | null;
+  /** Maximum wind gust (m/s) during match hours. */
+  windgustMax: number | null;
+  /** Dominant wind direction compass point during match hours. */
+  winddirectionDominant: string | null;
+  /** Total precipitation (mm) during match hours. */
+  precipitationTotal: number | null;
+  /** Average cloud cover (%) during match hours. */
+  cloudcoverAvg: number | null;
+  /** Average direct solar radiation (W/m²) during match hours. */
+  solarRadiationAvg: number | null;
+  /** WMO weather code representing dominant/worst conditions during match hours. */
+  weatherCode: number | null;
+  /** Human-readable label for weatherCode (e.g. "partly cloudy"). */
+  weatherLabel: string | null;
+  /** Maximum wet-bulb temperature (°C) during match hours — heat stress indicator. */
+  wetbulbMax: number | null;
+  /** Maximum snow depth (m) during match hours; null if no snow present. */
+  snowDepthMax: number | null;
+  /** Minimum visibility (m) during match hours. */
+  visibilityMin: number | null;
+  /** Sunrise time as "HH:MM" UTC. */
+  sunrise: string | null;
+  /** Sunset time as "HH:MM" UTC. */
+  sunset: string | null;
+  /** Total precipitation (mm) for the full calendar day. */
+  precipitationDayTotal: number | null;
+}
+
+/** Per-cell conditions overlay for the comparison table (coaching mode only). */
+export interface StageConditions {
+  /** UTC hour (0–23) when this competitor shot this stage. */
+  hourUtc: number;
+  /** WMO weather code at that hour, or null if unavailable. */
+  weatherCode: number | null;
+  /** Human-readable weather label (e.g. "partly cloudy"), or null. */
+  weatherLabel: string | null;
+  /** Temperature (°C) at that hour, or null. */
+  tempC: number | null;
+}
+
 export interface CompareResponse {
   match_id: number;
   mode: CompareMode;
@@ -411,6 +469,8 @@ export interface CompareResponse {
   courseLengthPerformance: Record<number, CourseLengthPerformance[]> | null; // null in live mode
   constraintPerformance: Record<number, ConstraintPerformance> | null; // null in live mode
   stageDegradationData: StageDegradationData[] | null; // null in live mode
+  /** Per-stage per-competitor conditions (weather + time), coaching mode only. Keyed stageId → competitorId. */
+  stageConditions: Record<number, Record<number, StageConditions>> | null;
   cacheInfo: CacheInfo;
 }
 

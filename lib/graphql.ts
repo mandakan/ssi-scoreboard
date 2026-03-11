@@ -130,6 +130,9 @@ export const MATCH_QUERY = `
         level
         stages_count
         competitors_count
+        has_geopos
+        lat
+        lng
         image {
           url
           width

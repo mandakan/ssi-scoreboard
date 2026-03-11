@@ -73,6 +73,9 @@ export interface RawMatchData {
     level?: string | null;
     stages_count?: number;
     competitors_count?: number;
+    has_geopos?: boolean | null;
+    lat?: number | string | null;
+    lng?: number | string | null;
     image?: { url?: string | null; width?: number | null; height?: number | null } | null;
     stages?: RawStage[];
     competitors_approved_w_wo_results_not_dnf?: RawCompetitor[];
@@ -212,6 +215,8 @@ export async function fetchMatchData(
   const response: MatchResponse = {
     name: ev.name,
     venue: ev.venue ?? null,
+    lat: ev.has_geopos && ev.lat != null ? parseFloat(String(ev.lat)) : null,
+    lng: ev.has_geopos && ev.lng != null ? parseFloat(String(ev.lng)) : null,
     date: ev.starts ?? null,
     level: ev.level ?? null,
     sub_rule: ev.sub_rule ?? null,
