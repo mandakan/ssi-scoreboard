@@ -351,7 +351,9 @@ class Store:
         synced_at: str,
         results: MatchResults,
     ) -> None:
-        # Upsert match metadata
+        import pyarrow as pa
+
+        # Upsert match metadata (single row)
         self.db.execute(
             """INSERT OR REPLACE INTO matches
                (source, ct, match_id, name, date, level, region, discipline,
@@ -365,66 +367,80 @@ class Store:
             ],
         )
 
-        # Upsert competitors — batch via executemany
-        competitor_rows = []
-        for c in results.competitors:
-            if source == "ssi":
-                identity_key = str(c.shooter_id) if c.shooter_id is not None else c.identity_key
-            else:
-                identity_key = c.identity_key
-            competitor_rows.append([
-                source, meta.ct, meta.match_id,
-                c.competitor_id, c.shooter_id, identity_key,
-                c.name, c.club, c.division,
-                c.region, c.region_display, c.category, c.alias,
-            ])
-        if competitor_rows:
-            self.db.executemany(
-                """INSERT OR REPLACE INTO competitors
-                   (source, ct, match_id, competitor_id, shooter_id, identity_key,
-                    name, club, division, region, region_display, category, alias)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                competitor_rows,
+        # Delete existing child rows so we can use plain INSERT (no per-row conflict check).
+        # This is safe inside the transaction: if the commit fails, the deletes are rolled back.
+        for tbl_name in ("competitors", "stages", "stage_results"):
+            self.db.execute(
+                f"DELETE FROM {tbl_name} WHERE source=? AND ct=? AND match_id=?",  # noqa: S608
+                [source, meta.ct, meta.match_id],
             )
 
-        # Upsert stages — batch via executemany
+        # Bulk insert competitors via PyArrow — DuckDB ingests columnar data orders of
+        # magnitude faster than row-by-row executemany.
+        if results.competitors:
+            identity_keys = [
+                str(c.shooter_id) if (source == "ssi" and c.shooter_id is not None)
+                else c.identity_key
+                for c in results.competitors
+            ]
+            comp_tbl = pa.table({  # noqa: F841
+                "source":        pa.array([source] * len(results.competitors), type=pa.string()),
+                "ct":            pa.array([meta.ct] * len(results.competitors), type=pa.int32()),
+                "match_id":      pa.array([meta.match_id] * len(results.competitors), type=pa.string()),
+                "competitor_id": pa.array([c.competitor_id for c in results.competitors], type=pa.int32()),
+                "shooter_id":    pa.array([c.shooter_id for c in results.competitors], type=pa.int32()),
+                "identity_key":  pa.array(identity_keys, type=pa.string()),
+                "name":          pa.array([c.name for c in results.competitors], type=pa.string()),
+                "club":          pa.array([c.club for c in results.competitors], type=pa.string()),
+                "division":      pa.array([c.division for c in results.competitors], type=pa.string()),
+                "region":        pa.array([c.region for c in results.competitors], type=pa.string()),
+                "region_display": pa.array([c.region_display for c in results.competitors], type=pa.string()),
+                "category":      pa.array([c.category for c in results.competitors], type=pa.string()),
+                "alias":         pa.array([c.alias for c in results.competitors], type=pa.string()),
+            })
+            self.db.execute("INSERT INTO competitors SELECT * FROM comp_tbl")
+
+        # Bulk insert stages via PyArrow
         if results.stages:
-            self.db.executemany(
-                """INSERT OR REPLACE INTO stages
-                   (source, ct, match_id, stage_id, stage_number, stage_name, max_points)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                [
-                    [source, meta.ct, meta.match_id,
-                     s.stage_id, s.stage_number, s.stage_name, s.max_points]
-                    for s in results.stages
-                ],
-            )
+            stg_tbl = pa.table({  # noqa: F841
+                "source":       pa.array([source] * len(results.stages), type=pa.string()),
+                "ct":           pa.array([meta.ct] * len(results.stages), type=pa.int32()),
+                "match_id":     pa.array([meta.match_id] * len(results.stages), type=pa.string()),
+                "stage_id":     pa.array([s.stage_id for s in results.stages], type=pa.int32()),
+                "stage_number": pa.array([s.stage_number for s in results.stages], type=pa.int32()),
+                "stage_name":   pa.array([s.stage_name for s in results.stages], type=pa.string()),
+                "max_points":   pa.array([s.max_points for s in results.stages], type=pa.int32()),
+            })
+            self.db.execute("INSERT INTO stages SELECT * FROM stg_tbl")
 
-        # Upsert stage results — batch via executemany
+        # Bulk insert stage results via PyArrow (the largest table — biggest win here)
         if results.results:
-            self.db.executemany(
-                """INSERT OR REPLACE INTO stage_results
-                   (source, ct, match_id, competitor_id, stage_id,
-                    hit_factor, points, time, max_points,
-                    a_hits, c_hits, d_hits,
-                    miss_count, no_shoots, procedurals,
-                    dq, dnf, zeroed,
-                    overall_rank, overall_percent,
-                    division_rank, division_percent)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                [
-                    [
-                        source, meta.ct, meta.match_id, r.competitor_id, r.stage_id,
-                        r.hit_factor, r.points, r.time, r.max_points,
-                        r.a_hits, r.c_hits, r.d_hits,
-                        r.miss_count, r.no_shoots, r.procedurals,
-                        r.dq, r.dnf, r.zeroed,
-                        r.overall_rank, r.overall_percent,
-                        r.division_rank, r.division_percent,
-                    ]
-                    for r in results.results
-                ],
-            )
+            sr = results.results
+            sr_tbl = pa.table({  # noqa: F841
+                "source":          pa.array([source] * len(sr), type=pa.string()),
+                "ct":              pa.array([meta.ct] * len(sr), type=pa.int32()),
+                "match_id":        pa.array([meta.match_id] * len(sr), type=pa.string()),
+                "competitor_id":   pa.array([r.competitor_id for r in sr], type=pa.int32()),
+                "stage_id":        pa.array([r.stage_id for r in sr], type=pa.int32()),
+                "hit_factor":      pa.array([r.hit_factor for r in sr], type=pa.float64()),
+                "points":          pa.array([r.points for r in sr], type=pa.float64()),
+                "time":            pa.array([r.time for r in sr], type=pa.float64()),
+                "max_points":      pa.array([r.max_points for r in sr], type=pa.int32()),
+                "a_hits":          pa.array([r.a_hits for r in sr], type=pa.int32()),
+                "c_hits":          pa.array([r.c_hits for r in sr], type=pa.int32()),
+                "d_hits":          pa.array([r.d_hits for r in sr], type=pa.int32()),
+                "miss_count":      pa.array([r.miss_count for r in sr], type=pa.int32()),
+                "no_shoots":       pa.array([r.no_shoots for r in sr], type=pa.int32()),
+                "procedurals":     pa.array([r.procedurals for r in sr], type=pa.int32()),
+                "dq":              pa.array([r.dq for r in sr], type=pa.bool_()),
+                "dnf":             pa.array([r.dnf for r in sr], type=pa.bool_()),
+                "zeroed":          pa.array([r.zeroed for r in sr], type=pa.bool_()),
+                "overall_rank":    pa.array([r.overall_rank for r in sr], type=pa.int32()),
+                "overall_percent": pa.array([r.overall_percent for r in sr], type=pa.float64()),
+                "division_rank":   pa.array([r.division_rank for r in sr], type=pa.int32()),
+                "division_percent": pa.array([r.division_percent for r in sr], type=pa.float64()),
+            })
+            self.db.execute("INSERT INTO stage_results SELECT * FROM sr_tbl")
 
     def get_match_count(self) -> int:
         """Return the number of matches in the store."""
