@@ -199,11 +199,12 @@ def test_syncer_uses_raw_store_on_cache_hit(tmp_path: Path) -> None:
         state=2,
     )
 
-    result = syncer._fetch_match(m)
+    result, src = syncer._fetch_match(m)
 
     client.fetch_raw_bundle.assert_not_called()
     assert result is not None
     assert result.meta.match_id == "cached-match"
+    assert src == "local"
     store.close()
 
 
@@ -230,9 +231,10 @@ def test_syncer_saves_bundle_after_api_fetch(tmp_path: Path) -> None:
         state=2,
     )
 
-    result = syncer._fetch_match(m)
+    result, src = syncer._fetch_match(m)
 
     client.fetch_raw_bundle.assert_called_once_with("fresh-match")
     assert raw_store.has_local("fresh-match")
     assert result is not None
+    assert src == "api"
     store.close()

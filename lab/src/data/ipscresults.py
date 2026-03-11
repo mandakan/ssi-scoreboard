@@ -47,7 +47,7 @@ from src.data.models import (
     StageMeta,
     StageResult,
 )
-from src.data.raw_store import BUNDLE_SCHEMA_VERSION, RawMatchStore
+from src.data.raw_store import BUNDLE_SCHEMA_VERSION, BundleSource, RawMatchStore
 from src.data.store import Store
 
 console = Console()
@@ -385,23 +385,37 @@ class IpscResultsSyncer:
 
         synced = 0
         skipped_errors = 0
+        source_counts: dict[BundleSource, int] = {"local": 0, "s3": 0, "api": 0}
+        _source_style: dict[BundleSource, str] = {
+            "local": "dim cyan",
+            "s3":    "dim blue",
+            "api":   "dim yellow",
+        }
+
         with Progress(console=console) as progress:
             task = progress.add_task("Syncing matches...", total=len(new_matches))
             for m in new_matches:
+                src: BundleSource = "api"
                 try:
-                    results = self._fetch_match(m)
+                    results, src = self._fetch_match(m)
+                    source_counts[src] += 1
+                    src_tag = f"[{_source_style[src]}]({src})[/{_source_style[src]}]"
                     if results is not None:
                         self.store.store_match_results(results)
                         synced += 1
                         progress.update(
-                            task, advance=1, description=f"[green]{m.name}[/green]"
+                            task, advance=1,
+                            description=f"[green]{m.name}[/green] {src_tag}",
                         )
                     else:
                         # No usable data (empty divisions etc.) — record to skip next time.
                         self.store.skip_match(
                             "ipscresults", 0, m.id, m.name, reason="no divisions or results"
                         )
-                        progress.update(task, advance=1, description=f"[yellow]{m.name}[/yellow]")
+                        progress.update(
+                            task, advance=1,
+                            description=f"[yellow]{m.name}[/yellow] {src_tag}",
+                        )
                 except httpx.HTTPStatusError as e:
                     # Server-side error for this specific match (e.g. 500 on DivisionList).
                     # Record as skipped so we don't retry on every subsequent sync.
@@ -418,8 +432,8 @@ class IpscResultsSyncer:
                     console.print(f"  [red]Error fetching {m.name}: {e}[/red]")
                     progress.update(task, advance=1)
 
-                # Skip the inter-match sleep when the bundle was served from cache.
-                if self.raw_store is None or not self.raw_store.has_local(m.id):
+                # Skip the inter-match sleep when the bundle was not fetched from the API.
+                if src == "api":
                     self.client._sleep()
 
         # Watermark: most recent match date we've seen
@@ -427,31 +441,44 @@ class IpscResultsSyncer:
         if dates:
             self.store.set_sync_watermark(max(dates), source="ipscresults")
 
-        msg = f"[bold green]Synced {synced} new ipscresults matches.[/bold green]"
+        parts = [f"[bold green]Synced {synced} ipscresults matches.[/bold green]"]
+        _ordered: list[BundleSource] = ["local", "s3", "api"]
+        tally = ", ".join(
+            f"{source_counts[s]} {s}"
+            for s in _ordered
+            if source_counts[s]
+        )
+        if tally:
+            parts.append(f"[dim]({tally})[/dim]")
         if skipped_errors:
-            msg += f" [yellow]({skipped_errors} skipped due to server errors)[/yellow]"
-        console.print(msg)
+            parts.append(f"[yellow]({skipped_errors} skipped due to server errors)[/yellow]")
+        console.print(" ".join(parts))
         return synced
 
-    def _fetch_match(self, m: IpscMatch) -> MatchResults | None:
+    def _fetch_match(self, m: IpscMatch) -> tuple[MatchResults | None, BundleSource]:
         """Load or fetch the raw bundle for ``m``, then parse it into MatchResults.
 
-        Tier 1 — raw_store: load the gzip bundle from local/S3 cache.
-        Tier 2 — API: fetch fresh OData, save to raw_store, parse.
+        Tier 1 — local file: instant, no network.
+        Tier 2 — S3/R2: download + cache locally, then parse.
+        Tier 3 — API: fetch fresh OData, save to raw_store, parse.
+
+        Returns (results, source) so callers can show which tier served the data.
         """
         if self.raw_store is not None:
+            was_local = self.raw_store.has_local(m.id)
             bundle = self.raw_store.load(m.id)
             if bundle is not None:
-                return self._parse_bundle(m, bundle)
+                source: BundleSource = "local" if was_local else "s3"
+                return self._parse_bundle(m, bundle), source
 
         bundle = self.client.fetch_raw_bundle(m.id)
         if bundle is None:
-            return None
+            return None, "api"
 
         if self.raw_store is not None:
             self.raw_store.save(m.id, bundle)
 
-        return self._parse_bundle(m, bundle)
+        return self._parse_bundle(m, bundle), "api"
 
     def _parse_bundle(self, m: IpscMatch, bundle: dict) -> MatchResults | None:  # type: ignore[type-arg]
         """Convert a raw OData bundle into a MatchResults object.

@@ -1,5 +1,6 @@
 """Tests for ipscresults.org OData client and syncer."""
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -112,18 +113,46 @@ def mock_store() -> MagicMock:
 
 
 def _fetch_match(mock_client: MagicMock) -> object:
-    """Helper to call _fetch_match with a minimal IpscMatch."""
+    """Helper: call _fetch_match and return just the MatchResults (not the source tag)."""
     from src.data.ipscresults_models import IpscMatch
 
     syncer = IpscResultsSyncer(client=mock_client, store=MagicMock())
     m = IpscMatch(id="uuid-1", name="Nordic Open 2025", date="2025-06-15",
                   level=3, discipline="Handgun")
-    return syncer._fetch_match(m)
+    results, _src = syncer._fetch_match(m)
+    return results
 
 
 def test_fetch_match_returns_match_results(mock_client: MagicMock) -> None:
     results = _fetch_match(mock_client)
     assert results is not None
+
+
+def test_fetch_match_source_tag_api(mock_client: MagicMock) -> None:
+    """Without a raw_store the bundle always comes from the API."""
+    from src.data.ipscresults_models import IpscMatch
+
+    syncer = IpscResultsSyncer(client=mock_client, store=MagicMock())
+    m = IpscMatch(id="uuid-1", name="Nordic Open 2025", date="2025-06-15",
+                  level=3, discipline="Handgun")
+    _results, src = syncer._fetch_match(m)
+    assert src == "api"
+
+
+def test_fetch_match_source_tag_local(mock_client: MagicMock, tmp_path: Path) -> None:
+    """When the bundle is already in the local raw store, source should be 'local'."""
+    from src.data.ipscresults_models import IpscMatch
+    from src.data.raw_store import RawMatchStore
+
+    raw_store = RawMatchStore(tmp_path / "raw")
+    raw_store.save("uuid-1", _make_raw_bundle())
+
+    syncer = IpscResultsSyncer(client=mock_client, store=MagicMock(), raw_store=raw_store)
+    m = IpscMatch(id="uuid-1", name="Nordic Open 2025", date="2025-06-15",
+                  level=3, discipline="Handgun")
+    _results, src = syncer._fetch_match(m)
+    assert src == "local"
+    mock_client.fetch_raw_bundle.assert_not_called()
 
 
 def test_fetch_match_source_is_ipscresults(mock_client: MagicMock) -> None:
@@ -225,6 +254,19 @@ def test_fetch_match_returns_none_when_no_divisions(mock_client: MagicMock) -> N
     mock_client.fetch_raw_bundle.return_value = None
     results = _fetch_match(mock_client)
     assert results is None
+
+
+def test_fetch_match_source_tag_api_on_none(mock_client: MagicMock) -> None:
+    """When the API returns nothing, source should still be 'api'."""
+    from src.data.ipscresults_models import IpscMatch
+
+    mock_client.fetch_raw_bundle.return_value = None
+    syncer = IpscResultsSyncer(client=mock_client, store=MagicMock())
+    m = IpscMatch(id="uuid-1", name="Nordic Open 2025", date="2025-06-15",
+                  level=3, discipline="Handgun")
+    results, src = syncer._fetch_match(m)
+    assert results is None
+    assert src == "api"
 
 
 # ------------------------------------------------------------------

@@ -42,10 +42,13 @@ import gzip
 import json
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     pass
+
+# Which storage tier served a bundle.
+BundleSource = Literal["local", "s3", "api"]
 
 log = logging.getLogger(__name__)
 
