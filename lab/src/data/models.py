@@ -52,6 +52,8 @@ class CompetitorMeta(BaseModel):
     region: str | None = None
     region_display: str | None = None
     category: str | None = None
+    # ipscresults user-chosen alias (e.g. "matusalem"). Used as secondary identity signal.
+    alias: str | None = None
 
 
 class StageResult(BaseModel):

@@ -12,7 +12,7 @@ from src.data.models import MatchResults
 
 # Bump this whenever the schema of any data table changes (not sync_state).
 # On version mismatch, all data tables are dropped and recreated; sync from scratch.
-SCHEMA_VERSION = "4"
+SCHEMA_VERSION = "5"
 
 # (name, division, region, category, mu, sigma, matches_played, last_match_date)
 RatingRow = tuple[str, str | None, str | None, str | None, float, float, int, str | None]
@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS competitors (
   shooter_id INTEGER, identity_key TEXT,
   name TEXT, club TEXT, division TEXT,
   region TEXT, region_display TEXT, category TEXT,
+  alias TEXT,
   PRIMARY KEY (source, ct, match_id, competitor_id)
 );
 
@@ -83,7 +84,8 @@ CREATE TABLE IF NOT EXISTS shooter_identities (
 -- Maps a source-specific identity to a canonical shooter.
 -- source_key: str(shooter_id) for SSI; name fingerprint "normalized|REG" for ipscresults.
 -- confidence: 1.0 = exact match; 0.0–1.0 = fuzzy match.
--- method: 'auto_exact', 'auto_fuzzy', 'manual'.
+-- method: 'auto_exact', 'auto_fuzzy', 'auto_alias', 'manual'.
+-- alias: ipscresults user-chosen handle (e.g. "matusalem"), used as secondary identity signal.
 CREATE TABLE IF NOT EXISTS shooter_identity_links (
   source TEXT NOT NULL,
   source_key TEXT NOT NULL,
@@ -92,6 +94,7 @@ CREATE TABLE IF NOT EXISTS shooter_identity_links (
   confidence REAL,
   method TEXT,
   linked_at TIMESTAMP,
+  alias TEXT,
   PRIMARY KEY (source, source_key)
 );
 
@@ -166,19 +169,27 @@ class Store:
         current = row[0] if row else "1"
         if current == SCHEMA_VERSION:
             # Additive column migrations — safe to apply on every startup.
-            for col in ["region TEXT", "region_display TEXT", "category TEXT"]:
+            for col in ["region TEXT", "region_display TEXT", "category TEXT", "alias TEXT"]:
                 with contextlib.suppress(Exception):
                     self.db.execute(f"ALTER TABLE competitors ADD COLUMN IF NOT EXISTS {col}")
             for col in ["skip_reason TEXT", "discipline TEXT"]:
                 with contextlib.suppress(Exception):
                     self.db.execute(f"ALTER TABLE matches ADD COLUMN IF NOT EXISTS {col}")
-            return
-
-        # v3 → v4: added discipline TEXT to matches. All other tables unchanged.
-        if current == "3" and SCHEMA_VERSION == "4":
             with contextlib.suppress(Exception):
                 self.db.execute(
-                    "ALTER TABLE matches ADD COLUMN IF NOT EXISTS discipline TEXT"
+                    "ALTER TABLE shooter_identity_links ADD COLUMN IF NOT EXISTS alias TEXT"
+                )
+            return
+
+        # v4 → v5: added alias TEXT to competitors and shooter_identity_links.
+        if current == "4" and SCHEMA_VERSION == "5":
+            with contextlib.suppress(Exception):
+                self.db.execute(
+                    "ALTER TABLE competitors ADD COLUMN IF NOT EXISTS alias TEXT"
+                )
+            with contextlib.suppress(Exception):
+                self.db.execute(
+                    "ALTER TABLE shooter_identity_links ADD COLUMN IF NOT EXISTS alias TEXT"
                 )
             self.db.execute(
                 "INSERT OR REPLACE INTO sync_state (key, value) VALUES ('schema_version', ?)",
@@ -186,8 +197,23 @@ class Store:
             )
             return
 
-        # v2 → v3 → v4: rebuild shooter_ratings/rating_history (division added to PK in v3),
-        # then add discipline column to matches (v4). Sync data preserved throughout.
+        # v3 → v5: add discipline to matches (v4), add alias columns (v5).
+        if current == "3":
+            for stmt in [
+                "ALTER TABLE matches ADD COLUMN IF NOT EXISTS discipline TEXT",
+                "ALTER TABLE competitors ADD COLUMN IF NOT EXISTS alias TEXT",
+                "ALTER TABLE shooter_identity_links ADD COLUMN IF NOT EXISTS alias TEXT",
+            ]:
+                with contextlib.suppress(Exception):
+                    self.db.execute(stmt)
+            self.db.execute(
+                "INSERT OR REPLACE INTO sync_state (key, value) VALUES ('schema_version', ?)",
+                [SCHEMA_VERSION],
+            )
+            return
+
+        # v2 → v5: rebuild shooter_ratings/rating_history (division added to PK in v3),
+        # add discipline column to matches (v4), add alias columns (v5).
         if current == "2":
             for tbl in ["shooter_ratings", "rating_history"]:
                 self.db.execute(f"DROP TABLE IF EXISTS {tbl}")
@@ -208,10 +234,13 @@ class Store:
                   PRIMARY KEY (algorithm, shooter_id, division, match_source, match_ct, match_id)
                 )
             """)
-            with contextlib.suppress(Exception):
-                self.db.execute(
-                    "ALTER TABLE matches ADD COLUMN IF NOT EXISTS discipline TEXT"
-                )
+            for stmt in [
+                "ALTER TABLE matches ADD COLUMN IF NOT EXISTS discipline TEXT",
+                "ALTER TABLE competitors ADD COLUMN IF NOT EXISTS alias TEXT",
+                "ALTER TABLE shooter_identity_links ADD COLUMN IF NOT EXISTS alias TEXT",
+            ]:
+                with contextlib.suppress(Exception):
+                    self.db.execute(stmt)
             self.db.execute(
                 "INSERT OR REPLACE INTO sync_state (key, value) VALUES ('schema_version', ?)",
                 [SCHEMA_VERSION],
@@ -318,13 +347,13 @@ class Store:
             self.db.execute(
                 """INSERT OR REPLACE INTO competitors
                    (source, ct, match_id, competitor_id, shooter_id, identity_key,
-                    name, club, division, region, region_display, category)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    name, club, division, region, region_display, category, alias)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 [
                     source, meta.ct, meta.match_id,
                     c.competitor_id, c.shooter_id, identity_key,
                     c.name, c.club, c.division,
-                    c.region, c.region_display, c.category,
+                    c.region, c.region_display, c.category, c.alias,
                 ],
             )
 
@@ -694,11 +723,11 @@ class Store:
 
     def bulk_save_identity_links(
         self,
-        rows: list[tuple[str, str, int, str, float, str]],
+        rows: list[tuple[str, str, int, str, float, str, str | None]],
     ) -> None:
         """Bulk upsert identity links via PyArrow, respecting manual overrides.
 
-        rows: list of (source, source_key, canonical_id, name_variant, confidence, method).
+        rows: list of (source, source_key, canonical_id, name_variant, confidence, method, alias).
         Manual links already in the DB are preserved.
         """
         if not rows:
@@ -726,6 +755,7 @@ class Store:
             "confidence": pa.array([r[4] for r in filtered], type=pa.float64()),
             "method": pa.array([r[5] for r in filtered], type=pa.string()),
             "linked_at": pa.array([now] * len(filtered), type=pa.string()),
+            "alias": pa.array([r[6] for r in filtered], type=pa.string()),
         })
         self.db.execute(
             "INSERT OR REPLACE INTO shooter_identity_links SELECT * FROM tbl"
@@ -748,17 +778,22 @@ class Store:
 
     def get_unlinked_ipscresults_competitors(
         self,
-    ) -> list[tuple[str, str | None]]:
-        """Return (name, region) pairs from ipscresults competitors not yet in identity_links."""
+    ) -> list[tuple[str, str | None, str | None]]:
+        """Return (name, region, alias) triples for unlinked ipscresults competitors.
+
+        When multiple aliases exist for the same (name, region), the lexicographically
+        largest non-null alias is returned (MAX picks any non-null value over null).
+        """
         rows = self.db.execute(
-            """SELECT DISTINCT c.name, c.region
+            """SELECT c.name, c.region, MAX(c.alias) AS alias
                FROM competitors c
                LEFT JOIN shooter_identity_links l
                  ON l.source = 'ipscresults' AND l.source_key = c.identity_key
                WHERE c.source = 'ipscresults' AND l.source_key IS NULL
+               GROUP BY c.name, c.region
                ORDER BY c.name"""
         ).fetchall()
-        return [(str(r[0]), r[1]) for r in rows]
+        return [(str(r[0]), r[1], r[2]) for r in rows]
 
     def get_identity_stats(self) -> dict[str, int]:
         """Return counts for identity resolution summary reporting."""

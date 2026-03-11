@@ -265,3 +265,90 @@ def test_resolve_all_is_idempotent(store: Store) -> None:
         "SELECT count(*) FROM shooter_identity_links"
     ).fetchone()[0]
     assert row_count > 0  # exact count depends on implementation, just no errors
+
+
+def test_alias_match_links_same_canonical_id(store: Store) -> None:
+    """An ipscresults competitor whose alias+region was seen before should be alias-matched."""
+    # Match 1: "Zara Unique" with alias "zarax" → gets a new canonical_id (no SSI counterpart)
+    fp1 = name_fingerprint("Zara Unique", "FIN")
+    comp1 = CompetitorMeta(
+        competitor_id=10, shooter_id=None,
+        identity_key=fp1, name="Zara Unique",
+        division="Standard", region="FIN", alias="zarax",
+    )
+    store.store_match_results(_ipr_match("uuid-1", [comp1]))
+
+    resolver = IdentityResolver()
+    report1 = resolver.resolve_all(store)
+    assert report1.new_identities == 1
+    canonical1 = store.get_identity_link("ipscresults", fp1)
+    assert canonical1 is not None and canonical1 >= 2_000_000
+
+    # Verify alias is stored in the link
+    row = store.db.execute(
+        "SELECT alias FROM shooter_identity_links WHERE source = 'ipscresults' AND source_key = ?",
+        [fp1],
+    ).fetchone()
+    assert row is not None and row[0] == "zarax"
+
+    # Match 2: "Zara Unikke" (different name spelling) with same alias "zarax" from FIN
+    # Name won't exact- or fuzzy-match, but alias should link to the same canonical_id.
+    fp2 = name_fingerprint("Zara Unikke", "FIN")
+    comp2 = CompetitorMeta(
+        competitor_id=20, shooter_id=None,
+        identity_key=fp2, name="Zara Unikke",
+        division="Standard", region="FIN", alias="zarax",
+    )
+    store.store_match_results(_ipr_match("uuid-2", [comp2]))
+
+    report2 = resolver.resolve_all(store)
+    assert report2.alias_matched == 1
+    assert store.get_identity_link("ipscresults", fp2) == canonical1
+
+
+def test_alias_stored_in_link(store: Store) -> None:
+    """Alias should be persisted in the identity link for exact-matched competitors."""
+    ipr_fp = name_fingerprint("Alice Smith", "SWE")
+    ipr_comp = CompetitorMeta(
+        competitor_id=10, shooter_id=None,
+        identity_key=ipr_fp, name="Alice Smith",
+        division="Production", region="SWE", alias="alicegun",
+    )
+    store.store_match_results(_ipr_match("uuid-1", [ipr_comp]))
+
+    resolver = IdentityResolver()
+    resolver.resolve_all(store)
+
+    row = store.db.execute(
+        "SELECT alias FROM shooter_identity_links WHERE source = 'ipscresults' AND source_key = ?",
+        [ipr_fp],
+    ).fetchone()
+    assert row is not None and row[0] == "alicegun"
+
+
+def test_null_alias_does_not_trigger_alias_match(store: Store) -> None:
+    """Competitors with no alias should not match via alias step."""
+    # First competitor with no alias → new identity
+    fp1 = name_fingerprint("Bob Jones", "NOR")
+    comp1 = CompetitorMeta(
+        competitor_id=10, shooter_id=None,
+        identity_key=fp1, name="Bob Jones",
+        division="Standard", region="NOR", alias=None,
+    )
+    store.store_match_results(_ipr_match("uuid-1", [comp1]))
+
+    resolver = IdentityResolver()
+    report1 = resolver.resolve_all(store)
+    assert report1.new_identities == 1
+
+    # Second competitor with no alias and different name → also new identity, no alias match
+    fp2 = name_fingerprint("Bob Jonez", "NOR")
+    comp2 = CompetitorMeta(
+        competitor_id=20, shooter_id=None,
+        identity_key=fp2, name="Bob Jonez",
+        division="Standard", region="NOR", alias=None,
+    )
+    store.store_match_results(_ipr_match("uuid-2", [comp2]))
+
+    report2 = resolver.resolve_all(store)
+    assert report2.alias_matched == 0

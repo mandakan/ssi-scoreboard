@@ -141,6 +141,7 @@ class ResolveReport:
 
     ssi_bootstrapped: int   # SSI shooter_id entries created / refreshed
     exact_matched: int      # ipscresults competitors linked via exact fingerprint
+    alias_matched: int      # ipscresults competitors linked via alias+region match
     fuzzy_matched: int      # ipscresults competitors linked via fuzzy name match
     new_identities: int     # ipscresults competitors with no SSI match → new canonical_id
 
@@ -148,6 +149,7 @@ class ResolveReport:
         return (
             f"SSI bootstrap: {self.ssi_bootstrapped} | "
             f"Exact: {self.exact_matched} | "
+            f"Alias: {self.alias_matched} | "
             f"Fuzzy: {self.fuzzy_matched} | "
             f"New: {self.new_identities}"
         )
@@ -170,10 +172,11 @@ class IdentityResolver:
     def resolve_all(self, store: Store) -> ResolveReport:
         """Run full identity resolution. Safe to call multiple times (idempotent)."""
         ssi_count = self._bootstrap_ssi(store)
-        exact, fuzzy, new = self._link_ipscresults(store)
+        exact, alias, fuzzy, new = self._link_ipscresults(store)
         return ResolveReport(
             ssi_bootstrapped=ssi_count,
             exact_matched=exact,
+            alias_matched=alias,
             fuzzy_matched=fuzzy,
             new_identities=new,
         )
@@ -207,7 +210,7 @@ class IdentityResolver:
 
         # Accumulate all rows in memory (pure CPU).
         identity_rows: list[tuple[int, str, str | None]] = []
-        link_rows: list[tuple[str, str, int, str, float, str]] = []
+        link_rows: list[tuple[str, str, int, str, float, str, str | None]] = []
         seen_fps: set[str] = set()  # dedup fingerprints (first shooter wins)
 
         for (sid, region), names in by_shooter.items():
@@ -215,14 +218,14 @@ class IdentityResolver:
             identity_rows.append((sid, primary, region or None))
 
             # SSI source link (one per shooter, last name variant wins via dedup)
-            link_rows.append(("ssi", str(sid), sid, primary, 1.0, "auto_exact"))
+            link_rows.append(("ssi", str(sid), sid, primary, 1.0, "auto_exact", None))
 
             for name in names:
                 fp = name_fingerprint(name, region)
                 if fp not in seen_fps:
                     seen_fps.add(fp)
                     link_rows.append(
-                        ("ssi_fp", fp, sid, name, 1.0, "auto_exact")
+                        ("ssi_fp", fp, sid, name, 1.0, "auto_exact", None)
                     )
 
         # Bulk write to DB.
@@ -238,18 +241,18 @@ class IdentityResolver:
 
     def _link_ipscresults(
         self, store: Store
-    ) -> tuple[int, int, int]:
+    ) -> tuple[int, int, int, int]:
         """Link unlinked ipscresults competitors to canonical identities.
 
-        Phase 1: pure CPU — normalize names, try exact matches, run fuzzy
-        matching in parallel across workers.
+        Phase 1: pure CPU — normalize names, try exact matches, alias matches,
+        run fuzzy matching in parallel across workers.
         Phase 2: sequential DB writes — apply all resolved links.
 
-        Returns (exact_count, fuzzy_count, new_count).
+        Returns (exact_count, alias_count, fuzzy_count, new_count).
         """
         unlinked = store.get_unlinked_ipscresults_competitors()
         if not unlinked:
-            return 0, 0, 0
+            return 0, 0, 0, 0
 
         # Build region-indexed lookup of SSI fingerprints for fuzzy matching.
         # ssi_fp_by_region: region → list of (normalized_name_part, fingerprint, canonical_id)
@@ -267,18 +270,30 @@ class IdentityResolver:
                 name_part, _, region = fp_str.partition("|")
                 ssi_fp_by_region[region].append((name_part, fp_str, int(canonical_id)))
 
+        # Build alias-based lookup from already-resolved ipscresults links.
+        # alias_by_region: region → alias → canonical_id
+        alias_rows = store.db.execute(
+            "SELECT source_key, canonical_id, alias FROM shooter_identity_links"
+            " WHERE source = 'ipscresults' AND alias IS NOT NULL"
+        ).fetchall()
+        alias_by_region: dict[str, dict[str, int]] = defaultdict(dict)
+        for source_key, canonical_id, alias in alias_rows:
+            region = str(source_key).rpartition("|")[2]
+            if region and alias:
+                alias_by_region[region][str(alias)] = int(canonical_id)
+
         # Phase 1: resolve all matches (pure CPU, parallelizable).
         resolved = _resolve_ipscresults_batch(
-            unlinked, ssi_fp_exact, dict(ssi_fp_by_region)
+            unlinked, ssi_fp_exact, dict(ssi_fp_by_region), dict(alias_by_region)
         )
 
         # Phase 2: bulk write all results.
         # Separate "new" identities (need allocated IDs) from known links.
-        new_entries: list[tuple[str, str, str]] = []  # (fp, display, region)
+        new_entries: list[tuple[str, str, str, str | None]] = []  # (fp, display, region, alias)
         known_links: list[_ResolveResult] = []
         for entry in resolved:
             if entry[3] == "new":
-                new_entries.append((entry[0], entry[1], entry[2]))
+                new_entries.append((entry[0], entry[1], entry[2], entry[6]))
             else:
                 known_links.append(entry)
 
@@ -288,33 +303,40 @@ class IdentityResolver:
         # Build identity rows for new ipscresults-only shooters.
         identity_rows: list[tuple[int, str, str | None]] = [
             (new_id, display, region or None)
-            for (fp, display, region), new_id in zip(new_entries, new_ids, strict=True)
+            for (fp, display, region, _alias), new_id in zip(new_entries, new_ids, strict=True)
         ]
 
         # Build link rows for all entries.
-        link_rows: list[tuple[str, str, int, str, float, str]] = []
-        for fp, display, _region, match_type, canonical_id, confidence in known_links:
+        link_rows: list[tuple[str, str, int, str, float, str, str | None]] = []
+        for fp, display, _region, match_type, canonical_id, confidence, alias in known_links:
             assert canonical_id is not None
-            method = "auto_exact" if match_type == "exact" else "auto_fuzzy"
-            link_rows.append(("ipscresults", fp, canonical_id, display, confidence, method))
-        for (fp, display, _region), new_id in zip(new_entries, new_ids, strict=True):
-            link_rows.append(("ipscresults", fp, new_id, display, 1.0, "auto_exact"))
+            if match_type == "exact":
+                method = "auto_exact"
+            elif match_type == "alias":
+                method = "auto_alias"
+            else:
+                method = "auto_fuzzy"
+            link_rows.append(("ipscresults", fp, canonical_id, display, confidence, method, alias))
+        for (fp, display, _region, alias), new_id in zip(new_entries, new_ids, strict=True):
+            link_rows.append(("ipscresults", fp, new_id, display, 1.0, "auto_exact", alias))
 
         store.bulk_save_identities(identity_rows)
         store.bulk_save_identity_links(link_rows)
 
         exact_count = sum(1 for e in known_links if e[3] == "exact")
+        alias_count = sum(1 for e in known_links if e[3] == "alias")
         fuzzy_count = sum(1 for e in known_links if e[3] == "fuzzy")
         new_count = len(new_entries)
-        return exact_count, fuzzy_count, new_count
+        return exact_count, alias_count, fuzzy_count, new_count
 
 
 # ---------------------------------------------------------------------------
 # Parallel fuzzy matching
 # ---------------------------------------------------------------------------
 
-# Result tuple: (fingerprint, display_name, region, match_type, canonical_id, confidence)
-_ResolveResult = tuple[str, str, str, str, int | None, float]
+# Result tuple: (fingerprint, display_name, region, match_type, canonical_id, confidence, alias)
+# match_type: 'exact' | 'alias' | 'fuzzy' | 'new'
+_ResolveResult = tuple[str, str, str, str, int | None, float, str | None]
 
 
 def _per_token_min(name_a: str, name_b: str) -> float:
@@ -341,16 +363,24 @@ def _per_token_min(name_a: str, name_b: str) -> float:
 
 
 def _fuzzy_match_chunk(
-    chunk: list[tuple[str, str | None]],
+    chunk: list[tuple[str, str | None, str | None]],
     ssi_fp_exact: dict[str, int],
     ssi_fp_by_region: dict[str, list[tuple[str, str, int]]],
+    alias_by_region: dict[str, dict[str, int]],
 ) -> list[_ResolveResult]:
-    """Match a chunk of unlinked competitors against SSI fingerprints.
+    """Match a chunk of unlinked competitors against SSI fingerprints and alias lookups.
 
     Pure CPU — no database access. Returns resolved results for each entry.
+
+    Matching order:
+    1. Exact fingerprint match (confidence 1.0)
+    2. Alias match — same non-null alias + same region as an already-linked
+       ipscresults identity (confidence 0.95, method 'auto_alias')
+    3. Fuzzy name match via SequenceMatcher (confidence = ratio)
+    4. New identity (to be assigned a fresh canonical_id)
     """
     results: list[_ResolveResult] = []
-    for name, raw_region in chunk:
+    for name, raw_region, alias in chunk:
         region = raw_region or ""
         display = normalize_name(name, "ipscresults")
         fp = name_fingerprint(display, region)
@@ -358,10 +388,17 @@ def _fuzzy_match_chunk(
         # 1. Exact fingerprint match
         canonical_id = ssi_fp_exact.get(fp)
         if canonical_id is not None:
-            results.append((fp, display, region, "exact", canonical_id, 1.0))
+            results.append((fp, display, region, "exact", canonical_id, 1.0, alias))
             continue
 
-        # 2. Fuzzy match within same region
+        # 2. Alias match — same alias + same region already linked before
+        if alias:
+            alias_canonical = alias_by_region.get(region.upper(), {}).get(alias)
+            if alias_canonical is not None:
+                results.append((fp, display, region, "alias", alias_canonical, 0.95, alias))
+                continue
+
+        # 3. Fuzzy match within same region
         candidates = ssi_fp_by_region.get(region.upper(), [])
         best_ratio = 0.0
         best_token_min = 0.0
@@ -383,20 +420,21 @@ def _fuzzy_match_chunk(
             and best_canonical is not None
         ):
             results.append(
-                (fp, display, region, "fuzzy", best_canonical, round(best_ratio, 3))
+                (fp, display, region, "fuzzy", best_canonical, round(best_ratio, 3), alias)
             )
             continue
 
-        # 3. No match — will need a new canonical_id (assigned during write phase)
-        results.append((fp, display, region, "new", None, 1.0))
+        # 4. No match — will need a new canonical_id (assigned during write phase)
+        results.append((fp, display, region, "new", None, 1.0, alias))
 
     return results
 
 
 def _resolve_ipscresults_batch(
-    unlinked: list[tuple[str, str | None]],
+    unlinked: list[tuple[str, str | None, str | None]],
     ssi_fp_exact: dict[str, int],
     ssi_fp_by_region: dict[str, list[tuple[str, str, int]]],
+    alias_by_region: dict[str, dict[str, int]],
 ) -> list[_ResolveResult]:
     """Resolve all unlinked ipscresults competitors, using parallel workers.
 
@@ -411,7 +449,7 @@ def _resolve_ipscresults_batch(
 
     if len(unlinked) < 500:
         console.print(f"  [dim]Resolving {len(unlinked)} competitors (single-threaded)[/dim]")
-        return _fuzzy_match_chunk(unlinked, ssi_fp_exact, ssi_fp_by_region)
+        return _fuzzy_match_chunk(unlinked, ssi_fp_exact, ssi_fp_by_region, alias_by_region)
 
     from concurrent.futures import ProcessPoolExecutor, as_completed
 
@@ -429,7 +467,7 @@ def _resolve_ipscresults_batch(
     with ProcessPoolExecutor(max_workers=n_workers) as pool:
         futures = {
             pool.submit(
-                _fuzzy_match_chunk, chunk, ssi_fp_exact, ssi_fp_by_region
+                _fuzzy_match_chunk, chunk, ssi_fp_exact, ssi_fp_by_region, alias_by_region
             ): i
             for i, chunk in enumerate(chunks)
         }

@@ -322,11 +322,13 @@ class IpscResultsSyncer:
         if not divisions:
             return None
 
-        # Fetch all competitors for DQ status (shared across divisions)
+        # Fetch all competitors for DQ status and alias (shared across divisions)
         all_competitors = self.client.get_competitors(m.id)
         dq_map: dict[int, bool] = {c.id: c.dq for c in all_competitors}
         # Division per competitor_number (used to assign division to stage results)
         comp_division: dict[int, str] = {c.id: c.division for c in all_competitors}
+        # Alias per competitor_number (user-chosen handle, identity signal)
+        alias_map: dict[int, str | None] = {c.id: c.alias for c in all_competitors}
 
         seen_stage_ids: set[int] = set()
         stage_metas: list[StageMeta] = []
@@ -388,6 +390,7 @@ class IpscResultsSyncer:
                             division=comp_division.get(row.competitor_number, div.division),
                             region=row.region,
                             category=row.category if row.category else None,
+                            alias=alias_map.get(row.competitor_number),
                         )
 
                     stage_results[key] = StageResult(
