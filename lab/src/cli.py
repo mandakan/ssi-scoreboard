@@ -13,6 +13,23 @@ app = typer.Typer(name="rating", help="SSI Scoreboard rating engine CLI")
 console = Console()
 
 DB_PATH_OPTION = typer.Option(Path("data/lab.duckdb"), help="Path to DuckDB database")
+RAW_DIR_OPTION = typer.Option(
+    Path("data/ipscresults-raw"),
+    envvar="LAB_RAW_DIR",
+    help=(
+        "Directory for raw OData bundle cache (one .json.gz per match). "
+        "Bundles are loaded before hitting the remote API, making re-syncs instant. "
+        "Set to an empty string to disable the file cache."
+    ),
+)
+S3_PREFIX_OPTION = typer.Option(
+    "lab", envvar="LAB_S3_PREFIX", help="Key prefix inside the bucket (default: lab)"
+)
+S3_ENDPOINT_OPTION = typer.Option(
+    "",
+    envvar="LAB_S3_ENDPOINT",
+    help="Endpoint URL — required for Cloudflare R2, omit for AWS S3",
+)
 
 
 def _warn_if_fresh_db(db_path: Path) -> None:
@@ -421,6 +438,14 @@ def sync_ipscresults(
     delay: float = typer.Option(
         0.3, help="Delay between matches in seconds (inter-match only)"
     ),
+    raw_dir: Path = RAW_DIR_OPTION,
+    bucket: str = typer.Option(
+        "",
+        envvar="LAB_S3_BUCKET",
+        help="S3/R2 bucket for raw bundle storage. Leave empty to use local files only.",
+    ),
+    prefix: str = S3_PREFIX_OPTION,
+    endpoint: str = S3_ENDPOINT_OPTION,
     db_path: Path = DB_PATH_OPTION,
 ) -> None:
     """Sync match data from ipscresults.org OData API.
@@ -429,10 +454,18 @@ def sync_ipscresults(
     (Handgun, Rifle, Shotgun, …) by default. Use --disciplines to restrict to a
     subset. These complement the SSI dataset which is mostly L2 (Regional).
 
+    Raw OData bundles are cached locally under --raw-dir (default:
+    data/ipscresults-raw/).  On re-syncs the bundles are loaded from disk
+    instead of the remote API, which is orders of magnitude faster.  If S3
+    credentials are available (LAB_S3_BUCKET + AWS_ACCESS_KEY_ID / SECRET), raw
+    bundles are also pushed to / pulled from S3 so the cache can be shared
+    across machines.
+
     Run 'rating link' afterwards to resolve shooter identities and remove
     cross-source duplicates before training.
     """
     from src.data.ipscresults import IpscResultsClient, IpscResultsSyncer
+    from src.data.raw_store import RawMatchStore
     from src.data.store import Store
 
     disc_set: set[str] | None = (
@@ -442,7 +475,25 @@ def sync_ipscresults(
     store = Store(db_path)
     jitter = min(delay * 0.3, 0.1) if delay > 0 else 0.0
     client = IpscResultsClient(delay=delay, jitter=jitter)
-    syncer = IpscResultsSyncer(client, store, level_min=level_min, disciplines=disc_set)
+
+    raw_store: RawMatchStore | None = None
+    if raw_dir and str(raw_dir):
+        s3 = _s3_client(endpoint) if bucket else None
+        if bucket:
+            _require_boto3()
+        raw_store = RawMatchStore(
+            raw_dir,
+            s3_client=s3,
+            s3_bucket=bucket,
+            s3_prefix=prefix,
+        )
+
+    syncer = IpscResultsSyncer(
+        client, store,
+        level_min=level_min,
+        disciplines=disc_set,
+        raw_store=raw_store,
+    )
     try:
         syncer.sync(full=full)
     finally:
@@ -1113,14 +1164,6 @@ def _prune_versions(s3: Any, bucket: str, prefix: str, max_versions: int) -> Non
         console.print(f"  Pruned {len(to_delete)} old version(s) (kept {max_versions})")
 
 S3_BUCKET_OPTION = typer.Option(..., envvar="LAB_S3_BUCKET", help="S3/R2 bucket name")
-S3_PREFIX_OPTION = typer.Option(
-    "lab", envvar="LAB_S3_PREFIX", help="Key prefix inside the bucket (default: lab)"
-)
-S3_ENDPOINT_OPTION = typer.Option(
-    "",
-    envvar="LAB_S3_ENDPOINT",
-    help="Endpoint URL — required for Cloudflare R2, omit for AWS S3",
-)
 
 
 @app.command(name="db-push")

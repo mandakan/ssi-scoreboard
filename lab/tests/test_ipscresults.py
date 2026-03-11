@@ -47,52 +47,62 @@ def test_ipsc_stage_result_defaults() -> None:
 # IpscResultsSyncer._fetch_match
 # ------------------------------------------------------------------
 
-def _make_divisions() -> list[IpscDivision]:
-    return [IpscDivision(division_code=1, division="Production", total=2)]
-
-
-def _make_stages() -> list[IpscStage]:
-    return [
-        IpscStage(id=1, name="Stage 1", max_points=150, min_rounds=30),
-        IpscStage(id=2, name="Stage 2", max_points=120, min_rounds=24),
-    ]
-
-
-def _make_stage_results() -> list[IpscStageResult]:
-    return [
-        # Stage 1
-        IpscStageResult(rank=1, competitor_number=10, competitor_name="Hollertz, Martin",
-                        region="SWE", stage_number=1, hit_factor=6.0, score=150,
-                        stage_time=25.0, stage_points=100.0, stage_percent=100.0),
-        IpscStageResult(rank=2, competitor_number=11, competitor_name="Jones, Bob",
-                        region="NOR", stage_number=1, hit_factor=3.0, score=75,
-                        stage_time=25.0, stage_points=50.0, stage_percent=50.0),
-        # Stage 2
-        IpscStageResult(rank=1, competitor_number=11, competitor_name="Jones, Bob",
-                        region="NOR", stage_number=2, hit_factor=5.0, score=120,
-                        stage_time=24.0, stage_points=100.0, stage_percent=100.0),
-        IpscStageResult(rank=2, competitor_number=10, competitor_name="Hollertz, Martin",
-                        region="SWE", stage_number=2, hit_factor=2.5, score=60,
-                        stage_time=24.0, stage_points=50.0, stage_percent=50.0),
-    ]
-
-
-def _make_competitors() -> list[IpscCompetitor]:
-    return [
-        IpscCompetitor(id=10, name="Hollertz, Martin", region_code="SWE",
-                       division="Production", division_code=1, dq=False),
-        IpscCompetitor(id=11, name="Jones, Bob", region_code="NOR",
-                       division="Production", division_code=1, dq=False),
-    ]
+def _make_raw_bundle(
+    *,
+    competitors: list[dict] | None = None,
+    results: list[dict] | None = None,
+) -> dict:
+    """Return a minimal raw OData bundle in the RawMatchStore format."""
+    if competitors is None:
+        competitors = [
+            {"ID": 10, "Name": "Hollertz, Martin", "RegionCode": "SWE",
+             "Division": "Production", "DivisionCode": 1, "DQ": False},
+            {"ID": 11, "Name": "Jones, Bob", "RegionCode": "NOR",
+             "Division": "Production", "DivisionCode": 1, "DQ": False},
+        ]
+    if results is None:
+        results = [
+            # Stage 1
+            {"Rank": 1, "CompetitorNumber": 10, "CompetitorName": "Hollertz, Martin",
+             "Region": "SWE", "StageNumber": 1,
+             "HitFactor": 6.0, "Score": 150, "StageTime": 25.0,
+             "StagePoints": 100.0, "StagePercent": 100.0},
+            {"Rank": 2, "CompetitorNumber": 11, "CompetitorName": "Jones, Bob",
+             "Region": "NOR", "StageNumber": 1,
+             "HitFactor": 3.0, "Score": 75, "StageTime": 25.0,
+             "StagePoints": 50.0, "StagePercent": 50.0},
+            # Stage 2
+            {"Rank": 1, "CompetitorNumber": 11, "CompetitorName": "Jones, Bob",
+             "Region": "NOR", "StageNumber": 2,
+             "HitFactor": 5.0, "Score": 120, "StageTime": 24.0,
+             "StagePoints": 100.0, "StagePercent": 100.0},
+            {"Rank": 2, "CompetitorNumber": 10, "CompetitorName": "Hollertz, Martin",
+             "Region": "SWE", "StageNumber": 2,
+             "HitFactor": 2.5, "Score": 60, "StageTime": 24.0,
+             "StagePoints": 50.0, "StagePercent": 50.0},
+        ]
+    return {
+        "schema_version": 1,
+        "match_id": "uuid-1",
+        "fetched_at": "2025-06-15T00:00:00+00:00",
+        "competitors": competitors,
+        "divisions": [{"DivisionCode": 1, "Division": "Production", "Total": 2}],
+        "per_division": {
+            "1": {
+                "stages": [
+                    {"ID": 1, "Name": "Stage 1", "MaxPoints": 150, "MinRounds": 30},
+                    {"ID": 2, "Name": "Stage 2", "MaxPoints": 120, "MinRounds": 24},
+                ],
+                "results": results,
+            }
+        },
+    }
 
 
 @pytest.fixture
 def mock_client() -> MagicMock:
     client = MagicMock()
-    client.get_divisions.return_value = _make_divisions()
-    client.get_stage_list.return_value = _make_stages()
-    client.get_stage_results.return_value = _make_stage_results()
-    client.get_competitors.return_value = _make_competitors()
+    client.fetch_raw_bundle.return_value = _make_raw_bundle()
     return client
 
 
@@ -174,13 +184,14 @@ def test_fetch_match_overall_percent_computed(mock_client: MagicMock) -> None:
 
 def test_fetch_match_dq_propagated(mock_client: MagicMock) -> None:
     """DQ status from CompetitorList should propagate to stage results."""
-    # Make competitor 10 DQ'd
-    mock_client.get_competitors.return_value = [
-        IpscCompetitor(id=10, name="Hollertz, Martin", region_code="SWE",
-                       division="Production", division_code=1, dq=True),
-        IpscCompetitor(id=11, name="Jones, Bob", region_code="NOR",
-                       division="Production", division_code=1, dq=False),
-    ]
+    mock_client.fetch_raw_bundle.return_value = _make_raw_bundle(
+        competitors=[
+            {"ID": 10, "Name": "Hollertz, Martin", "RegionCode": "SWE",
+             "Division": "Production", "DivisionCode": 1, "DQ": True},
+            {"ID": 11, "Name": "Jones, Bob", "RegionCode": "NOR",
+             "Division": "Production", "DivisionCode": 1, "DQ": False},
+        ]
+    )
     results = _fetch_match(mock_client)
     assert results is not None
     dq_results = [r for r in results.results if r.competitor_id == 10]
@@ -191,14 +202,18 @@ def test_fetch_match_dq_propagated(mock_client: MagicMock) -> None:
 
 def test_fetch_match_zeroed_detection(mock_client: MagicMock) -> None:
     """A zero hit_factor + zero time should be marked as zeroed."""
-    mock_client.get_stage_results.return_value = [
-        IpscStageResult(rank=1, competitor_number=10, competitor_name="Hollertz, Martin",
-                        region="SWE", stage_number=1, hit_factor=0.0, score=0,
-                        stage_time=0.0, stage_points=0.0, stage_percent=0.0),
-        IpscStageResult(rank=2, competitor_number=11, competitor_name="Jones, Bob",
-                        region="NOR", stage_number=1, hit_factor=0.0, score=0,
-                        stage_time=5.0, stage_points=0.0, stage_percent=0.0),
-    ]
+    mock_client.fetch_raw_bundle.return_value = _make_raw_bundle(
+        results=[
+            {"Rank": 1, "CompetitorNumber": 10, "CompetitorName": "Hollertz, Martin",
+             "Region": "SWE", "StageNumber": 1,
+             "HitFactor": 0.0, "Score": 0, "StageTime": 0.0,
+             "StagePoints": 0.0, "StagePercent": 0.0},
+            {"Rank": 2, "CompetitorNumber": 11, "CompetitorName": "Jones, Bob",
+             "Region": "NOR", "StageNumber": 1,
+             "HitFactor": 0.0, "Score": 0, "StageTime": 5.0,
+             "StagePoints": 0.0, "StagePercent": 0.0},
+        ]
+    )
     results = _fetch_match(mock_client)
     assert results is not None
     by_comp = {r.competitor_id: r for r in results.results}
@@ -207,7 +222,7 @@ def test_fetch_match_zeroed_detection(mock_client: MagicMock) -> None:
 
 
 def test_fetch_match_returns_none_when_no_divisions(mock_client: MagicMock) -> None:
-    mock_client.get_divisions.return_value = []
+    mock_client.fetch_raw_bundle.return_value = None
     results = _fetch_match(mock_client)
     assert results is None
 

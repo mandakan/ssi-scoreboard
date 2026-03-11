@@ -9,6 +9,12 @@ Sync workflow:
   3. For each division: fetch StageList + StageResult
   4. Merge into MatchResults and pass to Store
 
+Raw bundle cache:
+  When a RawMatchStore is configured (see raw_store.py), each match's complete
+  OData API responses are persisted as a gzip-compressed JSON file before being
+  parsed into MatchResults.  Subsequent syncs (or re-syncs with --full) load from
+  the bundle cache instead of hitting the remote API, making re-processing instant.
+
 Note: per-stage A/C/D hit details require an additional CompetitorScore call per competitor
 (one call per competitor, not per match). This is deferred to a future improvement — see
 GitHub issue #226. For now, a_hits / c_hits / d_hits / miss_count / procedurals are NULL.
@@ -19,6 +25,7 @@ from __future__ import annotations
 import random
 import time
 from collections import defaultdict
+from datetime import UTC, datetime
 
 import httpx
 from rich.console import Console
@@ -40,6 +47,7 @@ from src.data.models import (
     StageMeta,
     StageResult,
 )
+from src.data.raw_store import BUNDLE_SCHEMA_VERSION, RawMatchStore
 from src.data.store import Store
 
 console = Console()
@@ -88,6 +96,10 @@ class IpscResultsClient:
     def _sleep(self) -> None:
         if self.delay > 0:
             time.sleep(self.delay + random.uniform(0, self.jitter))
+
+    # ------------------------------------------------------------------
+    # Public API — return parsed Pydantic models
+    # ------------------------------------------------------------------
 
     def get_match_list(
         self,
@@ -157,6 +169,83 @@ class IpscResultsClient:
     def get_divisions(self, match_id: str) -> list[IpscDivision]:
         """Fetch Stats.DivisionList for a match."""
         data = self._get(f"/StatsMatchDetail/Stats.DivisionList(id={match_id})")
+        return self._parse_divisions(data.get("value", []))
+
+    def get_stage_list(self, match_id: str, div_code: int) -> list[IpscStage]:
+        """Fetch Stats.StageList for a match + division."""
+        data = self._get(f"/StatsMatchDetail/Stats.StageList(id={match_id},div={div_code})")
+        return self._parse_stages(data.get("value", []))
+
+    def get_stage_results(self, match_id: str, div_code: int) -> list[IpscStageResult]:
+        """Fetch Stats.StageResult for a match + division — all competitors × stages."""
+        data = self._get(f"/StatsMatchDetail/Stats.StageResult(id={match_id},div={div_code})")
+        return self._parse_stage_results(data.get("value", []))
+
+    def get_competitors(self, match_id: str) -> list[IpscCompetitor]:
+        """Fetch Stats.CompetitorList for a match — competitor metadata including DQ status."""
+        data = self._get(f"/StatsMatchDetail/Stats.CompetitorList(id={match_id})")
+        return self._parse_competitors(data.get("value", []))
+
+    # ------------------------------------------------------------------
+    # Raw bundle fetch — returns serialisable OData value arrays
+    # ------------------------------------------------------------------
+
+    def fetch_raw_bundle(self, match_id: str) -> dict | None:  # type: ignore[type-arg]
+        """Fetch all OData responses for one match and return as a raw JSON-serialisable dict.
+
+        Returns None when there are no usable divisions (same semantics as
+        _fetch_match returning None).  Per-division HTTP errors are silently
+        skipped (same behaviour as the existing sync loop).
+
+        The returned dict has schema_version == BUNDLE_SCHEMA_VERSION and
+        contains the unmodified OData ``value`` arrays so that new fields can
+        be extracted from stored files without re-fetching from the API.
+        """
+        div_data = self._get(f"/StatsMatchDetail/Stats.DivisionList(id={match_id})")
+        div_items: list[dict] = div_data.get("value", [])  # type: ignore[type-arg]
+        if not div_items:
+            return None
+
+        comp_data = self._get(f"/StatsMatchDetail/Stats.CompetitorList(id={match_id})")
+        comp_items: list[dict] = comp_data.get("value", [])  # type: ignore[type-arg]
+
+        per_division: dict[str, dict] = {}  # type: ignore[type-arg]
+        for div_raw in div_items:
+            div_code = div_raw.get("DivisionCode", 0)
+            try:
+                stage_data = self._get(
+                    f"/StatsMatchDetail/Stats.StageList(id={match_id},div={div_code})"
+                )
+                result_data = self._get(
+                    f"/StatsMatchDetail/Stats.StageResult(id={match_id},div={div_code})"
+                )
+            except httpx.HTTPStatusError:
+                continue  # skip divisions that fail — same as existing sync loop
+            per_division[str(div_code)] = {
+                "stages": stage_data.get("value", []),
+                "results": result_data.get("value", []),
+            }
+
+        if not per_division:
+            return None
+
+        return {
+            "schema_version": BUNDLE_SCHEMA_VERSION,
+            "match_id": match_id,
+            "fetched_at": datetime.now(UTC).isoformat(),
+            "competitors": comp_items,
+            "divisions": div_items,
+            "per_division": per_division,
+        }
+
+    # ------------------------------------------------------------------
+    # Static OData item → Pydantic parsers
+    # Shared by the get_X() methods and _parse_bundle() to avoid duplicating
+    # the PascalCase→snake_case field mapping.
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _parse_divisions(items: list[dict]) -> list[IpscDivision]:  # type: ignore[type-arg]
         return [
             IpscDivision(
                 division_code=r["DivisionCode"],
@@ -164,12 +253,11 @@ class IpscResultsClient:
                 total=r.get("Total", 0),
                 url_path=r.get("UrlPath"),
             )
-            for r in data.get("value", [])
+            for r in items
         ]
 
-    def get_stage_list(self, match_id: str, div_code: int) -> list[IpscStage]:
-        """Fetch Stats.StageList for a match + division."""
-        data = self._get(f"/StatsMatchDetail/Stats.StageList(id={match_id},div={div_code})")
+    @staticmethod
+    def _parse_stages(items: list[dict]) -> list[IpscStage]:  # type: ignore[type-arg]
         return [
             IpscStage(
                 id=r["ID"],
@@ -179,12 +267,11 @@ class IpscResultsClient:
                 min_rounds=r.get("MinRounds", 0),
                 url_path=r.get("UrlPath"),
             )
-            for r in data.get("value", [])
+            for r in items
         ]
 
-    def get_stage_results(self, match_id: str, div_code: int) -> list[IpscStageResult]:
-        """Fetch Stats.StageResult for a match + division — all competitors × stages."""
-        data = self._get(f"/StatsMatchDetail/Stats.StageResult(id={match_id},div={div_code})")
+    @staticmethod
+    def _parse_stage_results(items: list[dict]) -> list[IpscStageResult]:  # type: ignore[type-arg]
         return [
             IpscStageResult(
                 rank=r["Rank"],
@@ -201,12 +288,11 @@ class IpscResultsClient:
                 stage_points=r.get("StagePoints", 0.0),
                 stage_percent=r.get("StagePercent", 0.0),
             )
-            for r in data.get("value", [])
+            for r in items
         ]
 
-    def get_competitors(self, match_id: str) -> list[IpscCompetitor]:
-        """Fetch Stats.CompetitorList for a match — competitor metadata including DQ status."""
-        data = self._get(f"/StatsMatchDetail/Stats.CompetitorList(id={match_id})")
+    @staticmethod
+    def _parse_competitors(items: list[dict]) -> list[IpscCompetitor]:  # type: ignore[type-arg]
         return [
             IpscCompetitor(
                 id=r["ID"],
@@ -220,7 +306,7 @@ class IpscResultsClient:
                 division_code=r.get("DivisionCode", 0),
                 dq=r.get("DQ", False),
             )
-            for r in data.get("value", [])
+            for r in items
         ]
 
 
@@ -229,6 +315,10 @@ class IpscResultsSyncer:
 
     One IpscResultsSyncer instance manages the full sync loop:
     fetch match list → filter new → fetch each match's data → store.
+
+    When ``raw_store`` is provided, each match's raw OData bundle is persisted
+    before parsing.  On subsequent runs (including ``--full`` re-syncs), the
+    bundle is loaded from the store instead of hitting the remote API.
     """
 
     def __init__(
@@ -238,12 +328,14 @@ class IpscResultsSyncer:
         *,
         level_min: int = 3,
         disciplines: set[str] | None = None,
+        raw_store: RawMatchStore | None = None,
     ) -> None:
         self.client = client
         self.store = store
         self.level_min = level_min
         # None means all disciplines (no filter)
         self.disciplines = disciplines
+        self.raw_store = raw_store
 
     def sync(self, full: bool = False) -> int:
         """Sync matches from ipscresults.org. Returns number of new matches stored."""
@@ -255,6 +347,10 @@ class IpscResultsSyncer:
         console.print(
             f"  Found {len(all_matches)} matches (L{self.level_min}+, {disc_label})"
         )
+
+        if self.raw_store is not None:
+            cached = self.raw_store.local_count()
+            console.print(f"  Raw bundle cache: {cached} matches stored locally")
 
         if not full:
             new_matches = [
@@ -303,7 +399,10 @@ class IpscResultsSyncer:
                     # so we can retry on the next sync run.
                     console.print(f"  [red]Error fetching {m.name}: {e}[/red]")
                     progress.update(task, advance=1)
-                self.client._sleep()
+
+                # Skip the inter-match sleep when the bundle was served from cache.
+                if self.raw_store is None or not self.raw_store.has_local(m.id):
+                    self.client._sleep()
 
         # Watermark: most recent match date we've seen
         dates = [m.date for m in all_matches if m.date]
@@ -317,35 +416,55 @@ class IpscResultsSyncer:
         return synced
 
     def _fetch_match(self, m: IpscMatch) -> MatchResults | None:
-        """Fetch full data for one match and convert to MatchResults."""
-        divisions = self.client.get_divisions(m.id)
+        """Load or fetch the raw bundle for ``m``, then parse it into MatchResults.
+
+        Tier 1 — raw_store: load the gzip bundle from local/S3 cache.
+        Tier 2 — API: fetch fresh OData, save to raw_store, parse.
+        """
+        if self.raw_store is not None:
+            bundle = self.raw_store.load(m.id)
+            if bundle is not None:
+                return self._parse_bundle(m, bundle)
+
+        bundle = self.client.fetch_raw_bundle(m.id)
+        if bundle is None:
+            return None
+
+        if self.raw_store is not None:
+            self.raw_store.save(m.id, bundle)
+
+        return self._parse_bundle(m, bundle)
+
+    def _parse_bundle(self, m: IpscMatch, bundle: dict) -> MatchResults | None:  # type: ignore[type-arg]
+        """Convert a raw OData bundle into a MatchResults object.
+
+        This is the same transformation logic as the previous _fetch_match,
+        now operating on pre-fetched (and possibly cached) raw API responses.
+        """
+        divisions = IpscResultsClient._parse_divisions(bundle.get("divisions", []))
         if not divisions:
             return None
 
-        # Fetch all competitors for DQ status and alias (shared across divisions)
-        all_competitors = self.client.get_competitors(m.id)
+        all_competitors = IpscResultsClient._parse_competitors(bundle.get("competitors", []))
         dq_map: dict[int, bool] = {c.id: c.dq for c in all_competitors}
-        # Division per competitor_number (used to assign division to stage results)
         comp_division: dict[int, str] = {c.id: c.division for c in all_competitors}
-        # Alias per competitor_number (user-chosen handle, identity signal)
         alias_map: dict[int, str | None] = {c.id: c.alias for c in all_competitors}
+
+        per_division_raw: dict[str, dict] = bundle.get("per_division", {})  # type: ignore[type-arg]
 
         seen_stage_ids: set[int] = set()
         stage_metas: list[StageMeta] = []
-        # competitor_number → CompetitorMeta (de-duped across divisions)
         competitor_metas: dict[int, CompetitorMeta] = {}
-        # (competitor_number, stage_id) → StageResult
         stage_results: dict[tuple[int, int], StageResult] = {}
 
         for div in divisions:
-            try:
-                stages = self.client.get_stage_list(m.id, div.division_code)
-                results = self.client.get_stage_results(m.id, div.division_code)
-            except httpx.HTTPStatusError:
-                continue  # skip divisions that fail
+            div_data = per_division_raw.get(str(div.division_code), {})
+            stages = IpscResultsClient._parse_stages(div_data.get("stages", []))
+            results = IpscResultsClient._parse_stage_results(div_data.get("results", []))
 
-            # Collect stage metadata (stages are shared across divisions in the API
-            # but each division call can return different stage subsets)
+            if not stages or not results:
+                continue
+
             for s in stages:
                 if s.id not in seen_stage_ids:
                     seen_stage_ids.add(s.id)
@@ -360,24 +479,20 @@ class IpscResultsSyncer:
 
             stage_max: dict[int, int] = {s.id: s.max_points for s in stages}
 
-            # Group results by competitor_number to build per-competitor stage rows
             by_competitor: dict[int, list[IpscStageResult]] = defaultdict(list)
             by_stage: dict[int, list[IpscStageResult]] = defaultdict(list)
             for r in results:
                 by_competitor[r.competitor_number].append(r)
                 by_stage[r.stage_number].append(r)
 
-            # Build per-stage overall rankings across this division
             for _stage_num, stage_rows in by_stage.items():
                 sorted_rows = sorted(stage_rows, key=lambda x: x.hit_factor, reverse=True)
                 winner_hf = sorted_rows[0].hit_factor if sorted_rows else 1.0
                 for rank, row in enumerate(sorted_rows, start=1):
                     overall_pct = (row.hit_factor / winner_hf * 100.0) if winner_hf > 0 else 0.0
-                    # stage_number == stage_id in ipscresults data
-                    stage_id = row.stage_number
+                    stage_id = row.stage_number  # stage_number == stage_id in ipscresults data
                     key = (row.competitor_number, stage_id)
 
-                    # Create or update CompetitorMeta (once per competitor_number)
                     if row.competitor_number not in competitor_metas:
                         display_name = normalize_name(row.competitor_name, "ipscresults")
                         region = row.region or ""
