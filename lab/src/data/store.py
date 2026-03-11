@@ -889,6 +889,54 @@ class Store:
             [source, source_key, decision, datetime.now(UTC).isoformat()],
         )
 
+    def undo_identity_review(self, source: str, source_key: str) -> None:
+        """Reverse a previous approve or reject decision.
+
+        - Deletes the identity_reviews row so the link shows as unreviewed again.
+        - If the decision was 'rejected', also removes the manual link that was
+          created during rejection (and its orphaned canonical identity row if it
+          has no other links), so future `rating link` runs can re-create the
+          auto_fuzzy match.
+        """
+        review_row = self.db.execute(
+            "SELECT decision FROM identity_reviews WHERE source = ? AND source_key = ?",
+            [source, source_key],
+        ).fetchone()
+        if review_row is None:
+            return  # Nothing to undo
+
+        if str(review_row[0]) == "rejected":
+            # Find the manual link that was created during rejection.
+            link_row = self.db.execute(
+                "SELECT canonical_id FROM shooter_identity_links"
+                " WHERE source = ? AND source_key = ? AND method = 'manual'",
+                [source, source_key],
+            ).fetchone()
+            if link_row is not None:
+                rejected_id = int(link_row[0])
+                self.db.execute(
+                    "DELETE FROM shooter_identity_links"
+                    " WHERE source = ? AND source_key = ?",
+                    [source, source_key],
+                )
+                # Remove the orphaned identity row if it was allocated during
+                # rejection (canonical_id >= 2_000_000) and has no other links.
+                if rejected_id >= 2_000_000:
+                    still_linked = self.db.execute(
+                        "SELECT 1 FROM shooter_identity_links WHERE canonical_id = ?",
+                        [rejected_id],
+                    ).fetchone()
+                    if still_linked is None:
+                        self.db.execute(
+                            "DELETE FROM shooter_identities WHERE canonical_id = ?",
+                            [rejected_id],
+                        )
+
+        self.db.execute(
+            "DELETE FROM identity_reviews WHERE source = ? AND source_key = ?",
+            [source, source_key],
+        )
+
     def reject_identity_link(self, source: str, source_key: str) -> int:
         """Reject an auto-fuzzy identity link by splitting it into a new manual identity.
 

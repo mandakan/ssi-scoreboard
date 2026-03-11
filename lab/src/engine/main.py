@@ -338,6 +338,16 @@ def create_app(db_path: Path = Path("data/lab.duckdb")) -> FastAPI:
         store.mark_identity_reviewed(req.source, req.source_key, "rejected")
         return {"status": "ok", "new_canonical_id": new_id}
 
+    @app.post("/identity/undo")
+    async def undo_identity(req: IdentityDecisionRequest) -> dict[str, str]:
+        """Undo a previous approve or reject decision, returning the link to unreviewed.
+
+        For rejections, also removes the manual override so the pair can be
+        re-matched by a future `rating link` run.
+        """
+        store.undo_identity_review(req.source, req.source_key)
+        return {"status": "ok"}
+
     # Serve the static explorer if site/ exists alongside the API.
     # Routes defined above take precedence; StaticFiles only handles the rest.
     _site = Path("site")

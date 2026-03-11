@@ -716,8 +716,13 @@ _HTML = r"""<!DOCTYPE html>
                     </div>
                   </template>
                   <template x-if="lnk.reviewed">
-                    <span :class="lnk.decision === 'approved' ? 'text-green-600 font-medium text-xs' : 'text-gray-400 text-xs'"
-                      x-text="lnk.decision === 'approved' ? '✓ Approved' : '✗ Rejected'"></span>
+                    <div class="flex items-center gap-2">
+                      <span :class="lnk.decision === 'approved' ? 'text-green-600 font-medium text-xs' : 'text-gray-400 text-xs'"
+                        x-text="lnk.decision === 'approved' ? '✓ Approved' : '✗ Rejected'"></span>
+                      <button @click="undoLink(lnk)"
+                        class="text-xs text-gray-400 hover:text-gray-600 underline"
+                        title="Undo this decision">undo</button>
+                    </div>
                   </template>
                 </td>
               </tr>
@@ -1138,6 +1143,21 @@ document.addEventListener('alpine:init', () => {
         lnk.decision = 'rejected';
       } catch (e) {
         alert('Reject failed: ' + e.message);
+      }
+    },
+
+    async undoLink(lnk) {
+      try {
+        const r = await fetch('/identity/undo', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({source: 'ipscresults', source_key: lnk.source_key}),
+        });
+        if (!r.ok) throw new Error(await r.text());
+        lnk.reviewed = false;
+        lnk.decision = null;
+      } catch (e) {
+        alert('Undo failed: ' + e.message);
       }
     },
 

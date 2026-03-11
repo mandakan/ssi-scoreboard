@@ -78,6 +78,8 @@ If no → **Reject**. The system immediately splits them into two separate ident
 
 If you are unsure → leave it unreviewed and come back later. Unreviewed links are not wrong — they are simply unconfirmed.
 
+Changed your mind after clicking? Every reviewed row shows an **undo** link next to the approved/rejected label. Clicking it returns the row to unreviewed so you can decide again. For rejections, undo also removes the manual override so the pair can be re-matched automatically on the next `rating link` run.
+
 ### Priority order for review
 
 Work top-to-bottom through:
@@ -125,8 +127,8 @@ This creates a `method='manual'` link that is **never** overwritten by automatic
 **Does rejecting a link delete any match results?**
 No. Match results are always stored. Rejection only means the ipscresults records will no longer contribute to the SSI shooter's rating — they become a separate (unnamed) identity instead.
 
-**What if I approve a link by mistake?**
-Run `uv run rating link-shooter` with the correct `--canonical-id` to create a manual override that supersedes the approval. Or reject it via the UI if a reject button is still visible.
+**What if I approve or reject a link by mistake?**
+Click the **undo** link next to the approved/rejected label. The row returns to unreviewed immediately and you can re-decide. For undone rejections, the manual override is also removed from the database.
 
 **How often should I run the curation workflow?**
 After each major `sync-ipscresults` run that pulls in new international matches. New competitors may trigger new fuzzy links. The progress bar at the top of the Identity tab shows how many links are still unreviewed.
