@@ -31,7 +31,7 @@ const ALLOWED_LEVELS: Record<string, Set<string> | null> = {
 
 // The SSI API applies an undocumented result cap per query when browsing
 // without a search term, silently dropping events further out in the date
-// window. Splitting into 2-month sub-windows keeps each request small enough
+// window. Splitting into 1-month sub-windows keeps each request small enough
 // to fall within the cap, so all events in the full range are returned.
 // Each sub-window gets its own Next.js fetch-cache entry (revalidate: 3600).
 function buildSubWindows(
@@ -44,7 +44,7 @@ function buildSubWindows(
   const end = new Date(startsBefore);
   while (cur < end) {
     const next = new Date(cur);
-    next.setMonth(next.getMonth() + 2);
+    next.setMonth(next.getMonth() + 1);
     if (next > end) next.setTime(end.getTime());
     windows.push({
       ...baseVars,
