@@ -105,7 +105,13 @@ class RawMatchStore:
             try:
                 obj = self._s3.get_object(Bucket=self._bucket, Key=key)
                 raw_bytes = obj["Body"].read()  # already gzip-compressed
-                local.write_bytes(raw_bytes)
+                tmp = local.with_name(local.name + ".tmp")
+                try:
+                    tmp.write_bytes(raw_bytes)
+                    tmp.replace(local)  # atomic on POSIX
+                except Exception:
+                    tmp.unlink(missing_ok=True)
+                    raise
                 log.debug("s3 hit: downloaded %s → %s", key, local.name)
                 return _read_gz(local)
             except Exception as exc:  # noqa: BLE001

@@ -1650,12 +1650,15 @@ def raw_pull(
     failed = 0
     for key, name in to_download:
         local_path = raw_dir / name
+        tmp_path = local_path.with_name(local_path.name + ".tmp")
         try:
-            s3.download_file(bucket, key, str(local_path))
+            s3.download_file(bucket, key, str(tmp_path))
+            tmp_path.replace(local_path)  # atomic on POSIX
             downloaded += 1
             if downloaded % 50 == 0 or downloaded == len(to_download):
                 console.print(f"  {downloaded}/{len(to_download)} downloaded")
         except Exception as exc:  # noqa: BLE001
+            tmp_path.unlink(missing_ok=True)
             console.print(f"  [red]Failed:[/red] {name} — {exc}")
             failed += 1
 
