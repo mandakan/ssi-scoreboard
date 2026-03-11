@@ -337,8 +337,14 @@ class IpscResultsSyncer:
         self.disciplines = disciplines
         self.raw_store = raw_store
 
-    def sync(self, full: bool = False) -> int:
-        """Sync matches from ipscresults.org. Returns number of new matches stored."""
+    def sync(self, full: bool = False, raw_only: bool = False) -> int:
+        """Sync matches from ipscresults.org. Returns number of matches processed.
+
+        raw_only=True skips DuckDB writes entirely — it only fetches and caches
+        raw bundles for matches not yet stored locally.  The bundle files act as
+        the resume checkpoint: restart at any time and it picks up from the first
+        missing file.  Run a normal sync afterwards to parse into DuckDB.
+        """
         console.print("[bold]Fetching ipscresults match list...[/bold]")
         all_matches = self.client.get_match_list(
             level_min=self.level_min, disciplines=self.disciplines
@@ -370,14 +376,22 @@ class IpscResultsSyncer:
                 " — set --raw-dir to cache raw OData responses"
             )
 
-        if not full:
+        if raw_only:
+            # Only fetch bundles not yet cached locally — has_local() is the checkpoint.
+            if self.raw_store is None:
+                console.print("[red]--raw-only requires --raw-dir to be set.[/red]")
+                return 0
+            new_matches = [m for m in all_matches if not self.raw_store.has_local(m.id)]
+            console.print(f"  {len(new_matches)} bundles to download (raw-only mode)")
+        elif not full:
             new_matches = [
                 m for m in all_matches
                 if not self.store.has_match("ipscresults", 0, m.id)
             ]
+            console.print(f"  {len(new_matches)} matches to sync")
         else:
             new_matches = all_matches
-        console.print(f"  {len(new_matches)} matches to sync")
+            console.print(f"  {len(new_matches)} matches to sync")
 
         if not new_matches:
             console.print("[green]Already up to date.[/green]")
@@ -393,65 +407,82 @@ class IpscResultsSyncer:
         }
 
         with Progress(console=console) as progress:
-            task = progress.add_task("Syncing matches...", total=len(new_matches))
+            task_label = "Downloading bundles..." if raw_only else "Syncing matches..."
+            task = progress.add_task(task_label, total=len(new_matches))
             for m in new_matches:
                 src: BundleSource = "api"
                 try:
-                    results, src = self._fetch_match(m)
-                    source_counts[src] += 1
-                    src_tag = f"[{_source_style[src]}]({src})[/{_source_style[src]}]"
-                    if results is not None:
-                        self.store.store_match_results(results)
-                        synced += 1
-                        progress.update(
-                            task, advance=1,
-                            description=f"[green]{m.name}[/green] {src_tag}",
+                    if raw_only:
+                        # Fetch and cache only — no parse, no DuckDB write.
+                        bundle = self.client.fetch_raw_bundle(m.id)
+                        if bundle is not None:
+                            self.raw_store.save(m.id, bundle)  # type: ignore[union-attr]
+                            synced += 1
+                            src = "api"
+                        src_tag = f"[{_source_style[src]}]({src})[/{_source_style[src]}]"
+                        source_counts[src] += 1
+                        desc = (
+                            f"[green]{m.name}[/green] {src_tag}"
+                            if bundle else f"[yellow]{m.name}[/yellow]"
                         )
+                        progress.update(task, advance=1, description=desc)
+                        self.client._sleep()
                     else:
-                        # No usable data (empty divisions etc.) — record to skip next time.
-                        self.store.skip_match(
-                            "ipscresults", 0, m.id, m.name, reason="no divisions or results"
-                        )
-                        progress.update(
-                            task, advance=1,
-                            description=f"[yellow]{m.name}[/yellow] {src_tag}",
-                        )
+                        results, src = self._fetch_match(m)
+                        source_counts[src] += 1
+                        src_tag = f"[{_source_style[src]}]({src})[/{_source_style[src]}]"
+                        if results is not None:
+                            self.store.store_match_results(results)
+                            synced += 1
+                            progress.update(
+                                task, advance=1,
+                                description=f"[green]{m.name}[/green] {src_tag}",
+                            )
+                        else:
+                            # No usable data (empty divisions etc.) — record to skip next time.
+                            self.store.skip_match(
+                                "ipscresults", 0, m.id, m.name, reason="no divisions or results"
+                            )
+                            progress.update(
+                                task, advance=1,
+                                description=f"[yellow]{m.name}[/yellow] {src_tag}",
+                            )
+                        if src == "api":
+                            self.client._sleep()
                 except httpx.HTTPStatusError as e:
-                    # Server-side error for this specific match (e.g. 500 on DivisionList).
-                    # Record as skipped so we don't retry on every subsequent sync.
                     reason = f"HTTP {e.response.status_code}: {e.request.url}"
                     console.print(
                         f"  [yellow]HTTP {e.response.status_code} for {m.name} — skipping[/yellow]"
                     )
-                    self.store.skip_match("ipscresults", 0, m.id, m.name, reason=reason)
+                    if not raw_only:
+                        self.store.skip_match("ipscresults", 0, m.id, m.name, reason=reason)
                     skipped_errors += 1
                     progress.update(task, advance=1)
                 except Exception as e:
-                    # Unexpected error (network, parse failure) — log but don't skip,
-                    # so we can retry on the next sync run.
                     console.print(f"  [red]Error fetching {m.name}: {e}[/red]")
                     progress.update(task, advance=1)
 
-                # Skip the inter-match sleep when the bundle was not fetched from the API.
-                if src == "api":
-                    self.client._sleep()
+        if not raw_only:
+            # Watermark: most recent match date we've seen
+            dates = [m.date for m in all_matches if m.date]
+            if dates:
+                self.store.set_sync_watermark(max(dates), source="ipscresults")
 
-        # Watermark: most recent match date we've seen
-        dates = [m.date for m in all_matches if m.date]
-        if dates:
-            self.store.set_sync_watermark(max(dates), source="ipscresults")
-
-        parts = [f"[bold green]Synced {synced} ipscresults matches.[/bold green]"]
-        _ordered: list[BundleSource] = ["local", "s3", "api"]
-        tally = ", ".join(
-            f"{source_counts[s]} {s}"
-            for s in _ordered
-            if source_counts[s]
-        )
-        if tally:
-            parts.append(f"[dim]({tally})[/dim]")
+        if raw_only:
+            parts = [f"[bold green]Downloaded {synced} raw bundles.[/bold green]"]
+            parts.append("[dim]Run sync-ipscresults to parse into DuckDB.[/dim]")
+        else:
+            parts = [f"[bold green]Synced {synced} ipscresults matches.[/bold green]"]
+            _ordered: list[BundleSource] = ["local", "s3", "api"]
+            tally = ", ".join(
+                f"{source_counts[s]} {s}"
+                for s in _ordered
+                if source_counts[s]
+            )
+            if tally:
+                parts.append(f"[dim]({tally})[/dim]")
         if skipped_errors:
-            parts.append(f"[yellow]({skipped_errors} skipped due to server errors)[/yellow]")
+            parts.append(f"[yellow]({skipped_errors} skipped due to errors)[/yellow]")
         console.print(" ".join(parts))
         return synced
 

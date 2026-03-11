@@ -435,6 +435,16 @@ def sync_ipscresults(
         ),
     ),
     full: bool = typer.Option(False, help="Re-sync all matches, ignoring already-stored ones"),
+    raw_only: bool = typer.Option(
+        False,
+        "--raw-only",
+        help=(
+            "Download and cache raw bundles only — skip DuckDB writes entirely. "
+            "Matches with a local bundle file are skipped automatically, so the "
+            "command is safe to stop and restart at any time. "
+            "Run without --raw-only afterwards to parse cached bundles into DuckDB."
+        ),
+    ),
     delay: float = typer.Option(
         0.3, help="Delay between matches in seconds (inter-match only)"
     ),
@@ -495,7 +505,7 @@ def sync_ipscresults(
         raw_store=raw_store,
     )
     try:
-        syncer.sync(full=full)
+        syncer.sync(full=full, raw_only=raw_only)
     finally:
         client.close()
         store.close()
