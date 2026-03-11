@@ -71,14 +71,34 @@ test.describe("PWA install — About page", () => {
   });
 });
 
-test.describe("PWA install — footer link", () => {
-  test("footer contains Install app link pointing to /about#install", async ({
+test.describe("PWA install — desktop header link", () => {
+  test("site header contains Install app link pointing to /about#install", async ({
     page,
   }) => {
     await page.addInitScript((releaseId) => {
       localStorage.setItem("whats-new-seen-id", releaseId);
     }, LATEST_RELEASE_ID);
     await page.goto("/");
+    const link = page.getByRole("banner").getByRole("link", { name: /install app/i });
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute("href", "/about#install");
+  });
+});
+
+test.describe("PWA install — mobile More sheet link", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("More sheet contains Install app link pointing to /about#install", async ({
+    page,
+  }) => {
+    await page.addInitScript((releaseId) => {
+      localStorage.setItem("whats-new-seen-id", releaseId);
+    }, LATEST_RELEASE_ID);
+    await page.goto("/");
+
+    // Open the More sheet from the bottom nav
+    await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: /more/i }).click();
+
     const link = page.getByRole("link", { name: /install app/i });
     await expect(link).toBeVisible();
     await expect(link).toHaveAttribute("href", "/about#install");

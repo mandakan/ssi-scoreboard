@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { BarChart2, Smartphone, UserCheck, Users } from "lucide-react";
+import { BarChart2, Download, Smartphone, UserCheck, Users } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AppLogo } from "@/components/app-logo";
 import { useMyIdentity } from "@/lib/hooks/use-my-identity";
@@ -60,6 +60,13 @@ export function SiteHeader() {
           >
             <Smartphone className="w-4 h-4" aria-hidden="true" />
             <span>Sync</span>
+          </Link>
+          <Link
+            href="/about#install"
+            className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
+          >
+            <Download className="w-4 h-4" aria-hidden="true" />
+            <span>Install app</span>
           </Link>
           <ThemeToggle />
         </nav>

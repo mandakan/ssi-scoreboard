@@ -334,6 +334,133 @@ test.describe("Scoreboard E2E", () => {
   });
 });
 
+test.describe("Site header (desktop)", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript((releaseId) => {
+      localStorage.setItem("ssi-cell-help-seen", "1");
+      localStorage.setItem("whats-new-seen-id", releaseId);
+    }, LATEST_RELEASE_ID);
+  });
+
+  test("header is visible on desktop", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("banner")).toBeVisible();
+  });
+
+  test("header logo links to home", async ({ page }) => {
+    await page.goto("/");
+    const logo = page.getByRole("banner").getByRole("link", { name: /ssi scoreboard/i });
+    await expect(logo).toBeVisible();
+    await expect(logo).toHaveAttribute("href", "/");
+  });
+
+  test("header contains My shooters button", async ({ page }) => {
+    await page.goto("/");
+    await expect(
+      page.getByRole("banner").getByRole("button", { name: /my shooters/i })
+    ).toBeVisible();
+  });
+
+  test("header contains Sync link", async ({ page }) => {
+    await page.goto("/");
+    await expect(
+      page.getByRole("banner").getByRole("link", { name: /sync/i })
+    ).toBeVisible();
+  });
+
+  test("header contains Install app link", async ({ page }) => {
+    await page.goto("/");
+    await expect(
+      page.getByRole("banner").getByRole("link", { name: /install app/i })
+    ).toBeVisible();
+  });
+
+  test("header My shooters button opens tracked shooters sheet", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("banner").getByRole("button", { name: /my shooters/i }).click();
+    // Sheet should open — look for its heading
+    await expect(page.getByRole("dialog")).toBeVisible();
+  });
+});
+
+test.describe("Bottom nav (mobile)", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript((releaseId) => {
+      localStorage.setItem("ssi-cell-help-seen", "1");
+      localStorage.setItem("whats-new-seen-id", releaseId);
+    }, LATEST_RELEASE_ID);
+  });
+
+  test("bottom nav is visible on mobile", async ({ page }) => {
+    await page.goto("/");
+    await expect(
+      page.getByRole("navigation", { name: "Main navigation" })
+    ).toBeVisible();
+  });
+
+  test("bottom nav has Home, Shooters, My Stats, More buttons", async ({ page }) => {
+    await page.goto("/");
+    const nav = page.getByRole("navigation", { name: "Main navigation" });
+    await expect(nav.getByRole("link", { name: /home/i })).toBeVisible();
+    await expect(nav.getByRole("button", { name: /shooters/i })).toBeVisible();
+    await expect(nav.getByRole("button", { name: /my stats/i })).toBeVisible();
+    await expect(nav.getByRole("button", { name: /more/i })).toBeVisible();
+  });
+
+  test("Home nav item links to /", async ({ page }) => {
+    await page.goto("/");
+    const homeLink = page
+      .getByRole("navigation", { name: "Main navigation" })
+      .getByRole("link", { name: /home/i });
+    await expect(homeLink).toHaveAttribute("href", "/");
+  });
+
+  test("Home nav item has aria-current=page on home route", async ({ page }) => {
+    await page.goto("/");
+    const homeLink = page
+      .getByRole("navigation", { name: "Main navigation" })
+      .getByRole("link", { name: /home/i });
+    await expect(homeLink).toHaveAttribute("aria-current", "page");
+  });
+
+  test("Shooters button opens tracked shooters sheet", async ({ page }) => {
+    await page.goto("/");
+    await page
+      .getByRole("navigation", { name: "Main navigation" })
+      .getByRole("button", { name: /shooters/i })
+      .click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+  });
+
+  test("More button opens the More sheet", async ({ page }) => {
+    await page.goto("/");
+    await page
+      .getByRole("navigation", { name: "Main navigation" })
+      .getByRole("button", { name: /more/i })
+      .click();
+    await expect(page.getByRole("dialog", { name: /more/i })).toBeVisible();
+  });
+
+  test("More sheet contains Sync, Install app, About links", async ({ page }) => {
+    await page.goto("/");
+    await page
+      .getByRole("navigation", { name: "Main navigation" })
+      .getByRole("button", { name: /more/i })
+      .click();
+    const sheet = page.getByRole("dialog", { name: /more/i });
+    await expect(sheet.getByRole("link", { name: /sync/i })).toBeVisible();
+    await expect(sheet.getByRole("link", { name: /install app/i })).toBeVisible();
+    await expect(sheet.getByRole("link", { name: /about/i })).toBeVisible();
+  });
+
+  test("site header is hidden on mobile", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("banner")).not.toBeVisible();
+  });
+});
+
 test.describe("Mobile 390px viewport", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
