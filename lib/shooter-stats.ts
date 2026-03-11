@@ -90,6 +90,26 @@ export function computeAggregateStats(
     .map((m, i) => [i, m.avgHF as number]);
   const hfTrendSlope = linearRegressionSlope(hfTrendPoints);
 
+  // Average penalty rate across matches that have shot data
+  const withPenaltyData = matches.filter(
+    (m) => m.totalA + m.totalC + m.totalD + m.totalMiss > 0,
+  );
+  const avgPenaltyRate =
+    withPenaltyData.length > 0
+      ? withPenaltyData.reduce(
+          (s, m) => s + (computePenaltyRate(m) ?? 0),
+          0,
+        ) / withPenaltyData.length
+      : null;
+
+  // Average consistency index across matches that have it
+  const withCI = matches.filter((m) => m.consistencyIndex != null);
+  const avgConsistencyIndex =
+    withCI.length > 0
+      ? withCI.reduce((s, m) => s + (m.consistencyIndex ?? 0), 0) /
+        withCI.length
+      : null;
+
   return {
     totalStages,
     dateRange,
@@ -101,7 +121,26 @@ export function computeAggregateStats(
     missPercent,
     consistencyCV,
     hfTrendSlope,
+    avgPenaltyRate,
+    avgConsistencyIndex,
   };
+}
+
+/**
+ * Compute penalty rate for a single match:
+ * (totalMiss + totalNoShoots + totalProcedurals) / totalShots
+ * where totalShots = totalA + totalC + totalD + totalMiss.
+ * Returns null when there are no shots fired. Range: 0.0–1.0.
+ */
+export function computePenaltyRate(match: ShooterMatchSummary): number | null {
+  const totalShots =
+    match.totalA + match.totalC + match.totalD + match.totalMiss;
+  if (totalShots === 0) return null;
+  const penalties =
+    match.totalMiss +
+    (match.totalNoShoots ?? 0) +
+    (match.totalProcedurals ?? 0);
+  return penalties / totalShots;
 }
 
 /**

@@ -66,6 +66,7 @@ import {
   computeAZonePct,
   computeMovingAverage,
   getMostFrequentDivision,
+  computePenaltyRate,
 } from "@/lib/shooter-stats";
 import { divisionColor, extractDivisions } from "@/lib/division-colors";
 import { Progress } from "@/components/ui/progress";
@@ -363,9 +364,13 @@ interface ChartDataPoint {
   avgHF: number | null;
   matchPct: number | null;
   aZonePct: number | null;
+  penaltyRate: number | null;
+  consistencyIndex: number | null;
   avgHF_ma: number | null;
   matchPct_ma: number | null;
   aZonePct_ma: number | null;
+  penaltyRate_ma: number | null;
+  consistencyIndex_ma: number | null;
   divColor: string;
 }
 
@@ -378,7 +383,7 @@ function CustomTooltip({
 }: {
   active?: boolean;
   payload?: Array<{ payload: ChartDataPoint }>;
-  metricKey: "avgHF" | "matchPct" | "aZonePct";
+  metricKey: "avgHF" | "matchPct" | "aZonePct" | "penaltyRate" | "consistencyIndex";
   metricLabel: string;
   formatValue: (v: number | null) => string;
 }) {
@@ -460,10 +465,19 @@ function TrendChart({
       const az = computeAZonePct(m);
       return az != null ? parseFloat(az.toFixed(1)) : null;
     });
+    const penaltyValues = filtered.map((m) => {
+      const pr = computePenaltyRate(m);
+      return pr != null ? parseFloat((pr * 100).toFixed(2)) : null;
+    });
+    const ciValues = filtered.map((m) =>
+      m.consistencyIndex != null ? parseFloat(m.consistencyIndex.toFixed(1)) : null,
+    );
 
     const hfMa = computeMovingAverage(hfValues, 3);
     const pctMa = computeMovingAverage(pctValues, 3);
     const azMa = computeMovingAverage(azValues, 3);
+    const penaltyMa = computeMovingAverage(penaltyValues, 3);
+    const ciMa = computeMovingAverage(ciValues, 3);
 
     return filtered.map((m, i): ChartDataPoint => ({
       label: formatDateShort(m.date),
@@ -474,9 +488,13 @@ function TrendChart({
       avgHF: hfValues[i],
       matchPct: pctValues[i],
       aZonePct: azValues[i],
+      penaltyRate: penaltyValues[i],
+      consistencyIndex: ciValues[i],
       avgHF_ma: hfMa[i] != null ? parseFloat(hfMa[i]!.toFixed(2)) : null,
       matchPct_ma: pctMa[i] != null ? parseFloat(pctMa[i]!.toFixed(1)) : null,
       aZonePct_ma: azMa[i] != null ? parseFloat(azMa[i]!.toFixed(1)) : null,
+      penaltyRate_ma: penaltyMa[i] != null ? parseFloat(penaltyMa[i]!.toFixed(2)) : null,
+      consistencyIndex_ma: ciMa[i] != null ? parseFloat(ciMa[i]!.toFixed(1)) : null,
       divColor: divisionColor(m.division),
     }));
   }, [matches]);
@@ -484,11 +502,15 @@ function TrendChart({
   const hasHF = chartData.some((d) => d.avgHF != null);
   const hasPct = chartData.some((d) => d.matchPct != null);
   const hasAZ = chartData.some((d) => d.aZonePct != null);
+  const hasPenalty = chartData.some((d) => d.penaltyRate != null);
+  const hasCI = chartData.some((d) => d.consistencyIndex != null);
   const hasMA = chartData.length >= 3;
 
   const hfDot = useMemo(() => makeDivisionDot(showDivColors, "avgHF"), [showDivColors]);
   const pctDot = useMemo(() => makeDivisionDot(showDivColors, "matchPct"), [showDivColors]);
   const azDot = useMemo(() => makeDivisionDot(showDivColors, "aZonePct"), [showDivColors]);
+  const penaltyDot = useMemo(() => makeDivisionDot(showDivColors, "penaltyRate"), [showDivColors]);
+  const ciDot = useMemo(() => makeDivisionDot(showDivColors, "consistencyIndex"), [showDivColors]);
 
   if (chartData.length < 2) {
     return (
@@ -746,6 +768,182 @@ function TrendChart({
                     dataKey="aZonePct_ma"
                     name="3-match avg"
                     stroke="var(--chart-3)"
+                    strokeWidth={1.5}
+                    strokeDasharray="6 3"
+                    strokeOpacity={0.5}
+                    dot={false}
+                    connectNulls={false}
+                  />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {hasPenalty && (
+        <div>
+          <div className="flex items-center gap-1 mb-2">
+            <h3 className="text-sm font-medium">Penalty rate over time</h3>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="About the penalty rate trend chart"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="max-w-xs text-sm space-y-2" side="top">
+                <p className="font-medium">Penalty rate over time</p>
+                <p className="text-muted-foreground">
+                  Penalties (misses + no-shoots + procedurals) as a percentage
+                  of total rounds fired in each match. Lower is better — it
+                  measures how much you are giving away to penalties relative to
+                  the number of shots taken.
+                </p>
+                <p className="text-muted-foreground">
+                  A rising trend is a warning sign. If penalty rate climbs while
+                  A-zone % stays stable, procedurals and no-shoots are likely
+                  the cause rather than inaccuracy.
+                </p>
+              </PopoverContent>
+            </Popover>
+          </div>
+          <div className="h-48" aria-hidden="true">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={chartData}
+                margin={{ top: 4, right: 8, left: -16, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                  className="fill-muted-foreground"
+                  interval="preserveStartEnd"
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                  className="fill-muted-foreground"
+                  domain={[0, "auto"]}
+                  tickFormatter={(v: number) => `${v.toFixed(1)}%`}
+                  width={40}
+                />
+                <Tooltip
+                  content={
+                    <CustomTooltip
+                      metricKey="penaltyRate"
+                      metricLabel="Penalty rate"
+                      formatValue={(v) => (v != null ? `${v.toFixed(2)}%` : "—")}
+                    />
+                  }
+                  cursor={{ stroke: "var(--muted-foreground)", opacity: 0.2 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="penaltyRate"
+                  name="Penalty rate"
+                  stroke="var(--chart-4)"
+                  strokeWidth={2}
+                  dot={penaltyDot}
+                  connectNulls={false}
+                />
+                {hasMA && (
+                  <Line
+                    type="monotone"
+                    dataKey="penaltyRate_ma"
+                    name="3-match avg"
+                    stroke="var(--chart-4)"
+                    strokeWidth={1.5}
+                    strokeDasharray="6 3"
+                    strokeOpacity={0.5}
+                    dot={false}
+                    connectNulls={false}
+                  />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {hasCI && (
+        <div>
+          <div className="flex items-center gap-1 mb-2">
+            <h3 className="text-sm font-medium">Consistency index over time</h3>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="About the consistency index trend chart"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="max-w-xs text-sm space-y-2" side="top">
+                <p className="font-medium">Consistency index over time</p>
+                <p className="text-muted-foreground">
+                  Measures how evenly you performed across all stages in a
+                  match. Computed as (1 − CV) × 100, where CV is the
+                  coefficient of variation of your per-stage hit factors.
+                  Higher is better — 100 means every stage had the same hit
+                  factor.
+                </p>
+                <p className="text-muted-foreground">
+                  A sharp drop often signals one blown stage that dragged the
+                  average down. Pair this with the Match % chart to
+                  distinguish a bad stage from a bad overall match.
+                </p>
+              </PopoverContent>
+            </Popover>
+          </div>
+          <div className="h-48" aria-hidden="true">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={chartData}
+                margin={{ top: 4, right: 8, left: -16, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                  className="fill-muted-foreground"
+                  interval="preserveStartEnd"
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                  className="fill-muted-foreground"
+                  domain={[0, 100]}
+                  width={40}
+                />
+                <Tooltip
+                  content={
+                    <CustomTooltip
+                      metricKey="consistencyIndex"
+                      metricLabel="Consistency"
+                      formatValue={(v) => (v != null ? v.toFixed(1) : "—")}
+                    />
+                  }
+                  cursor={{ stroke: "var(--muted-foreground)", opacity: 0.2 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="consistencyIndex"
+                  name="Consistency index"
+                  stroke="var(--chart-5)"
+                  strokeWidth={2}
+                  dot={ciDot}
+                  connectNulls={false}
+                />
+                {hasMA && (
+                  <Line
+                    type="monotone"
+                    dataKey="consistencyIndex_ma"
+                    name="3-match avg"
+                    stroke="var(--chart-5)"
                     strokeWidth={1.5}
                     strokeDasharray="6 3"
                     strokeOpacity={0.5}

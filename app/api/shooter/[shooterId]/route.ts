@@ -78,6 +78,7 @@ function computeMatchStats(
   totalProcedurals: number;
   dq: boolean;
   perfectStages: number;
+  consistencyIndex: number | null;
 } {
   const myCards = rawScorecards.filter(
     (sc) =>
@@ -103,11 +104,26 @@ function computeMatchStats(
       totalProcedurals: 0,
       dq: false,
       perfectStages: 0,
+      consistencyIndex: null,
     };
   }
 
   const hfSum = myCards.reduce((s, sc) => s + (sc.hit_factor ?? 0), 0);
   const avgHF = hfSum / stageCount;
+
+  // Consistency index: (1 - CV) * 100 where CV = stddev(stageHFs) / mean(stageHFs)
+  let consistencyIndex: number | null = null;
+  const hfs = myCards
+    .map((sc) => sc.hit_factor ?? 0)
+    .filter((hf) => hf > 0);
+  if (hfs.length >= 2) {
+    const mean = hfs.reduce((s, v) => s + v, 0) / hfs.length;
+    if (mean > 0) {
+      const variance =
+        hfs.reduce((s, v) => s + (v - mean) ** 2, 0) / hfs.length;
+      consistencyIndex = (1 - Math.sqrt(variance) / mean) * 100;
+    }
+  }
 
   // Compute division-based match %
   const stagePcts: number[] = [];
@@ -171,6 +187,7 @@ function computeMatchStats(
     totalProcedurals,
     dq,
     perfectStages,
+    consistencyIndex,
   };
 }
 
@@ -299,6 +316,7 @@ export async function GET(
           let totalProcedurals = 0;
           let wasDQ = false;
           let perfectStagesCount = 0;
+          let consistencyIndexValue: number | null = null;
 
           if (scorecardsRaw) {
             try {
@@ -324,6 +342,7 @@ export async function GET(
               totalProcedurals = mStats.totalProcedurals;
               wasDQ = mStats.dq;
               perfectStagesCount = mStats.perfectStages;
+              consistencyIndexValue = mStats.consistencyIndex;
             } catch { /* skip scorecard stats on parse error */ }
           }
 
@@ -349,6 +368,7 @@ export async function GET(
             totalProcedurals,
             dq: wasDQ,
             perfectStages: perfectStagesCount,
+            consistencyIndex: consistencyIndexValue,
           };
           return summary;
         } catch { return null; }

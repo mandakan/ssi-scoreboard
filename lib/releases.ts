@@ -11,11 +11,26 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-03-10";
+export const LATEST_RELEASE_ID = "2026-03-11";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "March 11, 2026",
+    title: "Penalty Rate & Consistency Trends",
+    screenshotScenes: ["shooter-dashboard"],
+    sections: [
+      {
+        heading: "New",
+        items: [
+          "Penalty rate trend: tracks misses, no-shoots, and procedurals as a percentage of total rounds fired across matches. Lower is better — a rising trend signals something worth fixing in training.",
+          "Consistency index trend: measures how evenly you perform stage-to-stage within each match. Computed from the coefficient of variation of per-stage hit factors, scaled to 0–100 (higher is better). A drop flags a single blown stage rather than a bad overall match.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-03-10",
     date: "March 10, 2026",
     title: "Device Sync",
     screenshotScenes: ["tracked-shooters-sheet"],
