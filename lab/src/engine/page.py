@@ -213,11 +213,13 @@ _HTML = r"""<!DOCTYPE html>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>IPSC Rating Explorer</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
   <style>[x-cloak]{display:none!important}</style>
 </head>
 <body class="bg-gray-100 min-h-screen text-gray-900">
-<div x-data="app" x-cloak class="max-w-6xl mx-auto px-4 py-8">
+<div id="app-loading" class="flex items-center justify-center min-h-screen">
+  <p class="text-gray-500 text-lg">Loading ratings data…</p>
+</div>
+<div x-data="app" x-cloak x-init="document.getElementById('app-loading').remove()" class="max-w-6xl mx-auto px-4 py-8">
 
   <!-- Header -->
   <header class="mb-6">
@@ -992,7 +994,6 @@ _HTML = r"""<!DOCTYPE html>
 </div>
 
 <script>
-const D                 = DATA_PLACEHOLDER;
 const ALGO_DISPLAY      = ALGO_DISPLAY_PLACEHOLDER;
 const ALGO_DESC         = ALGO_DESC_PLACEHOLDER;
 const BASE_ALGO_DISPLAY = BASE_ALGO_DISPLAY_PLACEHOLDER;
@@ -1217,6 +1218,25 @@ document.addEventListener('alpine:init', () => {
     },
   }));
 });
+
+// Fetch data.json first, then inject Alpine so D is always set before alpine:init fires.
+// This keeps the HTML template tiny and the initial page-load fast.
+let D;
+fetch('data.json')
+  .then(r => { if (!r.ok) throw new Error(r.status + ' ' + r.statusText); return r.json(); })
+  .then(data => {
+    D = data;
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js';
+    document.head.appendChild(s);
+  })
+  .catch(err => {
+    const el = document.getElementById('app-loading');
+    if (el) el.innerHTML =
+      '<div class="text-center"><p class="text-red-600 font-semibold mb-2">Failed to load ratings data</p>' +
+      '<p class="text-gray-500 text-sm">' + err.message + '</p>' +
+      '<p class="text-gray-400 text-xs mt-2">Tip: serve the site with <code>uv run rating serve</code> instead of opening index.html directly.</p></div>';
+  });
 </script>
 </body>
 </html>
@@ -1296,7 +1316,17 @@ def _load_tuning_summary(data_dir: Path) -> dict[str, Any] | None:
 
 
 def generate_site(data: dict[str, Any], output_dir: Path, data_dir: Path | None = None) -> None:
-    """Write the static explorer to output_dir/index.html and manifest.json."""
+    """Write the static explorer to output_dir/.
+
+    Outputs:
+      index.html  — tiny static shell (no embedded data; loads data.json via fetch)
+      data.json   — all rating/shooter/match data (loaded asynchronously by the page)
+      manifest.json — provenance summary for reproducibility checking
+
+    Note: index.html uses fetch('data.json') so it requires an HTTP server.
+    Use 'uv run rating serve' locally, or deploy site/ to any static host.
+    Opening index.html directly as a file:// URL will not work.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Inject tuning results if available.
@@ -1312,15 +1342,19 @@ def generate_site(data: dict[str, Any], output_dir: Path, data_dir: Path | None 
         key=lambda a: (order.get(a, len(_ALGO_ORDER)), a),
     )
 
+    # Write data.json separately — keeps index.html tiny and generation fast.
     sep = (",", ":")
+    data_out = output_dir / "data.json"
+    data_out.write_text(json.dumps(data, separators=sep), encoding="utf-8")
+
+    # Write index.html — replace static placeholders only (no large data blob).
     html = _HTML
     # Replace longer/prefixed placeholders first so partial matches don't corrupt them.
     # (ALGO_DISPLAY_PLACEHOLDER is a substring of BASE_ALGO_DISPLAY_PLACEHOLDER)
-    html = html.replace("DATA_PLACEHOLDER",              json.dumps(data,             separators=sep))
     html = html.replace("BASE_ALGO_DISPLAY_PLACEHOLDER", json.dumps(BASE_ALGO_DISPLAY, separators=sep))
     html = html.replace("ALGO_ORDER_PLACEHOLDER",        json.dumps(_ALGO_ORDER,       separators=sep))
-    html = html.replace("ALGO_DISPLAY_PLACEHOLDER",      json.dumps(ALGO_DISPLAY,     separators=sep))
-    html = html.replace("ALGO_DESC_PLACEHOLDER",         json.dumps(ALGO_DESCRIPTION, separators=sep))
+    html = html.replace("ALGO_DISPLAY_PLACEHOLDER",      json.dumps(ALGO_DISPLAY,      separators=sep))
+    html = html.replace("ALGO_DESC_PLACEHOLDER",         json.dumps(ALGO_DESCRIPTION,  separators=sep))
 
     out = output_dir / "index.html"
     out.write_text(html, encoding="utf-8")
@@ -1329,11 +1363,13 @@ def generate_site(data: dict[str, Any], output_dir: Path, data_dir: Path | None 
     manifest_out = output_dir / "manifest.json"
     manifest_out.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
-    size_kb = out.stat().st_size // 1024
-    console.print(f"[green]Site written to {out}[/green] ({size_kb} KB)")
+    html_kb = out.stat().st_size // 1024
+    data_kb = data_out.stat().st_size // 1024
+    console.print(f"[green]Site written to {out}[/green] ({html_kb} KB HTML + {data_kb} KB data.json)")
     console.print(
         f"  {len(data['shooters'])} shooters · "
         f"{len(data['algorithms'])} algorithms · "
         f"{len(data['matches'])} matches"
     )
+    console.print(f"[dim]Serve with: uv run rating serve[/dim]")
     console.print(f"[dim]Manifest: {manifest_out}[/dim]")
