@@ -38,6 +38,7 @@ def export_data(
         "shooters": _export_shooters(store, ssi_only=ssi_only, algorithms=algorithms),
         "matches": _export_matches(store),
         "fuzzy_links": _export_fuzzy_links(store),
+        "review_stats": _export_review_stats(store),
     }
 
 
@@ -263,6 +264,12 @@ def _export_fuzzy_links(store: Store) -> list[dict[str, Any]]:
     prioritised for manual review). Sorted by confidence ascending so the most
     dubious matches appear first.
     """
+    # Load existing human review decisions for this source.
+    review_rows = store.db.execute(
+        "SELECT source_key, decision FROM identity_reviews WHERE source = 'ipscresults'"
+    ).fetchall()
+    review_map: dict[str, str] = {str(r[0]): str(r[1]) for r in review_rows}
+
     rows = store.db.execute(
         """
         SELECT
@@ -350,12 +357,15 @@ def _export_fuzzy_links(store: Store) -> list[dict[str, Any]]:
     result = []
     for row in rows:
         cid = int(row[4])
+        source_key = str(row[2])
         rank_info = rank_map.get(cid)
         ipr_m, ipr_last = ipr_stats.get(cid, (0, None))
         total_m = total_m_map.get(cid)
+        decision = review_map.get(source_key)
         result.append({
             "ipr": str(row[0]),
             "conf": round(float(row[1]), 3),
+            "source_key": source_key,
             "ssi": str(row[3]),
             "id": cid,
             "region": str(row[5]) if row[5] else None,
@@ -367,8 +377,34 @@ def _export_fuzzy_links(store: Store) -> list[dict[str, Any]]:
             "ipr_m": ipr_m,          # matches from the fuzzy-linked source
             "ipr_last": ipr_last,    # most recent ipscresults match date
             "total_m": total_m,      # total matches across all sources
+            # Human review state
+            "reviewed": decision is not None,
+            "decision": decision,    # 'approved' | 'rejected' | None
         })
     return result
+
+
+def _export_review_stats(store: Store) -> dict[str, int]:
+    """Return summary counts for the identity review progress indicator."""
+    total_row = store.db.execute(
+        "SELECT count(*) FROM shooter_identity_links"
+        " WHERE source = 'ipscresults' AND method = 'auto_fuzzy'"
+    ).fetchone()
+    total = int(total_row[0]) if total_row else 0
+
+    review_rows = store.db.execute(
+        "SELECT decision, count(*) FROM identity_reviews"
+        " WHERE source = 'ipscresults' GROUP BY decision"
+    ).fetchall()
+    counts: dict[str, int] = {str(r[0]): int(r[1]) for r in review_rows}
+    approved = counts.get("approved", 0)
+    rejected = counts.get("rejected", 0)
+    return {
+        "total": total,
+        "reviewed": approved + rejected,
+        "approved": approved,
+        "rejected": rejected,
+    }
 
 
 def _export_matches(store: Store) -> list[dict[str, Any]]:

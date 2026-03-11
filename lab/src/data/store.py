@@ -22,8 +22,17 @@ RatingRow = tuple[str, str | None, str | None, str | None, float, float, int, st
 DEFAULT_DB_PATH = Path(__file__).parent.parent.parent / "data" / "lab.duckdb"
 
 # The sync_state table is never dropped — it persists the watermark and version.
+# identity_reviews is also persistent — human decisions survive rating link re-runs.
 _BASE_SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS sync_state (key TEXT PRIMARY KEY, value TEXT);
+
+CREATE TABLE IF NOT EXISTS identity_reviews (
+  source     TEXT NOT NULL,
+  source_key TEXT NOT NULL,
+  decision   TEXT NOT NULL,      -- 'approved' | 'rejected'
+  decided_at TIMESTAMP NOT NULL,
+  PRIMARY KEY (source, source_key)
+);
 """
 
 # All data tables. Dropped and recreated on SCHEMA_VERSION bump.
@@ -865,6 +874,51 @@ class Store:
         ).fetchone()
         stats["unlinked"] = row[0] if row else 0
         return stats
+
+    def mark_identity_reviewed(
+        self, source: str, source_key: str, decision: str
+    ) -> None:
+        """Record a human review decision ('approved' or 'rejected') for an auto-fuzzy link.
+
+        Persisted in identity_reviews, which survives `rating link` re-runs.
+        """
+        self.db.execute(
+            """INSERT OR REPLACE INTO identity_reviews
+               (source, source_key, decision, decided_at)
+               VALUES (?, ?, ?, ?)""",
+            [source, source_key, decision, datetime.now(UTC).isoformat()],
+        )
+
+    def reject_identity_link(self, source: str, source_key: str) -> int:
+        """Reject an auto-fuzzy identity link by splitting it into a new manual identity.
+
+        Allocates a fresh canonical_id, creates the shooter_identities row, and inserts a
+        method='manual' link — which replaces the auto_fuzzy entry (same PK) and will never
+        be overwritten by future `rating link` runs.
+
+        Returns the newly allocated canonical_id.
+        """
+        row = self.db.execute(
+            """SELECT sil.name_variant, si.region
+               FROM shooter_identity_links sil
+               JOIN shooter_identities si ON si.canonical_id = sil.canonical_id
+               WHERE sil.source = ? AND sil.source_key = ?""",
+            [source, source_key],
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"No identity link found for {source!r} / {source_key!r}")
+        name_variant, region = str(row[0]), row[1]
+
+        (new_id,) = self._allocate_canonical_ids(1)
+        self.ensure_canonical_identity(new_id, name_variant, region)
+        self.db.execute(
+            """INSERT OR REPLACE INTO shooter_identity_links
+               (source, source_key, canonical_id, name_variant,
+                confidence, method, linked_at, alias)
+               VALUES (?, ?, ?, ?, 1.0, 'manual', ?, NULL)""",
+            [source, source_key, new_id, name_variant, datetime.now(UTC).isoformat()],
+        )
+        return new_id
 
     # ------------------------------------------------------------------
     # Match deduplication tables

@@ -604,13 +604,26 @@ _HTML = r"""<!DOCTYPE html>
         shooters by name similarity within the same region. The table below shows all
         <strong x-text="D.fuzzy_links.length"></strong> automatic fuzzy matches, sorted by confidence
         (lowest first). Low-confidence matches are the most likely to be wrong and should be
-        reviewed. Use <code class="bg-gray-100 px-1 rounded text-xs">rating link-shooter</code> to
-        create a manual override for any incorrect link.
+        reviewed.
       </p>
-      <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+      <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
         A confidence of 1.00 = exact name match after normalisation. Below 0.90 = names differ
         by more than a middle name or diacritic — check carefully.
       </p>
+
+      <!-- Review progress -->
+      <template x-if="D.review_stats">
+        <div class="mb-4">
+          <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
+            <span>Review progress</span>
+            <span x-text="D.review_stats.reviewed + ' / ' + D.review_stats.total + ' reviewed (' + D.review_stats.approved + ' approved, ' + D.review_stats.rejected + ' rejected)'"></span>
+          </div>
+          <div class="w-full bg-gray-100 rounded-full h-2">
+            <div class="h-2 rounded-full bg-green-500 transition-all"
+              :style="'width:' + (D.review_stats.total ? (D.review_stats.reviewed / D.review_stats.total * 100) : 0).toFixed(1) + '%'"></div>
+          </div>
+        </div>
+      </template>
 
       <!-- Filter -->
       <div class="flex flex-wrap gap-3 mb-4">
@@ -635,6 +648,10 @@ _HTML = r"""<!DOCTYPE html>
           <input type="checkbox" x-model="id_high_impact" class="rounded">
           High-impact only (top 20 in division)
         </label>
+        <label class="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer select-none">
+          <input type="checkbox" x-model="id_unreviewed_only" class="rounded">
+          Unreviewed only
+        </label>
         <span class="text-sm text-gray-400 self-center"
           x-text="idFiltered.length + ' / ' + D.fuzzy_links.length + ' shown'"></span>
       </div>
@@ -648,12 +665,16 @@ _HTML = r"""<!DOCTYPE html>
               <th class="pb-2 pr-4">ipscresults name</th>
               <th class="pb-2 pr-6">SSI name (matched to)</th>
               <th class="pb-2 pr-4">Div rank</th>
-              <th class="pb-2">IPR exposure</th>
+              <th class="pb-2 pr-4">IPR exposure</th>
+              <th class="pb-2">Review</th>
             </tr>
           </thead>
           <tbody>
             <template x-for="(lnk, i) in idFiltered" :key="i">
-              <tr :class="(lnk.conf < 0.90 && lnk.rank != null && lnk.rank <= 20) ? 'bg-red-50 border-b border-red-100' : 'border-b border-gray-50 hover:bg-gray-50'">
+              <tr :class="lnk.decision === 'approved' ? 'bg-green-50 border-b border-green-100' :
+                           lnk.decision === 'rejected' ? 'bg-gray-50 border-b border-gray-100 opacity-60' :
+                           (lnk.conf < 0.90 && lnk.rank != null && lnk.rank <= 20) ? 'bg-red-50 border-b border-red-100' :
+                           'border-b border-gray-50 hover:bg-gray-50'">
                 <td class="py-1.5 pr-4">
                   <span :class="lnk.conf < 0.90 ? 'text-red-600 font-semibold' : lnk.conf < 0.95 ? 'text-amber-600' : 'text-gray-700'"
                     x-text="lnk.conf.toFixed(3)"></span>
@@ -670,7 +691,7 @@ _HTML = r"""<!DOCTYPE html>
                     <span class="text-gray-300">—</span>
                   </template>
                 </td>
-                <td class="py-1.5 text-xs">
+                <td class="py-1.5 pr-4 text-xs">
                   <template x-if="lnk.ipr_m > 0">
                     <span :title="'ipscresults: ' + lnk.ipr_m + ' of ' + (lnk.total_m ?? '?') + ' total matches · last: ' + (lnk.ipr_last ?? 'unknown')">
                       <span :class="iprExposureClass(lnk)"
@@ -681,10 +702,26 @@ _HTML = r"""<!DOCTYPE html>
                     <span class="text-gray-300">—</span>
                   </template>
                 </td>
+                <td class="py-1.5">
+                  <template x-if="!lnk.reviewed">
+                    <div class="flex gap-1">
+                      <button @click="approveLink(lnk)"
+                        class="px-2 py-0.5 text-xs rounded bg-green-100 text-green-700 hover:bg-green-200 font-medium"
+                        title="Correct match — approve">✓ Approve</button>
+                      <button @click="rejectLink(lnk)"
+                        class="px-2 py-0.5 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200 font-medium"
+                        title="Wrong match — split into separate identity">✗ Reject</button>
+                    </div>
+                  </template>
+                  <template x-if="lnk.reviewed">
+                    <span :class="lnk.decision === 'approved' ? 'text-green-600 font-medium text-xs' : 'text-gray-400 text-xs'"
+                      x-text="lnk.decision === 'approved' ? '✓ Approved' : '✗ Rejected'"></span>
+                  </template>
+                </td>
               </tr>
             </template>
             <tr x-show="idFiltered.length===0">
-              <td colspan="6" class="py-6 text-center text-gray-400 text-sm">No matches found</td>
+              <td colspan="7" class="py-6 text-center text-gray-400 text-sm">No matches found</td>
             </tr>
           </tbody>
         </table>
@@ -986,12 +1023,15 @@ document.addEventListener('alpine:init', () => {
       div: '', region: '', cat: '', sort: 'conservative', q: '',
     },
     id_q: '', id_region: '', id_conf: '0', id_sort: 'conf', id_high_impact: false,
+    id_unreviewed_only: true,
 
     // Map of shooter canonical_id → fuzzy link entry (lowest conf wins if multiple).
     // Used to flag uncertain identity matches in the rankings and team tables.
+    // Rejected links are excluded — they've been split into separate identities.
     get fuzzyById() {
       const m = new Map();
       for (const lnk of (this.D.fuzzy_links || [])) {
+        if (lnk.decision === 'rejected') continue;
         const existing = m.get(lnk.id);
         if (!existing || lnk.conf < existing.conf) m.set(lnk.id, lnk);
       }
@@ -1057,6 +1097,7 @@ document.addEventListener('alpine:init', () => {
       const q = this.id_q.toLowerCase();
       const minConf = parseFloat(this.id_conf) || 0;
       let links = (this.D.fuzzy_links || []).filter(lnk => {
+        if (this.id_unreviewed_only && lnk.reviewed) return false;
         if (minConf > 0 && lnk.conf >= minConf) return false;
         if (this.id_region && lnk.region !== this.id_region) return false;
         if (this.id_high_impact && (lnk.rank == null || lnk.rank > 20)) return false;
@@ -1067,6 +1108,36 @@ document.addEventListener('alpine:init', () => {
         links = [...links].sort((a, b) => this._iprImpactScore(b) - this._iprImpactScore(a));
       }
       return links;
+    },
+
+    async approveLink(lnk) {
+      try {
+        const r = await fetch('/identity/approve', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({source: 'ipscresults', source_key: lnk.source_key}),
+        });
+        if (!r.ok) throw new Error(await r.text());
+        lnk.reviewed = true;
+        lnk.decision = 'approved';
+      } catch (e) {
+        alert('Approve failed: ' + e.message);
+      }
+    },
+
+    async rejectLink(lnk) {
+      try {
+        const r = await fetch('/identity/reject', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({source: 'ipscresults', source_key: lnk.source_key}),
+        });
+        if (!r.ok) throw new Error(await r.text());
+        lnk.reviewed = true;
+        lnk.decision = 'rejected';
+      } catch (e) {
+        alert('Reject failed: ' + e.message);
+      }
     },
 
     scoreVal(s) {

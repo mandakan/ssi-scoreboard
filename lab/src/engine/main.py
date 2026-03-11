@@ -6,7 +6,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -300,6 +300,42 @@ def create_app(db_path: Path = Path("data/lab.duckdb")) -> FastAPI:
             }
             for r in rows
         ]
+
+    class IdentityDecisionRequest(BaseModel):
+        source: str
+        source_key: str
+
+    @app.post("/identity/approve")
+    async def approve_identity(req: IdentityDecisionRequest) -> dict[str, str]:
+        """Mark an auto-fuzzy identity link as human-approved (correct match)."""
+        row = store.db.execute(
+            "SELECT 1 FROM shooter_identity_links"
+            " WHERE source = ? AND source_key = ? AND method = 'auto_fuzzy'",
+            [req.source, req.source_key],
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Auto-fuzzy link not found")
+        store.mark_identity_reviewed(req.source, req.source_key, "approved")
+        return {"status": "ok"}
+
+    @app.post("/identity/reject")
+    async def reject_identity(req: IdentityDecisionRequest) -> dict[str, object]:
+        """Reject an auto-fuzzy link: split into a new manual identity.
+
+        Allocates a fresh canonical_id for the ipscresults shooter, creates a manual
+        link (so future `rating link` runs never re-merge this pair), and records the
+        rejection decision in identity_reviews.
+        """
+        row = store.db.execute(
+            "SELECT 1 FROM shooter_identity_links"
+            " WHERE source = ? AND source_key = ? AND method = 'auto_fuzzy'",
+            [req.source, req.source_key],
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Auto-fuzzy link not found")
+        new_id = store.reject_identity_link(req.source, req.source_key)
+        store.mark_identity_reviewed(req.source, req.source_key, "rejected")
+        return {"status": "ok", "new_canonical_id": new_id}
 
     # Serve the static explorer if site/ exists alongside the API.
     # Routes defined above take precedence; StaticFiles only handles the rest.
