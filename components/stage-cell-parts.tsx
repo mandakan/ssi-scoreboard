@@ -265,7 +265,14 @@ export function ConditionsBadge({
           {createElement(weatherIcon(weatherCode), { className: "w-3 h-3", "aria-hidden": true })}
           {createElement(timeOfDayIcon(hourUtc), { className: "w-3 h-3", "aria-hidden": true })}
           {windColor != null && (
-            <Wind className={cn("w-3 h-3", windColor)} aria-hidden={true} />
+            // Icon + numeric speed: shape (icon+number vs icon-only vs absent) differentiates
+            // tiers independently of color, satisfying WCAG 1.4.1 (use of color).
+            <span className={cn("inline-flex items-center gap-px", windColor)} aria-hidden={true}>
+              <Wind className="w-3 h-3" />
+              <span className="text-[9px] font-medium tabular-nums leading-none">
+                {Math.round(windspeedMs!)}
+              </span>
+            </span>
           )}
         </span>
       </TooltipTrigger>
