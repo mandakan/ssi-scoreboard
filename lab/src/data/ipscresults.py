@@ -447,6 +447,8 @@ class IpscResultsSyncer:
                             )
                         if src == "api":
                             self.client._sleep()
+                except KeyboardInterrupt:
+                    raise
                 except httpx.HTTPStatusError as e:
                     reason = f"HTTP {e.response.status_code}: {e.request.url}"
                     console.print(
@@ -457,6 +459,11 @@ class IpscResultsSyncer:
                     skipped_errors += 1
                     progress.update(task, advance=1)
                 except Exception as e:
+                    # DuckDB translates Ctrl+C into a "Query interrupted" exception
+                    # (a regular Exception subclass, not KeyboardInterrupt). Re-raise it
+                    # so the user doesn't have to spam Ctrl+C to stop the sync.
+                    if "interrupt" in str(e).lower():
+                        raise KeyboardInterrupt from e
                     console.print(f"  [red]Error fetching {m.name}: {e}[/red]")
                     progress.update(task, advance=1)
 

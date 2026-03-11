@@ -177,6 +177,8 @@ class SyncClient:
                     self.store.store_match_results(results)
                     synced += 1
                     progress.update(task, advance=1, description=f"[green]{m.name}[/green]")
+                except KeyboardInterrupt:
+                    raise
                 except httpx.HTTPStatusError as e:
                     if e.response.status_code == 404:
                         # No scorecard data on SSI — record as known so we don't retry
@@ -190,6 +192,8 @@ class SyncClient:
                         )
                     progress.update(task, advance=1)
                 except Exception as e:
+                    if "interrupt" in str(e).lower():
+                        raise KeyboardInterrupt from e
                     console.print(f"  [red]Error processing {m.name}: {e}[/red]")
                     progress.update(task, advance=1)
 
