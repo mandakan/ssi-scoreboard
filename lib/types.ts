@@ -555,6 +555,12 @@ export interface ShooterMatchSummary {
   dq?: boolean;
   /** Number of stages with all A-hits and no penalties (C/D/miss/no-shoot/procedural). */
   perfectStages?: number;
+  /**
+   * Consistency index for this match: (1 − CV) × 100, where CV = stddev(stageHFs) / mean(stageHFs).
+   * Higher is better — 100 means every stage had the same hit factor.
+   * Null when fewer than 2 valid stages or mean HF is zero.
+   */
+  consistencyIndex?: number | null;
 }
 
 // Cross-match aggregate statistics for the shooter dashboard.
@@ -579,6 +585,10 @@ export interface ShooterAggregateStats {
   consistencyCV: number | null;
   /** Linear regression slope on avg HF over time. Positive = improving. Null when < 3 data points. */
   hfTrendSlope: number | null;
+  /** Mean penalty rate across matches: avg((miss+noShoots+procedurals) / totalShots). Null when no shot data. */
+  avgPenaltyRate?: number | null;
+  /** Mean consistency index across matches. Null when no data. */
+  avgConsistencyIndex?: number | null;
 }
 
 // Response from GET /api/shooter/{shooterId}.

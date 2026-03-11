@@ -5,6 +5,7 @@ import {
   computeAZonePct,
   computeMovingAverage,
   getMostFrequentDivision,
+  computePenaltyRate,
 } from "@/lib/shooter-stats";
 import type { ShooterMatchSummary } from "@/lib/types";
 
@@ -219,5 +220,64 @@ describe("computeAggregateStats", () => {
     const stats = computeAggregateStats(matches);
     // Identical HFs → CV = 0
     expect(stats.consistencyCV).toBeCloseTo(0);
+  });
+
+  it("computes avgPenaltyRate across matches", () => {
+    const matches = [
+      // totalShots = 80+10+5+5 = 100; penalties = 5 → rate = 0.05
+      makeMatch({ totalA: 80, totalC: 10, totalD: 5, totalMiss: 5, totalNoShoots: 0, totalProcedurals: 0 }),
+      // totalShots = 90+5+3+2 = 100; penalties = 2 → rate = 0.02
+      makeMatch({ totalA: 90, totalC: 5, totalD: 3, totalMiss: 2, totalNoShoots: 0, totalProcedurals: 0 }),
+    ];
+    const stats = computeAggregateStats(matches);
+    expect(stats.avgPenaltyRate).toBeCloseTo(0.035);
+  });
+
+  it("returns null avgPenaltyRate when no shots fired", () => {
+    const matches = [makeMatch({ totalA: 0, totalC: 0, totalD: 0, totalMiss: 0 })];
+    const stats = computeAggregateStats(matches);
+    expect(stats.avgPenaltyRate).toBeNull();
+  });
+
+  it("computes avgConsistencyIndex from matches with consistencyIndex", () => {
+    const matches = [
+      makeMatch({ consistencyIndex: 90 }),
+      makeMatch({ consistencyIndex: 80 }),
+      makeMatch({ consistencyIndex: null }),
+    ];
+    const stats = computeAggregateStats(matches);
+    expect(stats.avgConsistencyIndex).toBeCloseTo(85);
+  });
+
+  it("returns null avgConsistencyIndex when no data", () => {
+    const matches = [makeMatch({ consistencyIndex: null })];
+    const stats = computeAggregateStats(matches);
+    expect(stats.avgConsistencyIndex).toBeNull();
+  });
+});
+
+// ─── computePenaltyRate ───────────────────────────────────────────────────────
+
+describe("computePenaltyRate", () => {
+  it("computes penalty rate from hit totals", () => {
+    // 5 misses out of 100 shots = 0.05
+    const match = makeMatch({ totalA: 80, totalC: 10, totalD: 5, totalMiss: 5, totalNoShoots: 0, totalProcedurals: 0 });
+    expect(computePenaltyRate(match)).toBeCloseTo(5 / 100);
+  });
+
+  it("includes no-shoots and procedurals in penalties", () => {
+    // totalShots = 80+10+5+2 = 97; penalties = 2+1+1 = 4
+    const match = makeMatch({ totalA: 80, totalC: 10, totalD: 5, totalMiss: 2, totalNoShoots: 1, totalProcedurals: 1 });
+    expect(computePenaltyRate(match)).toBeCloseTo(4 / 97);
+  });
+
+  it("returns null when no shots fired", () => {
+    const match = makeMatch({ totalA: 0, totalC: 0, totalD: 0, totalMiss: 0 });
+    expect(computePenaltyRate(match)).toBeNull();
+  });
+
+  it("returns 0 when no penalties", () => {
+    const match = makeMatch({ totalA: 50, totalC: 10, totalD: 0, totalMiss: 0, totalNoShoots: 0, totalProcedurals: 0 });
+    expect(computePenaltyRate(match)).toBeCloseTo(0);
   });
 });
