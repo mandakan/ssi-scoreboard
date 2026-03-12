@@ -31,6 +31,10 @@ researchers, data quality considerations, and the automated tuning methodology.
 11. [Summary table](#summary-table)
 12. [Attribution](#attribution)
 
+> **Which models should I actually run?** See [docs/model-set.md](model-set.md)
+> for the canonical 11-model set, selection rationale, and copy-paste training/
+> sweep/benchmark commands.
+
 ---
 
 ## The core idea: what is a skill rating?
@@ -1185,13 +1189,18 @@ match-level percentages).
 | BT+LD | `openskill_bt_lvl_decay` | Bayesian BradleyTerry | Yes | Yes | Yes | Most complete Bayesian model |
 | ICS | `ics` | Peer comparison | No (div-weighted) | No | No | Federation benchmark |
 
-**Recommended for national team selection:** `openskill_bt_lvl` base ranking
-or `openskill_bt_lvl_decay +cons` (conservative) — the former identifies top
-performers most reliably; the latter is the most principled approach for long-term
-ranking where recency and experience level should count.
+**Recommended for national team selection:** `openskill_pl_decay` — confirmed as
+the top performer (Kendall τ = 0.4018) on the 2,039-match international dataset
+with `match_pct` scoring. Use the conservative ranking (μ − 0.52σ) to penalise
+low match counts. `openskill_bt_lvl_decay` is retained as a complementary view:
+where the two models disagree, a shooter's ranking is genuinely uncertain.
 
 **ICS 2.0** is included as the federation baseline. See benchmark results for a
 direct numerical comparison of where ICS and the Bayesian approaches differ.
+
+See [docs/model-set.md](model-set.md) for the full rationale behind which models
+to train, ready-to-run commands, and the canonical comparison set used for
+ongoing research.
 
 ---
 
