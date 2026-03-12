@@ -7,7 +7,7 @@
 
 import { NextResponse } from "next/server";
 import { createAIProvider } from "@/lib/ai-provider";
-import { buildPreMatchBriefPrompt, PRE_MATCH_PROMPT_VERSION } from "@/lib/pre-match-prompt";
+import { buildPreMatchBriefPrompt, computeSquadContext, PRE_MATCH_PROMPT_VERSION } from "@/lib/pre-match-prompt";
 import { fetchMatchData } from "@/lib/match-data";
 import { getShooterDashboard } from "@/lib/api-data";
 import cache from "@/lib/cache-impl";
@@ -88,12 +88,28 @@ export async function GET(
 
   const shooterName = dashboard?.profile?.name ?? null;
 
+  // Compute squad starting context: find the shooter's squad and their position in it.
+  let squadContext = null;
+  if (shooterId != null) {
+    const shooterCompetitor = match.competitors.find((c) => c.shooterId === shooterId);
+    if (shooterCompetitor) {
+      const squad = match.squads.find((sq) => sq.competitorIds.includes(shooterCompetitor.id));
+      if (squad && squad.competitorIds.length > 0) {
+        const positionIdx = squad.competitorIds.indexOf(shooterCompetitor.id);
+        if (positionIdx >= 0) {
+          squadContext = computeSquadContext(positionIdx, squad.competitorIds.length, match.stages);
+        }
+      }
+    }
+  }
+
   const prompt = buildPreMatchBriefPrompt({
     matchName: match.name,
     matchLevel: match.level,
     stages: match.stages,
     shooterName,
     dashboard,
+    squadContext,
   });
 
   let tip: string;

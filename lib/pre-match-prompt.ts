@@ -7,7 +7,42 @@ import type { StageInfo, ShooterDashboardResponse } from "@/lib/types";
  * Bump when the prompt structure changes enough that cached briefs should
  * be regenerated. Embedded in the cache key alongside the model ID.
  */
-export const PRE_MATCH_PROMPT_VERSION = 2;
+export const PRE_MATCH_PROMPT_VERSION = 3;
+
+/**
+ * Within-squad starting-order context for one shooter.
+ *
+ * Convention: the competitor with the lowest bib number starts Stage 1,
+ * second-lowest starts Stage 2, etc., wrapping around when squad size < stage count.
+ * formula: starterIndex = (stage_number - 1) % squadSize
+ */
+export interface SquadContext {
+  /** 1-indexed position in the squad (by competitor number). */
+  position: number;
+  /** Total number of competitors in the squad. */
+  squadSize: number;
+  /** Stage numbers (absolute) that this shooter starts. */
+  startingStages: number[];
+}
+
+/**
+ * Compute which stages a shooter starts given their 0-indexed squad position.
+ * Pure function — no I/O.
+ *
+ * @param positionIdx  0-based index in the squad order (sorted by competitor number)
+ * @param squadSize    Total number of competitors in the squad
+ * @param stages       All stages in the match (used for stage_number values)
+ */
+export function computeSquadContext(
+  positionIdx: number,
+  squadSize: number,
+  stages: StageInfo[],
+): SquadContext {
+  const startingStages = stages
+    .filter((s) => (s.stage_number - 1) % squadSize === positionIdx)
+    .map((s) => s.stage_number);
+  return { position: positionIdx + 1, squadSize, startingStages };
+}
 
 export interface PreMatchBriefInput {
   matchName: string;
@@ -17,6 +52,8 @@ export interface PreMatchBriefInput {
   shooterName: string | null;
   /** Historical dashboard data. Null when shooter has no indexed matches. */
   dashboard: ShooterDashboardResponse | null;
+  /** Within-squad starting context. Null when squad is unknown or not yet assigned. */
+  squadContext: SquadContext | null;
 }
 
 /** Summarise stage breakdown by course length. */
@@ -58,7 +95,7 @@ function listConstraints(stages: StageInfo[]): string[] {
  * Pure function — no network calls.
  */
 export function buildPreMatchBriefPrompt(input: PreMatchBriefInput): string {
-  const { matchName, matchLevel, stages, shooterName, dashboard } = input;
+  const { matchName, matchLevel, stages, shooterName, dashboard, squadContext } = input;
 
   const levelStr = matchLevel ?? "IPSC match";
   const courseBreakdown = summariseStageCourses(stages);
@@ -70,6 +107,15 @@ STAGES: ${stages.length} stages — ${courseBreakdown}${totalRounds > 0 ? `, ${t
 
   if (constraintLines.length > 0) {
     matchSection += `\nSPECIAL STAGES: ${constraintLines.join("; ")}`;
+  }
+
+  // Squad starting context — tells the coach when the shooter is "hot" (goes first).
+  if (squadContext) {
+    const { position, squadSize, startingStages } = squadContext;
+    matchSection += `\nSQUAD POSITION: ${position} of ${squadSize} (by competitor number)`;
+    if (startingStages.length > 0) {
+      matchSection += `\nSTAGES SHOOTER STARTS: ${startingStages.join(", ")} — goes first in the squad on these stages`;
+    }
   }
 
   let competitorSection: string;

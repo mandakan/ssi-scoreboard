@@ -26,6 +26,7 @@ import {
   PopoverDescription,
 } from "@/components/ui/popover";
 import { usePreMatchWeatherQuery, usePreMatchBriefQuery } from "@/lib/queries";
+import { computeSquadContext } from "@/lib/pre-match-prompt";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RefreshCw, Sparkles } from "lucide-react";
 
@@ -613,10 +614,7 @@ export function PreMatchView({
                 <ol className="space-y-0.5">
                   {squadMembers.map((c, i) => {
                     const isMe = i === mySquadIdx;
-                    // Which stages does this position start?
-                    const starts = sortedStages
-                      .filter((s) => (s.stage_number - 1) % n === i)
-                      .map((s) => s.stage_number);
+                    const { startingStages: starts } = computeSquadContext(i, n, sortedStages);
                     return (
                       <li
                         key={c.id}
