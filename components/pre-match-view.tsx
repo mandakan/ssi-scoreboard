@@ -502,7 +502,7 @@ function DivisionSection({
         role="region"
         aria-labelledby={headingId}
       >
-        <ul className="space-y-0.5 pb-2">
+        <ul className="pb-2 sm:grid sm:grid-cols-2 sm:gap-x-2 sm:gap-y-0.5 lg:grid-cols-3">
           {shown.map((c) => {
             const isMe = c.shooterId !== null && c.shooterId === myShooterId;
             const isTracked =
@@ -529,7 +529,7 @@ function DivisionSection({
                     {c.name}
                   </span>
                   {c.club && (
-                    <span className="text-xs truncate max-w-[80px] hidden sm:inline">
+                    <span className="text-xs truncate max-w-[80px]">
                       {c.club}
                     </span>
                   )}
@@ -548,7 +548,7 @@ function DivisionSection({
             );
           })}
           {!expanded && overflow > 0 && (
-            <li>
+            <li className="sm:col-span-2 lg:col-span-3">
               <button
                 className="w-full text-left text-xs text-muted-foreground px-2 py-1 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring rounded"
                 onClick={() => setExpanded(true)}
@@ -690,7 +690,7 @@ export function PreMatchView({
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 max-w-3xl">
       {/* AI pre-match brief ----------------------------------------------- */}
       {aiAvailable && briefShooterId !== null && (
         <PreMatchBriefCard ct={ct} id={id} shooterId={briefShooterId} />
@@ -797,32 +797,35 @@ export function PreMatchView({
                 <p className="text-xs text-muted-foreground font-medium">
                   Squad shooting order (by competitor number)
                 </p>
-                <ol className="space-y-0.5">
+                <ol className="space-y-0.5 max-w-xl">
                   {squadMembers.map((c, i) => {
                     const isMe = i === mySquadIdx;
                     const { startingStages: starts } = computeSquadContext(i, n, sortedStages);
                     return (
-                      <li
-                        key={c.id}
-                        className={`flex items-center gap-2 text-sm ${isMe ? "font-semibold text-foreground" : "text-muted-foreground"}`}
-                      >
-                        <span className="tabular-nums w-5 shrink-0 text-right text-xs">
-                          {i + 1}.
-                        </span>
-                        <span className="truncate flex-1 min-w-0">{c.name}</span>
-                        {c.competitor_number && (
-                          <span className="text-xs tabular-nums shrink-0">
-                            #{c.competitor_number}
+                      <li key={c.id}>
+                        <button
+                          className={`w-full flex items-center gap-2 text-sm text-left px-1 py-0.5 rounded hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring transition-colors ${isMe ? "font-semibold text-foreground" : "text-muted-foreground"}`}
+                          onClick={() => setSheetCompetitor(c)}
+                          aria-label={`View profile for ${c.name}`}
+                        >
+                          <span className="tabular-nums w-5 shrink-0 text-right text-xs">
+                            {i + 1}.
                           </span>
-                        )}
-                        {totalStages > 0 && starts.length > 0 && (
-                          <span className={`text-xs tabular-nums shrink-0 ${isMe ? "text-primary" : "text-muted-foreground/70"}`}>
-                            starts {starts.join(", ")}
-                          </span>
-                        )}
-                        {isMe && (
-                          <span className="text-xs text-primary shrink-0">← you</span>
-                        )}
+                          <span className="truncate flex-1 min-w-0">{c.name}</span>
+                          {c.competitor_number && (
+                            <span className="text-xs tabular-nums shrink-0">
+                              #{c.competitor_number}
+                            </span>
+                          )}
+                          {totalStages > 0 && starts.length > 0 && (
+                            <span className={`text-xs tabular-nums shrink-0 ${isMe ? "text-primary" : "text-muted-foreground/70"}`}>
+                              starts {starts.join(", ")}
+                            </span>
+                          )}
+                          {isMe && (
+                            <span className="text-xs text-primary shrink-0">← you</span>
+                          )}
+                        </button>
                       </li>
                     );
                   })}
