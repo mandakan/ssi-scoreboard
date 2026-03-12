@@ -5,14 +5,15 @@
 import type { AIProvider, AIProviderConfig } from "@/lib/ai-provider";
 
 const TIMEOUT_MS = 10_000;
-const SYSTEM_MESSAGE = "You are a concise IPSC shooting coach. Give specific, actionable advice in 1-2 sentences.";
+const DEFAULT_MAX_TOKENS = 200;
+const SYSTEM_MESSAGE = "You are a concise IPSC shooting coach. Give specific, actionable coaching advice. Follow the length instruction in the prompt exactly.";
 
 export function createOpenAIProvider(config: AIProviderConfig): AIProvider {
   const baseUrl = config.apiUrl ?? "https://api.openai.com/v1";
 
   return {
     modelId: config.model,
-    async generateTip(prompt: string): Promise<string> {
+    async generateTip(prompt: string, maxTokens = DEFAULT_MAX_TOKENS): Promise<string> {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
@@ -29,7 +30,7 @@ export function createOpenAIProvider(config: AIProviderConfig): AIProvider {
               { role: "system", content: SYSTEM_MESSAGE },
               { role: "user", content: prompt },
             ],
-            max_tokens: 150,
+            max_tokens: maxTokens,
             temperature: 0.7,
           }),
           signal: controller.signal,

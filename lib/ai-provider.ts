@@ -5,8 +5,15 @@ import { createCloudflareProvider } from "@/lib/ai-providers/cloudflare-workers-
 import { createOpenAIProvider } from "@/lib/ai-providers/openai-compatible";
 
 export interface AIProvider {
-  /** Generate a coaching tip from a text prompt. Returns the raw text response. */
-  generateTip(prompt: string): Promise<string>;
+  /**
+   * Generate a coaching tip from a text prompt. Returns the raw text response.
+   * @param maxTokens Maximum tokens to generate. Callers should pass a value
+   *   appropriate for the expected output length:
+   *   - Pre-match brief (max 55 words): 100
+   *   - Post-match coaching/roast (2–3 sentences): 200
+   *   Defaults to 200 if omitted.
+   */
+  generateTip(prompt: string, maxTokens?: number): Promise<string>;
   /** Human-readable model identifier for cache keys and response metadata. */
   modelId: string;
 }

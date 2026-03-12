@@ -114,7 +114,8 @@ export async function GET(
 
   let tip: string;
   try {
-    tip = await aiProvider.generateTip(prompt);
+    // Pre-match brief targets max 55 words — 100 tokens is sufficient with headroom.
+    tip = await aiProvider.generateTip(prompt, 100);
   } catch (err) {
     console.error("[pre-match/brief] AI generation failed:", err);
     return NextResponse.json({ error: "AI generation failed" }, { status: 502 });
