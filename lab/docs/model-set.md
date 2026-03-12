@@ -186,8 +186,37 @@ uv run rating train \
   --scoring stage_hf
 ```
 
-5 commands instead of 11; Groups A, B, C, and the stage_hf pair all use
+5 commands for the core set; Groups A, B, C, and the stage_hf pair all use
 parallel workers automatically.
+
+```bash
+# Group E — 2025 season, all levels (3 algorithms in parallel)
+uv run rating train \
+  --algorithm openskill_pl_decay,openskill_bt_lvl_decay,ics \
+  --scoring match_pct \
+  --date-from 2025-01-01 --date-to 2025-12-31 && \
+
+# Group E — 2025 season baselines (2 algorithms in parallel)
+uv run rating train \
+  --algorithm openskill,elo \
+  --scoring match_pct \
+  --date-from 2025-01-01 --date-to 2025-12-31 && \
+
+# Group E — 2025 season, L3+ only (3 algorithms in parallel)
+uv run rating train \
+  --algorithm openskill_pl_decay,openskill_bt_lvl_decay,ics \
+  --scoring match_pct \
+  --date-from 2025-01-01 --date-to 2025-12-31 --min-level l3 && \
+
+# Group E — 2025 season, L3+ baselines (2 algorithms in parallel)
+uv run rating train \
+  --algorithm openskill,elo \
+  --scoring match_pct \
+  --date-from 2025-01-01 --date-to 2025-12-31 --min-level l3
+```
+
+Stored as e.g. `openskill_pl_decay_mpct_2025`, `ics_mpct_l3plus_2025`, etc.
+4 additional commands, all using parallel workers.
 
 ### Benchmark
 
@@ -241,34 +270,6 @@ Key questions they can answer:
 - Do the all-time optimal hyperparameters still hold on 2025-only data? If not,
   the model may benefit from a recency-aware retuning cadence.
 
----
-
-### Seasonal snapshot models (optional)
-
-Date-filtered training is most useful when you want a "current season" view
-that ignores long historical tails — e.g. for team selection where only recent
-form matters. These are not part of the core 11-model set but can be added
-alongside it:
-
-```bash
-# 2025 season — primary algorithm only, all levels
-uv run rating train \
-  --algorithm openskill_pl_decay,openskill_bt_lvl_decay,ics \
-  --scoring match_pct \
-  --date-from 2025-01-01 --date-to 2025-12-31
-# → stored as openskill_pl_decay_mpct_2025, openskill_bt_lvl_decay_mpct_2025, ics_mpct_2025
-
-# 2025 season, L3+ only (highest-signal recent data)
-uv run rating train \
-  --algorithm openskill_pl_decay,openskill_bt_lvl_decay,ics \
-  --scoring match_pct \
-  --date-from 2025-01-01 --date-to 2025-12-31 --min-level l3
-# → stored as openskill_pl_decay_mpct_l3plus_2025, etc.
-```
-
-The auto-generated suffix combines level and date when both are set:
-`_mpct_l3plus_2025` for `--min-level l3 --date-from 2025-01-01 --date-to 2025-12-31`.
-Use `--label` to override this if you prefer a shorter name.
 
 ---
 
