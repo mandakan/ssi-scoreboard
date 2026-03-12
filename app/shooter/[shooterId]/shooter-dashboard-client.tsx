@@ -1610,40 +1610,8 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
               </div>
             )}
           </div>
-          {/* Decorative achievement ribbon bar — like medals on a uniform */}
-          {data.achievements && data.achievements.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-2.5" aria-hidden="true">
-              {data.achievements.map((a) => {
-                const highestTier =
-                  a.unlockedTiers.length > 0
-                    ? a.unlockedTiers[a.unlockedTiers.length - 1].level
-                    : null;
-                const Icon = ACHIEVEMENT_ICONS[a.definition.icon] ?? HelpCircle;
-                const colorClass = highestTier
-                  ? (TIER_COLORS[highestTier] ?? TIER_COLORS[1])
-                  : "bg-muted/30 text-muted-foreground";
-                return (
-                  <div
-                    key={a.definition.id}
-                    className={cn(
-                      "w-4 h-4 rounded-full flex items-center justify-center",
-                      colorClass,
-                      !highestTier && "opacity-30",
-                    )}
-                  >
-                    <Icon className="w-2.5 h-2.5" />
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
       </section>
-
-      {/* ── Achievements (preview) ──────────────────────────────────── */}
-      {data.achievements && data.achievements.length > 0 && (
-        <AchievementsSection achievements={data.achievements} />
-      )}
 
       {/* ── Aggregate metrics ──────────────────────────────────────────── */}
       {displayStats.totalStages > 0 && (
@@ -1733,6 +1701,11 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
             divisionFilter={effectiveFilter}
           />
         </section>
+      )}
+
+      {/* ── Achievements (preview) ──────────────────────────────────── */}
+      {data.achievements && data.achievements.length > 0 && (
+        <AchievementsSection achievements={data.achievements} />
       )}
 
       {/* ── Upcoming matches ──────────────────────────────────────────── */}
