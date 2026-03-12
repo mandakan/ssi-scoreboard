@@ -1,9 +1,22 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { ChevronDown, ChevronUp, HelpCircle } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  HelpCircle,
+  Sun,
+  Cloud,
+  CloudRain,
+  CloudSnow,
+  CloudDrizzle,
+  Zap,
+  Wind,
+  Thermometer,
+  Droplets,
+} from "lucide-react";
 import { regionToFlagEmoji } from "@/lib/ipsc-categories";
-import type { MatchResponse, CompetitorInfo } from "@/lib/types";
+import type { MatchResponse, CompetitorInfo, MatchWeatherData } from "@/lib/types";
 import {
   Popover,
   PopoverContent,
@@ -12,6 +25,7 @@ import {
   PopoverTitle,
   PopoverDescription,
 } from "@/components/ui/popover";
+import { usePreMatchWeatherQuery } from "@/lib/queries";
 
 interface PreMatchViewProps {
   match: MatchResponse;
@@ -20,12 +34,147 @@ interface PreMatchViewProps {
   myShooterId: number | null;
 }
 
+// ── Stage rotation ────────────────────────────────────────────────────────────
+
 // IPSC standard round-robin rotation.
 // For squad number `s` (1-indexed) and round `r` (1-indexed), returns the
 // 0-based index into a stages array sorted by stage_number.
 function getStageIndex(squadNumber: number, round: number, totalStages: number): number {
   return ((squadNumber - 1) + (round - 1)) % totalStages;
 }
+
+// ── Constraint parsing ────────────────────────────────────────────────────────
+
+interface StageConstraints {
+  strongHand: boolean;
+  weakHand: boolean;
+  movingTargets: boolean;
+  unloadedStart: boolean;
+}
+
+function parseConstraints(procedure: string | null, firearmCondition: string | null): StageConstraints {
+  const proc = procedure ?? "";
+  const fc = firearmCondition ?? "";
+  return {
+    strongHand: /strong hand/i.test(proc),
+    weakHand: /weak hand/i.test(proc),
+    movingTargets: /moving target/i.test(proc),
+    unloadedStart: /empty|unloaded/i.test(fc),
+  };
+}
+
+function ConstraintBadge({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center text-xs bg-amber-500/15 text-amber-800 dark:text-amber-300 px-1.5 py-0.5 rounded">
+      {label}
+    </span>
+  );
+}
+
+// ── Weather card ──────────────────────────────────────────────────────────────
+
+function weatherIcon(code: number | null) {
+  if (code == null) return <Cloud className="w-5 h-5" aria-hidden="true" />;
+  if (code === 0 || code === 1) return <Sun className="w-5 h-5" aria-hidden="true" />;
+  if (code === 2 || code === 3) return <Cloud className="w-5 h-5" aria-hidden="true" />;
+  if (code >= 45 && code <= 48) return <Cloud className="w-5 h-5" aria-hidden="true" />;
+  if (code >= 51 && code <= 57) return <CloudDrizzle className="w-5 h-5" aria-hidden="true" />;
+  if (code >= 61 && code <= 67) return <CloudRain className="w-5 h-5" aria-hidden="true" />;
+  if (code >= 71 && code <= 77) return <CloudSnow className="w-5 h-5" aria-hidden="true" />;
+  if (code >= 80 && code <= 86) return <CloudRain className="w-5 h-5" aria-hidden="true" />;
+  if (code >= 95) return <Zap className="w-5 h-5" aria-hidden="true" />;
+  return <Cloud className="w-5 h-5" aria-hidden="true" />;
+}
+
+function WeatherCard({ weather }: { weather: MatchWeatherData }) {
+  const tempStr =
+    weather.tempRange != null
+      ? `${Math.round(weather.tempRange[0])}–${Math.round(weather.tempRange[1])}°C`
+      : null;
+  const windStr =
+    weather.windspeedAvg != null
+      ? `${weather.windspeedAvg.toFixed(1)} m/s${weather.winddirectionDominant ? ` ${weather.winddirectionDominant}` : ""}${
+          weather.windgustMax != null ? `, gusts ${weather.windgustMax.toFixed(1)} m/s` : ""
+        }`
+      : null;
+  const precipStr =
+    weather.precipitationTotal != null && weather.precipitationTotal > 0
+      ? `${weather.precipitationTotal.toFixed(1)} mm`
+      : null;
+
+  return (
+    <div className="rounded-lg border p-4 space-y-3">
+      <div className="flex items-center gap-1.5">
+        <h2 className="font-semibold">Match day weather</h2>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+              aria-label="About match day weather"
+            >
+              <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-72" side="bottom" align="start">
+            <PopoverHeader>
+              <PopoverTitle>Match day weather</PopoverTitle>
+              <PopoverDescription>
+                Forecast for the match venue on the start date.
+              </PopoverDescription>
+            </PopoverHeader>
+            <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+              <p>
+                Sourced from Open-Meteo (free, no API key). Covers the full
+                match day in UTC. Forecast accuracy improves closer to the date.
+              </p>
+              <p>
+                Temperature and precipitation are for the day window (approximately 08:00–18:00 UTC).
+              </p>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      <div className="flex items-start gap-3">
+        <div className="text-muted-foreground mt-0.5">
+          {weatherIcon(weather.weatherCode)}
+        </div>
+        <div className="space-y-1.5 flex-1">
+          {weather.weatherLabel && (
+            <p className="text-sm font-medium capitalize">{weather.weatherLabel}</p>
+          )}
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {tempStr && (
+              <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                <Thermometer className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                {tempStr}
+              </span>
+            )}
+            {windStr && (
+              <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                <Wind className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                {windStr}
+              </span>
+            )}
+            {precipStr && (
+              <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                <Droplets className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                {precipStr}
+              </span>
+            )}
+          </div>
+          {weather.elevation != null && (
+            <p className="text-xs text-muted-foreground">
+              Elevation: {Math.round(weather.elevation)} m
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Division field ────────────────────────────────────────────────────────────
 
 const MAX_COLLAPSED = 5;
 
@@ -49,7 +198,7 @@ function DivisionSection({
 
   const shown = expanded ? competitors : competitors.slice(0, MAX_COLLAPSED);
   const overflow = competitors.length - MAX_COLLAPSED;
-  const headingId = `div-heading-${division.replace(/\s+/g, "-").toLowerCase()}`;
+  const headingId = `div-heading-${division.replace(/\W+/g, "-").toLowerCase()}`;
 
   return (
     <div>
@@ -135,6 +284,8 @@ function DivisionSection({
   );
 }
 
+// ── Main component ────────────────────────────────────────────────────────────
+
 export function PreMatchView({
   match,
   selectedIds,
@@ -207,9 +358,22 @@ export function PreMatchView({
 
   const useSelectControl = match.squads.length > 8;
 
+  // Weather forecast — only fetched when venue coordinates are available.
+  const matchDate = match.date ? match.date.slice(0, 10) : null;
+  const weatherQuery = usePreMatchWeatherQuery(match.lat, match.lng, matchDate);
+
+  const displayRows = rotation.length > 0
+    ? rotation
+    : sortedStages.map((s, i) => ({ round: i + 1, stage: s }));
+
   return (
     <div className="space-y-4">
-      {/* Stage rotation ---------------------------------------------------- */}
+      {/* Weather forecast -------------------------------------------------- */}
+      {match.lat != null && match.lng != null && weatherQuery.data && (
+        <WeatherCard weather={weatherQuery.data} />
+      )}
+
+      {/* Stage rotation / list --------------------------------------------- */}
       {sortedStages.length > 0 && (
         <div className="rounded-lg border p-4 space-y-3">
           <div className="flex items-center gap-1.5">
@@ -287,43 +451,72 @@ export function PreMatchView({
           )}
 
           <ol
-            className="space-y-2"
+            className="space-y-3"
             aria-label={
               selectedSquadNum !== null
                 ? `Stage rotation for Squad ${selectedSquadNum}`
                 : "Stage list"
             }
           >
-            {(rotation.length > 0 ? rotation : sortedStages.map((s, i) => ({ round: i + 1, stage: s }))).map(
-              ({ round, stage }) => (
-                <li key={stage.id} className="flex items-center gap-3 text-sm">
-                  {match.squads.length > 0 && (
-                    <span className="text-xs text-muted-foreground w-14 shrink-0 tabular-nums">
-                      Round {round}
-                    </span>
-                  )}
-                  <span className="font-medium flex-1 min-w-0 truncate">
-                    Stage {stage.stage_number}
-                    <span className="font-normal text-muted-foreground">
-                      {" "}
-                      — {stage.name}
-                    </span>
-                  </span>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {stage.course_display && (
-                      <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                        {stage.course_display}
+            {displayRows.map(({ round, stage }) => {
+              const c = parseConstraints(stage.procedure, stage.firearm_condition);
+              const constraintBadges = [
+                c.unloadedStart && "Unloaded start",
+                c.strongHand && "Strong hand",
+                c.weakHand && "Weak hand",
+                c.movingTargets && "Moving targets",
+              ].filter(Boolean) as string[];
+
+              return (
+                <li key={stage.id} className="space-y-1.5">
+                  <div className="flex items-center gap-3 text-sm">
+                    {match.squads.length > 0 && (
+                      <span className="text-xs text-muted-foreground w-14 shrink-0 tabular-nums">
+                        Round {round}
                       </span>
                     )}
-                    {stage.min_rounds != null && (
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {stage.min_rounds}r
+                    <span className="font-medium flex-1 min-w-0 truncate">
+                      Stage {stage.stage_number}
+                      <span className="font-normal text-muted-foreground">
+                        {" "}
+                        — {stage.name}
                       </span>
-                    )}
+                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {stage.course_display && (
+                        <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                          {stage.course_display}
+                        </span>
+                      )}
+                      {stage.min_rounds != null && (
+                        <span className="text-xs text-muted-foreground tabular-nums">
+                          {stage.min_rounds}r
+                        </span>
+                      )}
+                    </div>
                   </div>
+                  {/* Target breakdown */}
+                  {(stage.paper_targets != null || stage.steel_targets != null) && (
+                    <div className={`flex gap-2 text-xs text-muted-foreground ${match.squads.length > 0 ? "ml-[4.25rem]" : ""}`}>
+                      {stage.paper_targets != null && (
+                        <span>{stage.paper_targets}P</span>
+                      )}
+                      {stage.steel_targets != null && stage.steel_targets > 0 && (
+                        <span>{stage.steel_targets}S</span>
+                      )}
+                    </div>
+                  )}
+                  {/* Constraint badges */}
+                  {constraintBadges.length > 0 && (
+                    <div className={`flex flex-wrap gap-1 ${match.squads.length > 0 ? "ml-[4.25rem]" : ""}`}>
+                      {constraintBadges.map((label) => (
+                        <ConstraintBadge key={label} label={label} />
+                      ))}
+                    </div>
+                  )}
                 </li>
-              ),
-            )}
+              );
+            })}
           </ol>
         </div>
       )}

@@ -28,6 +28,10 @@ export interface StageInfo {
   ssi_url: string | null;
   /** Official course-length classification set by the match director ("Short"/"Medium"/"Long"). */
   course_display: string | null;
+  /** Full procedure text from the match director. Null if not set. */
+  procedure: string | null;
+  /** Firearm condition requirements (e.g. "Unloaded, hammer down"). Null if not set. */
+  firearm_condition: string | null;
 }
 
 export interface CompetitorInfo {

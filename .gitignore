@@ -48,3 +48,13 @@ lab/__pycache__/
 lab/src/__pycache__/
 lab/**/__pycache__/
 lab/**/*.pyc
+
+# Wrangler local state
+.wrangler/
+
+# Lab generated outputs
+lab/data/ipscresults-raw/
+lab/site/
+
+# Migration scratch files
+migration.sql

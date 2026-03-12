@@ -20,5 +20,6 @@ export const MAX_COMPETITORS = 12;
  *   8 → added get_division_display to IpscCompetitorNode in MATCH_QUERY + SCORECARDS_QUERY;
  *       added get_full_rule_display to IpscMatchNode (multi-discipline support)
  *   9 → added lat, lng to IpscMatchNode in MATCH_QUERY; lat/lng on MatchResponse (venue coordinates)
+ *  10 → added procedure, firearm_condition to StageInfo on MatchResponse
  */
-export const CACHE_SCHEMA_VERSION = 9;
+export const CACHE_SCHEMA_VERSION = 10;

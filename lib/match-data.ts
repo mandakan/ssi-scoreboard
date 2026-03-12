@@ -174,6 +174,8 @@ export async function fetchMatchData(
       ? `https://${s.get_full_absolute_url}`
       : null,
     course_display: s.get_course_display ?? null,
+    procedure: s.procedure ?? null,
+    firearm_condition: s.firearm_condition ?? null,
   }));
 
   const competitors: CompetitorInfo[] = (
