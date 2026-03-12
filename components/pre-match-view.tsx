@@ -456,8 +456,9 @@ export function PreMatchView({
 
   // Weather forecast — fetched when coords or venue name available.
   const matchDate = match.date ? match.date.slice(0, 10) : null;
+  const [now] = useState(Date.now);
   const daysUntilMatch = matchDate
-    ? Math.floor((new Date(matchDate).getTime() - Date.now()) / 86_400_000)
+    ? Math.floor((new Date(matchDate).getTime() - now) / 86_400_000)
     : null;
   // Open-Meteo forecast covers up to 16 days ahead.
   const weatherForecastAvailable = daysUntilMatch !== null && daysUntilMatch <= 16;
