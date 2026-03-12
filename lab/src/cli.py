@@ -664,7 +664,8 @@ def train(
             "'default' = recommended set (openskill_pl_decay, openskill_bt_lvl_decay, "
             "openskill_bt_lvl). "
             "'all' = also includes baselines (openskill, openskill_bt, elo). "
-            "Pass a single algorithm name to train just that one."
+            "Pass a single name or a comma-separated list to train a specific subset "
+            "in parallel, e.g. 'openskill_pl_decay,openskill_bt_lvl_decay,ics'."
         ),
     ),
     scoring: str = typer.Option(

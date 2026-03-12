@@ -188,7 +188,9 @@ def get_algorithms(name: str | None = None) -> list[RatingAlgorithm]:
 
     None or 'default' → recommended algorithms only (bt_lvl, pl_decay, bt_lvl_decay).
     'all' → all algorithms including baselines (elo, openskill, openskill_bt, ics).
-    Any other string → the single algorithm with that name.
+    Comma-separated list → the named algorithms in the given order, e.g.
+        'openskill_pl_decay,openskill_bt_lvl_decay,ics'
+    Any other single string → the single algorithm with that name.
     """
     from src.algorithms.elo import MultiElo
     from src.algorithms.ics import ICSAlgorithm
@@ -220,6 +222,17 @@ def get_algorithms(name: str | None = None) -> list[RatingAlgorithm]:
 
     if name == "all":
         return all_algos
+
+    if "," in name:
+        names = [n.strip() for n in name.split(",") if n.strip()]
+        algo_map = {a.name: a for a in all_algos}
+        result: list[RatingAlgorithm] = []
+        for n in names:
+            if n not in algo_map:
+                available = ", ".join(algo_map)
+                raise ValueError(f"Unknown algorithm '{n}'. Available: {available}")
+            result.append(algo_map[n])
+        return result
 
     for algo in all_algos:
         if algo.name == name:

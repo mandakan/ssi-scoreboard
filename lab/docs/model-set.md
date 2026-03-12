@@ -158,26 +158,36 @@ uv run rating clear-ratings \
 
 ### Full training run
 
+Algorithms that share the same scoring mode and level filter are grouped into
+a single command so they train in parallel (one worker per algorithm):
+
 ```bash
-# Group A — all-data baselines
-uv run rating train --algorithm openskill_pl_decay --scoring match_pct && \
-uv run rating train --algorithm openskill_bt_lvl_decay --scoring match_pct && \
-uv run rating train --algorithm ics --scoring match_pct && \
+# Group A — all-data baselines (3 algorithms in parallel)
+uv run rating train \
+  --algorithm openskill_pl_decay,openskill_bt_lvl_decay,ics \
+  --scoring match_pct && \
 
-# Group B — algorithm baselines
-uv run rating train --algorithm openskill_pl --scoring match_pct && \
-uv run rating train --algorithm elo --scoring match_pct && \
+# Group B — algorithm baselines (2 algorithms in parallel)
+uv run rating train \
+  --algorithm openskill_pl,elo \
+  --scoring match_pct && \
 
-# Group C — L3+ stratified
-uv run rating train --algorithm openskill_pl_decay --scoring match_pct --min-level l3 && \
-uv run rating train --algorithm openskill_bt_lvl_decay --scoring match_pct --min-level l3 && \
-uv run rating train --algorithm ics --scoring match_pct --min-level l3 && \
+# Group C — L3+ stratified (3 algorithms in parallel)
+uv run rating train \
+  --algorithm openskill_pl_decay,openskill_bt_lvl_decay,ics \
+  --scoring match_pct --min-level l3 && \
 
 # Group D — orthogonal signals
-uv run rating train --algorithm openskill_pl_decay --scoring match_pct_combined && \
-uv run rating train --algorithm openskill_pl_decay --scoring stage_hf && \
-uv run rating train --algorithm openskill_bt_lvl_decay --scoring stage_hf
+uv run rating train \
+  --algorithm openskill_pl_decay \
+  --scoring match_pct_combined && \
+uv run rating train \
+  --algorithm openskill_pl_decay,openskill_bt_lvl_decay \
+  --scoring stage_hf
 ```
+
+5 commands instead of 11; Groups A, B, C, and the stage_hf pair all use
+parallel workers automatically.
 
 ### Benchmark
 
