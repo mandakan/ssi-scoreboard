@@ -195,12 +195,26 @@ export async function fetchMatchData(
   }));
 
   const approvedIds = new Set(competitors.map((c) => c.id));
+  // Build a lookup for sorting squad members by their competitor (bib) number.
+  const competitorById = new Map(competitors.map((c) => [c.id, c]));
   const squads: SquadInfo[] = (ev.squads ?? [])
     .map((s) => {
       const competitorIds = (s.competitors ?? [])
         .map((c) => parseInt(c.id, 10))
         .filter((cid) => approvedIds.has(cid))
-        .sort((a, b) => a - b);
+        .sort((a, b) => {
+          // Sort by competitor (bib) number — this reflects typical within-squad
+          // shooting order. Numeric numbers are sorted numerically; non-numeric
+          // alphabetically; numeric before non-numeric.
+          const na = parseInt(competitorById.get(a)?.competitor_number ?? "", 10);
+          const nb = parseInt(competitorById.get(b)?.competitor_number ?? "", 10);
+          if (!isNaN(na) && !isNaN(nb)) return na - nb;
+          if (!isNaN(na)) return -1;
+          if (!isNaN(nb)) return 1;
+          return (competitorById.get(a)?.competitor_number ?? "").localeCompare(
+            competitorById.get(b)?.competitor_number ?? "",
+          );
+        });
       return {
         id: parseInt(s.id, 10),
         number: s.number ?? 0,

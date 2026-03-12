@@ -579,6 +579,52 @@ export function PreMatchView({
             </div>
           )}
 
+          {/* Squad shooting order ----------------------------------------- */}
+          {selectedSquadNum !== null && (() => {
+            const sq = match.squads.find((s) => s.number === selectedSquadNum);
+            if (!sq || sq.competitorIds.length === 0) return null;
+            const members = sq.competitorIds
+              .map((cid) => match.competitors.find((c) => c.id === cid))
+              .filter((c): c is CompetitorInfo => c != null);
+            const myIdx = members.findIndex(
+              (c) => c.shooterId === myShooterId || selectedIds.includes(c.id),
+            );
+            return (
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground font-medium">
+                  Squad shooting order (by competitor number)
+                </p>
+                <ol className="space-y-0.5">
+                  {members.map((c, i) => {
+                    const isMe = i === myIdx;
+                    return (
+                      <li
+                        key={c.id}
+                        className={`flex items-center gap-2 text-sm ${isMe ? "font-semibold text-foreground" : "text-muted-foreground"}`}
+                      >
+                        <span className="tabular-nums w-5 shrink-0 text-right text-xs">
+                          {i + 1}.
+                        </span>
+                        <span className="truncate flex-1">{c.name}</span>
+                        {c.competitor_number && (
+                          <span className="text-xs tabular-nums shrink-0">
+                            #{c.competitor_number}
+                          </span>
+                        )}
+                        {isMe && (
+                          <span className="text-xs text-primary shrink-0">← you</span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+                <p className="text-xs text-muted-foreground/70 italic">
+                  Order within the squad may be adjusted on match day — confirm with your RO or match director.
+                </p>
+              </div>
+            );
+          })()}
+
           <ol
             className="space-y-3"
             aria-label={
