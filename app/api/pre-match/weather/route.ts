@@ -8,6 +8,7 @@ import {
   processWeatherResponse,
   type OpenMeteoResponse,
 } from "@/lib/weather";
+import { geocodeVenueName } from "@/lib/geocoding";
 import type { MatchWeatherData } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -33,15 +34,34 @@ export async function GET(request: Request): Promise<NextResponse<MatchWeatherDa
   const latStr = searchParams.get("lat");
   const lngStr = searchParams.get("lng");
   const date = searchParams.get("date"); // YYYY-MM-DD
+  const venue = searchParams.get("venue");
+  const region = searchParams.get("region");
 
-  if (!latStr || !lngStr || !date) {
-    return NextResponse.json({ error: "Missing lat, lng, or date" }, { status: 400 });
+  if (!date) {
+    return NextResponse.json({ error: "Missing date" }, { status: 400 });
   }
 
-  const lat = parseFloat(latStr);
-  const lng = parseFloat(lngStr);
-  if (!isFinite(lat) || !isFinite(lng)) {
-    return NextResponse.json({ error: "Invalid lat/lng" }, { status: 400 });
+  let lat = latStr ? parseFloat(latStr) : null;
+  let lng = lngStr ? parseFloat(lngStr) : null;
+  if (lat != null && !isFinite(lat)) lat = null;
+  if (lng != null && !isFinite(lng)) lng = null;
+
+  // Fallback: geocode the venue name when SSI has no GPS coordinates.
+  // Results are cached permanently in Redis so Nominatim is called at most once per venue.
+  if ((lat == null || lng == null) && venue) {
+    try {
+      const geocoded = await geocodeVenueName(venue, region ?? null);
+      if (geocoded) {
+        lat = geocoded.lat;
+        lng = geocoded.lng;
+      }
+    } catch {
+      // Non-fatal — fall through to the coordinates check below
+    }
+  }
+
+  if (lat == null || lng == null) {
+    return NextResponse.json({ error: "No coordinates available for this venue" }, { status: 422 });
   }
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {

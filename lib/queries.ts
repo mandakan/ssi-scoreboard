@@ -109,20 +109,23 @@ export function usePreMatchWeatherQuery(
   lat: number | null,
   lng: number | null,
   date: string | null,
+  venue: string | null,
+  region: string | null,
 ) {
   return useQuery<MatchWeatherData, Error>({
-    queryKey: ["pre-match-weather", lat?.toFixed(4), lng?.toFixed(4), date],
+    queryKey: ["pre-match-weather", lat?.toFixed(4), lng?.toFixed(4), date, venue, region],
     queryFn: async () => {
-      const params = new URLSearchParams({
-        lat: String(lat),
-        lng: String(lng),
-        date: date!.slice(0, 10), // YYYY-MM-DD
-      });
+      const params = new URLSearchParams({ date: date!.slice(0, 10) });
+      if (lat != null) params.set("lat", String(lat));
+      if (lng != null) params.set("lng", String(lng));
+      if (venue) params.set("venue", venue);
+      if (region) params.set("region", region);
       const res = await fetch(`/api/pre-match/weather?${params}`);
       if (!res.ok) throw new Error("Weather unavailable");
       return res.json() as Promise<MatchWeatherData>;
     },
-    enabled: lat != null && lng != null && date != null,
+    // Fetch when we have either GPS coords or a venue name to geocode.
+    enabled: date != null && (lat != null && lng != null || venue != null),
     staleTime: 3_600_000, // 1 hour — mirrors server revalidate
     retry: false,
   });

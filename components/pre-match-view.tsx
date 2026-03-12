@@ -92,19 +92,19 @@ function weatherIcon(code: number | null) {
   return <Cloud className="w-5 h-5" aria-hidden="true" />;
 }
 
-function WeatherCard({ weather }: { weather: MatchWeatherData }) {
+function WeatherCard({ weather, tooFarAhead }: { weather?: MatchWeatherData; tooFarAhead?: boolean }) {
   const tempStr =
-    weather.tempRange != null
+    weather?.tempRange != null
       ? `${Math.round(weather.tempRange[0])}–${Math.round(weather.tempRange[1])}°C`
       : null;
   const windStr =
-    weather.windspeedAvg != null
+    weather?.windspeedAvg != null
       ? `${weather.windspeedAvg.toFixed(1)} m/s${weather.winddirectionDominant ? ` ${weather.winddirectionDominant}` : ""}${
           weather.windgustMax != null ? `, gusts ${weather.windgustMax.toFixed(1)} m/s` : ""
         }`
       : null;
   const precipStr =
-    weather.precipitationTotal != null && weather.precipitationTotal > 0
+    weather?.precipitationTotal != null && weather.precipitationTotal > 0
       ? `${weather.precipitationTotal.toFixed(1)} mm`
       : null;
 
@@ -132,6 +132,7 @@ function WeatherCard({ weather }: { weather: MatchWeatherData }) {
               <p>
                 Sourced from Open-Meteo (free, no API key). Covers the full
                 match day in UTC. Forecast accuracy improves closer to the date.
+                Available up to 16 days in advance.
               </p>
               <p>
                 Temperature and precipitation are for the day window (approximately 08:00–18:00 UTC).
@@ -141,41 +142,48 @@ function WeatherCard({ weather }: { weather: MatchWeatherData }) {
         </Popover>
       </div>
 
-      <div className="flex items-start gap-3">
-        <div className="text-muted-foreground mt-0.5">
-          {weatherIcon(weather.weatherCode)}
-        </div>
-        <div className="space-y-1.5 flex-1">
-          {weather.weatherLabel && (
-            <p className="text-sm font-medium capitalize">{weather.weatherLabel}</p>
-          )}
-          <div className="flex flex-wrap gap-x-4 gap-y-1">
-            {tempStr && (
-              <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                <Thermometer className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                {tempStr}
-              </span>
+      {tooFarAhead ? (
+        <p className="text-sm text-muted-foreground">
+          Forecast not yet available — Open-Meteo covers up to 16 days ahead.
+          Check back closer to the match.
+        </p>
+      ) : weather ? (
+        <div className="flex items-start gap-3">
+          <div className="text-muted-foreground mt-0.5">
+            {weatherIcon(weather.weatherCode)}
+          </div>
+          <div className="space-y-1.5 flex-1">
+            {weather.weatherLabel && (
+              <p className="text-sm font-medium capitalize">{weather.weatherLabel}</p>
             )}
-            {windStr && (
-              <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                <Wind className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                {windStr}
-              </span>
-            )}
-            {precipStr && (
-              <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                <Droplets className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                {precipStr}
-              </span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {tempStr && (
+                <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <Thermometer className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                  {tempStr}
+                </span>
+              )}
+              {windStr && (
+                <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <Wind className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                  {windStr}
+                </span>
+              )}
+              {precipStr && (
+                <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <Droplets className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                  {precipStr}
+                </span>
+              )}
+            </div>
+            {weather.elevation != null && (
+              <p className="text-xs text-muted-foreground">
+                Elevation: {Math.round(weather.elevation)} m
+              </p>
             )}
           </div>
-          {weather.elevation != null && (
-            <p className="text-xs text-muted-foreground">
-              Elevation: {Math.round(weather.elevation)} m
-            </p>
-          )}
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }
@@ -446,9 +454,18 @@ export function PreMatchView({
 
   const useSelectControl = match.squads.length > 8;
 
-  // Weather forecast — only fetched when venue coordinates are available.
+  // Weather forecast — fetched when coords or venue name available.
   const matchDate = match.date ? match.date.slice(0, 10) : null;
-  const weatherQuery = usePreMatchWeatherQuery(match.lat, match.lng, matchDate);
+  const daysUntilMatch = matchDate
+    ? Math.floor((new Date(matchDate).getTime() - Date.now()) / 86_400_000)
+    : null;
+  // Open-Meteo forecast covers up to 16 days ahead.
+  const weatherForecastAvailable = daysUntilMatch !== null && daysUntilMatch <= 16;
+  const hasVenueInfo = match.lat != null || match.lng != null || match.venue != null;
+  const weatherQuery = usePreMatchWeatherQuery(
+    match.lat, match.lng, matchDate,
+    match.venue, match.region,
+  );
 
   // Resolve the best shooterId for the AI brief: prefer identity, then first
   // selected competitor that has a global shooterId.
@@ -473,8 +490,11 @@ export function PreMatchView({
       )}
 
       {/* Weather forecast -------------------------------------------------- */}
-      {match.lat != null && match.lng != null && weatherQuery.data && (
-        <WeatherCard weather={weatherQuery.data} />
+      {hasVenueInfo && matchDate && (
+        <WeatherCard
+          weather={weatherForecastAvailable ? weatherQuery.data : undefined}
+          tooFarAhead={!weatherForecastAvailable}
+        />
       )}
 
       {/* Stage rotation / list --------------------------------------------- */}
