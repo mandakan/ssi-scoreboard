@@ -43,13 +43,20 @@ interface RawCompetitor {
   shooter?: { id: string } | null;
 }
 
+interface RawSquad {
+  id: string;
+  competitors?: Array<{ id: string }> | null;
+}
+
 interface RawMatchEvent {
   name: string;
   venue?: string | null;
   starts?: string | null;
   level?: string | null;
   region?: string | null;
+  get_full_rule_display?: string | null;
   competitors_approved_w_wo_results_not_dnf?: RawCompetitor[];
+  squads?: RawSquad[] | null;
 }
 
 interface RawMatchData {
@@ -304,6 +311,28 @@ export async function GET(
             ).length;
           }
 
+          // Build local-competitor-id → global-shooter-id map for squad lookup
+          const shooterIdByCompetitorId = new Map<string, number>();
+          for (const comp of allCompetitors) {
+            const globalId = decodeShooterId(comp.shooter?.id);
+            if (globalId) shooterIdByCompetitorId.set(comp.id, globalId);
+          }
+
+          // Find which squad the shooter is in and collect squadmates' global IDs
+          let squadmateShooterIds: number[] = [];
+          for (const squad of (ev.squads ?? [])) {
+            const memberIds = (squad.competitors ?? []).map((c) => c.id);
+            if (memberIds.includes(competitor.id)) {
+              squadmateShooterIds = memberIds
+                .filter((id) => id !== competitor.id)
+                .flatMap((id) => {
+                  const gid = shooterIdByCompetitorId.get(id);
+                  return gid != null ? [gid] : [];
+                });
+              break;
+            }
+          }
+
           // Compute stats from scorecards if available
           let stageCount = 0;
           let avgHF: number | null = null;
@@ -354,6 +383,7 @@ export async function GET(
             venue: ev.venue ?? null,
             level: ev.level ?? null,
             region: ev.region ?? null,
+            discipline: ev.get_full_rule_display ?? null,
             division,
             competitorId,
             competitorsInDivision,
@@ -369,6 +399,7 @@ export async function GET(
             dq: wasDQ,
             perfectStages: perfectStagesCount,
             consistencyIndex: consistencyIndexValue,
+            squadmateShooterIds,
           };
           return summary;
         } catch { return null; }
