@@ -94,6 +94,27 @@ def _filter_matches_by_date(
     return filtered
 
 
+_LEVEL_ORDER: dict[str, int] = {"l2": 2, "l3": 3, "l4": 4, "l5": 5}
+_VALID_LEVELS = set(_LEVEL_ORDER)
+
+
+def _filter_matches_by_level(
+    matches: list[tuple[str, int, str, str | None, str | None]],
+    min_level: str | None,
+) -> list[tuple[str, int, str, str | None, str | None]]:
+    """Return only matches at or above min_level.
+
+    Matches with no level value are treated as l2 (lowest).
+    """
+    if not min_level:
+        return matches
+    threshold = _LEVEL_ORDER[min_level]
+    return [
+        m for m in matches
+        if _LEVEL_ORDER.get(m[4] or "l2", 0) >= threshold
+    ]
+
+
 def _load_match_ids_file(path: Path) -> set[str]:
     """Load a set of match IDs from a JSON array or newline-separated text file.
 
@@ -717,6 +738,15 @@ def train(
             "Leave empty (default) to train on all disciplines."
         ),
     ),
+    min_level: str | None = typer.Option(
+        None,
+        "--min-level",
+        help=(
+            "Minimum match level to include: l2, l3, l4, or l5. "
+            "E.g. --min-level l3 trains on National/Continental/World matches only. "
+            "Omit (default) to include all levels."
+        ),
+    ),
     db_path: Path = DB_PATH_OPTION,
 ) -> None:
     """Train rating algorithms on synced match data.
@@ -763,7 +793,21 @@ def train(
         )
         raise typer.Exit(1)
 
-    name_suffix = label if label is not None else _date_label(date_from, date_to)
+    if min_level is not None and min_level not in _VALID_LEVELS:
+        valid = ", ".join(sorted(_VALID_LEVELS))
+        console.print(f"[red]Unknown level '{min_level}'. Use one of: {valid}.[/red]")
+        raise typer.Exit(1)
+
+    _level_label = f"{min_level}plus" if min_level else ""
+    _date_suffix = _date_label(date_from, date_to)
+    if label is not None:
+        name_suffix = label
+    elif _level_label and _date_suffix:
+        name_suffix = f"{_level_label}_{_date_suffix}"
+    elif _level_label:
+        name_suffix = _level_label
+    else:
+        name_suffix = _date_suffix
 
     store = Store(db_path)
     try:
@@ -786,6 +830,7 @@ def train(
         )
         all_matches = store.get_matches_chronological(disciplines=disc_set)
         matches = _filter_matches_by_date(all_matches, date_from, date_to)
+        matches = _filter_matches_by_level(matches, min_level)
         # Apply curated match-ID filter when provided (Gap 3 — ICS 2026 specific list).
         if match_ids_file is not None:
             allowed_ids = _load_match_ids_file(match_ids_file)
@@ -805,9 +850,10 @@ def train(
         date_range = ""
         if date_from or date_to:
             date_range = f", window: {date_from or '*'} → {date_to or '*'}"
+        level_info = f", min-level: {min_level}" if min_level else ""
         console.print(
             f"[bold]Training {n_algo} algorithm(s) on {n_match} matches "
-            f"(scoring: {mode_label}, dedup skip: {len(skip_set)}{date_range})[/bold]"
+            f"(scoring: {mode_label}, dedup skip: {len(skip_set)}{date_range}{level_info})[/bold]"
         )
         if name_suffix:
             console.print(f"  Storing as: [cyan]<algo>_{name_suffix}[/cyan]")
@@ -891,6 +937,15 @@ def tune(
             "Leave empty (default) to sweep on all disciplines."
         ),
     ),
+    min_level: str | None = typer.Option(
+        None,
+        "--min-level",
+        help=(
+            "Minimum match level to include: l2, l3, l4, or l5. "
+            "E.g. --min-level l3 sweeps on National/Continental/World matches only. "
+            "Omit (default) to include all levels."
+        ),
+    ),
     db_path: Path = DB_PATH_OPTION,
 ) -> None:
     """Run automated hyperparameter grid search.
@@ -904,6 +959,11 @@ def tune(
     """
     from src.tuning.sweep import run_sweep
 
+    if min_level is not None and min_level not in _VALID_LEVELS:
+        valid = ", ".join(sorted(_VALID_LEVELS))
+        console.print(f"[red]Unknown level '{min_level}'. Use one of: {valid}.[/red]")
+        raise typer.Exit(1)
+
     disc_set: set[str] | None = (
         {d.strip() for d in discipline.split(",") if d.strip()} if discipline else None
     )
@@ -915,6 +975,7 @@ def tune(
         workers=workers,
         output_path=output,
         disciplines=disc_set,
+        min_level=min_level,
     )
 
 
@@ -964,7 +1025,7 @@ def tune_merge(
 
 @app.command(name="clear-ratings")
 def clear_ratings(
-    algorithm: list[str] = typer.Argument(
+    algorithm: list[str] = typer.Argument(  # noqa: B008
         None,
         help=(
             "Algorithm name(s) to delete from shooter_ratings and rating_history. "

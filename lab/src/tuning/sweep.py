@@ -739,6 +739,7 @@ def run_sweep(
     cons_z: float = _CONS_Z_DEFAULT,
     output_path: Path | None = None,
     disciplines: set[str] | None = None,
+    min_level: str | None = None,
 ) -> list[TuneResult]:
     """Run the full hyperparameter grid search.
 
@@ -775,12 +776,22 @@ def run_sweep(
         m for m in all_matches if (m[0], m[1], m[2]) not in skip_set
     ]
 
+    # Apply level filter if requested
+    if min_level:
+        _level_order: dict[str, int] = {"l2": 2, "l3": 3, "l4": 4, "l5": 5}
+        threshold = _level_order.get(min_level, 0)
+        filtered_matches = [
+            m for m in filtered_matches
+            if _level_order.get(m[4] or "l2", 0) >= threshold
+        ]
+
     split_idx = int(len(filtered_matches) * split_ratio)
     train_matches = filtered_matches[:split_idx]
     test_matches = filtered_matches[split_idx:]
     test_match_keys = [(s, ct, mid) for s, ct, mid, _d, _l in test_matches]
 
-    console.print(f"[bold]Hyperparameter Sweep[/bold]  scoring={scoring}")
+    level_info = f"  min-level={min_level}" if min_level else ""
+    console.print(f"[bold]Hyperparameter Sweep[/bold]  scoring={scoring}{level_info}")
     console.print(
         f"  Total: {len(all_matches)} matches "
         f"({len(all_matches) - len(filtered_matches)} dedup-skipped)"
