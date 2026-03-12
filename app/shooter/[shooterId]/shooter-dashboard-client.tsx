@@ -1197,7 +1197,7 @@ function AchievementCard({ achievement }: { achievement: AchievementProgress }) 
         <button
           type="button"
           className={cn(
-            "flex flex-col gap-1.5 rounded-lg border border-border p-3 text-left transition-colors hover:bg-muted/50 min-h-[44px]",
+            "flex flex-col justify-between rounded-lg border border-border p-3 text-left transition-colors hover:bg-muted/50 h-24",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             isLocked && "opacity-50",
           )}
