@@ -559,6 +559,9 @@ export default function MatchPageClient() {
           selectedIds={selectedIds}
           trackedShooterIds={trackedIds}
           myShooterId={identity?.shooterId ?? null}
+          ct={ct}
+          id={id}
+          aiAvailable={aiAvailable}
         />
       )}
 

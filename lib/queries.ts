@@ -84,6 +84,27 @@ export function useShooterSearchQuery(query: string, limit = 20, enabled = true)
   });
 }
 
+export function usePreMatchBriefQuery(
+  ct: string,
+  id: string,
+  shooterId: number | null,
+  enabled: boolean,
+) {
+  return useQuery<CoachingTipResponse, Error>({
+    queryKey: ["pre-match-brief", ct, id, shooterId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (shooterId != null) params.set("shooterId", String(shooterId));
+      const res = await fetch(`/api/pre-match/brief/${ct}/${id}?${params}`);
+      if (!res.ok) throw new Error("Brief unavailable");
+      return res.json() as Promise<CoachingTipResponse>;
+    },
+    enabled,
+    staleTime: 1_800_000, // 30 minutes — mirrors server cache TTL
+    retry: false,
+  });
+}
+
 export function usePreMatchWeatherQuery(
   lat: number | null,
   lng: number | null,

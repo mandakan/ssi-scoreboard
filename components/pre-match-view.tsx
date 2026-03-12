@@ -25,13 +25,18 @@ import {
   PopoverTitle,
   PopoverDescription,
 } from "@/components/ui/popover";
-import { usePreMatchWeatherQuery } from "@/lib/queries";
+import { usePreMatchWeatherQuery, usePreMatchBriefQuery } from "@/lib/queries";
+import { Skeleton } from "@/components/ui/skeleton";
+import { RefreshCw, Sparkles } from "lucide-react";
 
 interface PreMatchViewProps {
   match: MatchResponse;
   selectedIds: number[];
   trackedShooterIds: Set<number>;
   myShooterId: number | null;
+  ct: string;
+  id: string;
+  aiAvailable: boolean;
 }
 
 // ── Stage rotation ────────────────────────────────────────────────────────────
@@ -174,6 +179,85 @@ function WeatherCard({ weather }: { weather: MatchWeatherData }) {
   );
 }
 
+// ── AI pre-match brief ────────────────────────────────────────────────────────
+
+function PreMatchBriefCard({
+  ct,
+  id,
+  shooterId,
+}: {
+  ct: string;
+  id: string;
+  shooterId: number | null;
+}) {
+  const briefQuery = usePreMatchBriefQuery(ct, id, shooterId, true);
+
+  return (
+    <div className="rounded-lg border p-4 space-y-3">
+      <div className="flex items-center gap-1.5">
+        <Sparkles className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
+        <h2 className="font-semibold">Pre-match brief</h2>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+              aria-label="About pre-match brief"
+            >
+              <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-72" side="bottom" align="start">
+            <PopoverHeader>
+              <PopoverTitle>AI pre-match brief</PopoverTitle>
+              <PopoverDescription>
+                Personalised preparation tips based on this match and your
+                history.
+              </PopoverDescription>
+            </PopoverHeader>
+            <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+              <p>
+                The brief analyses this match&apos;s stage breakdown (course lengths,
+                constraints, total rounds) and compares it against your
+                historical performance to surface the most relevant preparation
+                focus.
+              </p>
+              <p>
+                Requires AI to be configured and at least one tracked competitor
+                selected. Historical context improves as you visit more matches.
+              </p>
+            </div>
+          </PopoverContent>
+        </Popover>
+        {briefQuery.data && (
+          <button
+            className="ml-auto text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 focus-visible:outline-2 focus-visible:outline-ring rounded"
+            onClick={() => briefQuery.refetch()}
+            aria-label="Refresh pre-match brief"
+          >
+            <RefreshCw className="w-3 h-3" aria-hidden="true" />
+            Refresh
+          </button>
+        )}
+      </div>
+
+      {briefQuery.isLoading && (
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-4/5" />
+        </div>
+      )}
+      {briefQuery.isError && (
+        <p className="text-sm text-muted-foreground">
+          Brief unavailable — AI service may be unreachable.
+        </p>
+      )}
+      {briefQuery.data && (
+        <p className="text-sm leading-relaxed">{briefQuery.data.tip}</p>
+      )}
+    </div>
+  );
+}
+
 // ── Division field ────────────────────────────────────────────────────────────
 
 const MAX_COLLAPSED = 5;
@@ -291,6 +375,9 @@ export function PreMatchView({
   selectedIds,
   trackedShooterIds,
   myShooterId,
+  ct,
+  id,
+  aiAvailable,
 }: PreMatchViewProps) {
   const sortedStages = useMemo(
     () => [...match.stages].sort((a, b) => a.stage_number - b.stage_number),
@@ -362,12 +449,28 @@ export function PreMatchView({
   const matchDate = match.date ? match.date.slice(0, 10) : null;
   const weatherQuery = usePreMatchWeatherQuery(match.lat, match.lng, matchDate);
 
+  // Resolve the best shooterId for the AI brief: prefer identity, then first
+  // selected competitor that has a global shooterId.
+  const briefShooterId = useMemo(() => {
+    if (myShooterId !== null) return myShooterId;
+    for (const cId of selectedIds) {
+      const c = match.competitors.find((x) => x.id === cId);
+      if (c?.shooterId != null) return c.shooterId;
+    }
+    return null;
+  }, [myShooterId, selectedIds, match.competitors]);
+
   const displayRows = rotation.length > 0
     ? rotation
     : sortedStages.map((s, i) => ({ round: i + 1, stage: s }));
 
   return (
     <div className="space-y-4">
+      {/* AI pre-match brief ----------------------------------------------- */}
+      {aiAvailable && briefShooterId !== null && (
+        <PreMatchBriefCard ct={ct} id={id} shooterId={briefShooterId} />
+      )}
+
       {/* Weather forecast -------------------------------------------------- */}
       {match.lat != null && match.lng != null && weatherQuery.data && (
         <WeatherCard weather={weatherQuery.data} />
