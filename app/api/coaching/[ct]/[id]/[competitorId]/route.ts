@@ -374,7 +374,7 @@ export async function GET(
   // 10. Call AI provider
   let tip: string;
   try {
-    tip = await provider.generateTip(prompt);
+    tip = await provider.generateTip(prompt, 200);
   } catch (err) {
     const msg =
       err instanceof Error && err.name === "AbortError"

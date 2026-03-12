@@ -25,9 +25,18 @@ import {
   PopoverTitle,
   PopoverDescription,
 } from "@/components/ui/popover";
-import { usePreMatchWeatherQuery, usePreMatchBriefQuery } from "@/lib/queries";
+import { usePreMatchWeatherQuery, usePreMatchBriefQuery, useShooterDashboardQuery } from "@/lib/queries";
+import { computeSquadContext } from "@/lib/pre-match-prompt";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RefreshCw, Sparkles } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+} from "@/components/ui/sheet";
 
 interface PreMatchViewProps {
   match: MatchResponse;
@@ -267,6 +276,178 @@ function PreMatchBriefCard({
   );
 }
 
+// ── Competitor profile sheet ───────────────────────────────────────────────────
+
+function CompetitorSheet({
+  competitor,
+  open,
+  onOpenChange,
+  isMe,
+  isTracked,
+}: {
+  competitor: CompetitorInfo | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  isMe: boolean;
+  isTracked: boolean;
+}) {
+  const dashQuery = useShooterDashboardQuery(competitor?.shooterId ?? null);
+  const flag = competitor ? regionToFlagEmoji(competitor.region) : null;
+
+  if (!competitor) return null;
+
+  const stats = dashQuery.data?.stats;
+  const matchCount = dashQuery.data?.matchCount ?? 0;
+
+  const avgPctStr =
+    stats?.overallMatchPct != null
+      ? `${stats.overallMatchPct.toFixed(0)}%`
+      : null;
+
+  const trendLabel =
+    stats?.hfTrendSlope == null
+      ? null
+      : stats.hfTrendSlope > 0.002
+        ? "Improving ↑"
+        : stats.hfTrendSlope < -0.002
+          ? "Declining ↓"
+          : "Stable →";
+
+  const experienceStr =
+    matchCount >= 50
+      ? `${matchCount} matches — experienced`
+      : matchCount >= 20
+        ? `${matchCount} matches — intermediate`
+        : matchCount > 0
+          ? `${matchCount} matches — developing`
+          : null;
+
+  const recentMatches = dashQuery.data?.matches.slice(0, 3) ?? [];
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="rounded-t-xl max-h-[80dvh] overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2 flex-wrap pr-8">
+            {flag && <span aria-hidden="true">{flag}</span>}
+            <span>{competitor.name}</span>
+            {competitor.competitor_number && (
+              <span className="text-sm font-normal text-muted-foreground">
+                #{competitor.competitor_number}
+              </span>
+            )}
+          </SheetTitle>
+          <SheetDescription className="flex flex-wrap gap-1 items-center">
+            {competitor.division && <span>{competitor.division}</span>}
+            {competitor.club && (
+              <>
+                {competitor.division && <span aria-hidden="true">·</span>}
+                <span>{competitor.club}</span>
+              </>
+            )}
+          </SheetDescription>
+        </SheetHeader>
+
+        {/* You / Tracked badges */}
+        {(isMe || isTracked) && (
+          <div className="px-4 flex gap-1.5">
+            {isMe && (
+              <span className="text-xs bg-primary/15 text-primary px-2 py-0.5 rounded-full font-medium">
+                You
+              </span>
+            )}
+            {isTracked && !isMe && (
+              <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                Tracked
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Stats */}
+        <div className="px-4 space-y-3 pb-2">
+          {!competitor.shooterId ? (
+            <p className="text-sm text-muted-foreground">
+              No match history linked to this competitor yet.
+            </p>
+          ) : dashQuery.isLoading ? (
+            <div className="space-y-2" aria-label="Loading stats">
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-4 w-3/4" />
+            </div>
+          ) : !dashQuery.data ? (
+            <p className="text-sm text-muted-foreground">
+              Could not load match history.
+            </p>
+          ) : (
+            <dl className="space-y-2">
+              {experienceStr && (
+                <div className="flex justify-between text-sm">
+                  <dt className="text-muted-foreground">Experience</dt>
+                  <dd className="font-medium">{experienceStr}</dd>
+                </div>
+              )}
+              {avgPctStr && (
+                <div className="flex justify-between text-sm">
+                  <dt className="text-muted-foreground">Career avg</dt>
+                  <dd className="font-medium">{avgPctStr} of div. winner</dd>
+                </div>
+              )}
+              {trendLabel && (
+                <div className="flex justify-between text-sm">
+                  <dt className="text-muted-foreground">Recent trend</dt>
+                  <dd className="font-medium">{trendLabel}</dd>
+                </div>
+              )}
+              {recentMatches.length > 0 && (
+                <div className="pt-1 space-y-1">
+                  <p className="text-xs text-muted-foreground font-medium">
+                    Recent results
+                  </p>
+                  <ul className="space-y-0.5">
+                    {recentMatches.map((m) => (
+                      <li
+                        key={`${m.ct}-${m.matchId}`}
+                        className="flex items-center justify-between text-xs"
+                      >
+                        <span className="text-muted-foreground truncate flex-1 min-w-0 mr-2">
+                          {m.name}
+                        </span>
+                        {m.matchPct != null && (
+                          <span className="tabular-nums shrink-0">
+                            {m.matchPct.toFixed(0)}%
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {!experienceStr && !avgPctStr && recentMatches.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No scorecard data available yet.
+                </p>
+              )}
+            </dl>
+          )}
+        </div>
+
+        {competitor.shooterId && (
+          <SheetFooter>
+            <a
+              href={`/shooter/${competitor.shooterId}`}
+              className="w-full text-center text-sm font-medium px-4 py-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+            >
+              View full dashboard
+            </a>
+          </SheetFooter>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 // ── Division field ────────────────────────────────────────────────────────────
 
 const MAX_COLLAPSED = 5;
@@ -276,11 +457,13 @@ function DivisionSection({
   competitors,
   trackedShooterIds,
   myShooterId,
+  onSelectCompetitor,
 }: {
   division: string;
   competitors: CompetitorInfo[];
   trackedShooterIds: Set<number>;
   myShooterId: number | null;
+  onSelectCompetitor: (c: CompetitorInfo) => void;
 }) {
   const hasHighlighted = competitors.some(
     (c) =>
@@ -327,37 +510,40 @@ function DivisionSection({
             const highlighted = isMe || isTracked;
             const flag = regionToFlagEmoji(c.region);
             return (
-              <li
-                key={c.id}
-                className={`flex items-center gap-2 px-2 py-1 rounded text-sm ${
-                  highlighted
-                    ? "bg-primary/10 text-foreground"
-                    : "text-muted-foreground"
-                }`}
-              >
-                <span className="text-xs text-muted-foreground w-7 shrink-0 text-right tabular-nums">
-                  #{c.competitor_number}
-                </span>
-                <span
-                  className={`flex-1 truncate ${highlighted ? "font-medium" : ""}`}
+              <li key={c.id}>
+                <button
+                  className={`w-full flex items-center gap-2 px-2 py-1 rounded text-sm text-left hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring transition-colors ${
+                    highlighted
+                      ? "bg-primary/10 text-foreground"
+                      : "text-muted-foreground"
+                  }`}
+                  onClick={() => onSelectCompetitor(c)}
+                  aria-label={`View profile for ${c.name}`}
                 >
-                  {c.name}
-                </span>
-                {c.club && (
-                  <span className="text-xs truncate max-w-[80px] hidden sm:inline">
-                    {c.club}
+                  <span className="text-xs text-muted-foreground w-7 shrink-0 text-right tabular-nums">
+                    #{c.competitor_number}
                   </span>
-                )}
-                {flag && (
-                  <span aria-label={c.region_display ?? c.region ?? undefined}>
-                    {flag}
+                  <span
+                    className={`flex-1 truncate ${highlighted ? "font-medium" : ""}`}
+                  >
+                    {c.name}
                   </span>
-                )}
-                {isMe && (
-                  <span className="text-xs text-primary font-semibold shrink-0">
-                    you
-                  </span>
-                )}
+                  {c.club && (
+                    <span className="text-xs truncate max-w-[80px] hidden sm:inline">
+                      {c.club}
+                    </span>
+                  )}
+                  {flag && (
+                    <span aria-label={c.region_display ?? c.region ?? undefined}>
+                      {flag}
+                    </span>
+                  )}
+                  {isMe && (
+                    <span className="text-xs text-primary font-semibold shrink-0">
+                      you
+                    </span>
+                  )}
+                </button>
               </li>
             );
           })}
@@ -414,6 +600,7 @@ export function PreMatchView({
   const [selectedSquadNum, setSelectedSquadNum] = useState<number | null>(
     defaultSquadNum,
   );
+  const [sheetCompetitor, setSheetCompetitor] = useState<CompetitorInfo | null>(null);
 
   useEffect(() => {
     setSelectedSquadNum(defaultSquadNum);
@@ -483,6 +670,25 @@ export function PreMatchView({
     ? rotation
     : sortedStages.map((s, i) => ({ round: i + 1, stage: s }));
 
+  // Squad members in within-squad shooting order (sorted by competitor number,
+  // already reflected in SquadInfo.competitorIds from match-data.ts).
+  const squadMembers = useMemo(() => {
+    if (selectedSquadNum === null) return [];
+    const sq = match.squads.find((s) => s.number === selectedSquadNum);
+    if (!sq) return [];
+    return sq.competitorIds
+      .map((cid) => match.competitors.find((c) => c.id === cid))
+      .filter((c): c is CompetitorInfo => c != null);
+  }, [selectedSquadNum, match.squads, match.competitors]);
+
+  // Index of the tracked/selected shooter within the squad (-1 if not found).
+  const mySquadIdx = useMemo(
+    () => squadMembers.findIndex(
+      (c) => c.shooterId === myShooterId || selectedIds.includes(c.id),
+    ),
+    [squadMembers, myShooterId, selectedIds],
+  );
+
   return (
     <div className="space-y-4">
       {/* AI pre-match brief ----------------------------------------------- */}
@@ -525,11 +731,14 @@ export function PreMatchView({
                     at a different stage and advances by one each round.
                   </p>
                   <p>
-                    Some matches use a different order — check with the match
-                    director or your squad sheet if you need to be certain.
+                    Within each stage, the competitor with the lowest competitor
+                    number starts Stage 1, the second-lowest starts Stage 2, and
+                    so on — wrapping around if there are more stages than squad
+                    members.
                   </p>
                   <p>
-                    Select your squad to see the predicted shooting order.
+                    Both the squad rotation and the within-squad starting order
+                    may be adjusted by the match director or RO on the day.
                   </p>
                 </div>
               </PopoverContent>
@@ -579,6 +788,52 @@ export function PreMatchView({
             </div>
           )}
 
+          {/* Squad shooting order ----------------------------------------- */}
+          {squadMembers.length > 0 && (() => {
+            const n = squadMembers.length;
+            const totalStages = sortedStages.length;
+            return (
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground font-medium">
+                  Squad shooting order (by competitor number)
+                </p>
+                <ol className="space-y-0.5">
+                  {squadMembers.map((c, i) => {
+                    const isMe = i === mySquadIdx;
+                    const { startingStages: starts } = computeSquadContext(i, n, sortedStages);
+                    return (
+                      <li
+                        key={c.id}
+                        className={`flex items-center gap-2 text-sm ${isMe ? "font-semibold text-foreground" : "text-muted-foreground"}`}
+                      >
+                        <span className="tabular-nums w-5 shrink-0 text-right text-xs">
+                          {i + 1}.
+                        </span>
+                        <span className="truncate flex-1 min-w-0">{c.name}</span>
+                        {c.competitor_number && (
+                          <span className="text-xs tabular-nums shrink-0">
+                            #{c.competitor_number}
+                          </span>
+                        )}
+                        {totalStages > 0 && starts.length > 0 && (
+                          <span className={`text-xs tabular-nums shrink-0 ${isMe ? "text-primary" : "text-muted-foreground/70"}`}>
+                            starts {starts.join(", ")}
+                          </span>
+                        )}
+                        {isMe && (
+                          <span className="text-xs text-primary shrink-0">← you</span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+                <p className="text-xs text-muted-foreground/70 italic">
+                  The shooter ranked first in the squad by competitor number starts Stage 1, second starts Stage 2, etc. When there are more stages than squad members it wraps around. Order may be adjusted on match day — confirm with your RO.
+                </p>
+              </div>
+            );
+          })()}
+
           <ol
             className="space-y-3"
             aria-label={
@@ -595,6 +850,13 @@ export function PreMatchView({
                 c.weakHand && "Weak hand",
                 c.movingTargets && "Moving targets",
               ].filter(Boolean) as string[];
+
+              // Within-squad starting position for this stage.
+              const starterIdx = squadMembers.length > 0
+                ? (stage.stage_number - 1) % squadMembers.length
+                : -1;
+              const starter = starterIdx >= 0 ? squadMembers[starterIdx] : null;
+              const iStart = starterIdx >= 0 && starterIdx === mySquadIdx;
 
               return (
                 <li key={stage.id} className="space-y-1.5">
@@ -624,6 +886,18 @@ export function PreMatchView({
                       )}
                     </div>
                   </div>
+                  {/* Within-squad starter */}
+                  {starter && (
+                    <div className={`flex items-center gap-1.5 text-xs ${match.squads.length > 0 ? "ml-[4.25rem]" : ""}`}>
+                      {iStart ? (
+                        <span className="font-semibold text-primary">You start this stage</span>
+                      ) : (
+                        <span className="text-muted-foreground/70">
+                          {starter.name} starts
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {/* Target breakdown */}
                   {(stage.paper_targets != null || stage.steel_targets != null) && (
                     <div className={`flex gap-2 text-xs text-muted-foreground ${match.squads.length > 0 ? "ml-[4.25rem]" : ""}`}>
@@ -696,11 +970,21 @@ export function PreMatchView({
                 competitors={competitors}
                 trackedShooterIds={trackedShooterIds}
                 myShooterId={myShooterId}
+                onSelectCompetitor={setSheetCompetitor}
               />
             ))}
           </div>
         </div>
       )}
+
+      {/* Competitor profile sheet ------------------------------------------ */}
+      <CompetitorSheet
+        competitor={sheetCompetitor}
+        open={sheetCompetitor !== null}
+        onOpenChange={(open) => { if (!open) setSheetCompetitor(null); }}
+        isMe={sheetCompetitor?.shooterId != null && sheetCompetitor.shooterId === myShooterId}
+        isTracked={sheetCompetitor?.shooterId != null && trackedShooterIds.has(sheetCompetitor.shooterId)}
+      />
     </div>
   );
 }

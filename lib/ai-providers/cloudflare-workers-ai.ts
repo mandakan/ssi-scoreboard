@@ -14,8 +14,9 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AIProvider, AIProviderConfig } from "@/lib/ai-provider";
 
 const TIMEOUT_MS = 10_000;
+const DEFAULT_MAX_TOKENS = 200;
 const SYSTEM_MESSAGE =
-  "You are a concise IPSC shooting coach. Give specific, actionable advice in 1-2 sentences.";
+  "You are a concise IPSC shooting coach. Give specific, actionable coaching advice. Follow the length instruction in the prompt exactly.";
 
 // Minimal type for the Workers AI text-generation binding.
 // Augments CloudflareEnv (declared globally by @opennextjs/cloudflare) so that
@@ -48,7 +49,7 @@ export function createCloudflareProvider(config: AIProviderConfig): AIProvider {
 function createBindingProvider(config: AIProviderConfig): AIProvider {
   return {
     modelId: config.model,
-    async generateTip(prompt: string): Promise<string> {
+    async generateTip(prompt: string, maxTokens = DEFAULT_MAX_TOKENS): Promise<string> {
       const { env } = getCloudflareContext();
       const ai = env.AI;
       if (!ai) {
@@ -62,7 +63,7 @@ function createBindingProvider(config: AIProviderConfig): AIProvider {
           { role: "system", content: SYSTEM_MESSAGE },
           { role: "user", content: prompt },
         ],
-        max_tokens: 150,
+        max_tokens: maxTokens,
         temperature: 0.7,
       });
       return result.response ?? "";
@@ -77,7 +78,7 @@ function createRestProvider(config: AIProviderConfig): AIProvider {
 
   return {
     modelId: config.model,
-    async generateTip(prompt: string): Promise<string> {
+    async generateTip(prompt: string, maxTokens = DEFAULT_MAX_TOKENS): Promise<string> {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
@@ -93,7 +94,7 @@ function createRestProvider(config: AIProviderConfig): AIProvider {
               { role: "system", content: SYSTEM_MESSAGE },
               { role: "user", content: prompt },
             ],
-            max_tokens: 150,
+            max_tokens: maxTokens,
             temperature: 0.7,
           }),
           signal: controller.signal,
