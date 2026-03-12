@@ -441,8 +441,8 @@ export default function MatchPageClient() {
       {/* Match header */}
       <MatchHeader match={match} />
 
-      {/* Results disclaimer — shown whenever SSI has not publicly published results */}
-      {!resultsPublished && (
+      {/* Results disclaimer — shown whenever SSI has not publicly published results (not for pre-match) */}
+      {!resultsPublished && !isPreMatch && (
         <div
           role="alert"
           className="flex items-start gap-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3.5 py-3 text-sm text-amber-900 dark:text-amber-200"
