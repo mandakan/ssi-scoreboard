@@ -32,7 +32,23 @@ TYPICAL WORKFLOWS
    get_popular_matches()    ← returns [] when cache cold
    → (if empty) search_events(starts_after="<today>")
 
-4. Cross-competition profile for a shooter:
+4. Pre-match preparation (scoring_completed = 0, match in the future):
+   search_events(query="<match name>")
+   → get_match(ct, id)
+   stages[] now includes: procedure, firearm_condition, course_display,
+   min_rounds, paper_targets, steel_targets.
+   Use these to:
+   • Compute the IPSC round-robin rotation for a given squad number:
+       stage_index = ((squad_number − 1) + (round − 1)) % total_stages
+     Where stages are sorted by stage_number (1-indexed).
+   • Parse constraint signals from text fields:
+       procedure:         /strong hand/i, /weak hand/i, /moving target/i
+       firearm_condition: /empty|unloaded/i  → unloaded start
+   • Summarise by course-length breakdown and total rounds.
+   → get_shooter_dashboard(shooter_id) to add historical context
+     (overall match %, trend, penalty rate) for personalised prep advice.
+
+5. Cross-competition profile for a shooter:
    search_events(...) → get_match(ct, id)
    → note competitors[n].shooterId (global, stable integer)
    → get_shooter_dashboard(shooter_id)
@@ -245,6 +261,17 @@ PERFORMANCE RANKING — READ THIS CAREFULLY:
   Martin performed BETTER overall even though Anton had more points. Always check
   overall_rank and overall_percent, not the raw points field.
 
+PRE-MATCH PREPARATION (scoring_completed = 0):
+• get_match returns full stage data even before shooting starts.
+• Stage rotation (IPSC round-robin):
+    stage_index = ((squad_number − 1) + (round − 1)) % total_stages
+  where stages are sorted by stage_number (1-indexed) and rounds start at 1.
+• Parse constraint signals from stage text fields:
+    procedure:         /strong hand/i, /weak hand/i, /moving target/i
+    firearm_condition: /empty|unloaded/i  → unloaded start
+• Call get_shooter_dashboard(shooter_id) to add career context (avg match %,
+  penalty rate) for personalised preparation advice.
+
 DATA NOTES:
 • scoring_completed (0–100 %) on get_match shows how much of the match is scored.
 • dnf=true / dq=true competitors should be flagged in your summary.
@@ -349,7 +376,11 @@ export function registerMcpTools(server: McpServer, arg: string | DataProviders)
     "Use this to resolve any user reference to a competitor ID before calling compare_competitors: " +
     "match by `name` for named individuals, filter by `club` for club members, or use `squads[n].competitorIds` for an entire squad. " +
     "Always call this before compare_competitors. " +
-    "`ct` and `id` come from a search_events result (the `content_type` and `id` fields of the event).",
+    "`ct` and `id` come from a search_events result (the `content_type` and `id` fields of the event). " +
+    "Each stage in `stages[]` includes `procedure` (free-text stage instructions), `firearm_condition` (loading requirements such as 'Unloaded'), " +
+    "`course_display` ('Short'/'Medium'/'Long'), `min_rounds`, `paper_targets`, and `steel_targets`. " +
+    "When `scoring_completed` is 0 (pre-match), use these fields for preparation analysis: " +
+    "compute the round-robin stage rotation for a squad, parse constraint signals from text, and summarise the course breakdown.",
     {
       ct: z.string().describe("content_type value from a search_events result (typically '22' for IPSC matches)"),
       id: z.string().describe("id value from a search_events result"),
@@ -539,6 +570,47 @@ export function registerMcpTools(server: McpServer, arg: string | DataProviders)
               `   • Who is the most consistent vs the most variable\n` +
               `   • Any standout penalty issues\n` +
               `   • A brief narrative on the overall squad dynamic`,
+          },
+        },
+      ],
+    }),
+  );
+
+  server.prompt(
+    "pre_match_prep",
+    "Generate a pre-match preparation brief for a shooter at an upcoming IPSC match",
+    {
+      match_name: z.string().describe("Name of the upcoming IPSC match (partial name is fine)"),
+      competitor_name: z.string().describe("Full or partial name of the competitor to prepare"),
+      squad: z.string().optional().describe("Squad name or number (e.g. 'Squad 3'). If provided, shows the stage rotation order."),
+    },
+    ({ match_name, competitor_name, squad }) => ({
+      messages: [
+        {
+          role: "user" as const,
+          content: {
+            type: "text" as const,
+            text:
+              `Please prepare a pre-match brief for ${competitor_name} at "${match_name}".\n\n` +
+              `Steps:\n` +
+              `1. Use search_events with query="${match_name}" to find the match.\n` +
+              `2. Use get_match to load stages, competitors, and squads.\n` +
+              `3. Find ${competitor_name} in the competitor list — note their squad assignment.\n` +
+              (squad
+                ? `4. The competitor is in "${squad}". Compute the IPSC round-robin stage rotation:\n`
+                : `4. If the competitor's squad is known, compute the IPSC round-robin stage rotation:\n`) +
+              `   stage_index = ((squad_number − 1) + (round − 1)) % total_stages\n` +
+              `   List stages in the order the competitor will shoot them.\n` +
+              `5. For each stage summarise: course length (Short/Medium/Long), round count,\n` +
+              `   target breakdown (paper / steel), and any constraints\n` +
+              `   (strong hand, weak hand, unloaded start, moving targets).\n` +
+              `6. Use get_shooter_dashboard to load the competitor's career history and aggregate stats.\n` +
+              `7. Produce a preparation brief covering:\n` +
+              `   • Match overview: level, total stages, total rounds, constraint breakdown\n` +
+              `   • Stage rotation order (if squad known)\n` +
+              `   • Stages to watch: any constrained or long stages worth extra mental prep\n` +
+              `   • Historical context: career avg match %, recent trend, penalty rate\n` +
+              `   • 2–3 specific, actionable preparation tips tailored to their profile`,
           },
         },
       ],

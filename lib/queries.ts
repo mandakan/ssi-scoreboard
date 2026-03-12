@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { fetchMatch, fetchCompare, fetchEvents, fetchPopularMatches, fetchCoachingAvailability, fetchCoachingTip, fetchShooterDashboard, fetchShooterSearch } from "@/lib/api";
-import type { CompareMode, MatchResponse, CompareResponse, EventSummary, PopularMatch, CoachingTipResponse, CoachingAvailability, ShooterDashboardResponse, ShooterSearchResult } from "@/lib/types";
+import type { CompareMode, MatchResponse, CompareResponse, EventSummary, PopularMatch, CoachingTipResponse, CoachingAvailability, ShooterDashboardResponse, ShooterSearchResult, MatchWeatherData } from "@/lib/types";
 import { matchQueryKey, compareQueryKey, coachingAvailabilityKey, coachingTipQueryKey } from "@/lib/query-keys";
 
 // Re-export so existing imports from lib/queries keep working.
@@ -81,6 +81,50 @@ export function useShooterSearchQuery(query: string, limit = 20, enabled = true)
     queryFn: () => fetchShooterSearch(query, limit),
     staleTime: 60_000,
     enabled,
+  });
+}
+
+export function usePreMatchBriefQuery(
+  ct: string,
+  id: string,
+  shooterId: number | null,
+  enabled: boolean,
+) {
+  return useQuery<CoachingTipResponse, Error>({
+    queryKey: ["pre-match-brief", ct, id, shooterId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (shooterId != null) params.set("shooterId", String(shooterId));
+      const res = await fetch(`/api/pre-match/brief/${ct}/${id}?${params}`);
+      if (!res.ok) throw new Error("Brief unavailable");
+      return res.json() as Promise<CoachingTipResponse>;
+    },
+    enabled,
+    staleTime: 1_800_000, // 30 minutes — mirrors server cache TTL
+    retry: false,
+  });
+}
+
+export function usePreMatchWeatherQuery(
+  lat: number | null,
+  lng: number | null,
+  date: string | null,
+) {
+  return useQuery<MatchWeatherData, Error>({
+    queryKey: ["pre-match-weather", lat?.toFixed(4), lng?.toFixed(4), date],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        lat: String(lat),
+        lng: String(lng),
+        date: date!.slice(0, 10), // YYYY-MM-DD
+      });
+      const res = await fetch(`/api/pre-match/weather?${params}`);
+      if (!res.ok) throw new Error("Weather unavailable");
+      return res.json() as Promise<MatchWeatherData>;
+    },
+    enabled: lat != null && lng != null && date != null,
+    staleTime: 3_600_000, // 1 hour — mirrors server revalidate
+    retry: false,
   });
 }
 

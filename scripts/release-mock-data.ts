@@ -43,6 +43,8 @@ export const MOCK_MATCH: MatchResponse = {
       steel_targets: 0,
       ssi_url: "https://shootnscoreit.com/event/stage/24/101/",
       course_display: "Medium",
+      procedure: null,
+      firearm_condition: null,
     },
     {
       id: 102,
@@ -54,6 +56,8 @@ export const MOCK_MATCH: MatchResponse = {
       steel_targets: 5,
       ssi_url: "https://shootnscoreit.com/event/stage/24/102/",
       course_display: "Short",
+      procedure: null,
+      firearm_condition: null,
     },
     {
       id: 103,
@@ -65,6 +69,8 @@ export const MOCK_MATCH: MatchResponse = {
       steel_targets: 2,
       ssi_url: "https://shootnscoreit.com/event/stage/24/103/",
       course_display: "Long",
+      procedure: null,
+      firearm_condition: null,
     },
     {
       id: 104,
@@ -76,6 +82,8 @@ export const MOCK_MATCH: MatchResponse = {
       steel_targets: 0,
       ssi_url: "https://shootnscoreit.com/event/stage/24/104/",
       course_display: "Medium",
+      procedure: null,
+      firearm_condition: null,
     },
     {
       id: 105,
@@ -87,6 +95,8 @@ export const MOCK_MATCH: MatchResponse = {
       steel_targets: 0,
       ssi_url: "https://shootnscoreit.com/event/stage/24/105/",
       course_display: "Short",
+      procedure: null,
+      firearm_condition: null,
     },
     {
       id: 106,
@@ -98,6 +108,8 @@ export const MOCK_MATCH: MatchResponse = {
       steel_targets: 0,
       ssi_url: "https://shootnscoreit.com/event/stage/24/106/",
       course_display: "Long",
+      procedure: null,
+      firearm_condition: null,
     },
   ],
   competitors: [

@@ -14,6 +14,8 @@ const baseStages: StageInfo[] = [
     steel_targets: 0,
     ssi_url: "https://shootnscoreit.com/event/stage/24/1/",
     course_display: "Medium",
+    procedure: null,
+    firearm_condition: null,
   },
   {
     id: 2,
@@ -25,6 +27,8 @@ const baseStages: StageInfo[] = [
     steel_targets: 2,
     ssi_url: "https://shootnscoreit.com/event/stage/24/2/",
     course_display: "Short",
+    procedure: null,
+    firearm_condition: null,
   },
   {
     id: 3,
@@ -36,6 +40,8 @@ const baseStages: StageInfo[] = [
     steel_targets: null,
     ssi_url: null,
     course_display: null,
+    procedure: null,
+    firearm_condition: null,
   },
 ];
 

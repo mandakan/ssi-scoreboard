@@ -20,9 +20,9 @@ const MOCK_MATCH: MatchResponse = {
   results_status: "org",
   ssi_url: "https://shootnscoreit.com/event/22/99999999/",
   stages: [
-    { id: 1, name: "Stage 1", stage_number: 1, max_points: 80, min_rounds: 16, paper_targets: 8, steel_targets: 0, ssi_url: "https://shootnscoreit.com/event/stage/24/1/", course_display: "Medium" },
-    { id: 2, name: "Stage 2", stage_number: 2, max_points: 60, min_rounds: 12, paper_targets: 6, steel_targets: 0, ssi_url: "https://shootnscoreit.com/event/stage/24/2/", course_display: "Short" },
-    { id: 3, name: "Stage 3", stage_number: 3, max_points: 100, min_rounds: null, paper_targets: null, steel_targets: null, ssi_url: null, course_display: null },
+    { id: 1, name: "Stage 1", stage_number: 1, max_points: 80, min_rounds: 16, paper_targets: 8, steel_targets: 0, ssi_url: "https://shootnscoreit.com/event/stage/24/1/", course_display: "Medium", procedure: null, firearm_condition: null },
+    { id: 2, name: "Stage 2", stage_number: 2, max_points: 60, min_rounds: 12, paper_targets: 6, steel_targets: 0, ssi_url: "https://shootnscoreit.com/event/stage/24/2/", course_display: "Short", procedure: null, firearm_condition: null },
+    { id: 3, name: "Stage 3", stage_number: 3, max_points: 100, min_rounds: null, paper_targets: null, steel_targets: null, ssi_url: null, course_display: null, procedure: null, firearm_condition: null },
   ],
   competitors: [
     { id: 100, shooterId: null, name: "Alice Archer", competitor_number: "35", club: "Test Club", division: "Standard", region: null, region_display: null, category: null, ics_alias: null, license: null },
