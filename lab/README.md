@@ -261,4 +261,5 @@ more competitors > SSI over ipscresults.
 |----------|---------|
 | [docs/identity-curation.md](docs/identity-curation.md) | Anyone reviewing fuzzy matches in the Identity tab |
 | [docs/algorithms.md](docs/algorithms.md) | Technical reference: all algorithms, scoring modes, tuning methodology |
+| [docs/model-set.md](docs/model-set.md) | Canonical 11-model reference set — what to train, why, and ready-to-run commands |
 | [docs/tuning-report-2026-03-08.md](docs/tuning-report-2026-03-08.md) | Latest benchmark results across all configurations |
