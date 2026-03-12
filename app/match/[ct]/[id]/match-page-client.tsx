@@ -40,6 +40,7 @@ import { getMyIdentity, getTrackedShooters } from "@/lib/shooter-identity";
 import { useMyIdentity } from "@/lib/hooks/use-my-identity";
 import { useTrackedShooters } from "@/lib/hooks/use-tracked-shooters";
 import { MAX_COMPETITORS } from "@/lib/constants";
+import { PreMatchView } from "@/components/pre-match-view";
 
 // Stable empty array for useSyncExternalStore server snapshot — must be a
 // constant reference so React's referential equality check doesn't loop.
@@ -398,6 +399,11 @@ export default function MatchPageClient() {
   const resultsPublished = match.results_status === "all";
   const matchCancelled = match.match_status === "cs";
   const aiAvailable = coachingAvailability.data?.available === true;
+  // Pre-match: no scores yet and match not completed or cancelled.
+  const isPreMatch =
+    match.scoring_completed === 0 &&
+    match.match_status !== "cp" &&
+    match.match_status !== "cs";
 
   // Pick the older (more stale) cachedAt between match and compare responses.
   // null means "just fetched live" — prefer non-null if one is cached.
@@ -467,8 +473,8 @@ export default function MatchPageClient() {
         </div>
       )}
 
-      {/* Mode toggle */}
-      <div className="space-y-1">
+      {/* Mode toggle — hidden pre-match (no scores to analyse yet) */}
+      {!isPreMatch && <div className="space-y-1">
         <div className="flex items-center gap-1.5">
           <ModeToggle
             autoMode={autoMode}
@@ -502,7 +508,7 @@ export default function MatchPageClient() {
             ? "Fast refresh, stage-focused view. Coaching analytics hidden."
             : "Full analysis with style fingerprints, breakdowns, and simulator."}
         </p>
-      </div>
+      </div>}
 
       {/* Competitor picker */}
       <div className="space-y-1">
@@ -546,8 +552,18 @@ export default function MatchPageClient() {
         </div>
       </div>
 
+      {/* Pre-match view — replaces comparison when no scores yet */}
+      {isPreMatch && (
+        <PreMatchView
+          match={match}
+          selectedIds={selectedIds}
+          trackedShooterIds={trackedIds}
+          myShooterId={identity?.shooterId ?? null}
+        />
+      )}
+
       {/* Comparison views */}
-      {selectedIds.length > 0 && (
+      {!isPreMatch && selectedIds.length > 0 && (
         <div className="space-y-6">
           {compareQuery.isLoading && (
             <div className="rounded-lg border p-4 space-y-3">
@@ -988,7 +1004,7 @@ export default function MatchPageClient() {
         </div>
       )}
 
-      {selectedIds.length === 0 && (
+      {!isPreMatch && selectedIds.length === 0 && (
         <p className="text-muted-foreground text-sm">
           Select one or more competitors above to see the comparison.
         </p>
