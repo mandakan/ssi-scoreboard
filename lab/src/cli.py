@@ -888,6 +888,21 @@ def benchmark(
             "Leave empty (default) to benchmark on all disciplines."
         ),
     ),
+    date_from: str | None = typer.Option(
+        None,
+        "--date-from",
+        help="Only include matches on or after this date (YYYY-MM-DD).",
+    ),
+    date_to: str | None = typer.Option(
+        None,
+        "--date-to",
+        help="Only include matches on or before this date (YYYY-MM-DD).",
+    ),
+    min_level: str | None = typer.Option(
+        None,
+        "--min-level",
+        help="Minimum match level to include: l2, l3, l4, or l5.",
+    ),
     db_path: Path = DB_PATH_OPTION,
 ) -> None:
     """Run benchmark comparing all algorithms (base + conservative ranking variants).
@@ -895,10 +910,19 @@ def benchmark(
     Use --scoring all to run both stage_hf and match_pct in one pass and compare
     them side-by-side in a single table — the clearest way to see which scoring
     mode performs better for your data.
+
+    Use --date-from / --date-to to benchmark on a date-restricted window, and
+    --min-level to benchmark on a level-filtered subset. The 70/30 train/test
+    split is applied within the filtered match set.
     """
     from src.benchmark.report import save_chart
     from src.benchmark.runner import run_benchmark
     from src.data.store import Store
+
+    if min_level is not None and min_level not in _VALID_LEVELS:
+        valid = ", ".join(sorted(_VALID_LEVELS))
+        console.print(f"[red]Unknown level '{min_level}'. Use one of: {valid}.[/red]")
+        raise typer.Exit(1)
 
     disc_set: set[str] | None = (
         {d.strip() for d in discipline.split(",") if d.strip()} if discipline else None
@@ -906,7 +930,8 @@ def benchmark(
     store = Store(db_path)
     try:
         algo_metrics = run_benchmark(
-            store, split_ratio=split, scoring=scoring, disciplines=disc_set
+            store, split_ratio=split, scoring=scoring, disciplines=disc_set,
+            date_from=date_from, date_to=date_to, min_level=min_level,
         )
         if chart and algo_metrics:
             save_chart(algo_metrics, output_path=str(db_path.parent / "benchmark.png"))
@@ -947,6 +972,16 @@ def tune(
             "Omit (default) to include all levels."
         ),
     ),
+    date_from: str | None = typer.Option(
+        None,
+        "--date-from",
+        help="Only include matches on or after this date (YYYY-MM-DD).",
+    ),
+    date_to: str | None = typer.Option(
+        None,
+        "--date-to",
+        help="Only include matches on or before this date (YYYY-MM-DD).",
+    ),
     db_path: Path = DB_PATH_OPTION,
 ) -> None:
     """Run automated hyperparameter grid search.
@@ -977,6 +1012,8 @@ def tune(
         output_path=output,
         disciplines=disc_set,
         min_level=min_level,
+        date_from=date_from,
+        date_to=date_to,
     )
 
 

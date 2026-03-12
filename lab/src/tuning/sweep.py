@@ -740,6 +740,8 @@ def run_sweep(
     output_path: Path | None = None,
     disciplines: set[str] | None = None,
     min_level: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> list[TuneResult]:
     """Run the full hyperparameter grid search.
 
@@ -750,6 +752,7 @@ def run_sweep(
 
     from rich.progress import Progress
 
+    from src.cli import _filter_matches_by_date, _filter_matches_by_level
     from src.data.store import Store
 
     # Determine worker count
@@ -771,30 +774,28 @@ def run_sweep(
         console.print("[red]No matches in store. Run sync first.[/red]")
         return []
 
-    # Filter out dedup-skipped matches
+    # Filter out dedup-skipped matches, then apply date and level filters
     filtered_matches = [
         m for m in all_matches if (m[0], m[1], m[2]) not in skip_set
     ]
-
-    # Apply level filter if requested
-    if min_level:
-        _level_order: dict[str, int] = {"l2": 2, "l3": 3, "l4": 4, "l5": 5}
-        threshold = _level_order.get(min_level, 0)
-        filtered_matches = [
-            m for m in filtered_matches
-            if _level_order.get(m[4] or "l2", 0) >= threshold
-        ]
+    filtered_matches = _filter_matches_by_date(filtered_matches, date_from, date_to)
+    filtered_matches = _filter_matches_by_level(filtered_matches, min_level)
 
     split_idx = int(len(filtered_matches) * split_ratio)
     train_matches = filtered_matches[:split_idx]
     test_matches = filtered_matches[split_idx:]
     test_match_keys = [(s, ct, mid) for s, ct, mid, _d, _l in test_matches]
 
-    level_info = f"  min-level={min_level}" if min_level else ""
-    console.print(f"[bold]Hyperparameter Sweep[/bold]  scoring={scoring}{level_info}")
+    filter_parts = []
+    if date_from or date_to:
+        filter_parts.append(f"window: {date_from or '*'} → {date_to or '*'}")
+    if min_level:
+        filter_parts.append(f"min-level={min_level}")
+    filter_info = ("  " + ", ".join(filter_parts)) if filter_parts else ""
+    console.print(f"[bold]Hyperparameter Sweep[/bold]  scoring={scoring}{filter_info}")
     console.print(
         f"  Total: {len(all_matches)} matches "
-        f"({len(all_matches) - len(filtered_matches)} dedup-skipped)"
+        f"({len(all_matches) - len(filtered_matches)} dedup-skipped/filtered)"
     )
     console.print(f"  Train: {len(train_matches)} | Test: {len(test_matches)}")
     console.print(f"  Workers: {effective_workers}")

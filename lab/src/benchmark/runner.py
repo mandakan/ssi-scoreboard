@@ -247,6 +247,9 @@ def run_benchmark(
     split_ratio: float = 0.7,
     scoring: str = "stage_hf",
     disciplines: set[str] | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    min_level: str | None = None,
 ) -> dict[str, dict[str, list[float]]]:
     """Run chronological train/test benchmark for all algorithms.
 
@@ -262,13 +265,24 @@ def run_benchmark(
       to include all disciplines. Matches with no discipline value are excluded
       when a filter is active.
 
+    date_from / date_to:
+      Restrict the match window to [date_from, date_to] (inclusive, YYYY-MM-DD).
+      The 70/30 split is applied within the filtered window.
+
+    min_level:
+      Minimum match level to include: 'l2', 'l3', 'l4', or 'l5'.
+
     For each algorithm × scoring mode, measures:
     - Base: algorithm's own predict_rank() (mu-ordered)
     - Conservative (+cons): mu − z×σ at 70th percentile
 
     Also produces a per-division Kendall τ breakdown for cross-division fairness.
     """
-    matches = store.get_matches_chronological(disciplines=disciplines)
+    from src.cli import _filter_matches_by_date, _filter_matches_by_level
+
+    all_matches = store.get_matches_chronological(disciplines=disciplines)
+    all_matches = _filter_matches_by_date(all_matches, date_from, date_to)
+    matches = _filter_matches_by_level(all_matches, min_level)
     if not matches:
         console.print("[red]No matches in store. Run sync first.[/red]")
         return {}
@@ -282,7 +296,14 @@ def run_benchmark(
         "stage_hf": "stage HF", "match_pct": "match %", "match_pct_combined": "combined %"
     }
     mode_label = " + ".join(_mode_labels.get(m, m) for m in modes)
-    console.print(f"[bold]Benchmark: {len(matches)} matches — scoring: {mode_label}[/bold]")
+    filter_info = ""
+    if date_from or date_to:
+        filter_info += f", window: {date_from or '*'} → {date_to or '*'}"
+    if min_level:
+        filter_info += f", min-level: {min_level}"
+    console.print(
+        f"[bold]Benchmark: {len(matches)} matches — scoring: {mode_label}{filter_info}[/bold]"
+    )
     console.print(f"  Train: {len(train_matches)} | Test: {len(test_matches)}")
 
     console.print("\n[dim]Precomputing actual rankings for test matches...[/dim]")

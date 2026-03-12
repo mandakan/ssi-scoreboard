@@ -191,39 +191,84 @@ parallel workers automatically.
 
 ### Benchmark
 
+All three commands support `--date-from`, `--date-to`, and `--min-level`.
+The 70/30 train/test split is applied within the filtered match window.
+
 ```bash
-# Primary scoring mode
+# Full dataset
 uv run rating benchmark --scoring match_pct
-
-# Stage-level scoring
 uv run rating benchmark --scoring stage_hf
+uv run rating benchmark --scoring all   # both modes, one table
 
-# Both in one table
-uv run rating benchmark --scoring all
+# L3+ only
+uv run rating benchmark --scoring match_pct --min-level l3
+
+# Calendar-year window — e.g. 2025 only
+uv run rating benchmark --scoring match_pct \
+  --date-from 2025-01-01 --date-to 2025-12-31
+
+# Combined: 2025 matches at L3+
+uv run rating benchmark --scoring match_pct \
+  --date-from 2025-01-01 --date-to 2025-12-31 --min-level l3
 ```
 
 ### Hyperparameter sweep
 
-Run each scoring mode independently (they are fully independent and can be
-run in parallel on separate machines if needed):
+All three flags (`--date-from`, `--date-to`, `--min-level`) are available
+on `tune` as well. Run each scoring mode / filter combination independently
+— they are fully independent and can be distributed across machines:
 
 ```bash
 # All-data sweep
 uv run rating tune --scoring match_pct
 uv run rating tune --scoring stage_hf
 
-# L3+ stratified sweep — reveals whether optimal hyperparameters
-# differ when L2 matches are excluded (tau and level_scale may shift)
+# L3+ stratified sweep — do optimal hyperparameters shift when L2 is excluded?
 uv run rating tune --scoring match_pct --min-level l3
+
+# 2025-only sweep — how well do the defaults hold on recent data alone?
+uv run rating tune --scoring match_pct \
+  --date-from 2025-01-01 --date-to 2025-12-31
 
 # Merge results from all runs into one ranked table
 uv run rating tune-merge
 ```
 
-The L3+ sweep is particularly useful for the next tuning report: if
-`tau` or `level_scale` defaults shift meaningfully between the all-data and
-L3+ sweeps, it suggests those hyperparameters were compensating for L2
-data characteristics rather than modelling genuine skill dynamics.
+The L3+ and date-windowed sweeps are both targets for the next tuning report.
+Key questions they can answer:
+- Do `tau` or `level_scale` shift when L2 matches are excluded? If yes, those
+  hyperparameters were compensating for L2 data noise, not modelling skill dynamics.
+- Do the all-time optimal hyperparameters still hold on 2025-only data? If not,
+  the model may benefit from a recency-aware retuning cadence.
+
+---
+
+### Seasonal snapshot models (optional)
+
+Date-filtered training is most useful when you want a "current season" view
+that ignores long historical tails — e.g. for team selection where only recent
+form matters. These are not part of the core 11-model set but can be added
+alongside it:
+
+```bash
+# 2025 season — primary algorithm only, all levels
+uv run rating train \
+  --algorithm openskill_pl_decay,openskill_bt_lvl_decay,ics \
+  --scoring match_pct \
+  --date-from 2025-01-01 --date-to 2025-12-31
+# → stored as openskill_pl_decay_mpct_2025, openskill_bt_lvl_decay_mpct_2025, ics_mpct_2025
+
+# 2025 season, L3+ only (highest-signal recent data)
+uv run rating train \
+  --algorithm openskill_pl_decay,openskill_bt_lvl_decay,ics \
+  --scoring match_pct \
+  --date-from 2025-01-01 --date-to 2025-12-31 --min-level l3
+# → stored as openskill_pl_decay_mpct_l3plus_2025, etc.
+```
+
+The auto-generated suffix combines level and date when both are set:
+`_mpct_l3plus_2025` for `--min-level l3 --date-from 2025-01-01 --date-to 2025-12-31`.
+Use `--label` to override this if you prefer a shorter name.
 
 ---
 
