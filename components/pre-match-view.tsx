@@ -41,7 +41,8 @@ interface PreMatchViewProps {
 
 // ── Stage rotation ────────────────────────────────────────────────────────────
 
-// IPSC standard round-robin rotation.
+// IPSC standard round-robin rotation (used by most matches).
+// Some matches use a different order — this is a prediction, not a guarantee.
 // For squad number `s` (1-indexed) and round `r` (1-indexed), returns the
 // 0-based index into a stages array sorted by stage_number.
 function getStageIndex(squadNumber: number, round: number, totalStages: number): number {
@@ -499,11 +500,15 @@ export function PreMatchView({
                 </PopoverHeader>
                 <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
                   <p>
-                    IPSC competitions use a round-robin rotation: each squad
-                    starts at a different stage and advances by one each round.
+                    The standard IPSC rotation is round-robin: each squad starts
+                    at a different stage and advances by one each round.
                   </p>
                   <p>
-                    Select your squad to see your shooting order for the day.
+                    Some matches use a different order — check with the match
+                    director or your squad sheet if you need to be certain.
+                  </p>
+                  <p>
+                    Select your squad to see the predicted shooting order.
                   </p>
                 </div>
               </PopoverContent>
