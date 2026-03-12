@@ -11,11 +11,30 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-03-11";
+export const LATEST_RELEASE_ID = "2026-03-12";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "March 12, 2026",
+    title: "Pre-match View",
+    screenshotScenes: ["comparison-table"],
+    sections: [
+      {
+        heading: "New",
+        items: [
+          "Pre-match view: open any upcoming match to see a dedicated preparation screen instead of the (empty) comparison view.",
+          "Stage rotation: select your squad to see exactly which stage you shoot each round, based on the standard IPSC round-robin schedule. Your squad is auto-detected if you've set your identity or selected a competitor.",
+          "Stage details: each row shows course length, round count, target breakdown (paper / steel), and constraint badges for unloaded start, strong hand, weak hand, and moving target stages.",
+          "Registered field: all competitors grouped by division. Tracked shooters and your identity are highlighted and their divisions expand automatically.",
+          "Match day weather forecast: when the venue has coordinates, shows sky conditions, temperature range, wind speed and direction, and precipitation for the match day.",
+          "AI pre-match brief: if AI coaching is configured and you have a tracked identity, a personalised 2–3 sentence preparation tip is generated based on the match's stage breakdown and your historical performance patterns.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-03-11",
     date: "March 11, 2026",
     title: "Conditions Overlay, Penalty Rate & Consistency Trends",
     screenshotScenes: ["conditions-overlay", "comparison-table", "shooter-dashboard"],

@@ -8,19 +8,29 @@ directly — without you having to copy-paste URLs or scorecard numbers.
 
 ## What the MCP server lets you do
 
-Four tools are available:
+Six tools are available:
 
 | Tool | What it does |
 |---|---|
 | `search_events` | Search competitions by name, country, date range, or level |
-| `get_match` | Fetch the full competitor and squad list for a match |
+| `get_match` | Fetch the full competitor list, stage details, and squads for a match |
 | `compare_competitors` | Deep stage-by-stage comparison for 1–12 competitors |
 | `get_popular_matches` | List recently viewed matches from the cache |
+| `get_shooter_dashboard` | Cross-competition career profile and stats for a single shooter |
+| `find_shooter` | Search for a shooter by name in the local database |
 
 **Typical conversation flow:**
 1. Ask the assistant to find a match → `search_events`
 2. Ask it to look up competitors → `get_match`
 3. Ask it to compare two or more competitors → `compare_competitors`
+
+**For career / cross-match stats:**
+1. `get_match` → note a competitor's `shooterId`
+2. `get_shooter_dashboard(shooter_id)` → career history, aggregate stats, achievements
+
+**For pre-match preparation (upcoming match, no scores yet):**
+1. `search_events` → `get_match` → stage list with course lengths, round counts, and constraints
+2. Optionally `get_shooter_dashboard` for historical context and personalised tips
 
 ---
 
@@ -178,6 +188,18 @@ Once connected, try these prompts to get started:
 > "For those two competitors, show me efficiency (points per shot) and consistency score."
 
 > "What's the penalty rate impact for each competitor?"
+
+### Pre-match preparation
+
+> "I'm shooting the Nordic Open next weekend in Squad 4 — give me a stage rotation and highlight any constrained stages."
+
+> "What should I focus on before the Swedish Championship? My name is Alice Andersson."
+
+### Shooter career stats
+
+> "Show me Alice Andersson's match history and how her accuracy has been trending."
+
+> "Find shooter Bob Björk and pull up his career dashboard."
 
 ### End-to-end example
 
