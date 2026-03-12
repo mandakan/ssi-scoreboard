@@ -56,7 +56,7 @@ function makeCtx(overrides: Partial<AchievementEvalContext> = {}): AchievementEv
   };
 }
 
-const TOTAL_ACHIEVEMENTS = 10;
+const TOTAL_ACHIEVEMENTS = 13;
 
 describe("evaluateAchievements", () => {
   it("returns no unlocks for zero matches", () => {
@@ -369,5 +369,209 @@ describe("evaluateAchievements", () => {
     const vAch = achievements.find((a) => a.definition.id === "versatile")!;
     expect(vAch.currentValue).toBe(1);
     expect(vAch.unlockedTiers).toHaveLength(0);
+  });
+
+  // ── Social Shooter ───────────────────────────────────────────────────────
+
+  it("counts unique squadmates across all matches", () => {
+    const ctx = makeCtx({
+      matches: [
+        makeMatch({ matchId: "1", squadmateShooterIds: [10, 11, 12] }),
+        makeMatch({ matchId: "2", squadmateShooterIds: [11, 13, 14] }), // 11 is a repeat
+        makeMatch({ matchId: "3", squadmateShooterIds: [] }),
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const ach = achievements.find((a) => a.definition.id === "social-shooter")!;
+    expect(ach.currentValue).toBe(5); // 10, 11, 12, 13, 14
+    expect(ach.unlockedTiers).toHaveLength(0); // first tier at 10
+  });
+
+  it("unlocks social-shooter tier at 10 unique squadmates", () => {
+    const ids = Array.from({ length: 10 }, (_, i) => i + 1);
+    const ctx = makeCtx({
+      matches: [makeMatch({ squadmateShooterIds: ids })],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const ach = achievements.find((a) => a.definition.id === "social-shooter")!;
+    expect(ach.currentValue).toBe(10);
+    expect(ach.unlockedTiers).toHaveLength(1);
+    expect(ach.nextTier?.threshold).toBe(25);
+  });
+
+  it("returns 0 for social-shooter when no squad data", () => {
+    const ctx = makeCtx({
+      matches: [makeMatch(), makeMatch({ matchId: "2" })],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const ach = achievements.find((a) => a.definition.id === "social-shooter")!;
+    expect(ach.currentValue).toBe(0);
+    expect(ach.unlockedTiers).toHaveLength(0);
+  });
+
+  // ── Usual Suspects ───────────────────────────────────────────────────────
+
+  it("returns max recurrence count for usual-suspects", () => {
+    const ctx = makeCtx({
+      matches: [
+        makeMatch({ matchId: "1", squadmateShooterIds: [10, 20] }),
+        makeMatch({ matchId: "2", squadmateShooterIds: [10, 30] }),
+        makeMatch({ matchId: "3", squadmateShooterIds: [10, 20] }),
+        makeMatch({ matchId: "4", squadmateShooterIds: [20] }),
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const ach = achievements.find((a) => a.definition.id === "usual-suspects")!;
+    // Shooter 10 appears in matches 1, 2, 3 → count 3; shooter 20 in 1, 3, 4 → count 3
+    expect(ach.currentValue).toBe(3);
+    expect(ach.unlockedTiers).toHaveLength(2); // thresholds 2 and 3
+  });
+
+  it("unlocks first usual-suspects tier at 2 shared matches", () => {
+    const ctx = makeCtx({
+      matches: [
+        makeMatch({ matchId: "1", squadmateShooterIds: [99] }),
+        makeMatch({ matchId: "2", squadmateShooterIds: [99] }),
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const ach = achievements.find((a) => a.definition.id === "usual-suspects")!;
+    expect(ach.currentValue).toBe(2);
+    expect(ach.unlockedTiers).toHaveLength(1);
+    expect(ach.nextTier?.threshold).toBe(3);
+  });
+
+  it("returns 0 for usual-suspects when no squad data", () => {
+    const ctx = makeCtx({ matches: [makeMatch(), makeMatch({ matchId: "2" })] });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const ach = achievements.find((a) => a.definition.id === "usual-suspects")!;
+    expect(ach.currentValue).toBe(0);
+  });
+
+  // ── Traditionalist ───────────────────────────────────────────────────────
+
+  it("counts distinct years at same Swedish L3+ event — year in name", () => {
+    const ctx = makeCtx({
+      matches: [
+        makeMatch({ matchId: "1", level: "l3", region: "SWE", name: "Oden Cup 2021 LvL III", date: "2021-06-01T00:00:00Z", discipline: "IPSC Handgun" }),
+        makeMatch({ matchId: "2", level: "l3", region: "SWE", name: "Oden Cup 2023",         date: "2023-06-01T00:00:00Z", discipline: "IPSC Handgun" }),
+        makeMatch({ matchId: "3", level: "l3", region: "SWE", name: "Oden Cup 2024",         date: "2024-06-01T00:00:00Z", discipline: "IPSC Handgun" }),
+        makeMatch({ matchId: "4", level: "l2", region: "SWE", name: "Club Match 2024",        date: "2024-03-01T00:00:00Z", discipline: "IPSC Handgun" }),
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const ach = achievements.find((a) => a.definition.id === "traditionalist")!;
+    expect(ach.currentValue).toBe(3); // 3 L3+ years
+    expect(ach.unlockedTiers).toHaveLength(2); // thresholds 2 and 3
+  });
+
+  it("normalises HFO edition-number names to the same series key", () => {
+    const ctx = makeCtx({
+      matches: [
+        makeMatch({ matchId: "1", level: "l3", region: "SWE", name: "HFO.6 - HG & PCC - Accidental Discharge", date: "2023-06-01T00:00:00Z", discipline: "IPSC Handgun & PCC" }),
+        makeMatch({ matchId: "2", level: "l3", region: "SWE", name: "HFO.9 - PCC, Love & Handguns",            date: "2024-06-01T00:00:00Z", discipline: "IPSC Handgun & PCC" }),
+        makeMatch({ matchId: "3", level: "l3", region: "SWE", name: "HFO.10 - The Triggerfreeze (HG & PCC)",   date: "2025-06-01T00:00:00Z", discipline: "IPSC Handgun & PCC" }),
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const ach = achievements.find((a) => a.definition.id === "traditionalist")!;
+    expect(ach.currentValue).toBe(3); // all three normalise to "hfo"
+    expect(ach.unlockedTiers).toHaveLength(2);
+  });
+
+  it("normalises Roman-numeral chapter series", () => {
+    const ctx = makeCtx({
+      matches: [
+        makeMatch({ matchId: "1", level: "l3", region: "SWE", name: "Chapter II",  date: "2023-06-01T00:00:00Z", discipline: "IPSC Handgun" }),
+        makeMatch({ matchId: "2", level: "l3", region: "SWE", name: "Chapter III", date: "2024-06-01T00:00:00Z", discipline: "IPSC Handgun" }),
+        makeMatch({ matchId: "3", level: "l3", region: "SWE", name: "Chapter IV",  date: "2025-06-01T00:00:00Z", discipline: "IPSC Handgun" }),
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const ach = achievements.find((a) => a.definition.id === "traditionalist")!;
+    expect(ach.currentValue).toBe(3); // all three normalise to "chapter"
+  });
+
+  it("normalises year-embedded name (SNO2025)", () => {
+    const ctx = makeCtx({
+      matches: [
+        makeMatch({ matchId: "1", level: "l3", region: "SWE", name: "SNO 2023",   date: "2023-06-01T00:00:00Z", discipline: "IPSC Handgun" }),
+        makeMatch({ matchId: "2", level: "l3", region: "SWE", name: "SNO2025 HG", date: "2025-06-01T00:00:00Z", discipline: "IPSC Handgun" }),
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const ach = achievements.find((a) => a.definition.id === "traditionalist")!;
+    expect(ach.currentValue).toBe(2); // both normalise to "sno"
+  });
+
+  it("ignores non-Swedish L3+ matches for traditionalist", () => {
+    const ctx = makeCtx({
+      matches: [
+        makeMatch({ matchId: "1", level: "l3", region: "NOR", name: "Oden Cup 2023", date: "2023-06-01T00:00:00Z", discipline: "IPSC Handgun" }),
+        makeMatch({ matchId: "2", level: "l3", region: "NOR", name: "Oden Cup 2024", date: "2024-06-01T00:00:00Z", discipline: "IPSC Handgun" }),
+        makeMatch({ matchId: "3", level: "l3", region: "SWE", name: "HFO.9 - PCC, Love & Handguns", date: "2024-06-01T00:00:00Z", discipline: "IPSC Handgun & PCC" }),
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const ach = achievements.find((a) => a.definition.id === "traditionalist")!;
+    // Norwegian matches excluded; only 1 Swedish L3+ match → max = 1
+    expect(ach.currentValue).toBe(1);
+    expect(ach.unlockedTiers).toHaveLength(0);
+  });
+
+  it("treats same event name in different discipline as separate series", () => {
+    const ctx = makeCtx({
+      matches: [
+        makeMatch({ matchId: "1", level: "l3", region: "SWE", name: "Oden Cup 2023", date: "2023-05-01T00:00:00Z", discipline: "IPSC Handgun" }),
+        makeMatch({ matchId: "2", level: "l3", region: "SWE", name: "Oden Cup 2024", date: "2024-05-01T00:00:00Z", discipline: "IPSC Shotgun" }),
+        makeMatch({ matchId: "3", level: "l3", region: "SWE", name: "Oden Cup 2025", date: "2025-05-01T00:00:00Z", discipline: "IPSC Shotgun" }),
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const ach = achievements.find((a) => a.definition.id === "traditionalist")!;
+    // Handgun: 1 year; Shotgun: 2 years → max = 2
+    expect(ach.currentValue).toBe(2);
+    expect(ach.unlockedTiers).toHaveLength(1);
+  });
+
+  it("does not count the same year twice for traditionalist", () => {
+    const ctx = makeCtx({
+      matches: [
+        makeMatch({ matchId: "1", level: "l3", region: "SWE", name: "HFO.3 / The Spring Roll - Handgun", date: "2022-08-10T00:00:00Z", discipline: "IPSC Handgun" }),
+        makeMatch({ matchId: "2", level: "l3", region: "SWE", name: "HFO.3 / The Spring Roll - PCC",     date: "2022-08-11T00:00:00Z", discipline: "IPSC Handgun & PCC" }),
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const ach = achievements.find((a) => a.definition.id === "traditionalist")!;
+    // Both in 2022 but different disciplines → each group has 1 year → max = 1
+    expect(ach.currentValue).toBe(1);
+    expect(ach.unlockedTiers).toHaveLength(0);
+  });
+
+  it("returns 0 for traditionalist with only L2 Swedish matches", () => {
+    const ctx = makeCtx({
+      matches: [
+        makeMatch({ matchId: "1", level: "l2", region: "SWE", name: "HFO.6 - Accidental Discharge", date: "2023-06-01T00:00:00Z" }),
+        makeMatch({ matchId: "2", level: "l2", region: "SWE", name: "HFO.9 - PCC, Love & Handguns", date: "2024-06-01T00:00:00Z" }),
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const ach = achievements.find((a) => a.definition.id === "traditionalist")!;
+    expect(ach.currentValue).toBe(0);
+    expect(ach.unlockedTiers).toHaveLength(0);
   });
 });

@@ -627,6 +627,10 @@ export interface ShooterMatchSummary {
    * Null when fewer than 2 valid stages or mean HF is zero.
    */
   consistencyIndex?: number | null;
+  /** Global shooter IDs of competitors who shared a squad with this shooter. Empty if squad data unavailable or shooter was unassigned. */
+  squadmateShooterIds?: number[];
+  /** Human-readable discipline string, e.g. "IPSC Rifle", "IPSC Shotgun", "IPSC Handgun & PCC". Null if unavailable. */
+  discipline?: string | null;
 }
 
 // Cross-match aggregate statistics for the shooter dashboard.

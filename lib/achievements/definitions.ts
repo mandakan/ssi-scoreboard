@@ -16,6 +16,10 @@ const L2_PLUS = new Set([
   "l2", "l3", "l4", "l5",                        // raw Django choice codes
   "Level II", "Level III", "Level IV", "Level V", // display names (legacy)
 ]);
+const L3_PLUS = new Set([
+  "l3", "l4", "l5",
+  "Level III", "Level IV", "Level V",
+]);
 const L4_PLUS = new Set([
   "l4", "l5",                  // raw codes
   "Level IV", "Level V",       // display names (legacy)
@@ -25,8 +29,45 @@ function isL2Plus(m: ShooterMatchSummary): boolean {
   return m.level != null && L2_PLUS.has(m.level);
 }
 
+function isL3Plus(m: ShooterMatchSummary): boolean {
+  return m.level != null && L3_PLUS.has(m.level);
+}
+
 function isL4Plus(m: ShooterMatchSummary): boolean {
   return m.level != null && L4_PLUS.has(m.level);
+}
+
+/**
+ * Normalise a match name to a stable series key for grouping recurring events.
+ *
+ * Handles patterns observed in real SSI data:
+ *   "HFO.10 - The Triggerfreeze (HG & PCC)"   → "hfo"
+ *   "HFO.3 / The Spring Roll - Handgun"        → "hfo"
+ *   "Oden Cup 2021 LvL III"                    → "oden cup"
+ *   "SNO2025 HG"                               → "sno"
+ *   "Chapter III"                              → "chapter"
+ *   "Viking Match 2017 - Production Nationals" → "viking match"
+ *   "Bergen Open - Revitalized 2024"           → "bergen open"
+ *   "13th Helmbrechts-Cup 2023"                → "helmbrechts-cup"
+ */
+function normalizeMatchName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\s*[(\[（][^\)\]）]*[\)\]）]/g, "") // strip parenthesised/bracketed content
+    .replace(/^\d+(?:st|nd|rd|th)\s+/, "")       // strip leading ordinal: "13th "
+    .replace(/\s*\/.*$/, "")                      // strip subtitle after " / "
+    .replace(/\s+-.*$/, "")                       // strip subtitle after " - " (space before dash)
+    .replace(/\.\d+\s*$/, "")                     // strip edition number suffix: ".10"
+    .replace(/\d{4}.*$/, "")                      // strip 4-digit year (with or without space) + everything after
+    .replace(/\s+[ivxlcdm]+\s*$/i, "")            // strip trailing Roman numerals: "Chapter III"
+    .trim()
+    .replace(/\s+/g, " ");                        // collapse any double-spaces left behind
+}
+
+function extractYear(date: string | null): number | null {
+  if (!date) return null;
+  const m = /^(\d{4})/.exec(date);
+  return m ? parseInt(m[1], 10) : null;
 }
 
 // ── Milestone ────────────────────────────────────────────────────────────────
@@ -247,6 +288,102 @@ const versatile: AchievementEntry = {
   },
 };
 
+// ── Squad ─────────────────────────────────────────────────────────────────────
+
+const socialShooter: AchievementEntry = {
+  definition: {
+    id: "social-shooter",
+    name: "Social Shooter",
+    description: "Share a squad with many different competitors across all your matches.",
+    category: "variety",
+    icon: "users",
+    tiers: [
+      { level: 1, name: "Friendly",     threshold: 10,  label: "10 unique squadmates" },
+      { level: 2, name: "Networker",    threshold: 25,  label: "25 unique squadmates" },
+      { level: 3, name: "Well-Known",   threshold: 50,  label: "50 unique squadmates" },
+      { level: 4, name: "Community Pillar", threshold: 100, label: "100 unique squadmates" },
+    ],
+  },
+  evaluate: (ctx) => {
+    const seen = new Set<number>();
+    for (const m of ctx.matches) {
+      for (const id of (m.squadmateShooterIds ?? [])) {
+        seen.add(id);
+      }
+    }
+    return seen.size;
+  },
+};
+
+const usualSuspects: AchievementEntry = {
+  definition: {
+    id: "usual-suspects",
+    name: "Usual Suspects",
+    description: "Keep ending up in the same squad as the same competitor across different matches.",
+    category: "variety",
+    icon: "user-check",
+    tiers: [
+      { level: 1, name: "Familiar Face",  threshold: 2, label: "2 matches with same squadmate" },
+      { level: 2, name: "Squad Regular",  threshold: 3, label: "3 matches with same squadmate" },
+      { level: 3, name: "Inseparable",    threshold: 5, label: "5 matches with same squadmate" },
+    ],
+  },
+  evaluate: (ctx) => {
+    const counts = new Map<number, number>();
+    for (const m of ctx.matches) {
+      for (const id of (m.squadmateShooterIds ?? [])) {
+        counts.set(id, (counts.get(id) ?? 0) + 1);
+      }
+    }
+    let max = 0;
+    for (const count of counts.values()) {
+      if (count > max) max = count;
+    }
+    return max;
+  },
+};
+
+// ── Recurring competition ─────────────────────────────────────────────────────
+
+const traditionalist: AchievementEntry = {
+  definition: {
+    id: "traditionalist",
+    name: "Swedish Regular",
+    description: "Return to the same Swedish Level III+ competition year after year.",
+    category: "milestone",
+    icon: "calendar",
+    tiers: [
+      { level: 1, name: "Returning",  threshold: 2, label: "2 years at same event" },
+      { level: 2, name: "Dedicated",  threshold: 3, label: "3 years at same event" },
+      { level: 3, name: "Legendary",  threshold: 5, label: "5 years at same event" },
+    ],
+  },
+  evaluate: (ctx) => {
+    // Group Swedish L3+ matches by (normalized name, discipline) and count distinct years.
+    const groups = new Map<string, Set<number>>();
+    for (const m of ctx.matches) {
+      if (!isL3Plus(m)) continue;
+      if (m.region !== "SWE") continue;
+      const year = extractYear(m.date);
+      if (!year) continue;
+      const name = normalizeMatchName(m.name);
+      if (!name) continue;
+      const key = `${name}|||${m.discipline ?? ""}`;
+      const existing = groups.get(key);
+      if (existing) {
+        existing.add(year);
+      } else {
+        groups.set(key, new Set([year]));
+      }
+    }
+    let max = 0;
+    for (const years of groups.values()) {
+      if (years.size > max) max = years.size;
+    }
+    return max;
+  },
+};
+
 // ── Export ────────────────────────────────────────────────────────────────────
 
 export const ACHIEVEMENT_ENTRIES: AchievementEntry[] = [
@@ -260,6 +397,9 @@ export const ACHIEVEMENT_ENTRIES: AchievementEntry[] = [
   dqClub,
   globeTrotter,
   versatile,
+  socialShooter,
+  usualSuspects,
+  traditionalist,
 ];
 
 export const ACHIEVEMENT_DEFINITIONS: AchievementDefinition[] =
