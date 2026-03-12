@@ -483,6 +483,25 @@ export function PreMatchView({
     ? rotation
     : sortedStages.map((s, i) => ({ round: i + 1, stage: s }));
 
+  // Squad members in within-squad shooting order (sorted by competitor number,
+  // already reflected in SquadInfo.competitorIds from match-data.ts).
+  const squadMembers = useMemo(() => {
+    if (selectedSquadNum === null) return [];
+    const sq = match.squads.find((s) => s.number === selectedSquadNum);
+    if (!sq) return [];
+    return sq.competitorIds
+      .map((cid) => match.competitors.find((c) => c.id === cid))
+      .filter((c): c is CompetitorInfo => c != null);
+  }, [selectedSquadNum, match.squads, match.competitors]);
+
+  // Index of the tracked/selected shooter within the squad (-1 if not found).
+  const mySquadIdx = useMemo(
+    () => squadMembers.findIndex(
+      (c) => c.shooterId === myShooterId || selectedIds.includes(c.id),
+    ),
+    [squadMembers, myShooterId, selectedIds],
+  );
+
   return (
     <div className="space-y-4">
       {/* AI pre-match brief ----------------------------------------------- */}
@@ -525,11 +544,14 @@ export function PreMatchView({
                     at a different stage and advances by one each round.
                   </p>
                   <p>
-                    Some matches use a different order — check with the match
-                    director or your squad sheet if you need to be certain.
+                    Within each stage, the competitor with the lowest competitor
+                    number starts Stage 1, the second-lowest starts Stage 2, and
+                    so on — wrapping around if there are more stages than squad
+                    members.
                   </p>
                   <p>
-                    Select your squad to see the predicted shooting order.
+                    Both the squad rotation and the within-squad starting order
+                    may be adjusted by the match director or RO on the day.
                   </p>
                 </div>
               </PopoverContent>
@@ -580,23 +602,21 @@ export function PreMatchView({
           )}
 
           {/* Squad shooting order ----------------------------------------- */}
-          {selectedSquadNum !== null && (() => {
-            const sq = match.squads.find((s) => s.number === selectedSquadNum);
-            if (!sq || sq.competitorIds.length === 0) return null;
-            const members = sq.competitorIds
-              .map((cid) => match.competitors.find((c) => c.id === cid))
-              .filter((c): c is CompetitorInfo => c != null);
-            const myIdx = members.findIndex(
-              (c) => c.shooterId === myShooterId || selectedIds.includes(c.id),
-            );
+          {squadMembers.length > 0 && (() => {
+            const n = squadMembers.length;
+            const totalStages = sortedStages.length;
             return (
               <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground font-medium">
                   Squad shooting order (by competitor number)
                 </p>
                 <ol className="space-y-0.5">
-                  {members.map((c, i) => {
-                    const isMe = i === myIdx;
+                  {squadMembers.map((c, i) => {
+                    const isMe = i === mySquadIdx;
+                    // Which stages does this position start?
+                    const starts = sortedStages
+                      .filter((s) => (s.stage_number - 1) % n === i)
+                      .map((s) => s.stage_number);
                     return (
                       <li
                         key={c.id}
@@ -605,10 +625,15 @@ export function PreMatchView({
                         <span className="tabular-nums w-5 shrink-0 text-right text-xs">
                           {i + 1}.
                         </span>
-                        <span className="truncate flex-1">{c.name}</span>
+                        <span className="truncate flex-1 min-w-0">{c.name}</span>
                         {c.competitor_number && (
                           <span className="text-xs tabular-nums shrink-0">
                             #{c.competitor_number}
+                          </span>
+                        )}
+                        {totalStages > 0 && starts.length > 0 && (
+                          <span className={`text-xs tabular-nums shrink-0 ${isMe ? "text-primary" : "text-muted-foreground/70"}`}>
+                            starts {starts.join(", ")}
                           </span>
                         )}
                         {isMe && (
@@ -619,7 +644,7 @@ export function PreMatchView({
                   })}
                 </ol>
                 <p className="text-xs text-muted-foreground/70 italic">
-                  Order within the squad may be adjusted on match day — confirm with your RO or match director.
+                  The shooter ranked first in the squad by competitor number starts Stage 1, second starts Stage 2, etc. When there are more stages than squad members it wraps around. Order may be adjusted on match day — confirm with your RO.
                 </p>
               </div>
             );
@@ -641,6 +666,13 @@ export function PreMatchView({
                 c.weakHand && "Weak hand",
                 c.movingTargets && "Moving targets",
               ].filter(Boolean) as string[];
+
+              // Within-squad starting position for this stage.
+              const starterIdx = squadMembers.length > 0
+                ? (stage.stage_number - 1) % squadMembers.length
+                : -1;
+              const starter = starterIdx >= 0 ? squadMembers[starterIdx] : null;
+              const iStart = starterIdx >= 0 && starterIdx === mySquadIdx;
 
               return (
                 <li key={stage.id} className="space-y-1.5">
@@ -670,6 +702,18 @@ export function PreMatchView({
                       )}
                     </div>
                   </div>
+                  {/* Within-squad starter */}
+                  {starter && (
+                    <div className={`flex items-center gap-1.5 text-xs ${match.squads.length > 0 ? "ml-[4.25rem]" : ""}`}>
+                      {iStart ? (
+                        <span className="font-semibold text-primary">You start this stage</span>
+                      ) : (
+                        <span className="text-muted-foreground/70">
+                          {starter.name} starts
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {/* Target breakdown */}
                   {(stage.paper_targets != null || stage.steel_targets != null) && (
                     <div className={`flex gap-2 text-xs text-muted-foreground ${match.squads.length > 0 ? "ml-[4.25rem]" : ""}`}>
