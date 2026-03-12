@@ -9,6 +9,7 @@ import { NextResponse } from "next/server";
 import { createAIProvider } from "@/lib/ai-provider";
 import { buildPreMatchBriefPrompt, PRE_MATCH_PROMPT_VERSION } from "@/lib/pre-match-prompt";
 import { fetchMatchData } from "@/lib/match-data";
+import { getShooterDashboard } from "@/lib/api-data";
 import cache from "@/lib/cache-impl";
 import type { ShooterDashboardResponse } from "@/lib/types";
 import type { CoachingTipResponse } from "@/lib/types";
@@ -19,15 +20,23 @@ export const runtime = "nodejs";
  *  dashboard changes slowly; this is sufficient freshness for a pre-match brief. */
 const BRIEF_TTL = 1_800;
 
-/** Try to read the pre-computed shooter dashboard from the Redis cache.
- *  Returns null on any error or cache miss — the brief degrades gracefully. */
-async function getDashboardFromCache(
+/**
+ * Load shooter dashboard — Redis cache first, full DB computation on miss.
+ * Returns null only when the shooter has no indexed matches at all.
+ */
+async function loadDashboard(
   shooterId: number,
 ): Promise<ShooterDashboardResponse | null> {
+  // Fast path: return the pre-computed dashboard if it's still in Redis.
   try {
     const raw = await cache.get(`computed:shooter:${shooterId}:dashboard`);
-    if (!raw) return null;
-    return JSON.parse(raw) as ShooterDashboardResponse;
+    if (raw) return JSON.parse(raw) as ShooterDashboardResponse;
+  } catch { /* non-fatal */ }
+
+  // Slow path: compute from DB + match cache (same logic as GET /api/shooter/[shooterId]).
+  // getShooterDashboard() calls the route handler directly — no HTTP round-trip.
+  try {
+    return await getShooterDashboard(shooterId);
   } catch {
     return null;
   }
@@ -74,7 +83,7 @@ export async function GET(
   // Load dashboard if a specific shooter is requested.
   const dashboard =
     shooterId != null && isFinite(shooterId)
-      ? await getDashboardFromCache(shooterId)
+      ? await loadDashboard(shooterId)
       : null;
 
   const shooterName = dashboard?.profile?.name ?? null;
