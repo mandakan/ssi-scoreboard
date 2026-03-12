@@ -25,10 +25,18 @@ import {
   PopoverTitle,
   PopoverDescription,
 } from "@/components/ui/popover";
-import { usePreMatchWeatherQuery, usePreMatchBriefQuery } from "@/lib/queries";
+import { usePreMatchWeatherQuery, usePreMatchBriefQuery, useShooterDashboardQuery } from "@/lib/queries";
 import { computeSquadContext } from "@/lib/pre-match-prompt";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RefreshCw, Sparkles } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+} from "@/components/ui/sheet";
 
 interface PreMatchViewProps {
   match: MatchResponse;
@@ -268,6 +276,178 @@ function PreMatchBriefCard({
   );
 }
 
+// ── Competitor profile sheet ───────────────────────────────────────────────────
+
+function CompetitorSheet({
+  competitor,
+  open,
+  onOpenChange,
+  isMe,
+  isTracked,
+}: {
+  competitor: CompetitorInfo | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  isMe: boolean;
+  isTracked: boolean;
+}) {
+  const dashQuery = useShooterDashboardQuery(competitor?.shooterId ?? null);
+  const flag = competitor ? regionToFlagEmoji(competitor.region) : null;
+
+  if (!competitor) return null;
+
+  const stats = dashQuery.data?.stats;
+  const matchCount = dashQuery.data?.matchCount ?? 0;
+
+  const avgPctStr =
+    stats?.overallMatchPct != null
+      ? `${stats.overallMatchPct.toFixed(0)}%`
+      : null;
+
+  const trendLabel =
+    stats?.hfTrendSlope == null
+      ? null
+      : stats.hfTrendSlope > 0.002
+        ? "Improving ↑"
+        : stats.hfTrendSlope < -0.002
+          ? "Declining ↓"
+          : "Stable →";
+
+  const experienceStr =
+    matchCount >= 50
+      ? `${matchCount} matches — experienced`
+      : matchCount >= 20
+        ? `${matchCount} matches — intermediate`
+        : matchCount > 0
+          ? `${matchCount} matches — developing`
+          : null;
+
+  const recentMatches = dashQuery.data?.matches.slice(0, 3) ?? [];
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="rounded-t-xl max-h-[80dvh] overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2 flex-wrap pr-8">
+            {flag && <span aria-hidden="true">{flag}</span>}
+            <span>{competitor.name}</span>
+            {competitor.competitor_number && (
+              <span className="text-sm font-normal text-muted-foreground">
+                #{competitor.competitor_number}
+              </span>
+            )}
+          </SheetTitle>
+          <SheetDescription className="flex flex-wrap gap-1 items-center">
+            {competitor.division && <span>{competitor.division}</span>}
+            {competitor.club && (
+              <>
+                {competitor.division && <span aria-hidden="true">·</span>}
+                <span>{competitor.club}</span>
+              </>
+            )}
+          </SheetDescription>
+        </SheetHeader>
+
+        {/* You / Tracked badges */}
+        {(isMe || isTracked) && (
+          <div className="px-4 flex gap-1.5">
+            {isMe && (
+              <span className="text-xs bg-primary/15 text-primary px-2 py-0.5 rounded-full font-medium">
+                You
+              </span>
+            )}
+            {isTracked && !isMe && (
+              <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                Tracked
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Stats */}
+        <div className="px-4 space-y-3 pb-2">
+          {!competitor.shooterId ? (
+            <p className="text-sm text-muted-foreground">
+              No match history linked to this competitor yet.
+            </p>
+          ) : dashQuery.isLoading ? (
+            <div className="space-y-2" aria-label="Loading stats">
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-4 w-3/4" />
+            </div>
+          ) : !dashQuery.data ? (
+            <p className="text-sm text-muted-foreground">
+              Could not load match history.
+            </p>
+          ) : (
+            <dl className="space-y-2">
+              {experienceStr && (
+                <div className="flex justify-between text-sm">
+                  <dt className="text-muted-foreground">Experience</dt>
+                  <dd className="font-medium">{experienceStr}</dd>
+                </div>
+              )}
+              {avgPctStr && (
+                <div className="flex justify-between text-sm">
+                  <dt className="text-muted-foreground">Career avg</dt>
+                  <dd className="font-medium">{avgPctStr} of div. winner</dd>
+                </div>
+              )}
+              {trendLabel && (
+                <div className="flex justify-between text-sm">
+                  <dt className="text-muted-foreground">Recent trend</dt>
+                  <dd className="font-medium">{trendLabel}</dd>
+                </div>
+              )}
+              {recentMatches.length > 0 && (
+                <div className="pt-1 space-y-1">
+                  <p className="text-xs text-muted-foreground font-medium">
+                    Recent results
+                  </p>
+                  <ul className="space-y-0.5">
+                    {recentMatches.map((m) => (
+                      <li
+                        key={`${m.ct}-${m.matchId}`}
+                        className="flex items-center justify-between text-xs"
+                      >
+                        <span className="text-muted-foreground truncate flex-1 min-w-0 mr-2">
+                          {m.name}
+                        </span>
+                        {m.matchPct != null && (
+                          <span className="tabular-nums shrink-0">
+                            {m.matchPct.toFixed(0)}%
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {!experienceStr && !avgPctStr && recentMatches.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No scorecard data available yet.
+                </p>
+              )}
+            </dl>
+          )}
+        </div>
+
+        {competitor.shooterId && (
+          <SheetFooter>
+            <a
+              href={`/shooter/${competitor.shooterId}`}
+              className="w-full text-center text-sm font-medium px-4 py-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+            >
+              View full dashboard
+            </a>
+          </SheetFooter>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 // ── Division field ────────────────────────────────────────────────────────────
 
 const MAX_COLLAPSED = 5;
@@ -277,11 +457,13 @@ function DivisionSection({
   competitors,
   trackedShooterIds,
   myShooterId,
+  onSelectCompetitor,
 }: {
   division: string;
   competitors: CompetitorInfo[];
   trackedShooterIds: Set<number>;
   myShooterId: number | null;
+  onSelectCompetitor: (c: CompetitorInfo) => void;
 }) {
   const hasHighlighted = competitors.some(
     (c) =>
@@ -328,37 +510,40 @@ function DivisionSection({
             const highlighted = isMe || isTracked;
             const flag = regionToFlagEmoji(c.region);
             return (
-              <li
-                key={c.id}
-                className={`flex items-center gap-2 px-2 py-1 rounded text-sm ${
-                  highlighted
-                    ? "bg-primary/10 text-foreground"
-                    : "text-muted-foreground"
-                }`}
-              >
-                <span className="text-xs text-muted-foreground w-7 shrink-0 text-right tabular-nums">
-                  #{c.competitor_number}
-                </span>
-                <span
-                  className={`flex-1 truncate ${highlighted ? "font-medium" : ""}`}
+              <li key={c.id}>
+                <button
+                  className={`w-full flex items-center gap-2 px-2 py-1 rounded text-sm text-left hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring transition-colors ${
+                    highlighted
+                      ? "bg-primary/10 text-foreground"
+                      : "text-muted-foreground"
+                  }`}
+                  onClick={() => onSelectCompetitor(c)}
+                  aria-label={`View profile for ${c.name}`}
                 >
-                  {c.name}
-                </span>
-                {c.club && (
-                  <span className="text-xs truncate max-w-[80px] hidden sm:inline">
-                    {c.club}
+                  <span className="text-xs text-muted-foreground w-7 shrink-0 text-right tabular-nums">
+                    #{c.competitor_number}
                   </span>
-                )}
-                {flag && (
-                  <span aria-label={c.region_display ?? c.region ?? undefined}>
-                    {flag}
+                  <span
+                    className={`flex-1 truncate ${highlighted ? "font-medium" : ""}`}
+                  >
+                    {c.name}
                   </span>
-                )}
-                {isMe && (
-                  <span className="text-xs text-primary font-semibold shrink-0">
-                    you
-                  </span>
-                )}
+                  {c.club && (
+                    <span className="text-xs truncate max-w-[80px] hidden sm:inline">
+                      {c.club}
+                    </span>
+                  )}
+                  {flag && (
+                    <span aria-label={c.region_display ?? c.region ?? undefined}>
+                      {flag}
+                    </span>
+                  )}
+                  {isMe && (
+                    <span className="text-xs text-primary font-semibold shrink-0">
+                      you
+                    </span>
+                  )}
+                </button>
               </li>
             );
           })}
@@ -415,6 +600,7 @@ export function PreMatchView({
   const [selectedSquadNum, setSelectedSquadNum] = useState<number | null>(
     defaultSquadNum,
   );
+  const [sheetCompetitor, setSheetCompetitor] = useState<CompetitorInfo | null>(null);
 
   useEffect(() => {
     setSelectedSquadNum(defaultSquadNum);
@@ -784,11 +970,21 @@ export function PreMatchView({
                 competitors={competitors}
                 trackedShooterIds={trackedShooterIds}
                 myShooterId={myShooterId}
+                onSelectCompetitor={setSheetCompetitor}
               />
             ))}
           </div>
         </div>
       )}
+
+      {/* Competitor profile sheet ------------------------------------------ */}
+      <CompetitorSheet
+        competitor={sheetCompetitor}
+        open={sheetCompetitor !== null}
+        onOpenChange={(open) => { if (!open) setSheetCompetitor(null); }}
+        isMe={sheetCompetitor?.shooterId != null && sheetCompetitor.shooterId === myShooterId}
+        isTracked={sheetCompetitor?.shooterId != null && trackedShooterIds.has(sheetCompetitor.shooterId)}
+      />
     </div>
   );
 }
