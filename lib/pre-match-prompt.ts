@@ -7,7 +7,7 @@ import type { StageInfo, ShooterDashboardResponse } from "@/lib/types";
  * Bump when the prompt structure changes enough that cached briefs should
  * be regenerated. Embedded in the cache key alongside the model ID.
  */
-export const PRE_MATCH_PROMPT_VERSION = 1;
+export const PRE_MATCH_PROMPT_VERSION = 2;
 
 export interface PreMatchBriefInput {
   matchName: string;
@@ -80,10 +80,30 @@ STAGES: ${stages.length} stages — ${courseBreakdown}${totalRounds > 0 ? `, ${t
   } else {
     const name = shooterName ?? dashboard.profile.name;
     const stats = dashboard.stats;
+
+    // Division: prefer profile, fall back to most common in recent matches.
+    const division =
+      dashboard.profile.division ??
+      (() => {
+        const freq: Record<string, number> = {};
+        for (const m of dashboard.matches) {
+          if (m.division) freq[m.division] = (freq[m.division] ?? 0) + 1;
+        }
+        const entries = Object.entries(freq);
+        return entries.length > 0
+          ? entries.sort((a, b) => b[1] - a[1])[0][0]
+          : null;
+      })();
+
     const recentMatches = dashboard.matches.slice(0, 5);
     const recentPcts = recentMatches
       .filter((m) => m.matchPct != null)
       .map((m) => `${m.matchPct!.toFixed(0)}%`);
+
+    const avgPct =
+      stats.overallMatchPct != null
+        ? `${stats.overallMatchPct.toFixed(0)}%`
+        : "unknown";
 
     const trendStr =
       stats.hfTrendSlope == null
@@ -94,20 +114,41 @@ STAGES: ${stages.length} stages — ${courseBreakdown}${totalRounds > 0 ? `, ${t
             ? "declining"
             : "stable";
 
+    const aZoneStr =
+      stats.aPercent != null
+        ? `${stats.aPercent.toFixed(0)}%`
+        : "unknown";
+
+    const consistencyStr =
+      stats.consistencyCV == null
+        ? "unknown"
+        : stats.consistencyCV < 0.1
+          ? "very consistent"
+          : stats.consistencyCV < 0.2
+            ? "consistent"
+            : stats.consistencyCV < 0.3
+              ? "moderate variance"
+              : "high variance between matches";
+
     const penaltyStr =
       stats.avgPenaltyRate != null
         ? `${(stats.avgPenaltyRate * 100).toFixed(1)} per 100 rounds`
         : "unknown";
 
-    const avgPct =
-      stats.overallMatchPct != null
-        ? `${stats.overallMatchPct.toFixed(0)}%`
-        : "unknown";
+    const experienceStr =
+      dashboard.matchCount >= 50
+        ? "experienced (50+ L2+ matches)"
+        : dashboard.matchCount >= 20
+          ? `intermediate (${dashboard.matchCount} L2+ matches)`
+          : `developing (${dashboard.matchCount} L2+ matches)`;
 
-    competitorSection = `COMPETITOR: ${name}
+    competitorSection = `COMPETITOR: ${name}${division ? ` — ${division}` : ""}
+EXPERIENCE: ${experienceStr}
 CAREER MATCH AVERAGE: ${avgPct} (vs division winner)
 RECENT RESULTS (last ${recentPcts.length} matches): ${recentPcts.length > 0 ? recentPcts.join(", ") : "none"}
 PERFORMANCE TREND: ${trendStr}
+A-ZONE ACCURACY: ${aZoneStr} of all hits
+CONSISTENCY: ${consistencyStr}
 PENALTY RATE: ${penaltyStr}`;
   }
 
