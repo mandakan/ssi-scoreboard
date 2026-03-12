@@ -37,6 +37,11 @@ import {
   Globe,
   MapPin,
   Shuffle,
+  Users,
+  Repeat2,
+  CalendarDays,
+  Sparkles,
+  Flag,
   type LucideIcon,
 } from "lucide-react";
 
@@ -51,6 +56,11 @@ const ACHIEVEMENT_ICONS: Record<string, LucideIcon> = {
   globe: Globe,
   "map-pin": MapPin,
   shuffle: Shuffle,
+  users: Users,
+  "repeat-2": Repeat2,
+  "calendar-days": CalendarDays,
+  sparkles: Sparkles,
+  flag: Flag,
 };
 import {
   Popover,

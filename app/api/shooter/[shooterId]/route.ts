@@ -318,8 +318,16 @@ export async function GET(
             if (globalId) shooterIdByCompetitorId.set(comp.id, globalId);
           }
 
-          // Find which squad the shooter is in and collect squadmates' global IDs
+          // Build local-competitor-id → club map for same-club squad check
+          const clubByCompetitorId = new Map<string, string | null>();
+          for (const comp of allCompetitors) {
+            clubByCompetitorId.set(comp.id, comp.club ?? null);
+          }
+
+          // Find which squad the shooter is in; collect squadmates' global IDs
+          // and determine whether all members share the same club.
           let squadmateShooterIds: number[] = [];
+          let squadAllSameClub = false;
           for (const squad of (ev.squads ?? [])) {
             const memberIds = (squad.competitors ?? []).map((c) => c.id);
             if (memberIds.includes(competitor.id)) {
@@ -329,6 +337,13 @@ export async function GET(
                   const gid = shooterIdByCompetitorId.get(id);
                   return gid != null ? [gid] : [];
                 });
+
+              // Collect non-null clubs for all squad members (shooter included)
+              const clubs = memberIds
+                .map((id) => clubByCompetitorId.get(id) ?? null)
+                .filter((c): c is string => !!c);
+              squadAllSameClub =
+                clubs.length >= 2 && clubs.every((c) => c === clubs[0]);
               break;
             }
           }
@@ -400,6 +415,7 @@ export async function GET(
             perfectStages: perfectStagesCount,
             consistencyIndex: consistencyIndexValue,
             squadmateShooterIds,
+            squadAllSameClub,
           };
           return summary;
         } catch { return null; }

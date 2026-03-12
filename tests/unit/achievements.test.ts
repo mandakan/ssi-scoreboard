@@ -56,7 +56,7 @@ function makeCtx(overrides: Partial<AchievementEvalContext> = {}): AchievementEv
   };
 }
 
-const TOTAL_ACHIEVEMENTS = 13;
+const TOTAL_ACHIEVEMENTS = 15;
 
 describe("evaluateAchievements", () => {
   it("returns no unlocks for zero matches", () => {
@@ -451,6 +451,82 @@ describe("evaluateAchievements", () => {
     const { achievements } = evaluateAchievements(ctx, []);
 
     const ach = achievements.find((a) => a.definition.id === "usual-suspects")!;
+    expect(ach.currentValue).toBe(0);
+  });
+
+  // ── Fresh Faces ──────────────────────────────────────────────────────────
+
+  it("counts matches where all squadmates are first-timers", () => {
+    const ctx = makeCtx({
+      matches: [
+        // oldest first (chronological)
+        makeMatch({ matchId: "1", date: "2023-01-01T00:00:00Z", squadmateShooterIds: [10, 11, 12] }),
+        makeMatch({ matchId: "2", date: "2023-06-01T00:00:00Z", squadmateShooterIds: [11, 13] }), // 11 seen → not fresh
+        makeMatch({ matchId: "3", date: "2024-01-01T00:00:00Z", squadmateShooterIds: [20, 21] }), // all new → fresh
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const ach = achievements.find((a) => a.definition.id === "fresh-faces")!;
+    // match 1 is fresh (first squad ever), match 2 is not (11 seen), match 3 is fresh → 2
+    expect(ach.currentValue).toBe(2);
+    expect(ach.unlockedTiers).toHaveLength(1); // threshold 2
+  });
+
+  it("processes fresh-faces in chronological order regardless of array order", () => {
+    const ctx = makeCtx({
+      matches: [
+        makeMatch({ matchId: "3", date: "2025-01-01T00:00:00Z", squadmateShooterIds: [30, 31] }),
+        makeMatch({ matchId: "1", date: "2023-01-01T00:00:00Z", squadmateShooterIds: [10, 11] }),
+        makeMatch({ matchId: "2", date: "2024-01-01T00:00:00Z", squadmateShooterIds: [10, 20] }), // 10 seen
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const ach = achievements.find((a) => a.definition.id === "fresh-faces")!;
+    // sorted: match1 (fresh), match2 (10 seen → not fresh), match3 (fresh) → 2
+    expect(ach.currentValue).toBe(2);
+  });
+
+  it("skips matches without squad data for fresh-faces", () => {
+    const ctx = makeCtx({
+      matches: [
+        makeMatch({ matchId: "1", date: "2023-01-01T00:00:00Z" }), // no squad data
+        makeMatch({ matchId: "2", date: "2024-01-01T00:00:00Z", squadmateShooterIds: [10] }),
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const ach = achievements.find((a) => a.definition.id === "fresh-faces")!;
+    // Only match 2 has squad data, and it's the first with data → fresh → 1
+    expect(ach.currentValue).toBe(1);
+  });
+
+  // ── Band of Brothers ─────────────────────────────────────────────────────
+
+  it("counts matches where squadAllSameClub is true", () => {
+    const ctx = makeCtx({
+      matches: [
+        makeMatch({ matchId: "1", squadAllSameClub: true }),
+        makeMatch({ matchId: "2", squadAllSameClub: false }),
+        makeMatch({ matchId: "3", squadAllSameClub: true }),
+        makeMatch({ matchId: "4" }), // undefined — not counted
+      ],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const ach = achievements.find((a) => a.definition.id === "band-of-brothers")!;
+    expect(ach.currentValue).toBe(2);
+    expect(ach.unlockedTiers).toHaveLength(1); // threshold 2
+  });
+
+  it("returns 0 for band-of-brothers when no club-only squads", () => {
+    const ctx = makeCtx({
+      matches: [makeMatch(), makeMatch({ matchId: "2" })],
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const ach = achievements.find((a) => a.definition.id === "band-of-brothers")!;
     expect(ach.currentValue).toBe(0);
   });
 

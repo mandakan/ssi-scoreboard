@@ -321,7 +321,7 @@ const usualSuspects: AchievementEntry = {
     name: "Usual Suspects",
     description: "Keep ending up in the same squad as the same competitor across different matches.",
     category: "variety",
-    icon: "user-check",
+    icon: "repeat-2",
     tiers: [
       { level: 1, name: "Familiar Face",  threshold: 2, label: "2 matches with same squadmate" },
       { level: 2, name: "Squad Regular",  threshold: 3, label: "3 matches with same squadmate" },
@@ -343,6 +343,52 @@ const usualSuspects: AchievementEntry = {
   },
 };
 
+const freshFaces: AchievementEntry = {
+  definition: {
+    id: "fresh-faces",
+    name: "Fresh Faces",
+    description: "Compete in matches where every squadmate is someone you have never shared a squad with before.",
+    category: "variety",
+    icon: "sparkles",
+    tiers: [
+      { level: 1, name: "New Crowd",       threshold: 2,  label: "2 all-new squads" },
+      { level: 2, name: "Always Exploring", threshold: 5,  label: "5 all-new squads" },
+      { level: 3, name: "True Nomad",       threshold: 10, label: "10 all-new squads" },
+    ],
+  },
+  evaluate: (ctx) => {
+    // Process matches oldest-first; count matches where every squadmate ID is first-time.
+    const sorted = [...ctx.matches]
+      .filter((m) => (m.squadmateShooterIds?.length ?? 0) > 0)
+      .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
+    const everSeen = new Set<number>();
+    let count = 0;
+    for (const m of sorted) {
+      const ids = m.squadmateShooterIds!;
+      if (ids.every((id) => !everSeen.has(id))) count++;
+      for (const id of ids) everSeen.add(id);
+    }
+    return count;
+  },
+};
+
+const bandOfBrothers: AchievementEntry = {
+  definition: {
+    id: "band-of-brothers",
+    name: "Band of Brothers",
+    description: "Compete in matches where your entire squad is from the same club.",
+    category: "variety",
+    icon: "flag",
+    tiers: [
+      { level: 1, name: "Club Outing",        threshold: 2,  label: "2 club-only squads" },
+      { level: 2, name: "Team Players",        threshold: 5,  label: "5 club-only squads" },
+      { level: 3, name: "Band of Brothers",    threshold: 10, label: "10 club-only squads" },
+    ],
+  },
+  evaluate: (ctx) =>
+    ctx.matches.filter((m) => m.squadAllSameClub === true).length,
+};
+
 // ── Recurring competition ─────────────────────────────────────────────────────
 
 const traditionalist: AchievementEntry = {
@@ -351,7 +397,7 @@ const traditionalist: AchievementEntry = {
     name: "Swedish Regular",
     description: "Return to the same Swedish Level III+ competition year after year.",
     category: "milestone",
-    icon: "calendar",
+    icon: "calendar-days",
     tiers: [
       { level: 1, name: "Returning",  threshold: 2, label: "2 years at same event" },
       { level: 2, name: "Dedicated",  threshold: 3, label: "3 years at same event" },
@@ -399,6 +445,8 @@ export const ACHIEVEMENT_ENTRIES: AchievementEntry[] = [
   versatile,
   socialShooter,
   usualSuspects,
+  freshFaces,
+  bandOfBrothers,
   traditionalist,
 ];
 

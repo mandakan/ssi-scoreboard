@@ -633,6 +633,8 @@ export interface ShooterMatchSummary {
   consistencyIndex?: number | null;
   /** Global shooter IDs of competitors who shared a squad with this shooter. Empty if squad data unavailable or shooter was unassigned. */
   squadmateShooterIds?: number[];
+  /** True when every squad member (including the shooter) who has a club listed share the same club, and at least 2 members have club data. False/absent otherwise. */
+  squadAllSameClub?: boolean;
   /** Human-readable discipline string, e.g. "IPSC Rifle", "IPSC Shotgun", "IPSC Handgun & PCC". Null if unavailable. */
   discipline?: string | null;
 }
