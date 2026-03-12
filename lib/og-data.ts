@@ -132,6 +132,8 @@ export interface OgShooterData {
   aPercent: number | null;
   hfTrendSlope: number | null;
   dateRange: { from: string | null; to: string | null };
+  /** One entry per achievement in order — highest tier unlocked, or null if locked. */
+  achievements: Array<{ highestTier: number | null }>;
 }
 
 /**
@@ -176,6 +178,12 @@ async function fetchOgShooterDataImpl(
         aPercent: dashboard.stats.aPercent,
         hfTrendSlope: dashboard.stats.hfTrendSlope,
         dateRange: dashboard.stats.dateRange,
+        achievements: (dashboard.achievements ?? []).map((a) => ({
+          highestTier:
+            a.unlockedTiers.length > 0
+              ? a.unlockedTiers[a.unlockedTiers.length - 1].level
+              : null,
+        })),
       };
     }
 
@@ -201,6 +209,7 @@ async function fetchOgShooterDataImpl(
       aPercent: null,
       hfTrendSlope: null,
       dateRange: { from: null, to: null },
+      achievements: [],
     };
   } catch (err) {
     console.error("[og] Failed to fetch shooter data:", err);

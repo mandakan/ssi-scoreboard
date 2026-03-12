@@ -1182,6 +1182,78 @@ function tierSummary(achievement: AchievementProgress): string {
   return `${unlocked} of ${total} tiers unlocked`;
 }
 
+// ─── Achievement bubble (collapsed ribbon bar) ───────────────────────────────
+
+function AchievementBubbleButton({ achievement }: { achievement: AchievementProgress }) {
+  const { definition, unlockedTiers, nextTier, progressToNext } = achievement;
+  const highestTier = unlockedTiers.length > 0 ? unlockedTiers[unlockedTiers.length - 1] : null;
+  const highestDef = highestTier
+    ? definition.tiers.find((t) => t.level === highestTier.level)
+    : null;
+  const Icon = ACHIEVEMENT_ICONS[definition.icon] ?? HelpCircle;
+  const colorClass = highestTier
+    ? (TIER_COLORS[highestTier.level] ?? TIER_COLORS[1])
+    : "bg-muted/40 text-muted-foreground";
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "w-7 h-7 rounded-full flex items-center justify-center transition-colors",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            colorClass,
+            !highestTier && "opacity-40",
+          )}
+          aria-label={`${definition.name}: ${highestDef ? highestDef.name : "Locked"}. ${tierSummary(achievement)}`}
+        >
+          <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="max-w-xs text-sm space-y-2" side="top">
+        <p className="font-medium flex items-center gap-1.5">
+          <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+          {definition.name}
+        </p>
+        <p className="text-muted-foreground">{definition.description}</p>
+        <div className="space-y-1">
+          {definition.tiers.map((tier) => {
+            const unlocked = unlockedTiers.some((u) => u.level === tier.level);
+            return (
+              <div
+                key={tier.level}
+                className={cn(
+                  "flex items-center gap-2 text-xs",
+                  unlocked ? "text-foreground" : "text-muted-foreground",
+                )}
+              >
+                <span aria-hidden="true">{unlocked ? "\u2713" : "\u25CB"}</span>
+                <span className="font-medium">{tier.name}</span>
+                <span className="text-muted-foreground">{tier.label}</span>
+              </div>
+            );
+          })}
+        </div>
+        {nextTier && (
+          <div className="pt-1">
+            <Progress
+              value={progressToNext * 100}
+              className="h-1.5"
+              aria-label={`${Math.round(progressToNext * 100)}% to ${nextTier.name}`}
+            />
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              {Math.round(progressToNext * 100)}% to {nextTier.name} — {nextTier.label}
+            </p>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ─── Achievement card ────────────────────────────────────────────────────
+
 function AchievementCard({ achievement }: { achievement: AchievementProgress }) {
   const { definition, unlockedTiers, nextTier, progressToNext } = achievement;
   const highestTier = unlockedTiers.length > 0 ? unlockedTiers[unlockedTiers.length - 1] : null;
@@ -1270,7 +1342,7 @@ function AchievementsSection({
 }: {
   achievements: AchievementProgress[];
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const totalTiers = achievements.reduce(
     (s, a) => s + a.definition.tiers.length,
     0,
@@ -1324,7 +1396,7 @@ function AchievementsSection({
               that take dozens of matches to reach.
             </p>
             <p className="text-muted-foreground">
-              Tap any card to see the full unlock ladder and your progress
+              Tap any icon to see the full unlock ladder and your progress
               through it. Unlocked tiers are permanent — they persist even if
               old match data is pruned.
             </p>
@@ -1332,6 +1404,22 @@ function AchievementsSection({
         </Popover>
       </h2>
 
+      {/* Collapsed: ribbon bar of tappable icon bubbles */}
+      {!open && (
+        <div
+          className="flex flex-wrap gap-1.5 mt-1.5 pl-6"
+          role="list"
+          aria-label="Achievement overview — tap to inspect"
+        >
+          {achievements.map((a) => (
+            <div key={a.definition.id} role="listitem">
+              <AchievementBubbleButton achievement={a} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Expanded: full medal cards */}
       {open && (
         <section
           id="achievements-panel"
@@ -1522,6 +1610,33 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
               </div>
             )}
           </div>
+          {/* Decorative achievement ribbon bar — like medals on a uniform */}
+          {data.achievements && data.achievements.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2.5" aria-hidden="true">
+              {data.achievements.map((a) => {
+                const highestTier =
+                  a.unlockedTiers.length > 0
+                    ? a.unlockedTiers[a.unlockedTiers.length - 1].level
+                    : null;
+                const Icon = ACHIEVEMENT_ICONS[a.definition.icon] ?? HelpCircle;
+                const colorClass = highestTier
+                  ? (TIER_COLORS[highestTier] ?? TIER_COLORS[1])
+                  : "bg-muted/30 text-muted-foreground";
+                return (
+                  <div
+                    key={a.definition.id}
+                    className={cn(
+                      "w-4 h-4 rounded-full flex items-center justify-center",
+                      colorClass,
+                      !highestTier && "opacity-30",
+                    )}
+                  >
+                    <Icon className="w-2.5 h-2.5" />
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </section>
 

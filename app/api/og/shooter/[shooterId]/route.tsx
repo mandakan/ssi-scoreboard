@@ -16,6 +16,40 @@ import {
 } from "@/lib/og-helpers";
 import { CATEGORY_DISPLAY, regionToFlagEmoji } from "@/lib/ipsc-categories";
 
+// Tier → hex color for achievement dots in OG images
+const OG_TIER_COLOR: Record<number, string> = {
+  1: "#a1a1aa", // zinc-400
+  2: "#4ade80", // green-400
+  3: "#60a5fa", // blue-400
+  4: "#c084fc", // purple-400
+  5: "#fbbf24", // amber-400
+  6: "#fb7185", // rose-400
+};
+const OG_LOCKED_COLOR = "#3f3f46"; // zinc-700
+
+function achievementRibbon(achievements: OgShooterData["achievements"]) {
+  if (!achievements.length) return null;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "8px" }}>
+      {achievements.map((a, i) => (
+        <div
+          key={i}
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: "50%",
+            backgroundColor: a.highestTier
+              ? (OG_TIER_COLOR[a.highestTier] ?? OG_LOCKED_COLOR)
+              : OG_LOCKED_COLOR,
+            opacity: a.highestTier ? 1 : 0.35,
+            display: "flex",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 // ── Route handler ──────────────────────────────────────────────────────
 
 export async function GET(
@@ -250,6 +284,9 @@ function shooterWithStatsImage(shooter: OgShooterData) {
                 : null}
               {trendLabel ? pill(trendLabel, trendColor) : null}
             </div>
+
+            {/* Achievement ribbon bar */}
+            {achievementRibbon(shooter.achievements)}
           </div>
 
           {/* Footer */}
@@ -350,6 +387,9 @@ function shooterProfileImage(shooter: OgShooterData) {
               </div>
             ) : null}
           </div>
+
+          {/* Achievement ribbon bar */}
+          {achievementRibbon(shooter.achievements)}
 
           {/* Stats row */}
           <div
