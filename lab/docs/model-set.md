@@ -58,10 +58,10 @@ compare?". Not needed for day-to-day team selection.
 
 | Stored name | Command |
 |---|---|
-| `openskill_pl_mpct` | `--algorithm openskill_pl --scoring match_pct` |
+| `openskill_mpct` | `--algorithm openskill --scoring match_pct` |
 | `elo_mpct` | `--algorithm elo --scoring match_pct` |
 
-**`openskill_pl_mpct` — decay ablation baseline.**
+**`openskill_mpct` — decay ablation baseline.**
 The pure PL model without decay scores τ = 0.4009 vs PL+Decay's 0.4018 — a
 difference of 0.0009, which is within noise. This confirms that decay is not
 driving the PL family's dominance; it's the Plackett-Luce model form that
@@ -169,7 +169,7 @@ uv run rating train \
 
 # Group B — algorithm baselines (2 algorithms in parallel)
 uv run rating train \
-  --algorithm openskill_pl,elo \
+  --algorithm openskill,elo \
   --scoring match_pct && \
 
 # Group C — L3+ stratified (3 algorithms in parallel)
@@ -232,7 +232,7 @@ data characteristics rather than modelling genuine skill dynamics.
 | Model | Kendall τ (2026-03-08) | Primary purpose |
 |---|---|---|
 | `pl_decay_mpct` | **0.4018** | Primary ranking algorithm |
-| `pl_mpct` | 0.4009 | Decay ablation — shows decay adds ~nothing numerically |
+| `openskill_mpct` | 0.4009 | Decay ablation — shows decay adds ~nothing numerically |
 | `elo_mpct` | 0.3847 | Classical baseline |
 | `bt_lvl_decay_mpct` | 0.3742 | Level-weighted comparison; useful for uncertainty flagging |
 | `ics_mpct` | — | Non-parametric official method benchmark |
