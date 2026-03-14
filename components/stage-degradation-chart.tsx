@@ -287,7 +287,7 @@ export function StageDegradationChart({ data }: StageDegradationChartProps) {
             <ToggleGroupItem
               key={s.stageId}
               value={String(s.stageId)}
-              className="rounded-full border px-3 py-0.5 text-xs transition-colors"
+              className="h-auto min-w-0 rounded-full border px-3 py-0.5 text-xs transition-colors"
               style={{
                 backgroundColor: active ? "var(--foreground)" : undefined,
                 color: active ? "var(--background)" : "var(--muted-foreground)",

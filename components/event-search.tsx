@@ -295,7 +295,7 @@ export function EventSearch() {
                     <ToggleGroupItem
                       key={id}
                       value={id}
-                      className={chipClass(id === firearms)}
+                      className={cn("h-auto min-w-0", chipClass(id === firearms))}
                     >
                       {label}
                     </ToggleGroupItem>
@@ -316,7 +316,7 @@ export function EventSearch() {
                     <ToggleGroupItem
                       key={id}
                       value={id}
-                      className={chipClass(id === country)}
+                      className={cn("h-auto min-w-0", chipClass(id === country))}
                     >
                       {label}
                     </ToggleGroupItem>
@@ -337,7 +337,7 @@ export function EventSearch() {
                     <ToggleGroupItem
                       key={id}
                       value={id}
-                      className={chipClass(id === level)}
+                      className={cn("h-auto min-w-0", chipClass(id === level))}
                     >
                       {label}
                     </ToggleGroupItem>

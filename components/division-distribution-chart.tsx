@@ -128,7 +128,7 @@ export function DivisionDistributionChart({ data, stages: stagesProp }: Division
                 <ToggleGroupItem
                   key={key}
                   value={key}
-                  className="rounded-full border px-3 text-sm transition-opacity"
+                  className="h-auto min-w-0 rounded-full border px-3 text-sm transition-opacity"
                   style={{
                     borderColor: active ? "var(--muted-foreground)55" : "transparent",
                     backgroundColor: active ? "var(--muted-foreground)18" : undefined,

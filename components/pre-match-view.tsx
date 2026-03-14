@@ -776,7 +776,7 @@ export function PreMatchView({
                     <ToggleGroupItem
                       key={sq.id}
                       value={String(sq.number)}
-                      className={`px-3 py-1 rounded-full text-sm border transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring ${
+                      className={`h-auto min-w-0 px-3 py-1 rounded-full text-sm border transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring ${
                         selectedSquadNum === sq.number
                           ? "bg-primary text-primary-foreground border-primary"
                           : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/40"

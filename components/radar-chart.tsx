@@ -117,7 +117,7 @@ export function StageBalanceChart({ data }: StageBalanceChartProps) {
               disabled={disabled}
               title={disabled ? "Select 2+ competitors to compare within the group" : mode.description}
               className={[
-                "rounded-full border px-3 py-0.5 text-xs font-medium transition-colors",
+                "h-auto min-w-0 rounded-full border px-3 py-0.5 text-xs font-medium transition-colors",
                 disabled
                   ? "opacity-40 cursor-default text-muted-foreground border-border"
                   : active

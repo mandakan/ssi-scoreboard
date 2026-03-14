@@ -143,7 +143,7 @@ export function CoachingTip({
           <ToggleGroupItem
             value="coach"
             className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded py-1 px-2 text-xs font-medium transition-colors",
+              "h-auto min-w-0 flex flex-1 items-center justify-center gap-1.5 rounded py-1 px-2 text-xs font-medium transition-colors",
               mode === "coach"
                 ? "bg-foreground text-background"
                 : "text-muted-foreground hover:text-foreground",
@@ -155,7 +155,7 @@ export function CoachingTip({
           <ToggleGroupItem
             value="roast"
             className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded py-1 px-2 text-xs font-medium transition-colors",
+              "h-auto min-w-0 flex flex-1 items-center justify-center gap-1.5 rounded py-1 px-2 text-xs font-medium transition-colors",
               mode === "roast"
                 ? "bg-foreground text-background"
                 : "text-muted-foreground hover:text-foreground",

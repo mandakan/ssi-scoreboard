@@ -341,7 +341,7 @@ function DivisionFilter({
     >
       <ToggleGroupItem
         value=""
-        className={chipClass(selected === null)}
+        className={cn("h-auto min-w-0", chipClass(selected === null))}
       >
         All
       </ToggleGroupItem>
@@ -349,7 +349,7 @@ function DivisionFilter({
         <ToggleGroupItem
           key={div}
           value={div}
-          className={chipClass(selected === div)}
+          className={cn("h-auto min-w-0", chipClass(selected === div))}
         >
           <span
             className="inline-block w-2 h-2 rounded-full mr-1 align-middle"

@@ -496,7 +496,7 @@ export function StageSimulator({ ct, id, data, competitors, scoringCompleted }: 
                   <ToggleGroupItem
                     value="improve"
                     className={cn(
-                      "flex-1 py-2 font-medium transition-colors flex items-center justify-center gap-1.5",
+                      "h-auto min-w-0 flex-1 py-2 font-medium transition-colors flex items-center justify-center gap-1.5",
                       simMode === "improve"
                         ? "bg-foreground text-background"
                         : "bg-background text-muted-foreground hover:text-foreground"
@@ -510,7 +510,7 @@ export function StageSimulator({ ct, id, data, competitors, scoringCompleted }: 
                   <ToggleGroupItem
                     value="trade"
                     className={cn(
-                      "flex-1 py-2 font-medium transition-colors border-l border-input flex items-center justify-center gap-1.5",
+                      "h-auto min-w-0 flex-1 py-2 font-medium transition-colors border-l border-input flex items-center justify-center gap-1.5",
                       simMode === "trade"
                         ? "bg-foreground text-background"
                         : "bg-background text-muted-foreground hover:text-foreground"

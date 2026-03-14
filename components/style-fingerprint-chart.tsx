@@ -402,7 +402,7 @@ function CohortToggle({ mode, onChange }: { mode: CohortMode; onChange: (m: Coho
           <ToggleGroupItem
             key={opt.value}
             value={opt.value}
-            className="rounded-full border px-3 py-0.5 text-xs transition-colors"
+            className="h-auto min-w-0 rounded-full border px-3 py-0.5 text-xs transition-colors"
             style={{
               backgroundColor: mode === opt.value ? "var(--foreground)" : undefined,
               color: mode === opt.value ? "var(--background)" : "var(--muted-foreground)",
