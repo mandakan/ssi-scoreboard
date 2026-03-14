@@ -488,10 +488,23 @@ test.describe("Mobile 390px viewport", () => {
     await expect(page.getByText("Stage results")).toBeVisible();
     await expect(page.getByRole("table")).toBeVisible();
 
-    const hasOverflow = await page.evaluate(
-      () => document.documentElement.scrollWidth > window.innerWidth
-    );
-    expect(hasOverflow).toBe(false);
+    const overflowInfo = await page.evaluate(() => {
+      const docWidth = document.documentElement.scrollWidth;
+      const winWidth = window.innerWidth;
+      const overflowing: string[] = [];
+      if (docWidth > winWidth) {
+        document.querySelectorAll("*").forEach((el) => {
+          const rect = el.getBoundingClientRect();
+          if (rect.right > winWidth + 1) {
+            const tag = el.tagName.toLowerCase();
+            const cls = (el.className?.toString() ?? "").slice(0, 80);
+            overflowing.push(`${tag}[${cls}] right=${Math.round(rect.right)} w=${Math.round(rect.width)}`);
+          }
+        });
+      }
+      return { docWidth, winWidth, overflowing: overflowing.slice(0, 5) };
+    });
+    expect(overflowInfo.overflowing, `scrollWidth=${overflowInfo.docWidth} innerWidth=${overflowInfo.winWidth} overflowing: ${overflowInfo.overflowing.join(" | ")}`).toEqual([]);
   });
 
   test("home page has no horizontal overflow at 390px", async ({ page }) => {
