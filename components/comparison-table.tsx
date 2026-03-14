@@ -454,7 +454,7 @@ function ModeToggle({
                 value={m}
                 disabled={disabled}
                 className={cn(
-                  "h-auto min-w-0 px-2.5 py-1 first:rounded-l-md last:rounded-r-md transition-colors",
+                  "h-auto min-w-0 gap-0 rounded-none px-2.5 py-1 font-normal text-xs first:rounded-l-md last:rounded-r-md transition-colors",
                   "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
                   disabled
                     ? "opacity-40 cursor-default text-muted-foreground"
@@ -498,7 +498,7 @@ function ViewModeToggle({
           key={m}
           value={m}
           className={cn(
-            "h-auto min-w-0 px-2.5 py-1 transition-colors capitalize",
+            "h-auto min-w-0 gap-0 rounded-none px-2.5 py-1 font-normal text-xs transition-colors capitalize",
             i === 0 ? "rounded-l-md" : "",
             i === arr.length - 1 ? "rounded-r-md" : "",
             "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
