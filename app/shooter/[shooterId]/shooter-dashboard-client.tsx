@@ -81,6 +81,8 @@ import {
 import { divisionColor, extractDivisions } from "@/lib/division-colors";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type {
   ShooterMatchSummary,
   BackfillProgress,
@@ -330,26 +332,24 @@ function DivisionFilter({
   if (divisions.length < 2) return null;
 
   return (
-    <div
-      role="group"
+    <ToggleGroup
+      type="single"
+      value={selected ?? ""}
+      onValueChange={(v) => { onChange(v === "" ? null : v || null); }}
       aria-label="Filter by division"
-      className="flex flex-wrap gap-1.5 mb-3"
+      className="w-auto flex flex-wrap gap-1.5 mb-3"
     >
-      <button
-        type="button"
-        aria-pressed={selected === null}
-        onClick={() => onChange(null)}
-        className={chipClass(selected === null)}
+      <ToggleGroupItem
+        value=""
+        className={cn("h-auto min-w-0", chipClass(selected === null))}
       >
         All
-      </button>
+      </ToggleGroupItem>
       {divisions.map((div) => (
-        <button
+        <ToggleGroupItem
           key={div}
-          type="button"
-          aria-pressed={selected === div}
-          onClick={() => onChange(div)}
-          className={chipClass(selected === div)}
+          value={div}
+          className={cn("h-auto min-w-0", chipClass(selected === div))}
         >
           <span
             className="inline-block w-2 h-2 rounded-full mr-1 align-middle"
@@ -357,9 +357,9 @@ function DivisionFilter({
             aria-hidden="true"
           />
           {div}
-        </button>
+        </ToggleGroupItem>
       ))}
-    </div>
+    </ToggleGroup>
   );
 }
 
@@ -1081,30 +1081,28 @@ function AddMatchSection({ shooterId }: { shooterId: number }) {
   };
 
   return (
-    <div>
+    <Collapsible open={open} onOpenChange={setOpen}>
       <h3 className="text-sm font-semibold m-0 leading-none">
-        <button
-          type="button"
-          id="add-match-heading"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          aria-controls="add-match-panel"
-          className="flex w-full items-center gap-2 text-left min-h-[2.75rem]"
-        >
-          {open ? (
-            <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
-          ) : (
-            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
-          )}
-          <span className="text-muted-foreground uppercase tracking-wide text-xs">
-            Add match by URL
-          </span>
-        </button>
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            id="add-match-heading"
+            className="flex w-full items-center gap-2 text-left min-h-[2.75rem]"
+          >
+            {open ? (
+              <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
+            ) : (
+              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
+            )}
+            <span className="text-muted-foreground uppercase tracking-wide text-xs">
+              Add match by URL
+            </span>
+          </button>
+        </CollapsibleTrigger>
       </h3>
 
-      {open && (
+      <CollapsibleContent>
         <section
-          id="add-match-panel"
           role="region"
           aria-labelledby="add-match-heading"
           className="mt-1"
@@ -1157,8 +1155,8 @@ function AddMatchSection({ shooterId }: { shooterId: number }) {
             </p>
           )}
         </section>
-      )}
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -1353,92 +1351,92 @@ function AchievementsSection({
   );
 
   return (
-    <section>
-      <h2 className="text-sm font-semibold m-0 leading-none flex items-center">
-        <button
-          type="button"
-          id="achievements-heading"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          aria-controls="achievements-panel"
-          className="flex flex-1 items-center gap-2 text-left min-h-[2.75rem]"
-        >
-          {open ? (
-            <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
-          ) : (
-            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
-          )}
-          <span className="text-muted-foreground uppercase tracking-wide text-xs">
-            Achievements
-          </span>
-          <span className="text-xs font-normal text-muted-foreground">
-            ({unlockedCount}/{totalTiers})
-          </span>
-          <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-            Preview
-          </Badge>
-        </button>
-        <Popover>
-          <PopoverTrigger asChild>
+    <Collapsible open={open} onOpenChange={setOpen} asChild>
+      <section>
+        <h2 className="text-sm font-semibold m-0 leading-none flex items-center">
+          <CollapsibleTrigger asChild>
             <button
               type="button"
-              aria-label="About achievements"
-              className="text-muted-foreground hover:text-foreground transition-colors"
+              id="achievements-heading"
+              className="flex flex-1 items-center gap-2 text-left min-h-[2.75rem]"
             >
-              <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+              {open ? (
+                <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
+              ) : (
+                <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
+              )}
+              <span className="text-muted-foreground uppercase tracking-wide text-xs">
+                Achievements
+              </span>
+              <span className="text-xs font-normal text-muted-foreground">
+                ({unlockedCount}/{totalTiers})
+              </span>
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                Preview
+              </Badge>
             </button>
-          </PopoverTrigger>
-          <PopoverContent className="max-w-xs text-sm space-y-2" side="top">
-            <p className="font-medium">Achievements</p>
-            <p className="text-muted-foreground">
-              Each achievement has multiple tiers that unlock progressively as
-              you compete. Tiers range from beginner milestones to elite goals
-              that take dozens of matches to reach.
-            </p>
-            <p className="text-muted-foreground">
-              Tap any icon to see the full unlock ladder and your progress
-              through it. Unlocked tiers are permanent — they persist even if
-              old match data is pruned.
-            </p>
-          </PopoverContent>
-        </Popover>
-      </h2>
+          </CollapsibleTrigger>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                aria-label="About achievements"
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="max-w-xs text-sm space-y-2" side="top">
+              <p className="font-medium">Achievements</p>
+              <p className="text-muted-foreground">
+                Each achievement has multiple tiers that unlock progressively as
+                you compete. Tiers range from beginner milestones to elite goals
+                that take dozens of matches to reach.
+              </p>
+              <p className="text-muted-foreground">
+                Tap any icon to see the full unlock ladder and your progress
+                through it. Unlocked tiers are permanent — they persist even if
+                old match data is pruned.
+              </p>
+            </PopoverContent>
+          </Popover>
+        </h2>
 
-      {/* Collapsed: ribbon bar of tappable icon bubbles */}
-      {!open && (
-        <div
-          className="flex flex-wrap gap-1.5 mt-1.5 pl-6"
-          role="list"
-          aria-label="Achievement overview — tap to inspect"
-        >
-          {achievements.map((a) => (
-            <div key={a.definition.id} role="listitem">
-              <AchievementBubbleButton achievement={a} />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Expanded: full medal cards */}
-      {open && (
-        <section
-          id="achievements-panel"
-          role="region"
-          aria-labelledby="achievements-heading"
-          className="mt-1"
-        >
-          <p className="text-xs text-muted-foreground mb-3">
-            {unlockedCount} of {totalTiers} tiers unlocked. Tap a card to see
-            the full ladder.
-          </p>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {/* Collapsed: ribbon bar of tappable icon bubbles */}
+        {!open && (
+          <div
+            className="flex flex-wrap gap-1.5 mt-1.5 pl-6"
+            role="list"
+            aria-label="Achievement overview — tap to inspect"
+          >
             {achievements.map((a) => (
-              <AchievementCard key={a.definition.id} achievement={a} />
+              <div key={a.definition.id} role="listitem">
+                <AchievementBubbleButton achievement={a} />
+              </div>
             ))}
           </div>
-        </section>
-      )}
-    </section>
+        )}
+
+        {/* Expanded: full medal cards */}
+        <CollapsibleContent>
+          <section
+            role="region"
+            aria-labelledby="achievements-heading"
+            className="mt-1"
+          >
+            <p className="text-xs text-muted-foreground mb-3">
+              {unlockedCount} of {totalTiers} tiers unlocked. Tap a card to see
+              the full ladder.
+            </p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {achievements.map((a) => (
+                <AchievementCard key={a.definition.id} achievement={a} />
+              ))}
+            </div>
+          </section>
+        </CollapsibleContent>
+      </section>
+    </Collapsible>
   );
 }
 
@@ -1735,111 +1733,111 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
 
       {/* ── Upcoming matches ──────────────────────────────────────────── */}
       {data.upcomingMatches && data.upcomingMatches.length > 0 && (
-        <section>
-          <h2 className="text-sm font-semibold m-0 leading-none">
-            <button
-              type="button"
-              id="upcoming-heading"
-              onClick={() => setUpcomingOpen((v) => !v)}
-              aria-expanded={upcomingOpen}
-              aria-controls="upcoming-panel"
-              className="flex w-full items-center justify-between text-left gap-2 mb-3 min-h-[2.75rem]"
-            >
-              <span className="flex items-center gap-2">
-                <span className="text-muted-foreground uppercase tracking-wide">
-                  Upcoming
-                </span>
-                <span className="text-xs font-normal text-muted-foreground">
-                  ({data.upcomingMatches.length})
-                </span>
-              </span>
-              {upcomingOpen ? (
-                <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-              ) : (
-                <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-              )}
-            </button>
-          </h2>
+        <Collapsible open={upcomingOpen} onOpenChange={setUpcomingOpen} asChild>
+          <section>
+            <h2 className="text-sm font-semibold m-0 leading-none">
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  id="upcoming-heading"
+                  className="flex w-full items-center justify-between text-left gap-2 mb-3 min-h-[2.75rem]"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="text-muted-foreground uppercase tracking-wide">
+                      Upcoming
+                    </span>
+                    <span className="text-xs font-normal text-muted-foreground">
+                      ({data.upcomingMatches.length})
+                    </span>
+                  </span>
+                  {upcomingOpen ? (
+                    <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                  )}
+                </button>
+              </CollapsibleTrigger>
+            </h2>
 
-          {upcomingOpen && (
-            <div
-              id="upcoming-panel"
-              role="region"
-              aria-labelledby="upcoming-heading"
-              className="flex flex-col gap-2"
-            >
-              {data.upcomingMatches.map((match) => (
-                <UpcomingMatchCard
-                  key={`${match.ct}:${match.matchId}`}
-                  match={match}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* ── Match history ──────────────────────────────────────────────── */}
-      <section>
-        <h2 className="text-sm font-semibold m-0 leading-none">
-          <button
-            type="button"
-            id="history-heading"
-            onClick={() => setHistoryOpen((v) => !v)}
-            aria-expanded={historyOpen}
-            aria-controls="history-panel"
-            className="flex w-full items-center justify-between text-left gap-2 mb-3 min-h-[2.75rem]"
-          >
-            <span className="flex items-center gap-2">
-              <span className="text-muted-foreground uppercase tracking-wide">
-                Match history
-              </span>
-              <span className="text-xs font-normal text-muted-foreground">
-                ({matches.length}
-                {matchCount > matches.length ? ` of ${matchCount}` : ""})
-              </span>
-            </span>
-            {historyOpen ? (
-              <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-            ) : (
-              <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-            )}
-          </button>
-        </h2>
-
-        {historyOpen && (
-          <div
-            id="history-panel"
-            role="region"
-            aria-labelledby="history-heading"
-            className="flex flex-col gap-3"
-          >
-            <BackfillSection shooterId={shooterId} />
-
-            {matches.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-8 text-center text-muted-foreground">
-                <Target className="w-8 h-8" aria-hidden="true" />
-                <p className="text-sm">
-                  No match history yet. Matches appear here when you or anyone
-                  else views them on this app. Try &quot;Find past matches&quot;
-                  above, or paste a match URL below to add one directly.
-                </p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {matches.map((match) => (
-                  <MatchCard
+            <CollapsibleContent>
+              <div
+                role="region"
+                aria-labelledby="upcoming-heading"
+                className="flex flex-col gap-2"
+              >
+                {data.upcomingMatches.map((match) => (
+                  <UpcomingMatchCard
                     key={`${match.ct}:${match.matchId}`}
                     match={match}
                   />
                 ))}
               </div>
-            )}
+            </CollapsibleContent>
+          </section>
+        </Collapsible>
+      )}
 
-            <AddMatchSection shooterId={shooterId} />
-          </div>
-        )}
-      </section>
+      {/* ── Match history ──────────────────────────────────────────────── */}
+      <Collapsible open={historyOpen} onOpenChange={setHistoryOpen} asChild>
+        <section>
+          <h2 className="text-sm font-semibold m-0 leading-none">
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                id="history-heading"
+                className="flex w-full items-center justify-between text-left gap-2 mb-3 min-h-[2.75rem]"
+              >
+                <span className="flex items-center gap-2">
+                  <span className="text-muted-foreground uppercase tracking-wide">
+                    Match history
+                  </span>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    ({matches.length}
+                    {matchCount > matches.length ? ` of ${matchCount}` : ""})
+                  </span>
+                </span>
+                {historyOpen ? (
+                  <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                )}
+              </button>
+            </CollapsibleTrigger>
+          </h2>
+
+          <CollapsibleContent>
+            <div
+              role="region"
+              aria-labelledby="history-heading"
+              className="flex flex-col gap-3"
+            >
+              <BackfillSection shooterId={shooterId} />
+
+              {matches.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-8 text-center text-muted-foreground">
+                  <Target className="w-8 h-8" aria-hidden="true" />
+                  <p className="text-sm">
+                    No match history yet. Matches appear here when you or anyone
+                    else views them on this app. Try &quot;Find past matches&quot;
+                    above, or paste a match URL below to add one directly.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {matches.map((match) => (
+                    <MatchCard
+                      key={`${match.ct}:${match.matchId}`}
+                      match={match}
+                    />
+                  ))}
+                </div>
+              )}
+
+              <AddMatchSection shooterId={shooterId} />
+            </div>
+          </CollapsibleContent>
+        </section>
+      </Collapsible>
 
       {historyOpen && matchCount > matches.length && (
         <p className="text-xs text-center text-muted-foreground">

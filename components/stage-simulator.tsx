@@ -3,6 +3,7 @@
 import { useState, useId, useEffect, useRef } from "react";
 import { Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   isMajorPowerFactor,
   simulateStageAdjustment,
@@ -485,17 +486,17 @@ export function StageSimulator({ ct, id, data, competitors, scoringCompleted }: 
                 safeAdj.dToACount > 0 || safeAdj.dToCCount > 0 || safeAdj.removedProcedurals > 0;
               const tradeActive = safeAdj.aToCCount > 0 || safeAdj.aToMissCount > 0 || safeAdj.aToNSCount > 0;
               return (
-                <div
-                  className="flex rounded-md border border-input overflow-hidden text-sm"
-                  role="group"
+                <ToggleGroup
+                  type="single"
+                  value={simMode}
+                  onValueChange={(v) => { if (v) setSimMode(v as "improve" | "trade"); }}
+                  className="w-auto flex rounded-md border border-input overflow-hidden text-sm"
                   aria-label="Adjustment mode"
                 >
-                  <button
-                    type="button"
-                    onClick={() => setSimMode("improve")}
-                    aria-pressed={simMode === "improve"}
+                  <ToggleGroupItem
+                    value="improve"
                     className={cn(
-                      "flex-1 py-2 font-medium transition-colors flex items-center justify-center gap-1.5",
+                      "h-auto min-w-0 flex-1 py-2 font-medium transition-colors flex items-center justify-center gap-1.5",
                       simMode === "improve"
                         ? "bg-foreground text-background"
                         : "bg-background text-muted-foreground hover:text-foreground"
@@ -505,13 +506,11 @@ export function StageSimulator({ ct, id, data, competitors, scoringCompleted }: 
                     {improveActive && simMode !== "improve" && (
                       <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" aria-hidden="true" />
                     )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSimMode("trade")}
-                    aria-pressed={simMode === "trade"}
+                  </ToggleGroupItem>
+                  <ToggleGroupItem
+                    value="trade"
                     className={cn(
-                      "flex-1 py-2 font-medium transition-colors border-l border-input flex items-center justify-center gap-1.5",
+                      "h-auto min-w-0 flex-1 py-2 font-medium transition-colors border-l border-input flex items-center justify-center gap-1.5",
                       simMode === "trade"
                         ? "bg-foreground text-background"
                         : "bg-background text-muted-foreground hover:text-foreground"
@@ -521,8 +520,8 @@ export function StageSimulator({ ct, id, data, competitors, scoringCompleted }: 
                     {tradeActive && simMode !== "trade" && (
                       <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" aria-hidden="true" />
                     )}
-                  </button>
-                </div>
+                  </ToggleGroupItem>
+                </ToggleGroup>
               );
             })()}
 

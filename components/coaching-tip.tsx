@@ -11,6 +11,7 @@ import {
   PopoverDescription,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useCoachingTipQuery } from "@/lib/queries";
 
 type Mode = "coach" | "roast";
@@ -132,38 +133,38 @@ export function CoachingTip({
         </PopoverHeader>
 
         {/* Mode toggle */}
-        <div
-          className="flex gap-1 mb-3 rounded-md border p-0.5"
-          role="group"
+        <ToggleGroup
+          type="single"
+          value={mode}
+          onValueChange={(v) => { if (v) switchMode(v as "coach" | "roast"); }}
+          className="w-auto flex gap-1 mb-3 rounded-md border p-0.5"
           aria-label="Analysis mode"
         >
-          <button
-            onClick={() => switchMode("coach")}
+          <ToggleGroupItem
+            value="coach"
             className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded py-1 px-2 text-xs font-medium transition-colors",
+              "h-auto min-w-0 flex flex-1 items-center justify-center gap-1.5 rounded py-1 px-2 text-xs font-medium transition-colors",
               mode === "coach"
                 ? "bg-foreground text-background"
                 : "text-muted-foreground hover:text-foreground",
             )}
-            aria-pressed={mode === "coach"}
           >
             <GraduationCap className="w-3 h-3" aria-hidden="true" />
             Coach
-          </button>
-          <button
-            onClick={() => switchMode("roast")}
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="roast"
             className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded py-1 px-2 text-xs font-medium transition-colors",
+              "h-auto min-w-0 flex flex-1 items-center justify-center gap-1.5 rounded py-1 px-2 text-xs font-medium transition-colors",
               mode === "roast"
                 ? "bg-foreground text-background"
                 : "text-muted-foreground hover:text-foreground",
             )}
-            aria-pressed={mode === "roast"}
           >
             <Flame className="w-3 h-3" aria-hidden="true" />
             Roast
-          </button>
-        </div>
+          </ToggleGroupItem>
+        </ToggleGroup>
 
         <TipPanel
           key={mode}

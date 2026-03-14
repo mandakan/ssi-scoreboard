@@ -19,6 +19,7 @@ import { LoadingBar } from "@/components/loading-bar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Loader2, AlertCircle, ArrowLeft, RefreshCw, ChevronDown, ChevronUp, HelpCircle, ExternalLink, Info, ArrowUpDown } from "lucide-react";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import {
   Popover,
   PopoverContent,
@@ -799,34 +800,32 @@ export default function MatchPageClient() {
               {effectiveMode === "coaching" && (
                 <>
                   {/* Coaching / analysis view — hidden by default */}
-                  <div className="rounded-lg border p-4 space-y-3">
+                  <Collapsible open={showCoachingView} onOpenChange={setShowCoachingView} className="rounded-lg border p-4 space-y-3">
                     {/* WAI-ARIA accordion pattern: heading wraps the disclosure button */}
                     <h2 className="font-semibold text-base m-0 leading-none">
-                      <button
-                        type="button"
-                        id="coaching-view-heading"
-                        onClick={() => setShowCoachingView((v) => !v)}
-                        className="flex w-full items-center justify-between text-left gap-2"
-                        aria-expanded={showCoachingView}
-                        aria-controls="coaching-view-panel"
-                      >
-                        <span>
-                          Coaching analysis
-                          <span className="block text-xs font-normal text-muted-foreground mt-0.5">
-                            Post-match aggregate view — not recommended during active shooting.
+                      <CollapsibleTrigger asChild>
+                        <button
+                          type="button"
+                          id="coaching-view-heading"
+                          className="flex w-full items-center justify-between text-left gap-2"
+                        >
+                          <span>
+                            Coaching analysis
+                            <span className="block text-xs font-normal text-muted-foreground mt-0.5">
+                              Post-match aggregate view — not recommended during active shooting.
+                            </span>
                           </span>
-                        </span>
-                        {showCoachingView ? (
-                          <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-                        )}
-                      </button>
+                          {showCoachingView ? (
+                            <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                          )}
+                        </button>
+                      </CollapsibleTrigger>
                     </h2>
 
-                    {showCoachingView && (
+                    <CollapsibleContent>
                       <section
-                        id="coaching-view-panel"
                         role="region"
                         aria-labelledby="coaching-view-heading"
                         className="space-y-6 pt-2"
@@ -925,34 +924,33 @@ export default function MatchPageClient() {
                           <StageDegradationChart data={compareQuery.data} />
                         </div>
                       </section>
-                    )}
-                  </div>
+                    </CollapsibleContent>
+                  </Collapsible>
 
                   {/* Stage Simulator — collapsed by default, only ≥ 80% complete */}
                   {match.scoring_completed >= 80 && (
-                    <div className="rounded-lg border p-4">
+                    <Collapsible open={showSimulator} onOpenChange={setShowSimulator} className="rounded-lg border p-4">
                       <div className="flex items-start gap-2">
                         <h2 className="flex-1 font-semibold text-base m-0 leading-none">
-                          <button
-                            type="button"
-                            id="stage-simulator-heading"
-                            onClick={() => setShowSimulator((v) => !v)}
-                            className="flex w-full items-center justify-between text-left gap-2"
-                            aria-expanded={showSimulator}
-                            aria-controls="stage-simulator-panel"
-                          >
-                            <span>
-                              Stage Simulator
-                              <span className="block text-xs font-normal text-muted-foreground mt-0.5">
-                                What-if sandbox — the comparison table above is not affected.
+                          <CollapsibleTrigger asChild>
+                            <button
+                              type="button"
+                              id="stage-simulator-heading"
+                              className="flex w-full items-center justify-between text-left gap-2"
+                            >
+                              <span>
+                                Stage Simulator
+                                <span className="block text-xs font-normal text-muted-foreground mt-0.5">
+                                  What-if sandbox — the comparison table above is not affected.
+                                </span>
                               </span>
-                            </span>
-                            {showSimulator ? (
-                              <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-                            ) : (
-                              <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-                            )}
-                          </button>
+                              {showSimulator ? (
+                                <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                              )}
+                            </button>
+                          </CollapsibleTrigger>
                         </h2>
                         {showSimulator && (
                           <Popover>
@@ -982,9 +980,8 @@ export default function MatchPageClient() {
                         )}
                       </div>
 
-                      {showSimulator && (
+                      <CollapsibleContent>
                         <section
-                          id="stage-simulator-panel"
                           role="region"
                           aria-labelledby="stage-simulator-heading"
                           className="pt-4"
@@ -997,8 +994,8 @@ export default function MatchPageClient() {
                             scoringCompleted={match.scoring_completed}
                           />
                         </section>
-                      )}
-                    </div>
+                      </CollapsibleContent>
+                    </Collapsible>
                   )}
                 </>
               )}

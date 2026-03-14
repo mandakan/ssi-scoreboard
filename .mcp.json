@@ -1,5 +1,10 @@
 {
   "mcpServers": {
+    "shadcn": {
+      "type": "stdio",
+      "command": "pnpm",
+      "args": ["dlx", "shadcn@4", "mcp"]
+    },
     "ssi-scoreboard": {
       "type": "stdio",
       "command": "node_modules/.bin/tsx",

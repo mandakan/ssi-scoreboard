@@ -19,6 +19,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { useEventsQuery } from "@/lib/queries";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { EventSummary } from "@/lib/types";
 import { parseMatchUrl, cn } from "@/lib/utils";
 
@@ -281,49 +282,67 @@ export function EventSearch() {
               aria-label="Filters"
               className="mt-2 space-y-2"
             >
-              <div role="group" aria-label="Discipline" className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-xs text-muted-foreground font-medium w-16 shrink-0">Discipline</span>
-                {FIREARMS_OPTIONS.map(({ id, label }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    aria-pressed={id === firearms}
-                    onClick={() => setFirearms(id)}
-                    className={chipClass(id === firearms)}
-                  >
-                    {label}
-                  </button>
-                ))}
+                <ToggleGroup
+                  type="single"
+                  value={firearms}
+                  onValueChange={(v) => { if (v) setFirearms(v); }}
+                  aria-label="Discipline"
+                  className="w-auto flex gap-1.5 flex-wrap"
+                >
+                  {FIREARMS_OPTIONS.map(({ id, label }) => (
+                    <ToggleGroupItem
+                      key={id}
+                      value={id}
+                      className={cn("h-auto min-w-0", chipClass(id === firearms))}
+                    >
+                      {label}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
               </div>
 
-              <div role="group" aria-label="Country" className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-xs text-muted-foreground font-medium w-16 shrink-0">Country</span>
-                {COUNTRY_OPTIONS.map(({ id, label }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    aria-pressed={id === country}
-                    onClick={() => setCountry(id)}
-                    className={chipClass(id === country)}
-                  >
-                    {label}
-                  </button>
-                ))}
+                <ToggleGroup
+                  type="single"
+                  value={country}
+                  onValueChange={(v) => { if (v) setCountry(v); }}
+                  aria-label="Country"
+                  className="w-auto flex gap-1.5 flex-wrap"
+                >
+                  {COUNTRY_OPTIONS.map(({ id, label }) => (
+                    <ToggleGroupItem
+                      key={id}
+                      value={id}
+                      className={cn("h-auto min-w-0", chipClass(id === country))}
+                    >
+                      {label}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
               </div>
 
-              <div role="group" aria-label="Level" className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-xs text-muted-foreground font-medium w-16 shrink-0">Level</span>
-                {LEVEL_OPTIONS.map(({ id, label }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    aria-pressed={id === level}
-                    onClick={() => setLevel(id)}
-                    className={chipClass(id === level)}
-                  >
-                    {label}
-                  </button>
-                ))}
+                <ToggleGroup
+                  type="single"
+                  value={level}
+                  onValueChange={(v) => { if (v) setLevel(v); }}
+                  aria-label="Level"
+                  className="w-auto flex gap-1.5 flex-wrap"
+                >
+                  {LEVEL_OPTIONS.map(({ id, label }) => (
+                    <ToggleGroupItem
+                      key={id}
+                      value={id}
+                      className={cn("h-auto min-w-0", chipClass(id === level))}
+                    >
+                      {label}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
               </div>
             </div>
           )}

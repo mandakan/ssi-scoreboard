@@ -13,6 +13,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import { buildColorMap } from "@/lib/colors";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { CompareResponse, DivisionHFDistribution, StageComparison } from "@/lib/types";
 
 interface DivisionDistributionChartProps {
@@ -111,32 +112,34 @@ export function DivisionDistributionChart({ data, stages: stagesProp }: Division
     <div>
       {/* Division selector — shown only when competitors span multiple divisions */}
       {divisionKeys.length > 1 && (
-        <div
-          role="group"
-          aria-label="Division selector"
-          className="flex flex-wrap gap-2 pb-3"
-        >
+        <div className="flex flex-wrap gap-2 pb-3">
           <span className="self-center text-xs text-muted-foreground">Division:</span>
-          {divisionKeys.map((key) => {
-            const active = key === activeDivision;
-            const label = divisionLabel(key, data);
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setActiveDivision(key)}
-                aria-pressed={active}
-                className="rounded-full border px-3 text-sm transition-opacity"
-                style={{
-                  borderColor: active ? "var(--muted-foreground)55" : "transparent",
-                  backgroundColor: active ? "var(--muted-foreground)18" : undefined,
-                  opacity: active ? undefined : 0.5,
-                }}
-              >
-                {label}
-              </button>
-            );
-          })}
+          <ToggleGroup
+            type="single"
+            value={activeDivision}
+            onValueChange={(v) => { if (v) setActiveDivision(v); }}
+            aria-label="Division selector"
+            className="w-auto flex flex-wrap gap-2"
+          >
+            {divisionKeys.map((key) => {
+              const active = key === activeDivision;
+              const label = divisionLabel(key, data);
+              return (
+                <ToggleGroupItem
+                  key={key}
+                  value={key}
+                  className="h-auto min-w-0 rounded-full border px-3 text-sm transition-opacity"
+                  style={{
+                    borderColor: active ? "var(--muted-foreground)55" : "transparent",
+                    backgroundColor: active ? "var(--muted-foreground)18" : undefined,
+                    opacity: active ? undefined : 0.5,
+                  }}
+                >
+                  {label}
+                </ToggleGroupItem>
+              );
+            })}
+          </ToggleGroup>
         </div>
       )}
 

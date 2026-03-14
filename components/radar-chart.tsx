@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { buildColorMap } from "@/lib/colors";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { CompareResponse, PctMode } from "@/lib/types";
 
 interface StageBalanceChartProps {
@@ -99,24 +100,24 @@ export function StageBalanceChart({ data }: StageBalanceChartProps) {
   return (
     <div>
       {/* Mode toggle */}
-      <div
-        role="group"
+      <ToggleGroup
+        type="single"
+        value={pctMode}
+        onValueChange={(v) => { if (v) setPctMode(v as PctMode); }}
         aria-label="Percent mode"
-        className="flex gap-1 mb-3"
+        className="w-auto flex gap-1 mb-3"
       >
         {PCT_MODES.map((mode) => {
           const active = pctMode === mode.value;
           const disabled = mode.value === "group" && competitors.length < 2;
           return (
-            <button
+            <ToggleGroupItem
               key={mode.value}
-              type="button"
-              onClick={() => { if (!disabled) setPctMode(mode.value); }}
-              aria-pressed={active}
-              aria-disabled={disabled || undefined}
+              value={mode.value}
+              disabled={disabled}
               title={disabled ? "Select 2+ competitors to compare within the group" : mode.description}
               className={[
-                "rounded-full border px-3 py-0.5 text-xs font-medium transition-colors",
+                "h-auto min-w-0 rounded-full border px-3 py-0.5 text-xs font-medium transition-colors",
                 disabled
                   ? "opacity-40 cursor-default text-muted-foreground border-border"
                   : active
@@ -125,10 +126,10 @@ export function StageBalanceChart({ data }: StageBalanceChartProps) {
               ].join(" ")}
             >
               {mode.label}
-            </button>
+            </ToggleGroupItem>
           );
         })}
-      </div>
+      </ToggleGroup>
 
       <ResponsiveContainer width="100%" height={320}>
         <RadarChart data={radarData} margin={{ top: 8, right: 24, bottom: 8, left: 24 }}>

@@ -26,17 +26,18 @@ import {
   PopoverDescription,
 } from "@/components/ui/popover";
 import { usePreMatchWeatherQuery, usePreMatchBriefQuery, useShooterDashboardQuery } from "@/lib/queries";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { computeSquadContext } from "@/lib/pre-match-prompt";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RefreshCw, Sparkles } from "lucide-react";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter,
-} from "@/components/ui/sheet";
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+  DrawerFooter,
+} from "@/components/ui/drawer";
 
 interface PreMatchViewProps {
   match: MatchResponse;
@@ -325,10 +326,10 @@ function CompetitorSheet({
   const recentMatches = dashQuery.data?.matches.slice(0, 3) ?? [];
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-xl max-h-[80dvh] overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2 flex-wrap pr-8">
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="max-h-[80dvh]">
+        <DrawerHeader>
+          <DrawerTitle className="flex items-center gap-2 flex-wrap">
             {flag && <span aria-hidden="true">{flag}</span>}
             <span>{competitor.name}</span>
             {competitor.competitor_number && (
@@ -336,8 +337,8 @@ function CompetitorSheet({
                 #{competitor.competitor_number}
               </span>
             )}
-          </SheetTitle>
-          <SheetDescription className="flex flex-wrap gap-1 items-center">
+          </DrawerTitle>
+          <DrawerDescription className="flex flex-wrap gap-1 items-center">
             {competitor.division && <span>{competitor.division}</span>}
             {competitor.club && (
               <>
@@ -345,8 +346,8 @@ function CompetitorSheet({
                 <span>{competitor.club}</span>
               </>
             )}
-          </SheetDescription>
-        </SheetHeader>
+          </DrawerDescription>
+        </DrawerHeader>
 
         {/* You / Tracked badges */}
         {(isMe || isTracked) && (
@@ -434,17 +435,17 @@ function CompetitorSheet({
         </div>
 
         {competitor.shooterId && (
-          <SheetFooter>
+          <DrawerFooter>
             <a
               href={`/shooter/${competitor.shooterId}`}
               className="w-full text-center text-sm font-medium px-4 py-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
             >
               View full dashboard
             </a>
-          </SheetFooter>
+          </DrawerFooter>
         )}
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </Drawer>
   );
 }
 
@@ -764,26 +765,27 @@ export function PreMatchView({
                   ))}
                 </select>
               ) : (
-                <div
-                  className="flex gap-1.5 flex-wrap"
-                  role="group"
+                <ToggleGroup
+                  type="single"
+                  value={selectedSquadNum != null ? String(selectedSquadNum) : ""}
+                  onValueChange={(v) => { if (v) setSelectedSquadNum(Number(v)); }}
+                  className="w-auto flex gap-1.5 flex-wrap"
                   aria-label="Select squad"
                 >
                   {match.squads.map((sq) => (
-                    <button
+                    <ToggleGroupItem
                       key={sq.id}
-                      onClick={() => setSelectedSquadNum(sq.number)}
-                      aria-pressed={selectedSquadNum === sq.number}
-                      className={`px-3 py-1 rounded-full text-sm border transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring ${
+                      value={String(sq.number)}
+                      className={`h-auto min-w-0 px-3 py-1 rounded-full text-sm border transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring ${
                         selectedSquadNum === sq.number
                           ? "bg-primary text-primary-foreground border-primary"
                           : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/40"
                       }`}
                     >
                       {sq.name}
-                    </button>
+                    </ToggleGroupItem>
                   ))}
-                </div>
+                </ToggleGroup>
               )}
             </div>
           )}

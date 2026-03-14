@@ -14,6 +14,7 @@ import {
   useYAxisDomain,
 } from "recharts";
 import { buildColorMap } from "@/lib/colors";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type {
   CompareResponse,
   CompetitorInfo,
@@ -386,26 +387,32 @@ const COHORT_OPTIONS: { value: CohortMode; label: string }[] = [
 
 function CohortToggle({ mode, onChange }: { mode: CohortMode; onChange: (m: CohortMode) => void }) {
   return (
-    <div role="group" aria-label="Field overlay cohort" className="flex gap-1 flex-wrap">
+    <div className="flex gap-1 flex-wrap">
       <span className="text-xs self-center pr-1" style={{ color: "var(--muted-foreground)" }}>
         Field overlay:
       </span>
-      {COHORT_OPTIONS.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          onClick={() => onChange(opt.value)}
-          aria-pressed={mode === opt.value}
-          className="rounded-full border px-3 py-0.5 text-xs transition-colors"
-          style={{
-            backgroundColor: mode === opt.value ? "var(--foreground)" : undefined,
-            color: mode === opt.value ? "var(--background)" : "var(--muted-foreground)",
-            borderColor: mode === opt.value ? "var(--foreground)" : "var(--border)",
-          }}
-        >
-          {opt.label}
-        </button>
-      ))}
+      <ToggleGroup
+        type="single"
+        value={mode}
+        onValueChange={(v) => { if (v) onChange(v as CohortMode); }}
+        aria-label="Field overlay cohort"
+        className="w-auto flex gap-1 flex-wrap"
+      >
+        {COHORT_OPTIONS.map((opt) => (
+          <ToggleGroupItem
+            key={opt.value}
+            value={opt.value}
+            className="h-auto min-w-0 rounded-full border px-3 py-0.5 text-xs transition-colors"
+            style={{
+              backgroundColor: mode === opt.value ? "var(--foreground)" : undefined,
+              color: mode === opt.value ? "var(--background)" : "var(--muted-foreground)",
+              borderColor: mode === opt.value ? "var(--foreground)" : "var(--border)",
+            }}
+          >
+            {opt.label}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
     </div>
   );
 }

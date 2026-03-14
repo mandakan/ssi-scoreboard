@@ -14,6 +14,7 @@ import {
   useYAxisDomain,
 } from "recharts";
 import { buildColorMap } from "@/lib/colors";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { CompareResponse, CompetitorInfo, StageDegradationPoint } from "@/lib/types";
 
 // --------------------------------------------------------------------------
@@ -273,20 +274,20 @@ export function StageDegradationChart({ data }: StageDegradationChartProps) {
   return (
     <div className="space-y-3">
       {/* Stage selector */}
-      <div
-        role="group"
+      <ToggleGroup
+        type="single"
+        value={activeStageId != null ? String(activeStageId) : ""}
+        onValueChange={(v) => { if (v) setSelectedStageId(Number(v)); }}
         aria-label="Select stage for degradation view"
-        className="flex gap-1.5 flex-wrap"
+        className="w-auto flex gap-1.5 flex-wrap"
       >
         {stagesWithData.map((s) => {
           const active = s.stageId === activeStageId;
           return (
-            <button
+            <ToggleGroupItem
               key={s.stageId}
-              type="button"
-              onClick={() => setSelectedStageId(s.stageId)}
-              aria-pressed={active}
-              className="rounded-full border px-3 py-0.5 text-xs transition-colors"
+              value={String(s.stageId)}
+              className="h-auto min-w-0 rounded-full border px-3 py-0.5 text-xs transition-colors"
               style={{
                 backgroundColor: active ? "var(--foreground)" : undefined,
                 color: active ? "var(--background)" : "var(--muted-foreground)",
@@ -294,10 +295,10 @@ export function StageDegradationChart({ data }: StageDegradationChartProps) {
               }}
             >
               S{s.stageNum}
-            </button>
+            </ToggleGroupItem>
           );
         })}
-      </div>
+      </ToggleGroup>
 
       {/* Correlation badge */}
       {stage && stage.spearmanR !== null && stage.spearmanSignificant && (

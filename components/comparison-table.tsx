@@ -20,6 +20,7 @@ import { HitZoneBar } from "@/components/hit-zone-bar";
 import { RankBadge, PenaltyBadge, ShootingOrderBadge, StageClassificationBadge, ConditionsBadge, ordinal } from "@/components/stage-cell-parts";
 import { CellHelpModal } from "@/components/cell-help-modal";
 import { CoachingTip } from "@/components/coaching-tip";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { CompareResponse, CompetitorInfo, CompetitorSummary, LossBreakdownStats, PctMode, ShooterArchetype, StageArchetype, StageComparison, StageConditions, StageConstraints, ViewMode, WhatIfResult } from "@/lib/types";
 
 interface ComparisonTableProps {
@@ -437,22 +438,23 @@ function ModeToggle({
 }) {
   const groupDisabled = competitorCount < 2;
   return (
-    <div
-      role="group"
+    <ToggleGroup
+      type="single"
+      value={mode}
+      onValueChange={(v) => { if (v) onChange(v as PctMode); }}
       aria-label="Percentage reference"
-      className="inline-flex rounded-md border text-xs"
+      className="w-auto inline-flex rounded-md border text-xs"
     >
       {(["group", "division", "overall"] as PctMode[]).map((m) => {
         const disabled = m === "group" && groupDisabled;
         return (
           <Tooltip key={m}>
             <TooltipTrigger asChild>
-              <button
-                onClick={() => { if (!disabled) onChange(m); }}
-                aria-pressed={mode === m}
-                aria-disabled={disabled || undefined}
+              <ToggleGroupItem
+                value={m}
+                disabled={disabled}
                 className={cn(
-                  "px-2.5 py-1 first:rounded-l-md last:rounded-r-md transition-colors",
+                  "h-auto min-w-0 gap-0 rounded-none px-2.5 py-1 font-normal text-xs first:rounded-l-md last:rounded-r-md transition-colors",
                   "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
                   disabled
                     ? "opacity-40 cursor-default text-muted-foreground"
@@ -462,7 +464,7 @@ function ModeToggle({
                 )}
               >
                 {MODE_LABELS[m]}
-              </button>
+              </ToggleGroupItem>
             </TooltipTrigger>
             <TooltipContent side="top" className="max-w-56 text-center text-xs">
               {disabled
@@ -472,7 +474,7 @@ function ModeToggle({
           </Tooltip>
         );
       })}
-    </div>
+    </ToggleGroup>
   );
 }
 
@@ -484,18 +486,19 @@ function ViewModeToggle({
   onChange: (m: ViewMode) => void;
 }) {
   return (
-    <div
-      role="group"
+    <ToggleGroup
+      type="single"
+      value={viewMode}
+      onValueChange={(v) => { if (v) onChange(v as ViewMode); }}
       aria-label="Table view mode"
-      className="inline-flex rounded-md border text-xs"
+      className="w-auto inline-flex rounded-md border text-xs"
     >
       {(["absolute", "delta"] as ViewMode[]).map((m, i, arr) => (
-        <button
+        <ToggleGroupItem
           key={m}
-          onClick={() => onChange(m)}
-          aria-pressed={viewMode === m}
+          value={m}
           className={cn(
-            "px-2.5 py-1 transition-colors capitalize",
+            "h-auto min-w-0 gap-0 rounded-none px-2.5 py-1 font-normal text-xs transition-colors capitalize",
             i === 0 ? "rounded-l-md" : "",
             i === arr.length - 1 ? "rounded-r-md" : "",
             "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
@@ -505,9 +508,9 @@ function ViewModeToggle({
           )}
         >
           {m === "absolute" ? "Absolute" : "Delta"}
-        </button>
+        </ToggleGroupItem>
       ))}
-    </div>
+    </ToggleGroup>
   );
 }
 
@@ -858,37 +861,6 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                     style={{ borderBottom: `3px solid ${colorMap[comp.id]}` }}
                     aria-sort={isSortedByComp ? "ascending" : "none"}
                   >
-                    {canSortByComp && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            onClick={() =>
-                              onSortChange(isSortedByComp ? "stage" : comp.id)
-                            }
-                            className={cn(
-                              "absolute top-0 left-0 p-2 rounded-br text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
-                              isSortedByComp && "text-foreground"
-                            )}
-                            aria-label={
-                              isSortedByComp
-                                ? `Sort by stage number`
-                                : `Sort stages by ${comp.name.split(" ")[0]}'s shooting order`
-                            }
-                          >
-                            {isSortedByComp ? (
-                              <ArrowUp className="w-3 h-3" aria-hidden="true" />
-                            ) : (
-                              <ArrowUpDown className="w-3 h-3" aria-hidden="true" />
-                            )}
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" className="text-xs max-w-52 text-center">
-                          {isSortedByComp
-                            ? "Sorted by shooting order — tap to reset to stage-number order"
-                            : `Sort stages by ${comp.name.split(" ")[0]}'s shooting order (1st shot → last). Bar and line charts follow.`}
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
                     {onRemove && (
                       <button
                         onClick={() => onRemove(comp.id)}
@@ -902,17 +874,50 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                       <span className="font-mono text-xs text-muted-foreground">
                         #{comp.competitor_number}
                       </span>
-                      {comp.shooterId != null ? (
-                        <Link
-                          href={`/shooter/${comp.shooterId}${ct && matchId ? `?from=/match/${ct}/${matchId}` : ""}`}
-                          className="inline underline decoration-muted-foreground/50 underline-offset-2 hover:decoration-foreground min-h-0"
-                          aria-label={`View ${comp.name}'s stats`}
-                        >
-                          {comp.name.split(" ")[0]}
-                        </Link>
-                      ) : (
-                        <span>{comp.name.split(" ")[0]}</span>
-                      )}
+                      <span className="inline-flex items-center gap-1">
+                        {comp.shooterId != null ? (
+                          <Link
+                            href={`/shooter/${comp.shooterId}${ct && matchId ? `?from=/match/${ct}/${matchId}` : ""}`}
+                            className="inline underline decoration-muted-foreground/50 underline-offset-2 hover:decoration-foreground min-h-0"
+                            aria-label={`View ${comp.name}'s stats`}
+                          >
+                            {comp.name.split(" ")[0]}
+                          </Link>
+                        ) : (
+                          <span>{comp.name.split(" ")[0]}</span>
+                        )}
+                        {canSortByComp && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() =>
+                                  onSortChange(isSortedByComp ? "stage" : comp.id)
+                                }
+                                className={cn(
+                                  "p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+                                  isSortedByComp && "text-foreground"
+                                )}
+                                aria-label={
+                                  isSortedByComp
+                                    ? `Sort by stage number`
+                                    : `Sort stages by ${comp.name.split(" ")[0]}'s shooting order`
+                                }
+                              >
+                                {isSortedByComp ? (
+                                  <ArrowUp className="w-3 h-3" aria-hidden="true" />
+                                ) : (
+                                  <ArrowUpDown className="w-3 h-3" aria-hidden="true" />
+                                )}
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="text-xs max-w-52 text-center">
+                              {isSortedByComp
+                                ? "Sorted by shooting order — tap to reset to stage-number order"
+                                : `Sort stages by ${comp.name.split(" ")[0]}'s shooting order (1st shot → last). Bar and line charts follow.`}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </span>
                       {comp.division && (
                         <span className="text-xs text-muted-foreground uppercase tracking-wide">
                           {comp.division}
