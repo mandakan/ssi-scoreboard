@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import type { StageInfo } from "@/lib/types";
 
 interface StageListProps {
@@ -15,29 +16,27 @@ export function StageList({ stages }: StageListProps) {
   if (stages.length === 0) return null;
 
   return (
-    <div className="rounded-lg border">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        aria-controls="stage-list-content"
-        className={cn(
-          "w-full flex items-center justify-between px-4 py-3 text-sm font-medium",
-          "hover:bg-muted/30 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
-          open ? "rounded-t-lg" : "rounded-lg"
-        )}
-      >
-        <span>Stages ({stages.length})</span>
-        {open ? (
-          <ChevronDown className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
-        ) : (
-          <ChevronRight className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
-        )}
-      </button>
+    <Collapsible open={open} onOpenChange={setOpen} className="rounded-lg border">
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "w-full flex items-center justify-between px-4 py-3 text-sm font-medium",
+            "hover:bg-muted/30 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+            open ? "rounded-t-lg" : "rounded-lg"
+          )}
+        >
+          <span>Stages ({stages.length})</span>
+          {open ? (
+            <ChevronDown className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+          ) : (
+            <ChevronRight className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+          )}
+        </button>
+      </CollapsibleTrigger>
 
-      {open && (
+      <CollapsibleContent>
         <ul
-          id="stage-list-content"
           role="list"
           className="px-2 pb-2 space-y-0.5"
         >
@@ -101,7 +100,7 @@ export function StageList({ stages }: StageListProps) {
             </li>
           ))}
         </ul>
-      )}
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

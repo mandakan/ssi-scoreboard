@@ -14,12 +14,12 @@ import {
 import { QRCodeSVG } from "qrcode.react";
 import Link from "next/link";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+} from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { useMyIdentity } from "@/lib/hooks/use-my-identity";
 import { useTrackedShooters } from "@/lib/hooks/use-tracked-shooters";
@@ -239,16 +239,16 @@ export function TrackedShootersSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-xl">
-        <SheetHeader className="pb-2">
-          <SheetTitle>My shooters</SheetTitle>
-          <SheetDescription>
+    <Drawer open={open} onOpenChange={handleOpenChange}>
+      <DrawerContent className="max-h-[85vh]">
+        <DrawerHeader className="pb-2">
+          <DrawerTitle>My shooters</DrawerTitle>
+          <DrawerDescription>
             Tracked competitors are auto-selected when you visit their matches.
-          </SheetDescription>
-        </SheetHeader>
+          </DrawerDescription>
+        </DrawerHeader>
 
-        <div className="px-4 pb-4 space-y-5">
+        <div className="overflow-y-auto flex-1 px-4 pb-4 space-y-5">
 
           {/* ── Find shooter ── */}
           <section aria-labelledby="find-shooter-heading">
@@ -497,7 +497,7 @@ export function TrackedShootersSheet({
             )}
           </section>
         </div>
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </Drawer>
   );
 }

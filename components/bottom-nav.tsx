@@ -19,12 +19,12 @@ import { useWhatsNew } from "@/components/whats-new-provider";
 import { TrackedShootersSheet } from "@/components/tracked-shooters-sheet";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { RELEASES } from "@/lib/releases";
 
 function NavItem({
@@ -146,14 +146,14 @@ function MoreSheet({
   const hasReleases = RELEASES.length > 0;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-xl">
-        <SheetHeader>
-          <SheetTitle>More</SheetTitle>
-          <SheetDescription className="sr-only">
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle>More</DrawerTitle>
+          <DrawerDescription className="sr-only">
             App settings and information
-          </SheetDescription>
-        </SheetHeader>
+          </DrawerDescription>
+        </DrawerHeader>
         <div className="px-4 pb-4 divide-y divide-border">
           <div className="pb-2">
             <MoreLink
@@ -187,8 +187,8 @@ function MoreSheet({
             <ThemeToggle />
           </div>
         </div>
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </Drawer>
   );
 }
 

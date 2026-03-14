@@ -20,6 +20,7 @@ import { HitZoneBar } from "@/components/hit-zone-bar";
 import { RankBadge, PenaltyBadge, ShootingOrderBadge, StageClassificationBadge, ConditionsBadge, ordinal } from "@/components/stage-cell-parts";
 import { CellHelpModal } from "@/components/cell-help-modal";
 import { CoachingTip } from "@/components/coaching-tip";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { CompareResponse, CompetitorInfo, CompetitorSummary, LossBreakdownStats, PctMode, ShooterArchetype, StageArchetype, StageComparison, StageConditions, StageConstraints, ViewMode, WhatIfResult } from "@/lib/types";
 
 interface ComparisonTableProps {
@@ -437,8 +438,10 @@ function ModeToggle({
 }) {
   const groupDisabled = competitorCount < 2;
   return (
-    <div
-      role="group"
+    <ToggleGroup
+      type="single"
+      value={mode}
+      onValueChange={(v) => { if (v) onChange(v as PctMode); }}
       aria-label="Percentage reference"
       className="inline-flex rounded-md border text-xs"
     >
@@ -447,10 +450,9 @@ function ModeToggle({
         return (
           <Tooltip key={m}>
             <TooltipTrigger asChild>
-              <button
-                onClick={() => { if (!disabled) onChange(m); }}
-                aria-pressed={mode === m}
-                aria-disabled={disabled || undefined}
+              <ToggleGroupItem
+                value={m}
+                disabled={disabled}
                 className={cn(
                   "px-2.5 py-1 first:rounded-l-md last:rounded-r-md transition-colors",
                   "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
@@ -462,7 +464,7 @@ function ModeToggle({
                 )}
               >
                 {MODE_LABELS[m]}
-              </button>
+              </ToggleGroupItem>
             </TooltipTrigger>
             <TooltipContent side="top" className="max-w-56 text-center text-xs">
               {disabled
@@ -472,7 +474,7 @@ function ModeToggle({
           </Tooltip>
         );
       })}
-    </div>
+    </ToggleGroup>
   );
 }
 
@@ -484,16 +486,17 @@ function ViewModeToggle({
   onChange: (m: ViewMode) => void;
 }) {
   return (
-    <div
-      role="group"
+    <ToggleGroup
+      type="single"
+      value={viewMode}
+      onValueChange={(v) => { if (v) onChange(v as ViewMode); }}
       aria-label="Table view mode"
       className="inline-flex rounded-md border text-xs"
     >
       {(["absolute", "delta"] as ViewMode[]).map((m, i, arr) => (
-        <button
+        <ToggleGroupItem
           key={m}
-          onClick={() => onChange(m)}
-          aria-pressed={viewMode === m}
+          value={m}
           className={cn(
             "px-2.5 py-1 transition-colors capitalize",
             i === 0 ? "rounded-l-md" : "",
@@ -505,9 +508,9 @@ function ViewModeToggle({
           )}
         >
           {m === "absolute" ? "Absolute" : "Delta"}
-        </button>
+        </ToggleGroupItem>
       ))}
-    </div>
+    </ToggleGroup>
   );
 }
 

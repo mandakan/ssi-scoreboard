@@ -422,34 +422,34 @@ describe("ComparisonTable — incomplete scorecard indicator", () => {
 describe("ComparisonTable — delta view mode", () => {
   it("renders Absolute and Delta toggle buttons", () => {
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
-    expect(screen.getByRole("button", { name: "Absolute" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Delta" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Absolute" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Delta" })).toBeInTheDocument();
   });
 
   it("Absolute toggle is pressed by default", () => {
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
-    expect(screen.getByRole("button", { name: "Absolute" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "Delta" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("radio", { name: "Absolute" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: "Delta" })).toHaveAttribute("aria-checked", "false");
   });
 
   it("switches to delta mode when Delta button is clicked", () => {
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
-    fireEvent.click(screen.getByRole("button", { name: "Delta" }));
-    expect(screen.getByRole("button", { name: "Delta" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "Absolute" })).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(screen.getByRole("radio", { name: "Delta" }));
+    expect(screen.getByRole("radio", { name: "Delta" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: "Absolute" })).toHaveAttribute("aria-checked", "false");
   });
 
   it("shows delta value (leader has ±0.0 pts) in delta mode", () => {
     // Bob is the group leader (group_leader_points = 76, Bob.points = 76 → delta = 0)
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
-    fireEvent.click(screen.getByRole("button", { name: "Delta" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Delta" }));
     expect(screen.getAllByText("±0.0 pts").length).toBeGreaterThan(0);
   });
 
   it("shows negative delta for the non-leader competitor in delta mode", () => {
     // Alice: points=72, leader=76 → delta = -4 → "−4.0 pts"
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
-    fireEvent.click(screen.getByRole("button", { name: "Delta" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Delta" }));
     expect(screen.getAllByText("\u22124.0 pts").length).toBeGreaterThan(0);
   });
 
@@ -467,7 +467,7 @@ describe("ComparisonTable — delta view mode", () => {
       ],
     };
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
-    fireEvent.click(screen.getByRole("button", { name: "Delta" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Delta" }));
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 
@@ -485,7 +485,7 @@ describe("ComparisonTable — delta view mode", () => {
       ],
     };
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
-    fireEvent.click(screen.getByRole("button", { name: "Delta" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Delta" }));
     expect(screen.getByText("DNF")).toBeInTheDocument();
   });
 
@@ -503,20 +503,20 @@ describe("ComparisonTable — delta view mode", () => {
       ],
     };
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
-    fireEvent.click(screen.getByRole("button", { name: "Delta" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Delta" }));
     expect(screen.getByText("DQ")).toBeInTheDocument();
   });
 
   it("totals row shows 'Total deficit' label in delta mode", () => {
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
-    fireEvent.click(screen.getByRole("button", { name: "Delta" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Delta" }));
     expect(screen.getByText("Total deficit")).toBeInTheDocument();
   });
 
   it("totals row shows cumulative deficit for the non-leader in delta mode", () => {
     // Alice: -4 pts across the 1 stage → total deficit = "−4.0 pts"
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
-    fireEvent.click(screen.getByRole("button", { name: "Delta" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Delta" }));
     // Leader shows ±0.0 pts, non-leader shows −4.0 pts (appears at least once each)
     expect(screen.getAllByText("±0.0 pts").length).toBeGreaterThanOrEqual(2); // per-stage + totals for leader
     expect(screen.getAllByText("\u22124.0 pts").length).toBeGreaterThanOrEqual(2); // per-stage + totals for non-leader
@@ -526,7 +526,7 @@ describe("ComparisonTable — delta view mode", () => {
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     // % toggle visible in absolute mode
     expect(screen.getByRole("group", { name: "Percentage reference" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Delta" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Delta" }));
     // % toggle hidden in delta mode
     expect(screen.queryByRole("group", { name: "Percentage reference" })).not.toBeInTheDocument();
   });
@@ -546,7 +546,7 @@ describe("ComparisonTable — delta view mode", () => {
       ],
     };
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={tieData} />);
-    fireEvent.click(screen.getByRole("button", { name: "Delta" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Delta" }));
     // Both competitors show ±0.0 pts (per-stage); totals row also shows ±0.0 pts
     expect(screen.getAllByText("±0.0 pts").length).toBeGreaterThanOrEqual(2);
   });

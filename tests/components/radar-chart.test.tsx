@@ -174,20 +174,20 @@ describe("StageBalanceChart", () => {
 
   it("renders Group and Overall mode toggle buttons", () => {
     render(<StageBalanceChart data={baseData} />);
-    expect(screen.getByRole("button", { name: "Group" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Overall" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Group" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Overall" })).toBeInTheDocument();
   });
 
   it("Group button is active by default", () => {
     render(<StageBalanceChart data={baseData} />);
-    expect(screen.getByRole("button", { name: "Group" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "Overall" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("radio", { name: "Group" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: "Overall" })).toHaveAttribute("aria-checked", "false");
   });
 
   it("switches to Overall mode when button is clicked", () => {
     render(<StageBalanceChart data={baseData} />);
-    fireEvent.click(screen.getByRole("button", { name: "Overall" }));
-    expect(screen.getByRole("button", { name: "Overall" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "Group" })).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(screen.getByRole("radio", { name: "Overall" }));
+    expect(screen.getByRole("radio", { name: "Overall" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: "Group" })).toHaveAttribute("aria-checked", "false");
   });
 });
