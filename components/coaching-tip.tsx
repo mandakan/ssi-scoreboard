@@ -137,7 +137,7 @@ export function CoachingTip({
           type="single"
           value={mode}
           onValueChange={(v) => { if (v) switchMode(v as "coach" | "roast"); }}
-          className="flex gap-1 mb-3 rounded-md border p-0.5"
+          className="w-auto flex gap-1 mb-3 rounded-md border p-0.5"
           aria-label="Analysis mode"
         >
           <ToggleGroupItem

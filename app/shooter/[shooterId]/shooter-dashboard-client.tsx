@@ -337,7 +337,7 @@ function DivisionFilter({
       value={selected ?? ""}
       onValueChange={(v) => { onChange(v === "" ? null : v || null); }}
       aria-label="Filter by division"
-      className="flex flex-wrap gap-1.5 mb-3"
+      className="w-auto flex flex-wrap gap-1.5 mb-3"
     >
       <ToggleGroupItem
         value=""

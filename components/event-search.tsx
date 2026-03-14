@@ -289,7 +289,7 @@ export function EventSearch() {
                   value={firearms}
                   onValueChange={(v) => { if (v) setFirearms(v); }}
                   aria-label="Discipline"
-                  className="flex gap-1.5 flex-wrap"
+                  className="w-auto flex gap-1.5 flex-wrap"
                 >
                   {FIREARMS_OPTIONS.map(({ id, label }) => (
                     <ToggleGroupItem
@@ -310,7 +310,7 @@ export function EventSearch() {
                   value={country}
                   onValueChange={(v) => { if (v) setCountry(v); }}
                   aria-label="Country"
-                  className="flex gap-1.5 flex-wrap"
+                  className="w-auto flex gap-1.5 flex-wrap"
                 >
                   {COUNTRY_OPTIONS.map(({ id, label }) => (
                     <ToggleGroupItem
@@ -331,7 +331,7 @@ export function EventSearch() {
                   value={level}
                   onValueChange={(v) => { if (v) setLevel(v); }}
                   aria-label="Level"
-                  className="flex gap-1.5 flex-wrap"
+                  className="w-auto flex gap-1.5 flex-wrap"
                 >
                   {LEVEL_OPTIONS.map(({ id, label }) => (
                     <ToggleGroupItem

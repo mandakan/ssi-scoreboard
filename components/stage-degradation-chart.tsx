@@ -279,7 +279,7 @@ export function StageDegradationChart({ data }: StageDegradationChartProps) {
         value={activeStageId != null ? String(activeStageId) : ""}
         onValueChange={(v) => { if (v) setSelectedStageId(Number(v)); }}
         aria-label="Select stage for degradation view"
-        className="flex gap-1.5 flex-wrap"
+        className="w-auto flex gap-1.5 flex-wrap"
       >
         {stagesWithData.map((s) => {
           const active = s.stageId === activeStageId;

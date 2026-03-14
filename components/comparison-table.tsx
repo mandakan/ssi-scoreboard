@@ -443,7 +443,7 @@ function ModeToggle({
       value={mode}
       onValueChange={(v) => { if (v) onChange(v as PctMode); }}
       aria-label="Percentage reference"
-      className="inline-flex rounded-md border text-xs"
+      className="w-auto inline-flex rounded-md border text-xs"
     >
       {(["group", "division", "overall"] as PctMode[]).map((m) => {
         const disabled = m === "group" && groupDisabled;
@@ -491,7 +491,7 @@ function ViewModeToggle({
       value={viewMode}
       onValueChange={(v) => { if (v) onChange(v as ViewMode); }}
       aria-label="Table view mode"
-      className="inline-flex rounded-md border text-xs"
+      className="w-auto inline-flex rounded-md border text-xs"
     >
       {(["absolute", "delta"] as ViewMode[]).map((m, i, arr) => (
         <ToggleGroupItem

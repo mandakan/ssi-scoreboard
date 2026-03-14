@@ -119,7 +119,7 @@ export function DivisionDistributionChart({ data, stages: stagesProp }: Division
             value={activeDivision}
             onValueChange={(v) => { if (v) setActiveDivision(v); }}
             aria-label="Division selector"
-            className="flex flex-wrap gap-2"
+            className="w-auto flex flex-wrap gap-2"
           >
             {divisionKeys.map((key) => {
               const active = key === activeDivision;

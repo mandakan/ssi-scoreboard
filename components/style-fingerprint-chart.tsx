@@ -396,7 +396,7 @@ function CohortToggle({ mode, onChange }: { mode: CohortMode; onChange: (m: Coho
         value={mode}
         onValueChange={(v) => { if (v) onChange(v as CohortMode); }}
         aria-label="Field overlay cohort"
-        className="flex gap-1 flex-wrap"
+        className="w-auto flex gap-1 flex-wrap"
       >
         {COHORT_OPTIONS.map((opt) => (
           <ToggleGroupItem

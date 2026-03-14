@@ -769,7 +769,7 @@ export function PreMatchView({
                   type="single"
                   value={selectedSquadNum != null ? String(selectedSquadNum) : ""}
                   onValueChange={(v) => { if (v) setSelectedSquadNum(Number(v)); }}
-                  className="flex gap-1.5 flex-wrap"
+                  className="w-auto flex gap-1.5 flex-wrap"
                   aria-label="Select squad"
                 >
                   {match.squads.map((sq) => (

@@ -105,7 +105,7 @@ export function StageBalanceChart({ data }: StageBalanceChartProps) {
         value={pctMode}
         onValueChange={(v) => { if (v) setPctMode(v as PctMode); }}
         aria-label="Percent mode"
-        className="flex gap-1 mb-3"
+        className="w-auto flex gap-1 mb-3"
       >
         {PCT_MODES.map((mode) => {
           const active = pctMode === mode.value;

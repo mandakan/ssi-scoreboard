@@ -490,7 +490,7 @@ export function StageSimulator({ ct, id, data, competitors, scoringCompleted }: 
                   type="single"
                   value={simMode}
                   onValueChange={(v) => { if (v) setSimMode(v as "improve" | "trade"); }}
-                  className="flex rounded-md border border-input overflow-hidden text-sm"
+                  className="w-auto flex rounded-md border border-input overflow-hidden text-sm"
                   aria-label="Adjustment mode"
                 >
                   <ToggleGroupItem
