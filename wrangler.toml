@@ -63,8 +63,8 @@ AI_MODEL = "@cf/meta/llama-3.1-8b-instruct"
 # Run `pnpm tsx scripts/setup-d1.ts` to create and patch this ID automatically.
 [[d1_databases]]
 binding = "APP_DB"
-database_name = "ssi-scoreboard-app-db"
-database_id = "4ebae388-7038-47c2-9f3c-51e6d387b266"  # patched by scripts/setup-d1.ts
+database_name = "ssi-scoreboard-app-db-eu"
+database_id = "4a3d6cf5-31ce-4775-84f5-f9abee4206e2"  # patched by scripts/setup-d1.ts
 migrations_dir = "migrations"
 
 [assets]
