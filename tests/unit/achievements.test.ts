@@ -650,4 +650,47 @@ describe("evaluateAchievements", () => {
     expect(ach.currentValue).toBe(0);
     expect(ach.unlockedTiers).toHaveLength(0);
   });
+
+  it("preserves stored achievements when match data is empty (cache miss regression)", () => {
+    // Simulate empty match data (e.g. after D1 migration cleared match_data_cache)
+    const ctx: AchievementEvalContext = {
+      matchCount: 50,
+      matches: [],
+      stats: makeStats({
+        totalStages: 0,
+        aPercent: 0,
+        overallMatchPct: 0,
+        overallAvgHF: 0,
+      }),
+    };
+
+    // Previously unlocked achievements should survive
+    const stored: StoredAchievement[] = [
+      {
+        achievementId: "match-count",
+        tier: 1,
+        unlockedAt: "2025-06-01T00:00:00Z",
+        matchRef: "22:1234",
+        value: 10,
+      },
+      {
+        achievementId: "match-count",
+        tier: 2,
+        unlockedAt: "2025-09-01T00:00:00Z",
+        matchRef: "22:5678",
+        value: 25,
+      },
+    ];
+
+    const { achievements, newUnlocks } = evaluateAchievements(ctx, stored);
+
+    const matchCount = achievements.find((a) => a.definition.id === "match-count")!;
+    expect(matchCount.unlockedTiers).toHaveLength(2);
+    expect(matchCount.unlockedTiers[0].level).toBe(1);
+    expect(matchCount.unlockedTiers[0].value).toBe(10);
+    expect(matchCount.unlockedTiers[1].level).toBe(2);
+    expect(matchCount.unlockedTiers[1].value).toBe(25);
+    // No new unlocks — these were already stored
+    expect(newUnlocks).toHaveLength(0);
+  });
 });

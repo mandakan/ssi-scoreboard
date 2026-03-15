@@ -32,13 +32,15 @@ export function evaluateAchievements(
     const { definition, evaluate } = entry;
     const currentValue = evaluate(ctx);
 
-    // Determine which tiers are unlocked
+    // Determine which tiers are unlocked.
+    // Stored unlocks act as a floor — they are never lost even if the current
+    // computed value is lower (e.g. match data cache is temporarily empty).
     const unlockedTiers: UnlockedTier[] = [];
     for (const tier of definition.tiers) {
-      if (currentValue >= tier.threshold) {
-        const key = `${definition.id}:${tier.level}`;
-        const existing = storedByKey.get(key);
+      const key = `${definition.id}:${tier.level}`;
+      const existing = storedByKey.get(key);
 
+      if (currentValue >= tier.threshold) {
         if (existing) {
           unlockedTiers.push({
             level: tier.level,
@@ -63,6 +65,14 @@ export function evaluateAchievements(
             value: currentValue,
           });
         }
+      } else if (existing) {
+        // Previously unlocked but current data is incomplete — preserve it
+        unlockedTiers.push({
+          level: tier.level,
+          unlockedAt: existing.unlockedAt,
+          matchRef: existing.matchRef,
+          value: existing.value,
+        });
       }
     }
 
