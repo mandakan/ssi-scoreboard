@@ -58,7 +58,6 @@ function LoginForm({ onLogin }: { onLogin: (token: string) => void }) {
         headers: authHeaders(password.trim()),
       });
       if (res.ok) {
-        sessionStorage.setItem("ssi-admin-token", password.trim());
         onLogin(password.trim());
       } else {
         setError("Invalid password");
@@ -470,18 +469,12 @@ const SECTIONS: { id: AdminSection; label: string }[] = [
   { id: "suppressions", label: "Suppressed" },
 ];
 
-function getStoredToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return sessionStorage.getItem("ssi-admin-token");
-}
-
 export function AdminPageClient() {
-  const [token, setToken] = useState<string | null>(getStoredToken);
+  const [token, setToken] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<AdminSection>("health");
   const [suppressionRefreshKey, setSuppressionRefreshKey] = useState(0);
 
   const logout = () => {
-    sessionStorage.removeItem("ssi-admin-token");
     setToken(null);
   };
 
