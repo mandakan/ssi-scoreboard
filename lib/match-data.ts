@@ -226,7 +226,22 @@ export async function fetchMatchData(
 
   // Build cross-match shooter index. Registered with afterResponse() so the
   // promise completes even after the HTTP response is sent (required on CF Workers).
-  afterResponse(indexMatchShooters(ct, id, ev.starts ?? null, competitors));
+  afterResponse(indexMatchShooters(ct, id, ev.starts ?? null, competitors, {
+    name: ev.name,
+    venue: ev.venue ?? null,
+    date: ev.starts ?? null,
+    level: ev.level ?? null,
+    region: ev.region ?? null,
+    subRule: ev.sub_rule ?? null,
+    discipline: ev.get_full_rule_display ?? null,
+    status: ev.status ?? null,
+    resultsStatus: ev.results ?? null,
+    scoringCompleted: scoringPct,
+    competitorsCount: ev.competitors_count ?? competitors.length,
+    stagesCount: ev.stages_count ?? stages.length,
+    lat: ev.has_geopos && ev.lat != null ? parseFloat(String(ev.lat)) : null,
+    lng: ev.has_geopos && ev.lng != null ? parseFloat(String(ev.lng)) : null,
+  }));
 
   const response: MatchResponse = {
     name: ev.name,

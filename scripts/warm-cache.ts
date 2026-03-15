@@ -24,6 +24,7 @@
  *   --jitter                               Add ±50% random jitter to each delay
  *   --limit  <n>                           Max matches to warm (default: unlimited)
  *   --skip-scorecards                      Only warm GetMatch, skip compare call
+ *   --upcoming                             Warm upcoming/future matches (populates matches domain table)
  *   --dry-run                              List matches without warming
  *   --force                                Purge + re-warm (calls purge endpoint first)
  */
@@ -65,6 +66,7 @@ interface CliArgs {
   jitter: boolean;
   limit: number | null;
   skipScorecards: boolean;
+  upcoming: boolean;
   dryRun: boolean;
   force: boolean;
 }
@@ -83,16 +85,24 @@ function parseArgs(): CliArgs {
   };
   const has = (flag: string): boolean => args.includes(flag);
 
+  const upcoming = has("--upcoming");
+
+  // --upcoming overrides date range: today → +1 year (and implies --skip-scorecards)
+  const upcomingAfter = now.toISOString().slice(0, 10);
+  const upcomingBefore = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate())
+    .toISOString().slice(0, 10);
+
   return {
     url: get("--url") ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
     level: get("--level") ?? "l3plus",
     country: get("--country"),
-    after: get("--after") ?? defaultAfter.toISOString().slice(0, 10),
-    before: get("--before") ?? defaultBefore.toISOString().slice(0, 10),
-    delay: parseInt(get("--delay") ?? "2000", 10),
+    after: upcoming ? (get("--after") ?? upcomingAfter) : (get("--after") ?? defaultAfter.toISOString().slice(0, 10)),
+    before: upcoming ? (get("--before") ?? upcomingBefore) : (get("--before") ?? defaultBefore.toISOString().slice(0, 10)),
+    delay: parseInt(get("--delay") ?? (upcoming ? "500" : "2000"), 10),
     jitter: has("--jitter"),
     limit: get("--limit") !== null ? parseInt(get("--limit")!, 10) : null,
-    skipScorecards: has("--skip-scorecards"),
+    skipScorecards: upcoming || has("--skip-scorecards"),
+    upcoming,
     dryRun: has("--dry-run"),
     force: has("--force"),
   };
@@ -193,6 +203,7 @@ async function main(): Promise<void> {
   console.log(`Date range   : ${args.after} → ${args.before}`);
   console.log(`Delay        : ${args.delay}ms between requests${args.jitter ? " ±50% jitter" : ""}`);
   console.log(`Scorecards   : ${args.skipScorecards ? "skip" : "include"}`);
+  if (args.upcoming) console.log(`Upcoming     : yes (future matches only, populates matches domain table)`);
   console.log(`Mode         : ${args.dryRun ? "DRY RUN (no requests)" : args.force ? "force re-warm" : "normal (skip already cached)"}`);
   if (args.limit !== null) console.log(`Warm limit   : ${args.limit} matches`);
   console.log("─".repeat(50));
@@ -221,13 +232,24 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // Filter to historical only (≥4 days ago)
-  const fourDaysAgo = Date.now() - 4 * 86_400_000;
-  const filtered = events
-    .filter((e) => new Date(e.date).getTime() <= fourDaysAgo)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  // Filter events based on mode
+  let filtered: EventSummary[];
+  if (args.upcoming) {
+    // Upcoming mode: keep future matches, sort by date ascending (soonest first)
+    const now = Date.now();
+    filtered = events
+      .filter((e) => new Date(e.date).getTime() > now)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  } else {
+    // Historical mode: only completed matches (≥4 days ago), newest first
+    const fourDaysAgo = Date.now() - 4 * 86_400_000;
+    filtered = events
+      .filter((e) => new Date(e.date).getTime() <= fourDaysAgo)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }
 
-  console.log(`found ${events.length} events → ${filtered.length} historical${args.limit !== null ? ` (warm up to ${args.limit})` : ""}`);
+  const modeLabel = args.upcoming ? "upcoming" : "historical";
+  console.log(`found ${events.length} events → ${filtered.length} ${modeLabel}${args.limit !== null ? ` (warm up to ${args.limit})` : ""}`);
 
   if (filtered.length === 0) {
     console.log("Nothing to warm.");

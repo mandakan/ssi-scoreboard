@@ -4,6 +4,9 @@
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AppDatabase } from "@/lib/db";
+import type { MatchRecord } from "@/lib/types";
+import { runMigrations, LATEST_VERSION } from "@/lib/db-migrations";
+import type { AsyncMigrationExecutor } from "@/lib/db-migrations";
 
 // Minimal D1Database type for the binding. The full type comes from
 // @cloudflare/workers-types which is a devDep of the opennextjs package.
@@ -25,17 +28,54 @@ interface D1Result<T> {
   success: boolean;
 }
 
-// Schema is managed by migrations/0001_init.sql applied via:
-//   wrangler d1 migrations apply APP_DB [--env staging]
-// No runtime schema init needed here.
+// Schema is auto-migrated on first access via runMigrations().
+// Manual `wrangler d1 migrations apply APP_DB` still works in parallel —
+// the runtime runner is idempotent and skips already-applied migrations.
 function getDb(): D1Database {
   const { env } = getCloudflareContext() as unknown as { env: { APP_DB: D1Database } };
   return env.APP_DB;
 }
 
+/** Lazy-init: runs migrations once per process, then resolves immediately. */
+let migrationPromise: Promise<void> | null = null;
+
+async function ensureSchema(): Promise<D1Database> {
+  const d = getDb();
+  if (!migrationPromise) {
+    migrationPromise = (async () => {
+      const executor: AsyncMigrationExecutor = {
+        async exec(sql) { await d.exec(sql); },
+        async getVersion() {
+          try {
+            const row = await d.prepare(
+              `SELECT version FROM _schema_version WHERE id = 1`,
+            ).first<{ version: number }>();
+            return row?.version ?? 0;
+          } catch {
+            // Table doesn't exist yet — will be created by runMigrations
+            return 0;
+          }
+        },
+        async setVersion(version) {
+          await d.prepare(
+            `INSERT INTO _schema_version (id, version) VALUES (1, ?)
+             ON CONFLICT(id) DO UPDATE SET version = excluded.version`,
+          ).bind(version).run();
+        },
+      };
+      const applied = await runMigrations(executor);
+      if (applied > 0) {
+        console.log(`[db-d1] Applied ${applied} migration(s), now at v${LATEST_VERSION}`);
+      }
+    })();
+  }
+  await migrationPromise;
+  return d;
+}
+
 const db: AppDatabase = {
   async indexShooterMatch(shooterId, matchRef, startTimestamp) {
-    const db = getDb();
+    const db = await ensureSchema();
     await db
       .prepare(
         `INSERT INTO shooter_matches (shooter_id, match_ref, start_timestamp)
@@ -48,7 +88,7 @@ const db: AppDatabase = {
   },
 
   async setShooterProfile(shooterId, profile) {
-    const db = getDb();
+    const db = await ensureSchema();
     await db
       .prepare(
         `INSERT INTO shooter_profiles (shooter_id, name, club, division, last_seen, region, region_display, category, ics_alias, license)
@@ -80,7 +120,7 @@ const db: AppDatabase = {
   },
 
   async getShooterMatches(shooterId) {
-    const db = getDb();
+    const db = await ensureSchema();
     const result = await db
       .prepare(
         `SELECT match_ref FROM shooter_matches
@@ -94,7 +134,7 @@ const db: AppDatabase = {
 
   async getUpcomingMatches(shooterId) {
     const now = Math.floor(Date.now() / 1000);
-    const db = getDb();
+    const db = await ensureSchema();
     const result = await db
       .prepare(
         `SELECT match_ref FROM shooter_matches
@@ -107,7 +147,7 @@ const db: AppDatabase = {
   },
 
   async getShooterProfile(shooterId) {
-    const db = getDb();
+    const db = await ensureSchema();
     const row = await db
       .prepare(
         `SELECT name, club, division, last_seen, region, region_display, category, ics_alias, license
@@ -140,7 +180,7 @@ const db: AppDatabase = {
   },
 
   async hasShooterProfile(shooterId) {
-    const db = getDb();
+    const db = await ensureSchema();
     const row = await db
       .prepare(`SELECT 1 AS found FROM shooter_profiles WHERE shooter_id = ?`)
       .bind(shooterId)
@@ -149,7 +189,7 @@ const db: AppDatabase = {
   },
 
   async getShooterAchievements(shooterId) {
-    const db = getDb();
+    const db = await ensureSchema();
     const result = await db
       .prepare(
         `SELECT achievement_id, tier, unlocked_at, match_ref, value
@@ -176,7 +216,7 @@ const db: AppDatabase = {
 
   async saveShooterAchievements(shooterId, achievements) {
     if (achievements.length === 0) return;
-    const db = getDb();
+    const db = await ensureSchema();
     const stmts = achievements.map((a) =>
       db
         .prepare(
@@ -198,7 +238,7 @@ const db: AppDatabase = {
 
   async searchShooterProfiles(query, options) {
     const limit = Math.min(options?.limit ?? 20, 100);
-    const db = getDb();
+    const db = await ensureSchema();
     type Row = { shooter_id: number; name: string; club: string | null; division: string | null; last_seen: string };
     const toResult = (r: Row) => ({ shooterId: r.shooter_id, name: r.name, club: r.club, division: r.division, lastSeen: r.last_seen });
     if (!query) {
@@ -222,7 +262,7 @@ const db: AppDatabase = {
 
   async recordMatchAccess(key) {
     const now = Math.floor(Date.now() / 1000);
-    const db = getDb();
+    const db = await ensureSchema();
     await db
       .prepare(
         `INSERT INTO match_popularity (cache_key, last_seen_at, hit_count)
@@ -237,7 +277,7 @@ const db: AppDatabase = {
 
   async getPopularKeys(maxAgeSeconds, limit) {
     const cutoff = Math.floor(Date.now() / 1000) - maxAgeSeconds;
-    const db = getDb();
+    const db = await ensureSchema();
 
     // Prune stale entries
     await db
@@ -261,7 +301,7 @@ const db: AppDatabase = {
   // ── Match data cache ──────────────────────────────────────────────────
 
   async getMatchDataCache(cacheKey) {
-    const db = getDb();
+    const db = await ensureSchema();
     const row = await db
       .prepare(`SELECT data FROM match_data_cache WHERE cache_key = ?`)
       .bind(cacheKey)
@@ -270,7 +310,7 @@ const db: AppDatabase = {
   },
 
   async setMatchDataCache(cacheKey, data, meta) {
-    const db = getDb();
+    const db = await ensureSchema();
     await db
       .prepare(
         `INSERT INTO match_data_cache (cache_key, key_type, ct, match_id, data, schema_version, stored_at)
@@ -286,7 +326,7 @@ const db: AppDatabase = {
 
   async deleteMatchDataCache(...cacheKeys) {
     if (cacheKeys.length === 0) return;
-    const db = getDb();
+    const db = await ensureSchema();
     // D1 doesn't support variadic bind — delete one at a time
     const stmts = cacheKeys.map((key) =>
       db.prepare(`DELETE FROM match_data_cache WHERE cache_key = ?`).bind(key),
@@ -295,7 +335,7 @@ const db: AppDatabase = {
   },
 
   async scanMatchDataCacheKeys(keyType?) {
-    const db = getDb();
+    const db = await ensureSchema();
     if (keyType) {
       const result = await db
         .prepare(`SELECT cache_key FROM match_data_cache WHERE key_type = ?`)
@@ -310,7 +350,7 @@ const db: AppDatabase = {
   },
 
   async listMatchCacheEntries(options) {
-    const d = getDb();
+    const d = await ensureSchema();
     type Row = { cache_key: string; key_type: string; ct: number; match_id: string; stored_at: string; data?: string };
     const conditions: string[] = [];
     const binds: unknown[] = [];
@@ -337,6 +377,77 @@ const db: AppDatabase = {
       storedAt: r.stored_at,
       ...(r.data != null ? { data: r.data } : {}),
     }));
+  },
+  // ── Matches domain index ────────────────────────────────────────────────
+
+  async upsertMatch(match) {
+    const db = await ensureSchema();
+    await db
+      .prepare(
+        `INSERT INTO matches (match_ref, ct, match_id, name, venue, date, level, region, sub_rule, discipline, status, results_status, scoring_completed, competitors_count, stages_count, lat, lng, data, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(match_ref)
+         DO UPDATE SET name = excluded.name,
+                       venue = excluded.venue,
+                       date = excluded.date,
+                       level = excluded.level,
+                       region = excluded.region,
+                       sub_rule = excluded.sub_rule,
+                       discipline = excluded.discipline,
+                       status = excluded.status,
+                       results_status = excluded.results_status,
+                       scoring_completed = excluded.scoring_completed,
+                       competitors_count = excluded.competitors_count,
+                       stages_count = excluded.stages_count,
+                       lat = excluded.lat,
+                       lng = excluded.lng,
+                       data = excluded.data,
+                       updated_at = excluded.updated_at`,
+      )
+      .bind(
+        match.matchRef, match.ct, match.matchId, match.name,
+        match.venue, match.date, match.level, match.region,
+        match.subRule, match.discipline, match.status, match.resultsStatus,
+        match.scoringCompleted, match.competitorsCount, match.stagesCount,
+        match.lat, match.lng, match.data, match.updatedAt,
+      )
+      .run();
+  },
+
+  async getMatchesByRefs(matchRefs) {
+    if (matchRefs.length === 0) return new Map<string, MatchRecord>();
+    const db = await ensureSchema();
+    const placeholders = matchRefs.map(() => "?").join(",");
+    type MatchRow = {
+      match_ref: string; ct: number; match_id: string; name: string;
+      venue: string | null; date: string | null; level: string | null;
+      region: string | null; sub_rule: string | null; discipline: string | null;
+      status: string | null; results_status: string | null;
+      scoring_completed: number; competitors_count: number | null;
+      stages_count: number | null; lat: number | null; lng: number | null;
+      data: string | null; updated_at: string;
+    };
+    const result = await db
+      .prepare(
+        `SELECT match_ref, ct, match_id, name, venue, date, level, region, sub_rule, discipline,
+                status, results_status, scoring_completed, competitors_count, stages_count,
+                lat, lng, data, updated_at
+         FROM matches WHERE match_ref IN (${placeholders})`,
+      )
+      .bind(...matchRefs)
+      .all<MatchRow>();
+    const map = new Map<string, MatchRecord>();
+    for (const r of result.results) {
+      map.set(r.match_ref, {
+        matchRef: r.match_ref, ct: r.ct, matchId: r.match_id, name: r.name,
+        venue: r.venue, date: r.date, level: r.level, region: r.region,
+        subRule: r.sub_rule, discipline: r.discipline, status: r.status,
+        resultsStatus: r.results_status, scoringCompleted: r.scoring_completed,
+        competitorsCount: r.competitors_count, stagesCount: r.stages_count,
+        lat: r.lat, lng: r.lng, data: r.data, updatedAt: r.updated_at,
+      });
+    }
+    return map;
   },
 };
 
