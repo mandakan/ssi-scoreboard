@@ -204,6 +204,9 @@ export async function GET(req: Request) {
   );
 
   // Build cross-match shooter index — fire-and-forget, non-fatal.
+  // Match metadata (matchMeta) is NOT passed here because the compare route's
+  // RawMatchData lacks key fields (name, level, discipline). The match page visit
+  // (via match-data.ts) always populates the full matches table entry first.
   indexMatchShooters(ct, id, matchData.event?.starts ?? null, [...competitorInfoMap.values()]);
 
   const requestedCompetitors: CompetitorInfo[] = competitorIds.map((cid) => {

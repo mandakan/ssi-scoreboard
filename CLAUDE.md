@@ -43,6 +43,7 @@ Key directories:
 - `lib/cache-edge.ts` — @upstash/redis HTTP implementation (Cloudflare Pages target)
 - `lib/cache-impl.ts` — re-exports node adapter by default; CF builds override via webpack alias
 - `lib/db.ts` — `AppDatabase` interface (persistent shooter profiles, match indices, popularity tracking, achievements, match data cache)
+- `lib/db-migrations.ts` — shared migration definitions + runtime runner (single source of truth for schema)
 - `lib/db-sqlite.ts` — better-sqlite3 implementation (Docker / Node.js target)
 - `lib/db-d1.ts` — Cloudflare D1 implementation (Cloudflare Pages target)
 - `lib/db-impl.ts` — re-exports SQLite adapter by default; CF builds override via webpack/turbopack alias
@@ -70,7 +71,7 @@ Key directories:
 - `lib/achievements/evaluate.ts` — **pure function** `evaluateAchievements()`, no I/O, fully unit-tested
 - `lib/feature-previews.ts` — generic feature preview toggle system (localStorage + URL params)
 - `hooks/use-preview-feature.ts` — SSR-safe `usePreviewFeature()` hook for client components
-- `scripts/warm-cache.ts` — CLI cache warming script; writes permanent entries to both Redis and D1/SQLite; indexes known shooters as a side effect
+- `scripts/warm-cache.ts` — CLI cache warming script; writes permanent entries to both Redis and D1/SQLite; indexes known shooters as a side effect. Use `--upcoming` to warm future matches (populates the `matches` domain table for shooter dashboards)
 - `scripts/migrate-match-cache.ts` — one-time migration: moves permanent match data from Redis to D1/SQLite (`--drain` sets 24h Redis TTL, `--dry-run`, `--limit`)
 - `mcp/` — pnpm workspace package; stdio MCP server (`mcp/src/index.ts`) using `tsx` from root `node_modules`
 
@@ -256,6 +257,7 @@ arbitrary SSI match.
 - `match_popularity` — `{ cache_key PK, last_seen_at, hit_count }` — tracks popular `gql:GetMatch:*` keys
 - `shooter_achievements` — `{ shooter_id, achievement_id, tier }` — composite PK, persists unlocked tiers with `unlocked_at`, `match_ref`, `value`
 - `match_data_cache` — `{ cache_key PK, key_type, ct, match_id, data (JSON blob), schema_version, stored_at }` — durable store for historical match data offloaded from Redis (GetMatch, GetMatchScorecards, matchglobal)
+- `matches` — `{ match_ref PK, ct, match_id, name, venue, date, level, region, sub_rule, discipline, status, results_status, scoring_completed, competitors_count, stages_count, lat, lng, data, updated_at }` — structured match-level metadata, populated opportunistically on every match page visit via `indexMatchShooters()`. Provides durable match identity for the shooter dashboard (especially upcoming matches whose full JSON blob expires from Redis). This is an **opportunistic index**, not a complete catalogue — landing page search still uses the GraphQL API.
 
 **Tiered match data read path:**
 ```
@@ -273,7 +275,25 @@ and recent matches remain in Redis at their normal TTLs.
 imports) so it can be unit-tested with mocked deps. `lib/shooter-index.ts` handles the
 actual AppDatabase writes via the `AppDatabase` interface.
 
-**Migrations:**
+**Schema auto-migration:**
+
+Database schema is managed by a runtime migration runner (`lib/db-migrations.ts`) that
+runs automatically on first DB access. The `MIGRATIONS` array is the **single source of
+truth** for schema — both SQLite and D1 adapters use it. Migration files in `migrations/`
+are kept in parallel for manual `wrangler d1 migrations apply` but the app self-heals on
+startup.
+
+- Schema version is tracked in a `_schema_version` table (auto-created)
+- Migrations are idempotent: `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`
+- `ALTER TABLE ADD COLUMN` failures are silently caught (column already exists)
+- Expand-contract pattern: migrations only ADD — never drop or rename in the same release
+
+**Adding a new migration:**
+1. Append a new entry to `MIGRATIONS` in `lib/db-migrations.ts` (increment version)
+2. Create a matching SQL file in `migrations/` (for `wrangler d1 migrations apply` parallel path)
+3. Use idempotent DDL; one statement per array entry for `ALTER TABLE ADD COLUMN`
+
+**One-time data migrations:**
 - `scripts/migrate-shooter-data.ts` — one-time script that reads existing shooter data from
   Redis sorted sets and writes it to SQLite. Run after deploying the AppDatabase change to
   preserve historical data. Use `--cleanup` to delete permanent Redis keys (shooter profiles,
@@ -488,11 +508,14 @@ strings, consistent with the ioredis adapter — callers always do their own `JS
 
 **Persistent store:** the CF build uses Cloudflare D1 via the `APP_DB` binding declared in
 `wrangler.toml`. D1 holds shooter profiles, match indices, achievements, and the historical
-match data cache (offloaded from Upstash Redis). Formal migrations live in `migrations/`
-and are applied with `wrangler d1 migrations apply`. Current migrations:
+match data cache (offloaded from Upstash Redis). Schema is auto-migrated on first request
+(see "Schema auto-migration" above). Manual `wrangler d1 migrations apply` still works in
+parallel. Migration files in `migrations/`:
 - `0001_init.sql` — shooter profiles, matches, popularity
 - `0002_achievements.sql` — shooter achievements
 - `0003_match_data_cache.sql` — historical match data cache
+- `0004_shooter_profile_demographics.sql` — demographic fields on shooter profiles
+- `0005_matches.sql` — matches domain table (structured match-level metadata)
 
 **Bindings** (configured in `wrangler.toml`, not secrets):
 - `AI` — Workers AI binding for coaching tips

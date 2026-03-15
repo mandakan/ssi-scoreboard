@@ -4,72 +4,33 @@
 import Database from "better-sqlite3";
 import path from "path";
 import type { AppDatabase } from "@/lib/db";
-
-const SCHEMA_SQL = `
-  CREATE TABLE IF NOT EXISTS shooter_profiles (
-    shooter_id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL,
-    club TEXT,
-    division TEXT,
-    last_seen TEXT NOT NULL,
-    region TEXT,
-    region_display TEXT,
-    category TEXT,
-    ics_alias TEXT,
-    license TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS shooter_matches (
-    shooter_id INTEGER NOT NULL,
-    match_ref TEXT NOT NULL,
-    start_timestamp INTEGER NOT NULL,
-    PRIMARY KEY (shooter_id, match_ref)
-  );
-  CREATE INDEX IF NOT EXISTS idx_sm_shooter_ts
-    ON shooter_matches(shooter_id, start_timestamp);
-
-  CREATE TABLE IF NOT EXISTS shooter_achievements (
-    shooter_id INTEGER NOT NULL,
-    achievement_id TEXT NOT NULL,
-    tier INTEGER NOT NULL DEFAULT 1,
-    unlocked_at TEXT NOT NULL,
-    match_ref TEXT,
-    value REAL,
-    PRIMARY KEY (shooter_id, achievement_id, tier)
-  );
-  CREATE INDEX IF NOT EXISTS idx_sa_shooter
-    ON shooter_achievements(shooter_id);
-
-  CREATE TABLE IF NOT EXISTS match_popularity (
-    cache_key TEXT PRIMARY KEY,
-    last_seen_at INTEGER NOT NULL,
-    hit_count INTEGER NOT NULL DEFAULT 0
-  );
-  CREATE INDEX IF NOT EXISTS idx_mp_last_seen
-    ON match_popularity(last_seen_at);
-
-  CREATE TABLE IF NOT EXISTS match_data_cache (
-    cache_key      TEXT PRIMARY KEY,
-    key_type       TEXT NOT NULL,
-    ct             INTEGER NOT NULL,
-    match_id       TEXT NOT NULL,
-    data           TEXT NOT NULL,
-    schema_version INTEGER NOT NULL,
-    stored_at      TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-  CREATE INDEX IF NOT EXISTS idx_mdc_match ON match_data_cache(ct, match_id);
-  CREATE INDEX IF NOT EXISTS idx_mdc_key_type ON match_data_cache(key_type);
-`;
+import type { MatchRecord } from "@/lib/types";
+import { runMigrationsSync } from "@/lib/db-migrations";
+import type { SyncMigrationExecutor } from "@/lib/db-migrations";
 
 function openDb(dbPath: string): Database.Database {
   const db = new Database(dbPath);
   db.pragma("journal_mode = WAL");
   db.pragma("busy_timeout = 5000");
-  db.exec(SCHEMA_SQL);
-  // Apply new columns to existing databases (idempotent — SQLite errors on duplicate columns).
-  for (const col of ["region TEXT", "region_display TEXT", "category TEXT", "ics_alias TEXT", "license TEXT"]) {
-    try { db.exec(`ALTER TABLE shooter_profiles ADD COLUMN ${col}`); } catch { /* already exists */ }
-  }
+
+  // Run schema migrations synchronously on first open
+  const executor: SyncMigrationExecutor = {
+    exec(sql) { db.exec(sql); },
+    getVersion() {
+      const row = db.prepare(
+        `SELECT version FROM _schema_version WHERE id = 1`,
+      ).get() as { version: number } | undefined;
+      return row?.version ?? 0;
+    },
+    setVersion(version) {
+      db.prepare(
+        `INSERT INTO _schema_version (id, version) VALUES (1, ?)
+         ON CONFLICT(id) DO UPDATE SET version = excluded.version`,
+      ).run(version);
+    },
+  };
+  runMigrationsSync(executor);
+
   return db;
 }
 
@@ -380,6 +341,75 @@ export function createSqliteDatabase(
         storedAt: r.stored_at,
         ...(r.data != null ? { data: r.data } : {}),
       }));
+    },
+
+    // ── Matches domain index ────────────────────────────────────────────────
+
+    async upsertMatch(match) {
+      getDb()
+        .prepare(
+          `INSERT INTO matches (match_ref, ct, match_id, name, venue, date, level, region, sub_rule, discipline, status, results_status, scoring_completed, competitors_count, stages_count, lat, lng, data, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(match_ref)
+           DO UPDATE SET name = excluded.name,
+                         venue = excluded.venue,
+                         date = excluded.date,
+                         level = excluded.level,
+                         region = excluded.region,
+                         sub_rule = excluded.sub_rule,
+                         discipline = excluded.discipline,
+                         status = excluded.status,
+                         results_status = excluded.results_status,
+                         scoring_completed = excluded.scoring_completed,
+                         competitors_count = excluded.competitors_count,
+                         stages_count = excluded.stages_count,
+                         lat = excluded.lat,
+                         lng = excluded.lng,
+                         data = excluded.data,
+                         updated_at = excluded.updated_at`,
+        )
+        .run(
+          match.matchRef, match.ct, match.matchId, match.name,
+          match.venue, match.date, match.level, match.region,
+          match.subRule, match.discipline, match.status, match.resultsStatus,
+          match.scoringCompleted, match.competitorsCount, match.stagesCount,
+          match.lat, match.lng, match.data, match.updatedAt,
+        );
+    },
+
+    async getMatchesByRefs(matchRefs) {
+      if (matchRefs.length === 0) return new Map<string, MatchRecord>();
+      const d = getDb();
+      const placeholders = matchRefs.map(() => "?").join(",");
+      type MatchRow = {
+        match_ref: string; ct: number; match_id: string; name: string;
+        venue: string | null; date: string | null; level: string | null;
+        region: string | null; sub_rule: string | null; discipline: string | null;
+        status: string | null; results_status: string | null;
+        scoring_completed: number; competitors_count: number | null;
+        stages_count: number | null; lat: number | null; lng: number | null;
+        data: string | null; updated_at: string;
+      };
+      const rows = d
+        .prepare(
+          `SELECT match_ref, ct, match_id, name, venue, date, level, region, sub_rule, discipline,
+                  status, results_status, scoring_completed, competitors_count, stages_count,
+                  lat, lng, data, updated_at
+           FROM matches WHERE match_ref IN (${placeholders})`,
+        )
+        .all(...matchRefs) as MatchRow[];
+      const map = new Map<string, MatchRecord>();
+      for (const r of rows) {
+        map.set(r.match_ref, {
+          matchRef: r.match_ref, ct: r.ct, matchId: r.match_id, name: r.name,
+          venue: r.venue, date: r.date, level: r.level, region: r.region,
+          subRule: r.sub_rule, discipline: r.discipline, status: r.status,
+          resultsStatus: r.results_status, scoringCompleted: r.scoring_completed,
+          competitorsCount: r.competitors_count, stagesCount: r.stages_count,
+          lat: r.lat, lng: r.lng, data: r.data, updatedAt: r.updated_at,
+        });
+      }
+      return map;
     },
   };
 }

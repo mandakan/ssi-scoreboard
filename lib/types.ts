@@ -578,6 +578,34 @@ export interface BackfillProgress {
   errorMessage?: string;
 }
 
+// ── Match Domain Record ──────────────────────────────────────────────────────
+// Structured match-level metadata stored in the `matches` domain table (D1/SQLite).
+// Populated opportunistically when any user visits a match page or runs a comparison.
+// Provides durable match identity for the shooter dashboard (especially upcoming matches
+// whose full JSON blob expires from Redis and is not persisted to match_data_cache).
+
+export interface MatchRecord {
+  matchRef: string;            // PK — "22:26547" (ct:matchId)
+  ct: number;
+  matchId: string;
+  name: string;
+  venue: string | null;
+  date: string | null;         // ISO 8601
+  level: string | null;        // code: "1", "2", "3", "4", "5"
+  region: string | null;       // code: "SWE", "NOR", "FIN"
+  subRule: string | null;      // code: "ipsc_hs", "ipsc_rs", etc.
+  discipline: string | null;   // display: "Handgun", "Rifle" (from get_full_rule_display)
+  status: string | null;       // code: "on", "cs" (cancelled)
+  resultsStatus: string | null; // code: "org", "all"
+  scoringCompleted: number;
+  competitorsCount: number | null;
+  stagesCount: number | null;
+  lat: number | null;
+  lng: number | null;
+  data: string | null;         // full raw GetMatch JSON blob (fallback)
+  updatedAt: string;           // ISO 8601
+}
+
 // ── Upcoming Matches ──────────────────────────────────────────────────────────
 
 export interface UpcomingMatch {

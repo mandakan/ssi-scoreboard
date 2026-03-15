@@ -4,6 +4,7 @@
 
 import cache from "@/lib/cache-impl";
 import db from "@/lib/db-impl";
+import type { MatchRecord } from "@/lib/types";
 
 /**
  * Decodes a Relay Global ID to extract the numeric ShooterNode primary key.
@@ -41,12 +42,33 @@ export interface ShooterProfile {
   license: string | null;
 }
 
+/** Match-level metadata passed to indexMatchShooters for the matches domain table. */
+export interface MatchMetadata {
+  name: string;
+  venue: string | null;
+  date: string | null;
+  level: string | null;
+  region: string | null;
+  subRule: string | null;
+  discipline: string | null;
+  status: string | null;
+  resultsStatus: string | null;
+  scoringCompleted: number;
+  competitorsCount: number | null;
+  stagesCount: number | null;
+  lat: number | null;
+  lng: number | null;
+}
+
 /**
  * Build shooter → match secondary index in the AppDatabase.
  *
  * For each competitor with a known shooterId, upserts:
  *   shooter_profiles   — name, club, division, lastSeen
  *   shooter_matches    — matchRef + startTimestamp
+ *
+ * When matchMeta is provided, also upserts the `matches` domain table
+ * with structured match-level metadata (one row per match, not per competitor).
  *
  * Both operations are idempotent. Returns a Promise so the caller can
  * register it with ctx.waitUntil() on CF Workers (see lib/background-impl.ts),
@@ -68,6 +90,7 @@ export function indexMatchShooters(
     ics_alias?: string | null;
     license?: string | null;
   }>,
+  matchMeta?: MatchMetadata,
 ): Promise<void> {
   const matchRef = `${ct}:${matchId}`;
   const startTimestamp = matchStart
@@ -76,6 +99,33 @@ export function indexMatchShooters(
   const lastSeen = new Date().toISOString();
 
   const writes: Promise<void>[] = [];
+
+  // Upsert match-level metadata (one write per match, not per competitor)
+  if (matchMeta) {
+    const record: MatchRecord = {
+      matchRef,
+      ct: parseInt(ct, 10),
+      matchId,
+      name: matchMeta.name,
+      venue: matchMeta.venue,
+      date: matchMeta.date,
+      level: matchMeta.level,
+      region: matchMeta.region,
+      subRule: matchMeta.subRule,
+      discipline: matchMeta.discipline,
+      status: matchMeta.status,
+      resultsStatus: matchMeta.resultsStatus,
+      scoringCompleted: matchMeta.scoringCompleted,
+      competitorsCount: matchMeta.competitorsCount,
+      stagesCount: matchMeta.stagesCount,
+      lat: matchMeta.lat,
+      lng: matchMeta.lng,
+      data: null,
+      updatedAt: lastSeen,
+    };
+    writes.push(db.upsertMatch(record).catch(() => {}));
+  }
+
   for (const c of competitors) {
     if (c.shooterId == null) continue;
     const { shooterId } = c;

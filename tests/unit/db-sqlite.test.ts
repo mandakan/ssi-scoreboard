@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { createSqliteDatabase } from "@/lib/db-sqlite";
 import type { AppDatabase } from "@/lib/db";
 import type { ShooterProfile } from "@/lib/shooter-index";
+import type { MatchRecord } from "@/lib/types";
 
 function freshDb(): AppDatabase {
   return createSqliteDatabase(":memory:");
@@ -170,6 +171,97 @@ describe("AppDatabase (SQLite)", () => {
     it("returns empty for no data", async () => {
       const popular = await db.getPopularKeys(3600, 10);
       expect(popular).toEqual([]);
+    });
+  });
+
+  // ── upsertMatch / getMatchesByRefs ──────────────────────────────────────
+
+  describe("upsertMatch / getMatchesByRefs", () => {
+    const match: MatchRecord = {
+      matchRef: "22:1001",
+      ct: 22,
+      matchId: "1001",
+      name: "Nordic Championship 2026",
+      venue: "Gothenburg",
+      date: "2026-06-15T08:00:00Z",
+      level: "3",
+      region: "SWE",
+      subRule: "ipsc_hs",
+      discipline: "Handgun",
+      status: "on",
+      resultsStatus: "org",
+      scoringCompleted: 0,
+      competitorsCount: 150,
+      stagesCount: 12,
+      lat: 57.7089,
+      lng: 11.9746,
+      data: null,
+      updatedAt: "2026-03-15T10:00:00Z",
+    };
+
+    it("inserts and retrieves a match", async () => {
+      await db.upsertMatch(match);
+      const result = await db.getMatchesByRefs(["22:1001"]);
+      expect(result.size).toBe(1);
+      expect(result.get("22:1001")).toEqual(match);
+    });
+
+    it("updates an existing match (upsert)", async () => {
+      await db.upsertMatch(match);
+      const updated = { ...match, scoringCompleted: 50, updatedAt: "2026-06-15T12:00:00Z" };
+      await db.upsertMatch(updated);
+      const result = await db.getMatchesByRefs(["22:1001"]);
+      expect(result.get("22:1001")?.scoringCompleted).toBe(50);
+      expect(result.get("22:1001")?.updatedAt).toBe("2026-06-15T12:00:00Z");
+    });
+
+    it("returns empty map for unknown refs", async () => {
+      const result = await db.getMatchesByRefs(["22:9999"]);
+      expect(result.size).toBe(0);
+    });
+
+    it("returns empty map for empty input", async () => {
+      const result = await db.getMatchesByRefs([]);
+      expect(result.size).toBe(0);
+    });
+
+    it("handles batch lookup with mix of existing and missing refs", async () => {
+      await db.upsertMatch(match);
+      const match2 = { ...match, matchRef: "22:1002", matchId: "1002", name: "Swedish Open" };
+      await db.upsertMatch(match2);
+
+      const result = await db.getMatchesByRefs(["22:1001", "22:9999", "22:1002"]);
+      expect(result.size).toBe(2);
+      expect(result.get("22:1001")?.name).toBe("Nordic Championship 2026");
+      expect(result.get("22:1002")?.name).toBe("Swedish Open");
+      expect(result.has("22:9999")).toBe(false);
+    });
+
+    it("handles null optional fields", async () => {
+      const minimal: MatchRecord = {
+        matchRef: "22:2001",
+        ct: 22,
+        matchId: "2001",
+        name: "Minimal Match",
+        venue: null,
+        date: null,
+        level: null,
+        region: null,
+        subRule: null,
+        discipline: null,
+        status: null,
+        resultsStatus: null,
+        scoringCompleted: 0,
+        competitorsCount: null,
+        stagesCount: null,
+        lat: null,
+        lng: null,
+        data: null,
+        updatedAt: "2026-01-01T00:00:00Z",
+      };
+      await db.upsertMatch(minimal);
+      const result = await db.getMatchesByRefs(["22:2001"]);
+      expect(result.get("22:2001")).toEqual(minimal);
     });
   });
 });

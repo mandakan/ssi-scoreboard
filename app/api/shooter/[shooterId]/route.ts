@@ -427,46 +427,35 @@ export async function GET(
     }
   }
 
-  // ── 3b. Resolve upcoming match metadata ──────────────────────────────────
+  // ── 3b. Resolve upcoming match metadata from matches domain table ────────
+  // Reads structured metadata directly from D1/SQLite — no Redis/blob lookup needed.
+  // This ensures upcoming matches remain visible even after their Redis TTL expires.
   const upcomingMatches: UpcomingMatch[] = [];
-  for (const ref of upcomingRefs) {
-    const parts = ref.split(":");
-    if (parts.length < 2) continue;
-    const [ct, ...idParts] = parts;
-    const matchId = idParts.join(":");
-    if (!ct || !matchId) continue;
-    const ctNum = parseInt(ct, 10);
-    if (isNaN(ctNum)) continue;
-
-    const matchKey = gqlCacheKey("GetMatch", { ct: ctNum, id: matchId });
-    let matchRaw: string | null = null;
+  if (upcomingRefs.length > 0) {
+    let matchMetaMap = new Map<string, import("@/lib/types").MatchRecord>();
     try {
-      matchRaw = await getMatchDataWithFallback(matchKey);
-    } catch { continue; }
-    if (!matchRaw) continue;
+      matchMetaMap = await db.getMatchesByRefs(upcomingRefs);
+    } catch { /* ignore DB errors */ }
 
-    try {
-      const matchEntry = JSON.parse(matchRaw) as CacheEntry<RawMatchData>;
-      if (!matchEntry.v || matchEntry.v < 6) continue;
-      if (!matchEntry.data?.event) continue;
+    for (const ref of upcomingRefs) {
+      const meta = matchMetaMap.get(ref);
+      if (!meta) continue;
 
-      const ev = matchEntry.data.event;
-      const competitor = (
-        ev.competitors_approved_w_wo_results_not_dnf ?? []
-      ).find((c) => decodeShooterId(c.shooter?.id) === shooterId);
-      if (!competitor) continue;
+      const [ct, ...idParts] = ref.split(":");
+      if (!ct) continue;
+      const matchId = idParts.join(":");
 
       upcomingMatches.push({
         ct,
         matchId,
-        name: ev.name,
-        date: ev.starts ?? null,
-        venue: ev.venue ?? null,
-        level: ev.level ?? null,
-        division: extractDivision(competitor),
-        competitorId: parseInt(competitor.id, 10),
+        name: meta.name,
+        date: meta.date,
+        venue: meta.venue,
+        level: meta.level,
+        division: profile?.division ?? null,
+        competitorId: 0,
       });
-    } catch { /* skip on parse error */ }
+    }
   }
 
   // ── 4. Compute cross-match aggregates ─────────────────────────────────────

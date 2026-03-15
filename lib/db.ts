@@ -10,7 +10,7 @@
 
 import type { ShooterProfile } from "@/lib/shooter-index";
 import type { StoredAchievement } from "@/lib/achievements/types";
-import type { ShooterSearchResult } from "@/lib/types";
+import type { MatchRecord, ShooterSearchResult } from "@/lib/types";
 
 export interface AppDatabase {
   // ── Shooter cross-match index ────────────────────────────────────────────
@@ -107,4 +107,19 @@ export interface AppDatabase {
   }): Promise<
     Array<{ cacheKey: string; keyType: string; ct: number; matchId: string; storedAt: string; data?: string }>
   >;
+
+  // ── Matches domain index ─────────────────────────────────────────────────
+  // Structured match-level metadata — populated opportunistically on every
+  // match page visit or comparison. Provides durable match identity for the
+  // shooter dashboard without requiring the full JSON blob from Redis/match_data_cache.
+
+  /** Upsert match-level metadata. Idempotent on match_ref. */
+  upsertMatch(match: MatchRecord): Promise<void>;
+
+  /**
+   * Return match metadata for the given match_refs.
+   * Results are keyed by match_ref for O(1) lookup.
+   * Missing refs are simply absent from the returned map.
+   */
+  getMatchesByRefs(matchRefs: string[]): Promise<Map<string, MatchRecord>>;
 }
