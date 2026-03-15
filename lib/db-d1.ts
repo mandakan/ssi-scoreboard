@@ -36,40 +36,63 @@ function getDb(): D1Database {
   return env.APP_DB;
 }
 
-/** Lazy-init: runs migrations once per process, then resolves immediately. */
-let migrationPromise: Promise<void> | null = null;
+/**
+ * Ensure schema is up to date. On Cloudflare Workers, module-level state may
+ * not persist across requests, so this is designed to be cheap when already current:
+ * a single SELECT to check the version, then skip if current.
+ *
+ * If migrations fail, the error is logged but NOT re-thrown — the request proceeds
+ * with whatever schema exists. This prevents a migration bug from taking down all
+ * DB access. The migration will retry on the next request.
+ */
+let schemaChecked = false;
 
 async function ensureSchema(): Promise<D1Database> {
   const d = getDb();
-  if (!migrationPromise) {
-    migrationPromise = (async () => {
-      const executor: AsyncMigrationExecutor = {
-        async exec(sql) { await d.exec(sql); },
-        async getVersion() {
-          try {
-            const row = await d.prepare(
-              `SELECT version FROM _schema_version WHERE id = 1`,
-            ).first<{ version: number }>();
-            return row?.version ?? 0;
-          } catch {
-            // Table doesn't exist yet — will be created by runMigrations
-            return 0;
-          }
-        },
-        async setVersion(version) {
-          await d.prepare(
-            `INSERT INTO _schema_version (id, version) VALUES (1, ?)
-             ON CONFLICT(id) DO UPDATE SET version = excluded.version`,
-          ).bind(version).run();
-        },
-      };
-      const applied = await runMigrations(executor);
-      if (applied > 0) {
-        console.log(`[db-d1] Applied ${applied} migration(s), now at v${LATEST_VERSION}`);
-      }
-    })();
+
+  if (schemaChecked) return d;
+
+  try {
+    // Fast path: check if already at latest version (single SELECT)
+    let currentVersion = 0;
+    try {
+      const row = await d.prepare(
+        `SELECT version FROM _schema_version WHERE id = 1`,
+      ).first<{ version: number }>();
+      currentVersion = row?.version ?? 0;
+    } catch {
+      // _schema_version table doesn't exist — need full migration
+    }
+
+    if (currentVersion >= LATEST_VERSION) {
+      schemaChecked = true;
+      return d;
+    }
+
+    // Slow path: run pending migrations
+    const executor: AsyncMigrationExecutor = {
+      async exec(sql) { await d.exec(sql); },
+      async getVersion() { return currentVersion; },
+      async setVersion(version) {
+        await d.prepare(
+          `INSERT INTO _schema_version (id, version) VALUES (1, ?)
+           ON CONFLICT(id) DO UPDATE SET version = excluded.version`,
+        ).bind(version).run();
+        currentVersion = version;
+      },
+    };
+    const applied = await runMigrations(executor);
+    if (applied > 0) {
+      console.log(`[db-d1] Applied ${applied} migration(s), now at v${LATEST_VERSION}`);
+    }
+    schemaChecked = true;
+  } catch (err) {
+    // Log but don't throw — let the request proceed with the existing schema.
+    // If the schema is genuinely missing tables, the actual query will fail
+    // with a clear error instead of a mysterious migration failure.
+    console.error("[db-d1] Schema migration error (non-fatal):", err);
   }
-  await migrationPromise;
+
   return d;
 }
 
