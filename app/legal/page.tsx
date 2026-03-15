@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AIConsentControl } from "./ai-consent-control";
 
 export const metadata: Metadata = {
   title: "Legal – SSI Scoreboard",
@@ -163,7 +164,28 @@ export default function LegalPage() {
             </div>
 
             <div className="space-y-1">
-              <h3 className="font-medium">5. Third-party services</h3>
+              <h3 className="font-medium">5. AI coaching tips</h3>
+              <p className="text-muted-foreground">
+                SSI Scoreboard offers optional AI-generated coaching tips. When
+                you use this feature, competitor performance data (name,
+                division, club, match name, stage details, hit factors, zone
+                counts, and penalty statistics) is sent to a third-party
+                language model provider for processing. This data may be
+                processed on servers outside the EU/EEA, including in the
+                United States. The AI provider may retain data according to
+                its own policies.
+              </p>
+              <p className="text-muted-foreground">
+                AI coaching is entirely opt-in — no data is sent until you
+                explicitly request a tip and accept the data processing
+                consent dialog. You can withdraw your consent at any time
+                using the control below, which will require re-confirmation
+                before any future AI requests.
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="font-medium">6. Third-party services</h3>
               <p className="text-muted-foreground">
                 SSI Scoreboard may be hosted on infrastructure that collects
                 standard server logs (IP addresses, request paths, timestamps).
@@ -174,7 +196,7 @@ export default function LegalPage() {
             </div>
 
             <div className="space-y-1">
-              <h3 className="font-medium">6. Data removal requests</h3>
+              <h3 className="font-medium">7. Data removal requests</h3>
               <p className="text-muted-foreground">
                 If you are an IPSC competitor and wish to have your shooter
                 profile and match history removed from SSI Scoreboard, you may
@@ -194,6 +216,17 @@ export default function LegalPage() {
               </p>
             </div>
           </div>
+        </section>
+
+        {/* Your privacy controls */}
+        <section aria-labelledby="controls-heading" className="space-y-4">
+          <h2
+            id="controls-heading"
+            className="text-xl font-semibold border-b border-border pb-2"
+          >
+            Your Privacy Controls
+          </h2>
+          <AIConsentControl />
         </section>
 
         <p className="text-xs text-muted-foreground pb-8">
