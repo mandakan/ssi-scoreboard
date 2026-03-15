@@ -445,6 +445,22 @@ const db: AppDatabase = {
       db.prepare(`DELETE FROM shooter_achievements WHERE shooter_id = ?`).bind(shooterId),
     ]);
   },
+
+  async unsuppressShooter(shooterId) {
+    const db = getDb();
+    await db
+      .prepare(`DELETE FROM shooter_suppressions WHERE shooter_id = ?`)
+      .bind(shooterId)
+      .run();
+  },
+
+  async listSuppressedShooters() {
+    const db = getDb();
+    const result = await db
+      .prepare(`SELECT shooter_id, suppressed_at FROM shooter_suppressions ORDER BY suppressed_at DESC`)
+      .all<{ shooter_id: number; suppressed_at: string }>();
+    return result.results.map((r) => ({ shooterId: r.shooter_id, suppressedAt: r.suppressed_at }));
+  },
 };
 
 export default db;

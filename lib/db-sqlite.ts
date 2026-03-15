@@ -442,6 +442,19 @@ export function createSqliteDatabase(
       });
       tx();
     },
+
+    async unsuppressShooter(shooterId) {
+      getDb()
+        .prepare(`DELETE FROM shooter_suppressions WHERE shooter_id = ?`)
+        .run(shooterId);
+    },
+
+    async listSuppressedShooters() {
+      const rows = getDb()
+        .prepare(`SELECT shooter_id, suppressed_at FROM shooter_suppressions ORDER BY suppressed_at DESC`)
+        .all() as { shooter_id: number; suppressed_at: string }[];
+      return rows.map((r) => ({ shooterId: r.shooter_id, suppressedAt: r.suppressed_at }));
+    },
   };
 }
 
