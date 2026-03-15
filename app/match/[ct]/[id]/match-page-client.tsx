@@ -563,6 +563,7 @@ export default function MatchPageClient() {
           ct={ct}
           id={id}
           aiAvailable={aiAvailable}
+          onManageShooters={() => setShowManage(true)}
         />
       )}
 

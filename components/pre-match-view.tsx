@@ -48,6 +48,7 @@ interface PreMatchViewProps {
   ct: string;
   id: string;
   aiAvailable: boolean;
+  onManageShooters?: () => void;
 }
 
 // ── Stage rotation ────────────────────────────────────────────────────────────
@@ -212,11 +213,13 @@ function PreMatchBriefCard({
   id,
   shooterId,
   aiAvailable,
+  onManageShooters,
 }: {
   ct: string;
   id: string;
   shooterId: number | null;
   aiAvailable: boolean;
+  onManageShooters?: () => void;
 }) {
   const canGenerate = aiAvailable && shooterId !== null;
   const [requested, setRequested] = useState(false);
@@ -275,10 +278,23 @@ function PreMatchBriefCard({
       </CardHeader>
 
       <CardContent className="p-0">
-        {!canGenerate ? (
+        {!aiAvailable ? (
           <p className="text-sm text-muted-foreground">
             AI coaching is not currently enabled on this instance. Contact
             the site administrator to configure an AI provider.
+          </p>
+        ) : shooterId === null ? (
+          <p className="text-sm text-muted-foreground">
+            To generate a personalised brief, set yourself as a tracked
+            shooter.{" "}
+            {onManageShooters && (
+              <button
+                className="text-primary hover:text-primary/80 font-medium underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-ring rounded"
+                onClick={onManageShooters}
+              >
+                Manage tracked shooters
+              </button>
+            )}
           </p>
         ) : (
           <>
@@ -609,6 +625,7 @@ export function PreMatchView({
   ct,
   id,
   aiAvailable,
+  onManageShooters,
 }: PreMatchViewProps) {
   const sortedStages = useMemo(
     () => [...match.stages].sort((a, b) => a.stage_number - b.stage_number),
@@ -728,7 +745,7 @@ export function PreMatchView({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* AI pre-match brief ----------------------------------------------- */}
-      <PreMatchBriefCard ct={ct} id={id} shooterId={briefShooterId} aiAvailable={aiAvailable} />
+      <PreMatchBriefCard ct={ct} id={id} shooterId={briefShooterId} aiAvailable={aiAvailable} onManageShooters={onManageShooters} />
 
       {/* Weather forecast -------------------------------------------------- */}
       {hasVenueInfo && matchDate && (
