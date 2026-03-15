@@ -87,6 +87,6 @@ binding = "AI"
 # environments in Wrangler — declare it explicitly for staging.
 [[env.staging.d1_databases]]
 binding = "APP_DB"
-database_name = "ssi-scoreboard-app-db-staging"
-database_id = "e852033b-34c1-4929-8f10-8dfaba84c990"  # patched by scripts/setup-d1.ts
+database_name = "ssi-scoreboard-app-db-staging-eu"
+database_id = "1b1c7faf-c206-41f6-9557-adbdf1c0ba18"  # patched by scripts/setup-d1.ts
 migrations_dir = "migrations"

@@ -3,10 +3,13 @@
  * Migrate D1 databases to EU jurisdiction.
  *
  * D1 databases cannot be relocated after creation. This script:
- * 1. Exports all data from the existing database (schema + data)
- * 2. Creates a new database with --jurisdiction eu
- * 3. Imports the exported data into the new database
- * 4. Patches wrangler.toml with the new database ID
+ * 1. Creates a new database with --jurisdiction eu
+ * 2. Applies migrations to set up the schema
+ * 3. Exports data per table from the old database (skipping match_data_cache
+ *    whose large JSON blobs exceed D1's statement size limit — it self-heals
+ *    from Redis/API on first access)
+ * 4. Imports each table's data into the new database
+ * 5. Patches wrangler.toml with the new database ID and name
  *
  * The old database is NOT deleted — verify the new one works before
  * deleting it manually: npx wrangler d1 delete <old-db-name>
@@ -24,7 +27,7 @@
  */
 
 import { execSync } from "child_process";
-import { readFileSync, writeFileSync, unlinkSync } from "fs";
+import { readFileSync, writeFileSync, unlinkSync, existsSync } from "fs";
 import { join } from "path";
 
 const WRANGLER_TOML = join(process.cwd(), "wrangler.toml");
@@ -36,6 +39,21 @@ const STAGING_DB_NAME = "ssi-scoreboard-app-db-staging";
 // New EU database names
 const PROD_EU_DB_NAME = "ssi-scoreboard-app-db-eu";
 const STAGING_EU_DB_NAME = "ssi-scoreboard-app-db-staging-eu";
+
+// Tables with large JSON blobs that exceed D1's per-statement limit.
+// These are skipped during migration and self-heal from Redis/API.
+const SKIP_TABLES = ["match_data_cache"];
+
+// Tables to migrate (in dependency order). d1_migrations is handled
+// automatically by wrangler d1 migrations apply.
+const DATA_TABLES = [
+  "shooter_profiles",
+  "shooter_matches",
+  "shooter_achievements",
+  "match_popularity",
+  "matches",
+  "shooter_suppressions",
+];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -76,14 +94,19 @@ function createEuDatabase(name: string): string {
   return uuidMatch[1];
 }
 
-function exportDatabase(name: string, outputPath: string): void {
-  console.log(`  Exporting ${name} → ${outputPath}`);
-  runVisible(`npx wrangler d1 export ${name} --remote --output ${outputPath}`);
+function exportTable(dbName: string, table: string, outputPath: string): void {
+  console.log(`    Exporting table: ${table}`);
+  runVisible(`npx wrangler d1 export ${dbName} --remote --output ${outputPath} --table ${table} --no-schema`);
 }
 
-function importDatabase(name: string, sqlFile: string): void {
-  console.log(`  Importing ${sqlFile} → ${name}`);
-  runVisible(`npx wrangler d1 execute ${name} --remote --file ${sqlFile} --yes`);
+function importSqlFile(dbName: string, sqlFile: string): void {
+  runVisible(`npx wrangler d1 execute ${dbName} --remote --file ${sqlFile} --yes`);
+}
+
+function cleanupFile(path: string): void {
+  try {
+    if (existsSync(path)) unlinkSync(path);
+  } catch { /* ignore */ }
 }
 
 function patchWranglerToml(oldId: string, newId: string, label: string): void {
@@ -117,6 +140,7 @@ function migrateDatabase(
   oldName: string,
   newName: string,
   label: string,
+  envFlag: string,
   dryRun: boolean,
 ): void {
   console.log(`\n── ${label} ──────────────────────────────────────────────`);
@@ -143,36 +167,69 @@ function migrateDatabase(
 
   if (dryRun) {
     console.log(`  [DRY RUN] Would:`);
-    console.log(`    1. Export ${oldName} to /tmp/${oldName}-export.sql`);
-    console.log(`    2. Create new DB "${newName}" with --jurisdiction eu`);
-    console.log(`    3. Import data into ${newName}`);
-    console.log(`    4. Patch wrangler.toml: ${oldDb.uuid} → <new-id>`);
-    console.log(`    5. Patch wrangler.toml database_name: ${oldName} → ${newName}`);
+    console.log(`    1. Create new DB "${newName}" with --jurisdiction eu`);
+    console.log(`    2. Apply migrations to create schema`);
+    console.log(`    3. Export and import data table by table:`);
+    for (const t of DATA_TABLES) console.log(`       - ${t}`);
+    console.log(`    4. Skip tables (self-heal from cache): ${SKIP_TABLES.join(", ")}`);
+    console.log(`    5. Patch wrangler.toml: ${oldDb.uuid} → <new-id>`);
+    console.log(`    6. Patch wrangler.toml database_name: ${oldName} → ${newName}`);
     return;
   }
 
-  const exportPath = `/tmp/${oldName}-export.sql`;
-
-  // Step 1: Export
-  exportDatabase(oldName, exportPath);
-
-  // Step 2: Create EU database
+  // Step 1: Create EU database
   const newId = createEuDatabase(newName);
 
-  // Step 3: Import data
-  importDatabase(newName, exportPath);
-
-  // Step 4: Patch wrangler.toml
+  // Step 2: Temporarily patch wrangler.toml so migrations target the new DB
   patchWranglerToml(oldDb.uuid, newId, label);
   patchDbName(oldName, newName);
 
-  // Clean up export file
+  // Step 3: Apply migrations to create schema
+  console.log(`  Applying migrations...`);
   try {
-    unlinkSync(exportPath);
-    console.log(`  Cleaned up ${exportPath}`);
-  } catch { /* ignore */ }
+    runVisible(`npx wrangler d1 migrations apply APP_DB${envFlag} --remote`);
+  } catch (err) {
+    console.warn(`  Warning: migration command exited non-zero (tables may already exist)`);
+    if (err instanceof Error) console.warn(`    ${err.message.split("\n")[0]}`);
+  }
+
+  // Step 4: Export and import data table by table
+  console.log(`  Migrating data...`);
+  const tmpDir = "/tmp";
+  let tablesImported = 0;
+
+  for (const table of DATA_TABLES) {
+    const exportPath = join(tmpDir, `${oldName}-${table}.sql`);
+    try {
+      // Export from OLD database — we need to temporarily restore the old ID
+      // Actually, use the old database name directly since it still exists
+      exportTable(oldName, table, exportPath);
+
+      // Check if the export has any INSERT statements
+      const content = readFileSync(exportPath, "utf-8");
+      const insertCount = (content.match(/INSERT INTO/g) || []).length;
+      if (insertCount === 0) {
+        console.log(`      (empty — skipped)`);
+        cleanupFile(exportPath);
+        continue;
+      }
+
+      console.log(`      ${insertCount} rows → importing...`);
+      importSqlFile(newName, exportPath);
+      tablesImported++;
+    } catch (err) {
+      console.warn(`    Warning: failed to migrate table ${table}`);
+      if (err instanceof Error) console.warn(`      ${err.message.split("\n")[0]}`);
+    } finally {
+      cleanupFile(exportPath);
+    }
+  }
 
   console.log(`\n  Migration complete for ${label}.`);
+  console.log(`  ${tablesImported}/${DATA_TABLES.length} tables imported.`);
+  if (SKIP_TABLES.length > 0) {
+    console.log(`  Skipped (will self-heal): ${SKIP_TABLES.join(", ")}`);
+  }
   console.log(`  Old database "${oldName}" (${oldDb.uuid}) is still intact.`);
   console.log(`  After verifying, delete it with: npx wrangler d1 delete ${oldName}`);
 }
@@ -192,11 +249,11 @@ async function main(): Promise<void> {
   if (dryRun) console.log("(dry run — no changes will be made)\n");
 
   if (doProd) {
-    migrateDatabase(PROD_DB_NAME, PROD_EU_DB_NAME, "Production", dryRun);
+    migrateDatabase(PROD_DB_NAME, PROD_EU_DB_NAME, "Production", "", dryRun);
   }
 
   if (doStaging) {
-    migrateDatabase(STAGING_DB_NAME, STAGING_EU_DB_NAME, "Staging", dryRun);
+    migrateDatabase(STAGING_DB_NAME, STAGING_EU_DB_NAME, "Staging", " --env staging", dryRun);
   }
 
   console.log("\n─────────────────────────────────────────────────────────");
