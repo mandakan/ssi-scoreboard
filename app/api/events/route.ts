@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { executeQuery, EVENTS_QUERY } from "@/lib/graphql";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 import type { EventSummary } from "@/lib/types";
 
@@ -57,6 +58,14 @@ function buildSubWindows(
 }
 
 export async function GET(req: Request) {
+  const rl = await checkRateLimit(req, { prefix: "events", limit: 30, windowSeconds: 60 });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } },
+    );
+  }
+
   const t0 = performance.now();
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q") ?? "";

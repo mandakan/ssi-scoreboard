@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { MAX_COMPETITORS } from "@/lib/constants";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY, MATCH_QUERY } from "@/lib/graphql";
 import cache from "@/lib/cache-impl";
 import { computeMatchTtl } from "@/lib/match-ttl";
@@ -63,6 +64,14 @@ interface RawMatchData {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function GET(req: Request) {
+  const rl = await checkRateLimit(req, { prefix: "compare", limit: 30, windowSeconds: 60 });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } },
+    );
+  }
+
   const t0 = performance.now();
 
   const { searchParams } = new URL(req.url);
