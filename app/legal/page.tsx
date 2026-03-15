@@ -178,11 +178,19 @@ export default function LegalPage() {
               <p className="text-muted-foreground">
                 If you are an IPSC competitor and wish to have your shooter
                 profile and match history removed from SSI Scoreboard, you may
-                submit a removal request by contacting the developer. Upon
-                verification, your shooter profile, match index, and achievement
-                data will be permanently deleted and your shooter ID will be
-                added to a suppression list to prevent automatic re-indexing.
-                This does not affect the underlying match data on ShootNScoreIt.
+                submit a removal request by emailing{" "}
+                <a
+                  href="mailto:privacy@urdr.dev"
+                  className="underline underline-offset-4 hover:text-foreground"
+                >
+                  privacy@urdr.dev
+                </a>
+                . Please include your name and shooter ID so we can locate your
+                data. Upon verification, your shooter profile, match index, and
+                achievement data will be permanently deleted and your shooter ID
+                will be added to a suppression list to prevent automatic
+                re-indexing. This does not affect the underlying match data on
+                ShootNScoreIt.
               </p>
             </div>
           </div>
