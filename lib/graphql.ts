@@ -36,8 +36,9 @@ interface GraphQLResponse<T> {
   errors?: GraphQLError[];
 }
 
-/** Timeout for upstream GraphQL requests (ms). */
-const GRAPHQL_TIMEOUT_MS = 30_000;
+/** Timeout for upstream GraphQL requests (ms). The SSI API can be slow
+ *  for large matches with many scorecards, so we allow a generous window. */
+const GRAPHQL_TIMEOUT_MS = 60_000;
 
 export async function executeQuery<T>(
   query: string,
