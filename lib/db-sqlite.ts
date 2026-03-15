@@ -455,6 +455,29 @@ export function createSqliteDatabase(
         .all() as { shooter_id: number; suppressed_at: string }[];
       return rows.map((r) => ({ shooterId: r.shooter_id, suppressedAt: r.suppressed_at }));
     },
+
+    // ── Retention ──────────────────────────────────────────────────────────
+
+    async purgeInactiveShooters(olderThan) {
+      const d = getDb();
+      const rows = d.prepare(
+        `SELECT shooter_id FROM shooter_profiles
+         WHERE last_seen < ?
+           AND shooter_id NOT IN (SELECT shooter_id FROM shooter_suppressions)`,
+      ).all(olderThan) as { shooter_id: number }[];
+
+      if (rows.length === 0) return 0;
+
+      const ids = rows.map((r) => r.shooter_id);
+      const placeholders = ids.map(() => "?").join(",");
+      const tx = d.transaction(() => {
+        d.prepare(`DELETE FROM shooter_profiles WHERE shooter_id IN (${placeholders})`).run(...ids);
+        d.prepare(`DELETE FROM shooter_matches WHERE shooter_id IN (${placeholders})`).run(...ids);
+        d.prepare(`DELETE FROM shooter_achievements WHERE shooter_id IN (${placeholders})`).run(...ids);
+      });
+      tx();
+      return ids.length;
+    },
   };
 }
 

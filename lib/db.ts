@@ -139,4 +139,14 @@ export interface AppDatabase {
 
   /** Return all suppressed shooter IDs with their suppression timestamps. */
   listSuppressedShooters(): Promise<Array<{ shooterId: number; suppressedAt: string }>>;
+
+  // ── Retention ───────────────────────────────────────────────────────────
+
+  /**
+   * Delete shooter profiles (and their match index + achievements) where
+   * last_seen is older than the given ISO timestamp. Returns the number of
+   * profiles purged. Does NOT purge suppressed shooters — those are kept
+   * intentionally.
+   */
+  purgeInactiveShooters(olderThan: string): Promise<number>;
 }
