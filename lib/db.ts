@@ -133,4 +133,10 @@ export interface AppDatabase {
 
   /** Suppress a shooter: add to suppression list and delete profile, match index, and achievements. */
   suppressShooter(shooterId: number): Promise<void>;
+
+  /** Remove a shooter from the suppression list, allowing re-indexing. */
+  unsuppressShooter(shooterId: number): Promise<void>;
+
+  /** Return all suppressed shooter IDs with their suppression timestamps. */
+  listSuppressedShooters(): Promise<Array<{ shooterId: number; suppressedAt: string }>>;
 }
