@@ -461,6 +461,31 @@ const db: AppDatabase = {
       .all<{ shooter_id: number; suppressed_at: string }>();
     return result.results.map((r) => ({ shooterId: r.shooter_id, suppressedAt: r.suppressed_at }));
   },
+
+  // ── Retention ──────────────────────────────────────────────────────────
+
+  async purgeInactiveShooters(olderThan) {
+    const db = getDb();
+    const result = await db
+      .prepare(
+        `SELECT shooter_id FROM shooter_profiles
+         WHERE last_seen < ?
+           AND shooter_id NOT IN (SELECT shooter_id FROM shooter_suppressions)`,
+      )
+      .bind(olderThan)
+      .all<{ shooter_id: number }>();
+
+    const ids = result.results.map((r) => r.shooter_id);
+    if (ids.length === 0) return 0;
+
+    const stmts = ids.flatMap((id) => [
+      db.prepare(`DELETE FROM shooter_profiles WHERE shooter_id = ?`).bind(id),
+      db.prepare(`DELETE FROM shooter_matches WHERE shooter_id = ?`).bind(id),
+      db.prepare(`DELETE FROM shooter_achievements WHERE shooter_id = ?`).bind(id),
+    ]);
+    await db.batch(stmts);
+    return ids.length;
+  },
 };
 
 export default db;
