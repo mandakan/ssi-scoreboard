@@ -54,6 +54,10 @@ on:
         description: 'Skip scorecards + fingerprints (only warm GetMatch)'
         type: boolean
         default: false
+      upcoming:
+        description: 'Warm upcoming/future matches (populates matches domain table for shooter dashboards)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -124,6 +128,7 @@ jobs:
           INPUT_FORCE: ${{ inputs.force || 'false' }}
           INPUT_DRY_RUN: ${{ inputs.dry_run || 'false' }}
           INPUT_SKIP_SCORECARDS: ${{ inputs.skip_scorecards || 'false' }}
+          INPUT_UPCOMING: ${{ inputs.upcoming || 'false' }}
         run: |
           ARGS="--url $INPUT_URL --level $INPUT_LEVEL --delay $INPUT_DELAY"
           if [ -n "$INPUT_COUNTRY" ];                then ARGS="$ARGS --country $INPUT_COUNTRY"; fi
@@ -134,5 +139,6 @@ jobs:
           if [ "$INPUT_FORCE" = "true" ];             then ARGS="$ARGS --force"; fi
           if [ "$INPUT_DRY_RUN" = "true" ];           then ARGS="$ARGS --dry-run"; fi
           if [ "$INPUT_SKIP_SCORECARDS" = "true" ];   then ARGS="$ARGS --skip-scorecards"; fi
+          if [ "$INPUT_UPCOMING" = "true" ];          then ARGS="$ARGS --upcoming"; fi
           echo "Running: pnpm tsx scripts/warm-cache.ts $ARGS"
           pnpm tsx scripts/warm-cache.ts $ARGS
