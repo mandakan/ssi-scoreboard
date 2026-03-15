@@ -209,7 +209,8 @@ function PreMatchBriefCard({
   id: string;
   shooterId: number | null;
 }) {
-  const briefQuery = usePreMatchBriefQuery(ct, id, shooterId, true);
+  const [requested, setRequested] = useState(false);
+  const briefQuery = usePreMatchBriefQuery(ct, id, shooterId, requested);
 
   return (
     <div className="rounded-lg border p-4 space-y-3">
@@ -259,6 +260,15 @@ function PreMatchBriefCard({
         )}
       </div>
 
+      {!requested && !briefQuery.data && (
+        <button
+          className="text-sm text-primary hover:text-primary/80 font-medium flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-ring rounded transition-colors"
+          onClick={() => setRequested(true)}
+        >
+          <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+          Generate personalised brief
+        </button>
+      )}
       {briefQuery.isLoading && (
         <div className="space-y-2">
           <Skeleton className="h-4 w-full" />
