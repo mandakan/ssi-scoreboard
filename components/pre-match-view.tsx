@@ -30,6 +30,8 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { computeSquadContext } from "@/lib/pre-match-prompt";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RefreshCw, Sparkles } from "lucide-react";
+import { useAIConsent } from "@/hooks/use-ai-consent";
+import { AIConsentDialog } from "@/components/ai-consent-dialog";
 import {
   Drawer,
   DrawerContent,
@@ -224,107 +226,129 @@ function PreMatchBriefCard({
   const canGenerate = aiAvailable && shooterId !== null;
   const [requested, setRequested] = useState(false);
   const briefQuery = usePreMatchBriefQuery(ct, id, shooterId, canGenerate && requested);
+  const { consent } = useAIConsent();
+  const [showConsent, setShowConsent] = useState(false);
+
+  function handleGenerate() {
+    if (consent !== "granted") {
+      setShowConsent(true);
+      return;
+    }
+    setRequested(true);
+  }
+
+  function handleConsented() {
+    setRequested(true);
+  }
 
   return (
-    <Card className="gap-3 p-4 shadow-none rounded-lg">
-      <CardHeader className="p-0">
-        <CardTitle>
-          <h2 className="flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
-            Pre-match brief
-            <Popover>
-              <PopoverTrigger asChild>
+    <>
+      <Card className="gap-3 p-4 shadow-none rounded-lg">
+        <CardHeader className="p-0">
+          <CardTitle>
+            <h2 className="flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
+              Pre-match brief
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                    aria-label="About pre-match brief"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72" side="bottom" align="start">
+                  <PopoverHeader>
+                    <PopoverTitle>AI pre-match brief</PopoverTitle>
+                    <PopoverDescription>
+                      Personalised preparation tips based on this match and your
+                      history.
+                    </PopoverDescription>
+                  </PopoverHeader>
+                  <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+                    <p>
+                      The brief analyses this match&apos;s stage breakdown (course lengths,
+                      constraints, total rounds) and compares it against your
+                      historical performance to surface the most relevant preparation
+                      focus.
+                    </p>
+                    <p>
+                      Requires AI to be configured and at least one tracked competitor
+                      selected. Historical context improves as you visit more matches.
+                    </p>
+                  </div>
+                </PopoverContent>
+              </Popover>
+              {briefQuery.data && (
                 <button
-                  className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                  aria-label="About pre-match brief"
+                  className="ml-auto text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 focus-visible:outline-2 focus-visible:outline-ring rounded"
+                  onClick={() => briefQuery.refetch()}
+                  aria-label="Refresh pre-match brief"
                 >
-                  <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                  <RefreshCw className="w-3 h-3" aria-hidden="true" />
+                  Refresh
                 </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-72" side="bottom" align="start">
-                <PopoverHeader>
-                  <PopoverTitle>AI pre-match brief</PopoverTitle>
-                  <PopoverDescription>
-                    Personalised preparation tips based on this match and your
-                    history.
-                  </PopoverDescription>
-                </PopoverHeader>
-                <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                  <p>
-                    The brief analyses this match&apos;s stage breakdown (course lengths,
-                    constraints, total rounds) and compares it against your
-                    historical performance to surface the most relevant preparation
-                    focus.
-                  </p>
-                  <p>
-                    Requires AI to be configured and at least one tracked competitor
-                    selected. Historical context improves as you visit more matches.
-                  </p>
-                </div>
-              </PopoverContent>
-            </Popover>
-            {briefQuery.data && (
-              <button
-                className="ml-auto text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 focus-visible:outline-2 focus-visible:outline-ring rounded"
-                onClick={() => briefQuery.refetch()}
-                aria-label="Refresh pre-match brief"
-              >
-                <RefreshCw className="w-3 h-3" aria-hidden="true" />
-                Refresh
-              </button>
-            )}
-          </h2>
-        </CardTitle>
-      </CardHeader>
+              )}
+            </h2>
+          </CardTitle>
+        </CardHeader>
 
-      <CardContent className="p-0">
-        {!aiAvailable ? (
-          <p className="text-sm text-muted-foreground">
-            AI coaching is not currently enabled on this instance. Contact
-            the site administrator to configure an AI provider.
-          </p>
-        ) : shooterId === null ? (
-          <p className="text-sm text-muted-foreground">
-            To generate a personalised brief, set yourself as a tracked
-            shooter.{" "}
-            {onManageShooters && (
-              <button
-                className="text-primary hover:text-primary/80 font-medium underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-ring rounded"
-                onClick={onManageShooters}
-              >
-                Manage tracked shooters
-              </button>
-            )}
-          </p>
-        ) : (
-          <>
-            {!requested && !briefQuery.data && (
-              <button
-                className="text-sm text-primary hover:text-primary/80 font-medium flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-ring rounded transition-colors"
-                onClick={() => setRequested(true)}
-              >
-                <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
-                Generate personalised brief
-              </button>
-            )}
-            {briefQuery.isLoading && (
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-4/5" />
-              </div>
-            )}
-            {briefQuery.isError && (
-              <p className="text-sm text-muted-foreground">
-                Brief unavailable — AI service may be unreachable.
-              </p>
-            )}
-            {briefQuery.data && (
-              <p className="text-sm leading-relaxed">{briefQuery.data.tip}</p>
-            )}
-          </>
-        )}
-      </CardContent>
-    </Card>
+        <CardContent className="p-0">
+          {!aiAvailable ? (
+            <p className="text-sm text-muted-foreground">
+              AI coaching is not currently enabled on this instance. Contact
+              the site administrator to configure an AI provider.
+            </p>
+          ) : shooterId === null ? (
+            <p className="text-sm text-muted-foreground">
+              To generate a personalised brief, set yourself as a tracked
+              shooter.{" "}
+              {onManageShooters && (
+                <button
+                  className="text-primary hover:text-primary/80 font-medium underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-ring rounded"
+                  onClick={onManageShooters}
+                >
+                  Manage tracked shooters
+                </button>
+              )}
+            </p>
+          ) : (
+            <>
+              {!requested && !briefQuery.data && (
+                <button
+                  className="text-sm text-primary hover:text-primary/80 font-medium flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-ring rounded transition-colors"
+                  onClick={handleGenerate}
+                >
+                  <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+                  Generate personalised brief
+                </button>
+              )}
+              {briefQuery.isLoading && (
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-4/5" />
+                </div>
+              )}
+              {briefQuery.isError && (
+                <p className="text-sm text-muted-foreground">
+                  Brief unavailable — AI service may be unreachable.
+                </p>
+              )}
+              {briefQuery.data && (
+                <p className="text-sm leading-relaxed">{briefQuery.data.tip}</p>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <AIConsentDialog
+        open={showConsent}
+        onOpenChange={setShowConsent}
+        onConsented={handleConsented}
+      />
+    </>
   );
 }
 
