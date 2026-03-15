@@ -117,13 +117,18 @@ export default function LegalPage() {
             </div>
 
             <div className="space-y-1">
-              <h3 className="font-medium">2. No server-side storage of personal data</h3>
+              <h3 className="font-medium">2. Server-side data storage</h3>
               <p className="text-muted-foreground">
-                SSI Scoreboard does not store any personal data on its servers.
-                API responses are cached transiently (seconds to minutes) solely
-                to reduce load on the SSI API and improve response times. No
-                data is persisted to a database or written to permanent storage
-                by SSI Scoreboard.
+                SSI Scoreboard stores a cross-match index derived from
+                publicly-published SSI competition results. This includes
+                competitor names, club affiliations, divisions, and match
+                history. This data is used solely to provide the shooter
+                dashboard and cross-match statistics features. The legal basis
+                for this processing is legitimate interest (GDPR Article
+                6(1)(f)) — the data is already publicly available on
+                shootnscoreit.com and is processed for a compatible analytical
+                purpose. API responses are also cached (seconds to days) to
+                reduce load on the SSI API.
               </p>
             </div>
 
@@ -167,11 +172,24 @@ export default function LegalPage() {
                 provider.
               </p>
             </div>
+
+            <div className="space-y-1">
+              <h3 className="font-medium">6. Data removal requests</h3>
+              <p className="text-muted-foreground">
+                If you are an IPSC competitor and wish to have your shooter
+                profile and match history removed from SSI Scoreboard, you may
+                submit a removal request by contacting the developer. Upon
+                verification, your shooter profile, match index, and achievement
+                data will be permanently deleted and your shooter ID will be
+                added to a suppression list to prevent automatic re-indexing.
+                This does not affect the underlying match data on ShootNScoreIt.
+              </p>
+            </div>
           </div>
         </section>
 
         <p className="text-xs text-muted-foreground pb-8">
-          Last updated: February 2026
+          Last updated: March 2026
         </p>
       </div>
     </main>

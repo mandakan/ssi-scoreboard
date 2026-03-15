@@ -33,6 +33,16 @@ export async function POST(
     return NextResponse.json({ error: "Invalid shooterId" } as const, { status: 400 });
   }
 
+  // GDPR suppression check
+  try {
+    if (await db.isShooterSuppressed(shooterId)) {
+      return NextResponse.json(
+        { error: "This profile has been removed at the owner's request" } as const,
+        { status: 410 },
+      );
+    }
+  } catch { /* ignore */ }
+
   // Cooldown check
   const lockKey = `backfill:lock:${shooterId}`;
   try {

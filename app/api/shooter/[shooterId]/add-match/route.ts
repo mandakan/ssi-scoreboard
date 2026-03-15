@@ -15,6 +15,7 @@ import { computeMatchTtl } from "@/lib/match-ttl";
 import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
 import { parseMatchUrl } from "@/lib/utils";
 import { extractDivision } from "@/lib/divisions";
+import db from "@/lib/db-impl";
 import type { RawMatchData } from "@/lib/match-data";
 
 interface RawScorecardsResponse {
@@ -30,6 +31,16 @@ export async function POST(
   if (isNaN(shooterId) || shooterId <= 0) {
     return NextResponse.json({ success: false, message: "Invalid shooterId" }, { status: 400 });
   }
+
+  // GDPR suppression check
+  try {
+    if (await db.isShooterSuppressed(shooterId)) {
+      return NextResponse.json(
+        { success: false, message: "This profile has been removed at the owner's request" },
+        { status: 410 },
+      );
+    }
+  } catch { /* ignore */ }
 
   let body: { url?: string };
   try {
