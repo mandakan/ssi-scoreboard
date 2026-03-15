@@ -36,6 +36,9 @@ interface GraphQLResponse<T> {
   errors?: GraphQLError[];
 }
 
+/** Timeout for upstream GraphQL requests (ms). */
+const GRAPHQL_TIMEOUT_MS = 30_000;
+
 export async function executeQuery<T>(
   query: string,
   variables?: Record<string, unknown>,
@@ -47,16 +50,31 @@ export async function executeQuery<T>(
   // Extract the operation name for log context, e.g. "GetMatchScorecards"
   const operationName = query.match(/query\s+(\w+)/)?.[1] ?? "unknown";
 
-  const response = await fetch(GRAPHQL_ENDPOINT, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Api-Key ${apiKey}`,
-    },
-    body: JSON.stringify({ query, variables }),
-    cache: revalidate === false ? "no-store" : undefined,
-    next: revalidate !== false ? { revalidate } : undefined,
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), GRAPHQL_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(GRAPHQL_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Api-Key ${apiKey}`,
+      },
+      body: JSON.stringify({ query, variables }),
+      cache: revalidate === false ? "no-store" : undefined,
+      next: revalidate !== false ? { revalidate } : undefined,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeout);
+    if (err instanceof DOMException && err.name === "AbortError") {
+      console.error(`[ssi-api] ${operationName} timed out after ${GRAPHQL_TIMEOUT_MS}ms | vars=${JSON.stringify(variables ?? {})}`);
+      throw new Error(`Upstream request timed out after ${GRAPHQL_TIMEOUT_MS / 1000}s`);
+    }
+    throw err;
+  }
+  clearTimeout(timeout);
 
   if (!response.ok) {
     const retryAfter = response.headers.get("Retry-After");
