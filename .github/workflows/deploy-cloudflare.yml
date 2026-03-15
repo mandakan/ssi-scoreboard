@@ -42,6 +42,12 @@ jobs:
           echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "BUILD_DATE=$(date -u +%Y.%m.%d)" >> $GITHUB_ENV
 
+      - name: Apply D1 migrations (production)
+        run: npx wrangler d1 migrations apply APP_DB --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - run: pnpm cf:deploy
         env:
           SSI_API_KEY: ${{ secrets.SSI_API_KEY }}

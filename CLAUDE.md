@@ -275,22 +275,22 @@ and recent matches remain in Redis at their normal TTLs.
 imports) so it can be unit-tested with mocked deps. `lib/shooter-index.ts` handles the
 actual AppDatabase writes via the `AppDatabase` interface.
 
-**Schema auto-migration:**
+**Schema migrations:**
 
-Database schema is managed by a runtime migration runner (`lib/db-migrations.ts`) that
-runs automatically on first DB access. The `MIGRATIONS` array is the **single source of
-truth** for schema — both SQLite and D1 adapters use it. Migration files in `migrations/`
-are kept in parallel for manual `wrangler d1 migrations apply` but the app self-heals on
-startup.
+Schema is defined in two places that must be kept in sync:
+- `lib/db-migrations.ts` — `MIGRATIONS` array, used by the SQLite adapter's runtime
+  migration runner (`runMigrationsSync`). Auto-applies on first DB access (Docker).
+- `migrations/*.sql` — SQL files applied by `wrangler d1 migrations apply` (Cloudflare D1).
+  Applied automatically in CI before each deploy (see `deploy-cloudflare.yml` and
+  `deploy-staging.yml`).
 
-- Schema version is tracked in a `_schema_version` table (auto-created)
 - Migrations are idempotent: `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`
 - `ALTER TABLE ADD COLUMN` failures are silently caught (column already exists)
 - Expand-contract pattern: migrations only ADD — never drop or rename in the same release
 
 **Adding a new migration:**
 1. Append a new entry to `MIGRATIONS` in `lib/db-migrations.ts` (increment version)
-2. Create a matching SQL file in `migrations/` (for `wrangler d1 migrations apply` parallel path)
+2. Create a matching SQL file in `migrations/` (for D1)
 3. Use idempotent DDL; one statement per array entry for `ALTER TABLE ADD COLUMN`
 
 **One-time data migrations:**
@@ -508,9 +508,9 @@ strings, consistent with the ioredis adapter — callers always do their own `JS
 
 **Persistent store:** the CF build uses Cloudflare D1 via the `APP_DB` binding declared in
 `wrangler.toml`. D1 holds shooter profiles, match indices, achievements, and the historical
-match data cache (offloaded from Upstash Redis). Schema is auto-migrated on first request
-(see "Schema auto-migration" above). Manual `wrangler d1 migrations apply` still works in
-parallel. Migration files in `migrations/`:
+match data cache (offloaded from Upstash Redis). Migrations are applied automatically in CI
+before each deploy via `wrangler d1 migrations apply` (see deploy workflows). Migration files
+in `migrations/`:
 - `0001_init.sql` — shooter profiles, matches, popularity
 - `0002_achievements.sql` — shooter achievements
 - `0003_match_data_cache.sql` — historical match data cache

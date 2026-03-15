@@ -5,8 +5,6 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AppDatabase } from "@/lib/db";
 import type { MatchRecord } from "@/lib/types";
-import { runMigrations, LATEST_VERSION } from "@/lib/db-migrations";
-import type { AsyncMigrationExecutor } from "@/lib/db-migrations";
 
 // Minimal D1Database type for the binding. The full type comes from
 // @cloudflare/workers-types which is a devDep of the opennextjs package.
@@ -28,77 +26,18 @@ interface D1Result<T> {
   success: boolean;
 }
 
-// Schema is auto-migrated on first access via runMigrations().
-// Manual `wrangler d1 migrations apply APP_DB` still works in parallel —
-// the runtime runner is idempotent and skips already-applied migrations.
+// Schema is managed by migrations/*.sql applied via:
+//   wrangler d1 migrations apply APP_DB [--env staging]
+// This runs automatically in CI before each deploy (see deploy-cloudflare.yml
+// and deploy-staging.yml). No runtime schema init needed here.
 function getDb(): D1Database {
   const { env } = getCloudflareContext() as unknown as { env: { APP_DB: D1Database } };
   return env.APP_DB;
 }
 
-/**
- * Ensure schema is up to date. On Cloudflare Workers, module-level state may
- * not persist across requests, so this is designed to be cheap when already current:
- * a single SELECT to check the version, then skip if current.
- *
- * If migrations fail, the error is logged but NOT re-thrown — the request proceeds
- * with whatever schema exists. This prevents a migration bug from taking down all
- * DB access. The migration will retry on the next request.
- */
-let schemaChecked = false;
-
-async function ensureSchema(): Promise<D1Database> {
-  const d = getDb();
-
-  if (schemaChecked) return d;
-
-  try {
-    // Fast path: check if already at latest version (single SELECT)
-    let currentVersion = 0;
-    try {
-      const row = await d.prepare(
-        `SELECT version FROM _schema_version WHERE id = 1`,
-      ).first<{ version: number }>();
-      currentVersion = row?.version ?? 0;
-    } catch {
-      // _schema_version table doesn't exist — need full migration
-    }
-
-    if (currentVersion >= LATEST_VERSION) {
-      schemaChecked = true;
-      return d;
-    }
-
-    // Slow path: run pending migrations
-    const executor: AsyncMigrationExecutor = {
-      async exec(sql) { await d.exec(sql); },
-      async getVersion() { return currentVersion; },
-      async setVersion(version) {
-        await d.prepare(
-          `INSERT INTO _schema_version (id, version) VALUES (1, ?)
-           ON CONFLICT(id) DO UPDATE SET version = excluded.version`,
-        ).bind(version).run();
-        currentVersion = version;
-      },
-    };
-    const applied = await runMigrations(executor);
-    if (applied > 0) {
-      console.log(`[db-d1] Applied ${applied} migration(s), now at v${LATEST_VERSION}`);
-    }
-    schemaChecked = true;
-  } catch (err) {
-    // Log but don't throw — let the request proceed with the existing schema.
-    // If the schema is genuinely missing tables, the actual query will fail
-    // with a clear error instead of a mysterious migration failure.
-    console.error("[db-d1] Schema migration error (non-fatal):", err);
-  }
-
-  return d;
-}
-
 const db: AppDatabase = {
   async indexShooterMatch(shooterId, matchRef, startTimestamp) {
-    const db = await ensureSchema();
+    const db = getDb();
     await db
       .prepare(
         `INSERT INTO shooter_matches (shooter_id, match_ref, start_timestamp)
@@ -111,7 +50,7 @@ const db: AppDatabase = {
   },
 
   async setShooterProfile(shooterId, profile) {
-    const db = await ensureSchema();
+    const db = getDb();
     await db
       .prepare(
         `INSERT INTO shooter_profiles (shooter_id, name, club, division, last_seen, region, region_display, category, ics_alias, license)
@@ -143,7 +82,7 @@ const db: AppDatabase = {
   },
 
   async getShooterMatches(shooterId) {
-    const db = await ensureSchema();
+    const db = getDb();
     const result = await db
       .prepare(
         `SELECT match_ref FROM shooter_matches
@@ -157,7 +96,7 @@ const db: AppDatabase = {
 
   async getUpcomingMatches(shooterId) {
     const now = Math.floor(Date.now() / 1000);
-    const db = await ensureSchema();
+    const db = getDb();
     const result = await db
       .prepare(
         `SELECT match_ref FROM shooter_matches
@@ -170,7 +109,7 @@ const db: AppDatabase = {
   },
 
   async getShooterProfile(shooterId) {
-    const db = await ensureSchema();
+    const db = getDb();
     const row = await db
       .prepare(
         `SELECT name, club, division, last_seen, region, region_display, category, ics_alias, license
@@ -203,7 +142,7 @@ const db: AppDatabase = {
   },
 
   async hasShooterProfile(shooterId) {
-    const db = await ensureSchema();
+    const db = getDb();
     const row = await db
       .prepare(`SELECT 1 AS found FROM shooter_profiles WHERE shooter_id = ?`)
       .bind(shooterId)
@@ -212,7 +151,7 @@ const db: AppDatabase = {
   },
 
   async getShooterAchievements(shooterId) {
-    const db = await ensureSchema();
+    const db = getDb();
     const result = await db
       .prepare(
         `SELECT achievement_id, tier, unlocked_at, match_ref, value
@@ -239,7 +178,7 @@ const db: AppDatabase = {
 
   async saveShooterAchievements(shooterId, achievements) {
     if (achievements.length === 0) return;
-    const db = await ensureSchema();
+    const db = getDb();
     const stmts = achievements.map((a) =>
       db
         .prepare(
@@ -261,7 +200,7 @@ const db: AppDatabase = {
 
   async searchShooterProfiles(query, options) {
     const limit = Math.min(options?.limit ?? 20, 100);
-    const db = await ensureSchema();
+    const db = getDb();
     type Row = { shooter_id: number; name: string; club: string | null; division: string | null; last_seen: string };
     const toResult = (r: Row) => ({ shooterId: r.shooter_id, name: r.name, club: r.club, division: r.division, lastSeen: r.last_seen });
     if (!query) {
@@ -285,7 +224,7 @@ const db: AppDatabase = {
 
   async recordMatchAccess(key) {
     const now = Math.floor(Date.now() / 1000);
-    const db = await ensureSchema();
+    const db = getDb();
     await db
       .prepare(
         `INSERT INTO match_popularity (cache_key, last_seen_at, hit_count)
@@ -300,7 +239,7 @@ const db: AppDatabase = {
 
   async getPopularKeys(maxAgeSeconds, limit) {
     const cutoff = Math.floor(Date.now() / 1000) - maxAgeSeconds;
-    const db = await ensureSchema();
+    const db = getDb();
 
     // Prune stale entries
     await db
@@ -324,7 +263,7 @@ const db: AppDatabase = {
   // ── Match data cache ──────────────────────────────────────────────────
 
   async getMatchDataCache(cacheKey) {
-    const db = await ensureSchema();
+    const db = getDb();
     const row = await db
       .prepare(`SELECT data FROM match_data_cache WHERE cache_key = ?`)
       .bind(cacheKey)
@@ -333,7 +272,7 @@ const db: AppDatabase = {
   },
 
   async setMatchDataCache(cacheKey, data, meta) {
-    const db = await ensureSchema();
+    const db = getDb();
     await db
       .prepare(
         `INSERT INTO match_data_cache (cache_key, key_type, ct, match_id, data, schema_version, stored_at)
@@ -349,7 +288,7 @@ const db: AppDatabase = {
 
   async deleteMatchDataCache(...cacheKeys) {
     if (cacheKeys.length === 0) return;
-    const db = await ensureSchema();
+    const db = getDb();
     // D1 doesn't support variadic bind — delete one at a time
     const stmts = cacheKeys.map((key) =>
       db.prepare(`DELETE FROM match_data_cache WHERE cache_key = ?`).bind(key),
@@ -358,7 +297,7 @@ const db: AppDatabase = {
   },
 
   async scanMatchDataCacheKeys(keyType?) {
-    const db = await ensureSchema();
+    const db = getDb();
     if (keyType) {
       const result = await db
         .prepare(`SELECT cache_key FROM match_data_cache WHERE key_type = ?`)
@@ -373,7 +312,7 @@ const db: AppDatabase = {
   },
 
   async listMatchCacheEntries(options) {
-    const d = await ensureSchema();
+    const d = getDb();
     type Row = { cache_key: string; key_type: string; ct: number; match_id: string; stored_at: string; data?: string };
     const conditions: string[] = [];
     const binds: unknown[] = [];
@@ -401,10 +340,11 @@ const db: AppDatabase = {
       ...(r.data != null ? { data: r.data } : {}),
     }));
   },
+
   // ── Matches domain index ────────────────────────────────────────────────
 
   async upsertMatch(match) {
-    const db = await ensureSchema();
+    const db = getDb();
     await db
       .prepare(
         `INSERT INTO matches (match_ref, ct, match_id, name, venue, date, level, region, sub_rule, discipline, status, results_status, scoring_completed, competitors_count, stages_count, lat, lng, data, updated_at)
@@ -439,7 +379,7 @@ const db: AppDatabase = {
 
   async getMatchesByRefs(matchRefs) {
     if (matchRefs.length === 0) return new Map<string, MatchRecord>();
-    const db = await ensureSchema();
+    const db = getDb();
     const placeholders = matchRefs.map(() => "?").join(",");
     type MatchRow = {
       match_ref: string; ct: number; match_id: string; name: string;

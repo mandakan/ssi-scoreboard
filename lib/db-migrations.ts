@@ -147,25 +147,15 @@ export const MIGRATIONS: Migration[] = [
 export const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
 
 /**
- * Synchronous executor for better-sqlite3 (Node.js / Docker).
+ * Synchronous executor interface for better-sqlite3 (Node.js / Docker).
+ * D1 (Cloudflare) uses `wrangler d1 migrations apply` in CI instead —
+ * no runtime migration runner needed.
  */
 export interface SyncMigrationExecutor {
   exec(sql: string): void;
   getVersion(): number;
   setVersion(version: number): void;
 }
-
-/**
- * Async executor for D1 (Cloudflare Pages).
- */
-export interface AsyncMigrationExecutor {
-  exec(sql: string): Promise<void>;
-  getVersion(): Promise<number>;
-  setVersion(version: number): Promise<void>;
-}
-
-/** Common type for the public API. */
-export type MigrationExecutor = SyncMigrationExecutor | AsyncMigrationExecutor;
 
 const SCHEMA_VERSION_DDL = `CREATE TABLE IF NOT EXISTS _schema_version (
   id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -191,31 +181,6 @@ export function runMigrationsSync(executor: SyncMigrationExecutor): number {
       try { executor.exec(stmt); } catch { /* idempotent — ignore */ }
     }
     executor.setVersion(migration.version);
-    applied++;
-  }
-
-  return applied;
-}
-
-/**
- * Run all pending migrations asynchronously (for D1).
- * Idempotent — re-running on an already-current DB is a no-op.
- * Returns the number of migrations applied.
- */
-export async function runMigrations(executor: AsyncMigrationExecutor): Promise<number> {
-  await executor.exec(SCHEMA_VERSION_DDL);
-
-  const currentVersion = await executor.getVersion();
-  if (currentVersion >= LATEST_VERSION) return 0;
-
-  let applied = 0;
-  for (const migration of MIGRATIONS) {
-    if (migration.version <= currentVersion) continue;
-
-    for (const stmt of migration.statements) {
-      try { await executor.exec(stmt); } catch { /* idempotent — ignore */ }
-    }
-    await executor.setVersion(migration.version);
     applied++;
   }
 
