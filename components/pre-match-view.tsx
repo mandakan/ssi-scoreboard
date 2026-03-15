@@ -211,13 +211,16 @@ function PreMatchBriefCard({
   ct,
   id,
   shooterId,
+  aiAvailable,
 }: {
   ct: string;
   id: string;
   shooterId: number | null;
+  aiAvailable: boolean;
 }) {
+  const canGenerate = aiAvailable && shooterId !== null;
   const [requested, setRequested] = useState(false);
-  const briefQuery = usePreMatchBriefQuery(ct, id, shooterId, requested);
+  const briefQuery = usePreMatchBriefQuery(ct, id, shooterId, canGenerate && requested);
 
   return (
     <Card className="gap-3 p-4 shadow-none rounded-lg">
@@ -272,28 +275,37 @@ function PreMatchBriefCard({
       </CardHeader>
 
       <CardContent className="p-0">
-        {!requested && !briefQuery.data && (
-          <button
-            className="text-sm text-primary hover:text-primary/80 font-medium flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-ring rounded transition-colors"
-            onClick={() => setRequested(true)}
-          >
-            <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
-            Generate personalised brief
-          </button>
-        )}
-        {briefQuery.isLoading && (
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-4/5" />
-          </div>
-        )}
-        {briefQuery.isError && (
+        {!canGenerate ? (
           <p className="text-sm text-muted-foreground">
-            Brief unavailable — AI service may be unreachable.
+            AI coaching is not currently enabled on this instance. Contact
+            the site administrator to configure an AI provider.
           </p>
-        )}
-        {briefQuery.data && (
-          <p className="text-sm leading-relaxed">{briefQuery.data.tip}</p>
+        ) : (
+          <>
+            {!requested && !briefQuery.data && (
+              <button
+                className="text-sm text-primary hover:text-primary/80 font-medium flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-ring rounded transition-colors"
+                onClick={() => setRequested(true)}
+              >
+                <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+                Generate personalised brief
+              </button>
+            )}
+            {briefQuery.isLoading && (
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-4/5" />
+              </div>
+            )}
+            {briefQuery.isError && (
+              <p className="text-sm text-muted-foreground">
+                Brief unavailable — AI service may be unreachable.
+              </p>
+            )}
+            {briefQuery.data && (
+              <p className="text-sm leading-relaxed">{briefQuery.data.tip}</p>
+            )}
+          </>
         )}
       </CardContent>
     </Card>
@@ -716,9 +728,7 @@ export function PreMatchView({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* AI pre-match brief ----------------------------------------------- */}
-      {aiAvailable && briefShooterId !== null && (
-        <PreMatchBriefCard ct={ct} id={id} shooterId={briefShooterId} />
-      )}
+      <PreMatchBriefCard ct={ct} id={id} shooterId={briefShooterId} aiAvailable={aiAvailable} />
 
       {/* Weather forecast -------------------------------------------------- */}
       {hasVenueInfo && matchDate && (
