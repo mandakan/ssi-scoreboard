@@ -38,6 +38,7 @@ import {
   DrawerDescription,
   DrawerFooter,
 } from "@/components/ui/drawer";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface PreMatchViewProps {
   match: MatchResponse;
@@ -119,82 +120,88 @@ function WeatherCard({ weather, tooFarAhead }: { weather?: MatchWeatherData; too
       : null;
 
   return (
-    <div className="rounded-lg border p-4 space-y-3">
-      <div className="flex items-center gap-1.5">
-        <h2 className="font-semibold">Match day weather</h2>
-        <Popover>
-          <PopoverTrigger asChild>
-            <button
-              className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-              aria-label="About match day weather"
-            >
-              <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className="w-72" side="bottom" align="start">
-            <PopoverHeader>
-              <PopoverTitle>Match day weather</PopoverTitle>
-              <PopoverDescription>
-                Forecast for the match venue on the start date.
-              </PopoverDescription>
-            </PopoverHeader>
-            <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-              <p>
-                Sourced from Open-Meteo (free, no API key). Covers the full
-                match day in UTC. Forecast accuracy improves closer to the date.
-                Available up to 16 days in advance.
-              </p>
-              <p>
-                Temperature and precipitation are for the day window (approximately 08:00–18:00 UTC).
-              </p>
-            </div>
-          </PopoverContent>
-        </Popover>
-      </div>
+    <Card className="gap-3 p-4 shadow-none rounded-lg">
+      <CardHeader className="p-0">
+        <CardTitle>
+          <h2 className="flex items-center gap-1.5">
+            Match day weather
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                  aria-label="About match day weather"
+                >
+                  <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72" side="bottom" align="start">
+                <PopoverHeader>
+                  <PopoverTitle>Match day weather</PopoverTitle>
+                  <PopoverDescription>
+                    Forecast for the match venue on the start date.
+                  </PopoverDescription>
+                </PopoverHeader>
+                <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+                  <p>
+                    Sourced from Open-Meteo (free, no API key). Covers the full
+                    match day in UTC. Forecast accuracy improves closer to the date.
+                    Available up to 16 days in advance.
+                  </p>
+                  <p>
+                    Temperature and precipitation are for the day window (approximately 08:00–18:00 UTC).
+                  </p>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </h2>
+        </CardTitle>
+      </CardHeader>
 
-      {tooFarAhead ? (
-        <p className="text-sm text-muted-foreground">
-          Forecast not yet available — Open-Meteo covers up to 16 days ahead.
-          Check back closer to the match.
-        </p>
-      ) : weather ? (
-        <div className="flex items-start gap-3">
-          <div className="text-muted-foreground mt-0.5">
-            {weatherIcon(weather.weatherCode)}
-          </div>
-          <div className="space-y-1.5 flex-1">
-            {weather.weatherLabel && (
-              <p className="text-sm font-medium capitalize">{weather.weatherLabel}</p>
-            )}
-            <div className="flex flex-wrap gap-x-4 gap-y-1">
-              {tempStr && (
-                <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                  <Thermometer className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                  {tempStr}
-                </span>
+      <CardContent className="p-0">
+        {tooFarAhead ? (
+          <p className="text-sm text-muted-foreground">
+            Forecast not yet available — Open-Meteo covers up to 16 days ahead.
+            Check back closer to the match.
+          </p>
+        ) : weather ? (
+          <div className="flex items-start gap-3">
+            <div className="text-muted-foreground mt-0.5">
+              {weatherIcon(weather.weatherCode)}
+            </div>
+            <div className="space-y-1.5 flex-1">
+              {weather.weatherLabel && (
+                <p className="text-sm font-medium capitalize">{weather.weatherLabel}</p>
               )}
-              {windStr && (
-                <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                  <Wind className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                  {windStr}
-                </span>
-              )}
-              {precipStr && (
-                <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                  <Droplets className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                  {precipStr}
-                </span>
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                {tempStr && (
+                  <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <Thermometer className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                    {tempStr}
+                  </span>
+                )}
+                {windStr && (
+                  <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <Wind className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                    {windStr}
+                  </span>
+                )}
+                {precipStr && (
+                  <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <Droplets className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                    {precipStr}
+                  </span>
+                )}
+              </div>
+              {weather.elevation != null && (
+                <p className="text-xs text-muted-foreground">
+                  Elevation: {Math.round(weather.elevation)} m
+                </p>
               )}
             </div>
-            {weather.elevation != null && (
-              <p className="text-xs text-muted-foreground">
-                Elevation: {Math.round(weather.elevation)} m
-              </p>
-            )}
           </div>
-        </div>
-      ) : null}
-    </div>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -213,77 +220,83 @@ function PreMatchBriefCard({
   const briefQuery = usePreMatchBriefQuery(ct, id, shooterId, requested);
 
   return (
-    <div className="rounded-lg border p-4 space-y-3">
-      <div className="flex items-center gap-1.5">
-        <Sparkles className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
-        <h2 className="font-semibold">Pre-match brief</h2>
-        <Popover>
-          <PopoverTrigger asChild>
-            <button
-              className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-              aria-label="About pre-match brief"
-            >
-              <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className="w-72" side="bottom" align="start">
-            <PopoverHeader>
-              <PopoverTitle>AI pre-match brief</PopoverTitle>
-              <PopoverDescription>
-                Personalised preparation tips based on this match and your
-                history.
-              </PopoverDescription>
-            </PopoverHeader>
-            <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-              <p>
-                The brief analyses this match&apos;s stage breakdown (course lengths,
-                constraints, total rounds) and compares it against your
-                historical performance to surface the most relevant preparation
-                focus.
-              </p>
-              <p>
-                Requires AI to be configured and at least one tracked competitor
-                selected. Historical context improves as you visit more matches.
-              </p>
-            </div>
-          </PopoverContent>
-        </Popover>
-        {briefQuery.data && (
+    <Card className="gap-3 p-4 shadow-none rounded-lg">
+      <CardHeader className="p-0">
+        <CardTitle>
+          <h2 className="flex items-center gap-1.5">
+            <Sparkles className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
+            Pre-match brief
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                  aria-label="About pre-match brief"
+                >
+                  <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72" side="bottom" align="start">
+                <PopoverHeader>
+                  <PopoverTitle>AI pre-match brief</PopoverTitle>
+                  <PopoverDescription>
+                    Personalised preparation tips based on this match and your
+                    history.
+                  </PopoverDescription>
+                </PopoverHeader>
+                <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+                  <p>
+                    The brief analyses this match&apos;s stage breakdown (course lengths,
+                    constraints, total rounds) and compares it against your
+                    historical performance to surface the most relevant preparation
+                    focus.
+                  </p>
+                  <p>
+                    Requires AI to be configured and at least one tracked competitor
+                    selected. Historical context improves as you visit more matches.
+                  </p>
+                </div>
+              </PopoverContent>
+            </Popover>
+            {briefQuery.data && (
+              <button
+                className="ml-auto text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 focus-visible:outline-2 focus-visible:outline-ring rounded"
+                onClick={() => briefQuery.refetch()}
+                aria-label="Refresh pre-match brief"
+              >
+                <RefreshCw className="w-3 h-3" aria-hidden="true" />
+                Refresh
+              </button>
+            )}
+          </h2>
+        </CardTitle>
+      </CardHeader>
+
+      <CardContent className="p-0">
+        {!requested && !briefQuery.data && (
           <button
-            className="ml-auto text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 focus-visible:outline-2 focus-visible:outline-ring rounded"
-            onClick={() => briefQuery.refetch()}
-            aria-label="Refresh pre-match brief"
+            className="text-sm text-primary hover:text-primary/80 font-medium flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-ring rounded transition-colors"
+            onClick={() => setRequested(true)}
           >
-            <RefreshCw className="w-3 h-3" aria-hidden="true" />
-            Refresh
+            <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+            Generate personalised brief
           </button>
         )}
-      </div>
-
-      {!requested && !briefQuery.data && (
-        <button
-          className="text-sm text-primary hover:text-primary/80 font-medium flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-ring rounded transition-colors"
-          onClick={() => setRequested(true)}
-        >
-          <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
-          Generate personalised brief
-        </button>
-      )}
-      {briefQuery.isLoading && (
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-4/5" />
-        </div>
-      )}
-      {briefQuery.isError && (
-        <p className="text-sm text-muted-foreground">
-          Brief unavailable — AI service may be unreachable.
-        </p>
-      )}
-      {briefQuery.data && (
-        <p className="text-sm leading-relaxed">{briefQuery.data.tip}</p>
-      )}
-    </div>
+        {briefQuery.isLoading && (
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-4/5" />
+          </div>
+        )}
+        {briefQuery.isError && (
+          <p className="text-sm text-muted-foreground">
+            Brief unavailable — AI service may be unreachable.
+          </p>
+        )}
+        {briefQuery.data && (
+          <p className="text-sm leading-relaxed">{briefQuery.data.tip}</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -701,7 +714,7 @@ export function PreMatchView({
   );
 
   return (
-    <div className="space-y-4 max-w-3xl">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* AI pre-match brief ----------------------------------------------- */}
       {aiAvailable && briefShooterId !== null && (
         <PreMatchBriefCard ct={ct} id={id} shooterId={briefShooterId} />
@@ -715,52 +728,47 @@ export function PreMatchView({
         />
       )}
 
-      {/* Stage rotation / list --------------------------------------------- */}
-      {sortedStages.length > 0 && (
-        <div className="rounded-lg border p-4 space-y-3">
-          <div className="flex items-center gap-1.5">
-            <h2 className="font-semibold">Stage rotation</h2>
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                  aria-label="About stage rotation"
-                >
-                  <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-72" side="bottom" align="start">
-                <PopoverHeader>
-                  <PopoverTitle>Stage rotation</PopoverTitle>
-                  <PopoverDescription>
-                    Which stage your squad shoots each round.
-                  </PopoverDescription>
-                </PopoverHeader>
-                <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                  <p>
-                    The standard IPSC rotation is round-robin: each squad starts
-                    at a different stage and advances by one each round.
-                  </p>
-                  <p>
-                    Within each stage, the competitor with the lowest competitor
-                    number starts Stage 1, the second-lowest starts Stage 2, and
-                    so on — wrapping around if there are more stages than squad
-                    members.
-                  </p>
-                  <p>
-                    Both the squad rotation and the within-squad starting order
-                    may be adjusted by the match director or RO on the day.
-                  </p>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
+      {/* Your squad -------------------------------------------------------- */}
+      {match.squads.length > 0 && squadMembers.length > 0 && (
+        <Card className="gap-3 p-4 shadow-none rounded-lg">
+          <CardHeader className="p-0">
+            <CardTitle>
+              <h2 className="flex items-center gap-1.5">
+                Your squad
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                      aria-label="About squad shooting order"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-72" side="bottom" align="start">
+                    <PopoverHeader>
+                      <PopoverTitle>Squad shooting order</PopoverTitle>
+                      <PopoverDescription>
+                        Who shoots first at each stage within your squad.
+                      </PopoverDescription>
+                    </PopoverHeader>
+                    <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+                      <p>
+                        The competitor with the lowest competitor number starts
+                        Stage 1, the second-lowest starts Stage 2, and so on —
+                        wrapping around if there are more stages than squad members.
+                      </p>
+                      <p>
+                        Order may be adjusted by the match director or RO on the day.
+                      </p>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </h2>
+            </CardTitle>
+          </CardHeader>
 
-          {match.squads.length > 0 && (
+          <CardContent className="p-0 space-y-3">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm text-muted-foreground shrink-0">
-                Your squad:
-              </span>
               {useSelectControl ? (
                 <select
                   className="text-sm border border-border rounded px-2 py-1 bg-background text-foreground focus-visible:outline-2 focus-visible:outline-ring"
@@ -798,18 +806,12 @@ export function PreMatchView({
                 </ToggleGroup>
               )}
             </div>
-          )}
 
-          {/* Squad shooting order ----------------------------------------- */}
-          {squadMembers.length > 0 && (() => {
-            const n = squadMembers.length;
-            const totalStages = sortedStages.length;
-            return (
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground font-medium">
-                  Squad shooting order (by competitor number)
-                </p>
-                <ol className="space-y-0.5 max-w-xl">
+            {(() => {
+              const n = squadMembers.length;
+              const totalStages = sortedStages.length;
+              return (
+                <ol className="space-y-0.5" aria-label={`Squad ${selectedSquadNum} shooting order`}>
                   {squadMembers.map((c, i) => {
                     const isMe = i === mySquadIdx;
                     const { startingStages: starts } = computeSquadContext(i, n, sortedStages);
@@ -842,154 +844,205 @@ export function PreMatchView({
                     );
                   })}
                 </ol>
-                <p className="text-xs text-muted-foreground/70 italic">
-                  The shooter ranked first in the squad by competitor number starts Stage 1, second starts Stage 2, etc. When there are more stages than squad members it wraps around. Order may be adjusted on match day — confirm with your RO.
-                </p>
-              </div>
-            );
-          })()}
-
-          <ol
-            className="space-y-3"
-            aria-label={
-              selectedSquadNum !== null
-                ? `Stage rotation for Squad ${selectedSquadNum}`
-                : "Stage list"
-            }
-          >
-            {displayRows.map(({ round, stage }) => {
-              const c = parseConstraints(stage.procedure, stage.firearm_condition);
-              const constraintBadges = [
-                c.unloadedStart && "Unloaded start",
-                c.strongHand && "Strong hand",
-                c.weakHand && "Weak hand",
-                c.movingTargets && "Moving targets",
-              ].filter(Boolean) as string[];
-
-              // Within-squad starting position for this stage.
-              const starterIdx = squadMembers.length > 0
-                ? (stage.stage_number - 1) % squadMembers.length
-                : -1;
-              const starter = starterIdx >= 0 ? squadMembers[starterIdx] : null;
-              const iStart = starterIdx >= 0 && starterIdx === mySquadIdx;
-
-              return (
-                <li key={stage.id} className="space-y-1.5">
-                  <div className="flex items-center gap-3 text-sm">
-                    {match.squads.length > 0 && (
-                      <span className="text-xs text-muted-foreground w-14 shrink-0 tabular-nums">
-                        Round {round}
-                      </span>
-                    )}
-                    <span className="font-medium flex-1 min-w-0 truncate">
-                      Stage {stage.stage_number}
-                      <span className="font-normal text-muted-foreground">
-                        {" "}
-                        — {stage.name}
-                      </span>
-                    </span>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {stage.course_display && (
-                        <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                          {stage.course_display}
-                        </span>
-                      )}
-                      {stage.min_rounds != null && (
-                        <span className="text-xs text-muted-foreground tabular-nums">
-                          {stage.min_rounds}r
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {/* Within-squad starter */}
-                  {starter && (
-                    <div className={`flex items-center gap-1.5 text-xs ${match.squads.length > 0 ? "ml-[4.25rem]" : ""}`}>
-                      {iStart ? (
-                        <span className="font-semibold text-primary">You start this stage</span>
-                      ) : (
-                        <span className="text-muted-foreground/70">
-                          {starter.name} starts
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  {/* Target breakdown */}
-                  {(stage.paper_targets != null || stage.steel_targets != null) && (
-                    <div className={`flex gap-2 text-xs text-muted-foreground ${match.squads.length > 0 ? "ml-[4.25rem]" : ""}`}>
-                      {stage.paper_targets != null && (
-                        <span>{stage.paper_targets}P</span>
-                      )}
-                      {stage.steel_targets != null && stage.steel_targets > 0 && (
-                        <span>{stage.steel_targets}S</span>
-                      )}
-                    </div>
-                  )}
-                  {/* Constraint badges */}
-                  {constraintBadges.length > 0 && (
-                    <div className={`flex flex-wrap gap-1 ${match.squads.length > 0 ? "ml-[4.25rem]" : ""}`}>
-                      {constraintBadges.map((label) => (
-                        <ConstraintBadge key={label} label={label} />
-                      ))}
-                    </div>
-                  )}
-                </li>
               );
-            })}
-          </ol>
-        </div>
+            })()}
+
+            <p className="text-xs text-muted-foreground/70 italic">
+              Order by competitor number. May be adjusted on match day — confirm with your RO.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Stage rotation / list --------------------------------------------- */}
+      {sortedStages.length > 0 && (
+        <Card className="gap-3 p-4 shadow-none rounded-lg">
+          <CardHeader className="p-0">
+            <CardTitle>
+              <h2 className="flex items-center gap-1.5">
+                Stage rotation
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                      aria-label="About stage rotation"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-72" side="bottom" align="start">
+                    <PopoverHeader>
+                      <PopoverTitle>Stage rotation</PopoverTitle>
+                      <PopoverDescription>
+                        Which stage your squad shoots each round.
+                      </PopoverDescription>
+                    </PopoverHeader>
+                    <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+                      <p>
+                        The standard IPSC rotation is round-robin: each squad starts
+                        at a different stage and advances by one each round.
+                      </p>
+                      <p>
+                        Both the squad rotation and the within-squad starting order
+                        may be adjusted by the match director or RO on the day.
+                      </p>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </h2>
+            </CardTitle>
+          </CardHeader>
+
+          <CardContent className="p-0">
+            <ol
+              className="space-y-3"
+              aria-label={
+                selectedSquadNum !== null
+                  ? `Stage rotation for Squad ${selectedSquadNum}`
+                  : "Stage list"
+              }
+            >
+              {displayRows.map(({ round, stage }) => {
+                const c = parseConstraints(stage.procedure, stage.firearm_condition);
+                const constraintBadges = [
+                  c.unloadedStart && "Unloaded start",
+                  c.strongHand && "Strong hand",
+                  c.weakHand && "Weak hand",
+                  c.movingTargets && "Moving targets",
+                ].filter(Boolean) as string[];
+
+                // Within-squad starting position for this stage.
+                const starterIdx = squadMembers.length > 0
+                  ? (stage.stage_number - 1) % squadMembers.length
+                  : -1;
+                const starter = starterIdx >= 0 ? squadMembers[starterIdx] : null;
+                const iStart = starterIdx >= 0 && starterIdx === mySquadIdx;
+                const hasSquads = match.squads.length > 0;
+
+                return (
+                  <li key={stage.id} className="space-y-1.5">
+                    <div className="flex items-center gap-3 text-sm">
+                      {hasSquads && (
+                        <span className="text-xs text-muted-foreground w-14 shrink-0 tabular-nums">
+                          Round {round}
+                        </span>
+                      )}
+                      <span className="font-medium flex-1 min-w-0 truncate">
+                        Stage {stage.stage_number}
+                        <span className="font-normal text-muted-foreground">
+                          {" "}
+                          — {stage.name}
+                        </span>
+                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {stage.course_display && (
+                          <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                            {stage.course_display}
+                          </span>
+                        )}
+                        {stage.min_rounds != null && (
+                          <span className="text-xs text-muted-foreground tabular-nums">
+                            {stage.min_rounds}r
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {/* Within-squad starter */}
+                    {starter && (
+                      <div className={`flex items-center gap-1.5 text-xs ${hasSquads ? "ml-[4.25rem]" : ""}`}>
+                        {iStart ? (
+                          <span className="font-semibold text-primary">You start this stage</span>
+                        ) : (
+                          <span className="text-muted-foreground/70">
+                            {starter.name} starts
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {/* Target breakdown */}
+                    {(stage.paper_targets != null || stage.steel_targets != null) && (
+                      <div className={`flex gap-2 text-xs text-muted-foreground ${hasSquads ? "ml-[4.25rem]" : ""}`}>
+                        {stage.paper_targets != null && (
+                          <span>{stage.paper_targets}P</span>
+                        )}
+                        {stage.steel_targets != null && stage.steel_targets > 0 && (
+                          <span>{stage.steel_targets}S</span>
+                        )}
+                      </div>
+                    )}
+                    {/* Constraint badges */}
+                    {constraintBadges.length > 0 && (
+                      <div className={`flex flex-wrap gap-1 ${hasSquads ? "ml-[4.25rem]" : ""}`}>
+                        {constraintBadges.map((label) => (
+                          <ConstraintBadge key={label} label={label} />
+                        ))}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+          </CardContent>
+        </Card>
       )}
 
       {/* Registered field -------------------------------------------------- */}
       {divisionGroups.length > 0 && (
-        <div className="rounded-lg border p-4">
-          <div className="flex items-center gap-1.5 mb-2">
-            <h2 className="font-semibold">Registered field</h2>
-            <span className="text-xs text-muted-foreground">
-              — {match.competitors.length} competitors
-            </span>
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  className="ml-auto text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                  aria-label="About registered field"
-                >
-                  <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-72" side="bottom" align="end">
-                <PopoverHeader>
-                  <PopoverTitle>Registered field</PopoverTitle>
-                  <PopoverDescription>
-                    All registered competitors, grouped by division.
-                  </PopoverDescription>
-                </PopoverHeader>
-                <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                  <p>
-                    Competitors you track are highlighted. Divisions with your
-                    tracked shooters expand automatically.
-                  </p>
-                  <p>
-                    Tap a division heading to expand or collapse the competitor
-                    list.
-                  </p>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
+        <Card className="gap-3 p-4 shadow-none rounded-lg md:col-span-2">
+          <CardHeader className="p-0">
+            <CardTitle>
+              <h2 className="flex items-center gap-1.5">
+                Registered field
+                <span className="text-xs text-muted-foreground font-normal">
+                  — {match.competitors.length} competitors
+                </span>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      className="ml-auto text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                      aria-label="About registered field"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-72" side="bottom" align="end">
+                    <PopoverHeader>
+                      <PopoverTitle>Registered field</PopoverTitle>
+                      <PopoverDescription>
+                        All registered competitors, grouped by division.
+                      </PopoverDescription>
+                    </PopoverHeader>
+                    <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+                      <p>
+                        Competitors you track are highlighted. Divisions with your
+                        tracked shooters expand automatically.
+                      </p>
+                      <p>
+                        Tap a division heading to expand or collapse the competitor
+                        list.
+                      </p>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </h2>
+            </CardTitle>
+          </CardHeader>
 
-          <div className="divide-y divide-border">
-            {divisionGroups.map(([division, competitors]) => (
-              <DivisionSection
-                key={division}
-                division={division}
-                competitors={competitors}
-                trackedShooterIds={trackedShooterIds}
-                myShooterId={myShooterId}
-                onSelectCompetitor={setSheetCompetitor}
-              />
-            ))}
-          </div>
-        </div>
+          <CardContent className="p-0">
+            <div className="divide-y divide-border">
+              {divisionGroups.map(([division, competitors]) => (
+                <DivisionSection
+                  key={division}
+                  division={division}
+                  competitors={competitors}
+                  trackedShooterIds={trackedShooterIds}
+                  myShooterId={myShooterId}
+                  onSelectCompetitor={setSheetCompetitor}
+                />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Competitor profile sheet ------------------------------------------ */}
