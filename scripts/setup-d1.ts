@@ -59,10 +59,11 @@ function findOrCreate(dbName: string): string {
     return existing.uuid;
   }
 
-  console.log(`  Creating database: ${dbName}`);
+  console.log(`  Creating database: ${dbName} (location: weur)`);
   // d1 create does not support --json; parse UUID from plain-text output.
   // Use runMerged so we capture wrangler's stderr output (where it prints the ID).
-  const output = runMerged(`npx wrangler d1 create ${dbName}`);
+  // --location weur: prefer Western Europe for data residency.
+  const output = runMerged(`npx wrangler d1 create ${dbName} --location weur`);
   const uuidMatch = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(output);
   if (!uuidMatch) {
     throw new Error(`Could not parse database_id from wrangler output:\n${output}`);
