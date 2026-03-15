@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:24-alpine AS base
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@10.30.3 --activate
@@ -28,7 +28,7 @@ ENV NEXT_PUBLIC_BUILD_DATE=${BUILD_DATE}
 RUN pnpm build
 
 # ─── Runner ──────────────────────────────────────────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
