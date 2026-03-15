@@ -210,6 +210,16 @@ export async function GET(
     return NextResponse.json({ error: "Invalid shooterId" }, { status: 400 });
   }
 
+  // ── 0. Check GDPR suppression ────────────────────────────────────────────
+  try {
+    if (await db.isShooterSuppressed(shooterId)) {
+      return NextResponse.json(
+        { error: "This profile has been removed at the owner's request" },
+        { status: 410 },
+      );
+    }
+  } catch { /* if DB is unavailable, proceed normally */ }
+
   // ── 1. Check computed dashboard cache ────────────────────────────────────
   const dashboardKey = `computed:shooter:${shooterId}:dashboard`;
   try {
@@ -502,4 +512,34 @@ export async function GET(
   );
 
   return NextResponse.json(response);
+}
+
+// ─── DELETE: suppress shooter (GDPR right-to-erasure) ─────────────────────
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ shooterId: string }> },
+) {
+  const secret = process.env.CACHE_PURGE_SECRET;
+  const auth = req.headers.get("Authorization");
+  if (!secret || auth !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { shooterId: shooterIdStr } = await params;
+  const shooterId = parseInt(shooterIdStr, 10);
+  if (isNaN(shooterId) || shooterId <= 0) {
+    return NextResponse.json({ error: "Invalid shooterId" }, { status: 400 });
+  }
+
+  await db.suppressShooter(shooterId);
+
+  // Invalidate cached dashboard
+  try {
+    await cache.del(`computed:shooter:${shooterId}:dashboard`);
+  } catch { /* ignore cache errors */ }
+
+  console.log(JSON.stringify({ route: "shooter-suppress", shooterId }));
+
+  return NextResponse.json({ suppressed: true, shooterId });
 }

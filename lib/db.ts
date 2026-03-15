@@ -122,4 +122,15 @@ export interface AppDatabase {
    * Missing refs are simply absent from the returned map.
    */
   getMatchesByRefs(matchRefs: string[]): Promise<Map<string, MatchRecord>>;
+
+  // ── Shooter suppressions (GDPR) ──────────────────────────────────────
+
+  /** Check whether a shooter ID is suppressed (GDPR erasure). */
+  isShooterSuppressed(shooterId: number): Promise<boolean>;
+
+  /** Return all suppressed shooter IDs. Used by indexMatchShooters to skip suppressed shooters in bulk. */
+  getAllSuppressedShooterIds(): Promise<Set<number>>;
+
+  /** Suppress a shooter: add to suppression list and delete profile, match index, and achievements. */
+  suppressShooter(shooterId: number): Promise<void>;
 }

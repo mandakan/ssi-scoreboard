@@ -141,6 +141,18 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS idx_matches_date ON matches(date)`,
     ],
   },
+
+  // ── 0006_shooter_suppressions.sql ──────────────────────────────────────
+  {
+    version: 6,
+    label: "shooter_suppressions: GDPR right-to-erasure suppression list",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS shooter_suppressions (
+        shooter_id INTEGER PRIMARY KEY,
+        suppressed_at TEXT NOT NULL
+      )`,
+    ],
+  },
 ];
 
 /** The latest schema version — used by adapters to skip the runner when already current. */

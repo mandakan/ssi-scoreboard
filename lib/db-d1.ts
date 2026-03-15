@@ -203,9 +203,10 @@ const db: AppDatabase = {
     const db = getDb();
     type Row = { shooter_id: number; name: string; club: string | null; division: string | null; last_seen: string };
     const toResult = (r: Row) => ({ shooterId: r.shooter_id, name: r.name, club: r.club, division: r.division, lastSeen: r.last_seen });
+    const notSuppressed = `AND shooter_id NOT IN (SELECT shooter_id FROM shooter_suppressions)`;
     if (!query) {
       const result = await db
-        .prepare(`SELECT shooter_id, name, club, division, last_seen FROM shooter_profiles ORDER BY last_seen DESC LIMIT ?`)
+        .prepare(`SELECT shooter_id, name, club, division, last_seen FROM shooter_profiles WHERE 1=1 ${notSuppressed} ORDER BY last_seen DESC LIMIT ?`)
         .bind(limit)
         .all<Row>();
       return result.results.map(toResult);
@@ -214,7 +215,7 @@ const db: AppDatabase = {
     const result = await db
       .prepare(
         `SELECT shooter_id, name, club, division, last_seen FROM shooter_profiles
-         WHERE name LIKE '%' || ? || '%' ESCAPE '\\'
+         WHERE name LIKE '%' || ? || '%' ESCAPE '\\' ${notSuppressed}
          ORDER BY last_seen DESC LIMIT ?`,
       )
       .bind(escaped, limit)
@@ -411,6 +412,38 @@ const db: AppDatabase = {
       });
     }
     return map;
+  },
+
+  // ── Shooter suppressions (GDPR) ──────────────────────────────────────
+
+  async isShooterSuppressed(shooterId) {
+    const db = getDb();
+    const row = await db
+      .prepare(`SELECT 1 AS found FROM shooter_suppressions WHERE shooter_id = ?`)
+      .bind(shooterId)
+      .first();
+    return row !== null;
+  },
+
+  async getAllSuppressedShooterIds() {
+    const db = getDb();
+    const result = await db
+      .prepare(`SELECT shooter_id FROM shooter_suppressions`)
+      .all<{ shooter_id: number }>();
+    return new Set(result.results.map((r) => r.shooter_id));
+  },
+
+  async suppressShooter(shooterId) {
+    const db = getDb();
+    await db.batch([
+      db.prepare(
+        `INSERT OR IGNORE INTO shooter_suppressions (shooter_id, suppressed_at)
+         VALUES (?, datetime('now'))`,
+      ).bind(shooterId),
+      db.prepare(`DELETE FROM shooter_profiles WHERE shooter_id = ?`).bind(shooterId),
+      db.prepare(`DELETE FROM shooter_matches WHERE shooter_id = ?`).bind(shooterId),
+      db.prepare(`DELETE FROM shooter_achievements WHERE shooter_id = ?`).bind(shooterId),
+    ]);
   },
 };
 

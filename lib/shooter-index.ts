@@ -75,7 +75,7 @@ export interface MatchMetadata {
  * ensuring writes complete even after the HTTP response is sent. Errors are
  * silently swallowed — this is non-fatal and must not affect the main request path.
  */
-export function indexMatchShooters(
+export async function indexMatchShooters(
   ct: string,
   matchId: string,
   matchStart: string | null,
@@ -97,6 +97,10 @@ export function indexMatchShooters(
     ? Math.floor(new Date(matchStart).getTime() / 1000)
     : Math.floor(Date.now() / 1000);
   const lastSeen = new Date().toISOString();
+
+  // Load suppression list (single query, tiny table) to skip GDPR-suppressed shooters
+  let suppressedIds = new Set<number>();
+  try { suppressedIds = await db.getAllSuppressedShooterIds(); } catch { /* ignore */ }
 
   const writes: Promise<void>[] = [];
 
@@ -128,6 +132,7 @@ export function indexMatchShooters(
 
   for (const c of competitors) {
     if (c.shooterId == null) continue;
+    if (suppressedIds.has(c.shooterId)) continue;
     const { shooterId } = c;
     const profile: ShooterProfile = {
       name: c.name,
