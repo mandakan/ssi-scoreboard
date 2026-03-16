@@ -24,15 +24,26 @@ import { handleWatch, handleUnwatch } from "./commands/watch";
 import { handleRemindRegistrations } from "./commands/remind-registrations";
 import { pollWatchedMatches } from "./notifications/stage-scored";
 import { pollRegistrationReminders } from "./notifications/registration-reminder";
+import { landingPage, privacyPage, tosPage } from "./pages";
 
 const worker: ExportedHandler<Env> = {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url);
 
-    // GET /invite → redirect to the Discord bot invite flow
-    if (request.method === "GET" && url.pathname === "/invite") {
-      const inviteUrl = `https://discord.com/api/oauth2/authorize?client_id=${env.DISCORD_APP_ID}&scope=bot%20applications.commands&permissions=2048`;
-      return Response.redirect(inviteUrl, 302);
+    // Static pages and invite redirect (GET routes)
+    if (request.method === "GET") {
+      switch (url.pathname) {
+        case "/":
+          return htmlResponse(landingPage());
+        case "/privacy":
+          return htmlResponse(privacyPage());
+        case "/tos":
+          return htmlResponse(tosPage());
+        case "/invite": {
+          const inviteUrl = `https://discord.com/api/oauth2/authorize?client_id=${env.DISCORD_APP_ID}&scope=bot%20applications.commands&permissions=2048`;
+          return Response.redirect(inviteUrl, 302);
+        }
+      }
     }
 
     // Only POST / is the Discord interactions endpoint
@@ -315,5 +326,14 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json" },
+  });
+}
+
+function htmlResponse(html: string): Response {
+  return new Response(html, {
+    headers: {
+      "Content-Type": "text/html;charset=utf-8",
+      "Cache-Control": "public, max-age=3600",
+    },
   });
 }
