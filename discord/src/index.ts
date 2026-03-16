@@ -129,7 +129,7 @@ async function handleCommand(
   const guildId = getGuildId(interaction);
 
   // Commands where the response is only visible to the caller
-  const EPHEMERAL_COMMANDS = new Set(["help", "link", "me", "unwatch"]);
+  const EPHEMERAL_COMMANDS = new Set(["help", "link", "me", "unwatch", "remind-registrations"]);
 
   try {
     let content = "";
