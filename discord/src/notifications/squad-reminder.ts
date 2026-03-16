@@ -63,7 +63,10 @@ interface MatchNotification {
   date: string | null;
   level: string | null;
   triggerType: TriggerType;
+  /** Shooters to @mention (unsquadded when squadding is open, all otherwise). */
   shooters: MatchShooterInfo[];
+  /** Shooters already in a squad — shown without @mention so others know which squad to join. */
+  alreadySquadded: MatchShooterInfo[];
   /** The raw ISO timestamp when squadding opens (for displaying exact time). */
   squaddingStartsRaw: string | null;
   isSquaddingOpen: boolean;
@@ -209,7 +212,21 @@ async function processGuildSquadReminder(
     if (shooterInfos.length === 0) continue;
 
     // Create a notification for each trigger type
+    const isOpen = matchData?.is_squadding_possible ?? false;
+
     for (const trigger of triggers) {
+      // When squadding is already open, only @mention shooters who haven't
+      // picked a squad yet. If everyone is squadded, skip entirely.
+      // Already-squadded shooters are passed separately so the embed can
+      // show them (without pinging) as a hint for which squad to join.
+      let shootersToNotify = shooterInfos;
+      let alreadySquadded: MatchShooterInfo[] = [];
+      if (trigger === "squadding" && isOpen) {
+        shootersToNotify = shooterInfos.filter((s) => s.squadNumber == null);
+        alreadySquadded = shooterInfos.filter((s) => s.squadNumber != null);
+        if (shootersToNotify.length === 0) continue;
+      }
+
       notifications.push({
         ct: upcoming.ct,
         matchId: upcoming.matchId,
@@ -218,9 +235,10 @@ async function processGuildSquadReminder(
         date: upcoming.date,
         level: matchData?.level ?? upcoming.level,
         triggerType: trigger,
-        shooters: shooterInfos,
+        shooters: shootersToNotify,
+        alreadySquadded,
         squaddingStartsRaw: matchData?.squadding_starts ?? null,
-        isSquaddingOpen: matchData?.is_squadding_possible ?? false,
+        isSquaddingOpen: isOpen,
         stagesCount: matchData?.stages_count ?? 0,
       });
     }
@@ -340,17 +358,47 @@ function buildSquaddingEmbed(
     .map((s) => `\u2022 <@${s.discordUserId}>`)
     .join("\n");
 
+  const fieldName = n.isSquaddingOpen
+    ? `Still need to squad (${n.shooters.length})`
+    : `Ready up (${n.shooters.length})`;
+
+  const fields: NonNullable<APIEmbed["fields"]> = [
+    {
+      name: fieldName,
+      value: shooterList,
+      inline: false,
+    },
+  ];
+
+  // When squadding is open, show who already picked a squad (without pinging)
+  // so the unsquadded shooters know which squad to join.
+  if (n.alreadySquadded.length > 0) {
+    // Group by squad number for clarity
+    const bySquad = new Map<number, string[]>();
+    for (const s of n.alreadySquadded) {
+      const sq = s.squadNumber!;
+      const list = bySquad.get(sq) ?? [];
+      list.push(s.shooterName);
+      bySquad.set(sq, list);
+    }
+
+    const squaddedLines = [...bySquad.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([sq, names]) => `\u2022 **Squad ${sq}**: ${names.join(", ")}`)
+      .join("\n");
+
+    fields.push({
+      name: "Already squadded",
+      value: squaddedLines,
+      inline: false,
+    });
+  }
+
   return {
     title: n.isSquaddingOpen ? "Squadding is OPEN!" : "Squadding opens today!",
     color: 0xf59e0b, // amber
     description: lines.join("\n"),
-    fields: [
-      {
-        name: `Ready up (${n.shooters.length})`,
-        value: shooterList,
-        inline: false,
-      },
-    ],
+    fields,
     timestamp: new Date().toISOString(),
   };
 }
