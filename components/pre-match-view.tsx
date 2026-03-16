@@ -749,13 +749,21 @@ export function PreMatchView({
 
   // Squad members in within-squad shooting order (sorted by competitor number,
   // already reflected in SquadInfo.competitorIds from match-data.ts).
+  // Deduplicate by shooterId — the same person can register for multiple divisions
+  // and appear as separate competitor entries within the same squad.
   const squadMembers = useMemo(() => {
     if (selectedSquadNum === null) return [];
     const sq = match.squads.find((s) => s.number === selectedSquadNum);
     if (!sq) return [];
+    const seen = new Set<number>();
     return sq.competitorIds
       .map((cid) => match.competitors.find((c) => c.id === cid))
-      .filter((c): c is CompetitorInfo => c != null);
+      .filter((c): c is CompetitorInfo => {
+        if (!c) return false;
+        if (c.shooterId && seen.has(c.shooterId)) return false;
+        if (c.shooterId) seen.add(c.shooterId);
+        return true;
+      });
   }, [selectedSquadNum, match.squads, match.competitors]);
 
   // Index of the tracked/selected shooter within the squad (-1 if not found).
