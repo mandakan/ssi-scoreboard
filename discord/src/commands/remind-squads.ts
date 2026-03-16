@@ -113,7 +113,7 @@ async function handleSet(
       `Squadding reminders: **${formatRemindDays(remindDays)}**\n` +
       "Match-day reminder: **always on**",
     footer: {
-      text: "Runs daily. Shooters must /link their accounts to get mentioned.",
+      text: "Running now — check the channel for a preview. Repeats daily. Shooters must /link to get mentioned.",
     },
   };
 

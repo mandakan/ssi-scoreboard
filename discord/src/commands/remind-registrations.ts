@@ -10,6 +10,8 @@ export interface RegistrationReminderConfig {
   channelId: string;
   country: string | null;
   minLevel: string;
+  /** Discipline filter: "handgun", "rifle", "shotgun", "minirifle", or null (all). */
+  discipline: string | null;
   daysAhead: number;
   /** ISO date string (YYYY-MM-DD) of the last successful digest post. */
   lastRunDate: string | null;
@@ -28,6 +30,7 @@ export async function handleRemindRegistrations(
   action: string | undefined,
   country: string | undefined,
   level: string | undefined,
+  discipline: string | undefined,
   days: number | undefined,
 ): Promise<{ content: string; embeds: APIEmbed[] }> {
   switch (action) {
@@ -37,7 +40,7 @@ export async function handleRemindRegistrations(
       return handleShow(kv, guildId);
     case "set":
     default:
-      return handleSet(kv, guildId, channelId, country, level, days);
+      return handleSet(kv, guildId, channelId, country, level, discipline, days);
   }
 }
 
@@ -47,17 +50,21 @@ async function handleSet(
   channelId: string,
   country: string | undefined,
   level: string | undefined,
+  discipline: string | undefined,
   days: number | undefined,
 ): Promise<{ content: string; embeds: APIEmbed[] }> {
   const validLevels = ["l2plus", "l3plus", "l4plus", "all"];
   const minLevel = level && validLevels.includes(level) ? level : "l2plus";
-  const daysAhead = days && days >= 1 && days <= 365 ? days : 60;
+  const validDisciplines = ["handgun", "rifle", "shotgun", "minirifle"];
+  const normalizedDiscipline = discipline && validDisciplines.includes(discipline) ? discipline : null;
+  const daysAhead = days && days >= 1 && days <= 730 ? days : 365;
   const normalizedCountry = country?.toUpperCase() ?? null;
 
   const config: RegistrationReminderConfig = {
     channelId,
     country: normalizedCountry,
     minLevel,
+    discipline: normalizedDiscipline,
     daysAhead,
     lastRunDate: null,
     createdAt: new Date().toISOString(),
@@ -68,6 +75,7 @@ async function handleSet(
   const filters: string[] = [];
   if (normalizedCountry) filters.push(`Country: **${normalizedCountry}**`);
   filters.push(`Level: **${formatLevel(minLevel)}**`);
+  if (normalizedDiscipline) filters.push(`Discipline: **${formatDiscipline(normalizedDiscipline)}**`);
   filters.push(`Window: **next ${daysAhead} days**`);
   filters.push(`Channel: <#${channelId}>`);
 
@@ -75,10 +83,10 @@ async function handleSet(
     title: "Registration reminder configured",
     color: 0x22c55e, // green
     description:
-      "I'll post a daily digest of upcoming matches with open registration.\n\n" +
+      "I'll post a daily digest of upcoming matches with registration status.\n\n" +
       filters.join("\n"),
     footer: {
-      text: "Digest posts daily at ~08:00 UTC. Use /remind-registrations show to check config.",
+      text: "Posting the first digest now — check the channel. Repeats daily at ~08:00 UTC.",
     },
   };
 
@@ -130,6 +138,10 @@ async function handleShow(
     fields.push({ name: "Country", value: config.country, inline: true });
   }
 
+  if (config.discipline) {
+    fields.push({ name: "Discipline", value: formatDiscipline(config.discipline), inline: true });
+  }
+
   if (config.lastRunDate) {
     fields.push({ name: "Last digest", value: config.lastRunDate, inline: true });
   }
@@ -151,5 +163,30 @@ function formatLevel(minLevel: string): string {
     case "l3plus": return "Level III+";
     case "l4plus": return "Level IV+";
     default: return minLevel;
+  }
+}
+
+export function formatDiscipline(discipline: string): string {
+  switch (discipline) {
+    case "handgun": return "Handgun (incl. PCC)";
+    case "rifle": return "Rifle";
+    case "shotgun": return "Shotgun";
+    case "minirifle": return "Mini Rifle";
+    default: return discipline;
+  }
+}
+
+/**
+ * Test whether an event's discipline string matches the configured filter.
+ * Uses substring matching so "handgun" matches both "IPSC Handgun" and "IPSC Handgun & PCC".
+ */
+export function matchesDiscipline(eventDiscipline: string, filter: string): boolean {
+  const d = eventDiscipline.toLowerCase();
+  switch (filter) {
+    case "handgun": return d.includes("handgun") || d.includes("pcc");
+    case "rifle": return d.includes("rifle") && !d.includes("mini rifle");
+    case "shotgun": return d.includes("shotgun");
+    case "minirifle": return d.includes("mini rifle");
+    default: return true;
   }
 }

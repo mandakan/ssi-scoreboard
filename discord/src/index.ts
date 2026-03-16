@@ -30,9 +30,9 @@ import { handleRemindRegistrations } from "./commands/remind-registrations";
 import { handleRemindSquads } from "./commands/remind-squads";
 import { handleAutocomplete } from "./commands/autocomplete";
 import { pollWatchedMatches } from "./notifications/stage-scored";
-import { pollRegistrationReminders } from "./notifications/registration-reminder";
+import { pollRegistrationReminders, runRegistrationReminderForGuild } from "./notifications/registration-reminder";
 import { landingPage, privacyPage, tosPage } from "./pages";
-import { pollSquadReminders } from "./notifications/squad-reminder";
+import { pollSquadReminders, runSquadReminderForGuild } from "./notifications/squad-reminder";
 
 const worker: ExportedHandler<Env> = {
   async fetch(request, env, ctx): Promise<Response> {
@@ -373,17 +373,27 @@ async function handleDeferredCommand(
           content = "Could not determine the channel.";
           break;
         }
+        const reminderAction = options.action as string | undefined;
         const reminderResult = await handleRemindRegistrations(
           env.BOT_KV,
           guildId,
           reminderChannelId,
-          options.action as string | undefined,
+          reminderAction,
           options.country as string | undefined,
           options.level as string | undefined,
+          options.discipline as string | undefined,
           options.days as number | undefined,
         );
         content = reminderResult.content;
         embeds = reminderResult.embeds;
+        // On "set", run the reminder immediately so the user sees what it produces
+        if (reminderAction === "set" || reminderAction === undefined) {
+          try {
+            await runRegistrationReminderForGuild(env, guildId);
+          } catch (err) {
+            console.error("Immediate registration reminder failed:", err);
+          }
+        }
         break;
       }
 
@@ -397,15 +407,24 @@ async function handleDeferredCommand(
           content = "Could not determine the channel.";
           break;
         }
+        const squadAction = options.action as string | undefined;
         const squadResult = await handleRemindSquads(
           env.BOT_KV,
           guildId,
           squadChannelId,
-          options.action as string | undefined,
+          squadAction,
           options.days as string | undefined,
         );
         content = squadResult.content;
         embeds = squadResult.embeds;
+        // On "set", run the reminder immediately so the user sees what it produces
+        if (squadAction === "set" || squadAction === undefined) {
+          try {
+            await runSquadReminderForGuild(env, guildId);
+          } catch (err) {
+            console.error("Immediate squad reminder failed:", err);
+          }
+        }
         break;
       }
 
