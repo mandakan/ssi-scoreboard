@@ -62,6 +62,14 @@ const HELP_EMBED: APIEmbed = {
       value: "Stop watching the current match.",
       inline: false,
     },
+    {
+      name: "Tip: restrict to a channel",
+      value:
+        "To keep bot output in a dedicated channel, go to Server Settings \u2192 Channels \u2192 " +
+        "select the channel \u2192 Permissions, and only grant Range Officer the " +
+        "\"Use Application Commands\" permission in your bot channel.",
+      inline: false,
+    },
   ],
 };
 
