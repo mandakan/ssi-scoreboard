@@ -116,7 +116,7 @@ export function landingPage(): string {
     reveal everyone's predictions to see who called it best. Your prediction is private
     until reveal — no anchoring bias!</p>
     <ul class="commands">
-      <li><code>/predict submit &lt;match&gt; &lt;percent&gt; &lt;mikes&gt;</code> Predict your match % and total mikes before the match starts. Only registered competitors can predict <span class="badge badge-ephemeral">only you</span></li>
+      <li><code>/predict submit &lt;match&gt; &lt;percent&gt; &lt;mikes&gt;</code> Predict your match % and total mikes (misses) before the match starts. Only registered competitors can predict. You can update your prediction any time before scoring starts <span class="badge badge-ephemeral">only you</span></li>
       <li><code>/predict reveal &lt;match&gt;</code> Reveal all predictions after the match completes (95%+ scored). Awards: Most Accurate, Most Humble, Most Overconfident, Oracle, and more <span class="badge badge-public">visible to all</span></li>
       <li><code>/predict status</code> Check how many predictions have been submitted <span class="badge badge-ephemeral">only you</span></li>
     </ul>

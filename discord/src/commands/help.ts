@@ -99,16 +99,24 @@ const HELP_EMBED: APIEmbed = {
     {
       name: "/predict submit <match> <percent> <mikes>",
       value:
-        "Predict your match performance before it starts — your overall match % and total mikes. " +
-        "Predictions are hidden until reveal. Only registered competitors can predict.",
+        "Predict your match performance before it starts — your overall match % and total mikes (misses). " +
+        "Only registered competitors can predict. Predictions are hidden until reveal to prevent anchoring bias. " +
+        "You can update your prediction any time before scoring starts.",
       inline: false,
     },
     {
       name: "/predict reveal <match>",
       value:
         "Reveal all predictions after the match completes (95%+ scored). " +
-        "Shows a table comparing predictions vs actual results, plus awards for " +
-        "most accurate, most humble, most overconfident, and more.",
+        "Shows a table comparing predictions vs actual results, plus awards: " +
+        "Most Accurate, Oracle (within 1%), Mike Oracle (exact mikes), Most Humble, and more.",
+      inline: false,
+    },
+    {
+      name: "/predict status [match]",
+      value:
+        "Check how many predictions have been submitted — without match shows all active games, " +
+        "with match shows count for that specific match.",
       inline: false,
     },
     {
