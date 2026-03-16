@@ -179,9 +179,9 @@ export async function handleLeaderboard(
   }
 
   const scoringLabel =
-    event.scoring_completed === 100
+    match.scoring_completed === 100
       ? "Completed"
-      : `${event.scoring_completed}% scored`;
+      : `${match.scoring_completed}% scored`;
 
   // Leader highlight
   const leader = shooterStats[0];

@@ -6,6 +6,7 @@ import { handleHelp, WELCOME_EMBED } from "../src/commands/help";
 import type { ScoreboardClient } from "../src/scoreboard-client";
 import type {
   EventSearchResult,
+  MatchResponse,
   ShooterSearchResult,
   ShooterDashboardResponse,
 } from "../src/types";
@@ -15,9 +16,10 @@ import type {
 function mockClient(overrides: Partial<ScoreboardClient> = {}): ScoreboardClient {
   return {
     searchEvents: vi.fn().mockResolvedValue([]),
-    getMatch: vi.fn().mockResolvedValue({}),
+    getMatch: vi.fn().mockResolvedValue(makeMatchResponse()),
     searchShooters: vi.fn().mockResolvedValue([]),
     getShooterDashboard: vi.fn().mockResolvedValue({}),
+    compare: vi.fn().mockResolvedValue({ stages: [], competitors: [] }),
     ...overrides,
   } as unknown as ScoreboardClient;
 }
@@ -42,9 +44,25 @@ function makeEvent(overrides: Partial<EventSearchResult> = {}): EventSearchResul
     venue: "Gothenburg",
     date: "2026-06-15",
     level: "Level III",
+    status: "cp",
+    region: "Sweden",
+    discipline: "IPSC Handgun",
+    ...overrides,
+  };
+}
+
+function makeMatchResponse(overrides: Partial<MatchResponse> = {}): MatchResponse {
+  return {
+    name: "Swedish Handgun Championship 2026",
+    venue: "Gothenburg",
+    date: "2026-06-15",
+    level: "Level III",
     scoring_completed: 100,
     competitors_count: 120,
     stages_count: 16,
+    stages: [],
+    competitors: [],
+    squads: [],
     ...overrides,
   };
 }
@@ -62,14 +80,18 @@ function makeShooterResult(overrides: Partial<ShooterSearchResult> = {}): Shoote
 function makeDashboard(overrides: Partial<ShooterDashboardResponse> = {}): ShooterDashboardResponse {
   return {
     shooterId: 42,
-    name: "Jane Doe",
-    club: "Gothenburg PSK",
-    division: "Production",
+    profile: {
+      name: "Jane Doe",
+      club: "Gothenburg PSK",
+      division: "Production",
+      lastSeen: "2026-03-01",
+    },
     matchCount: 15,
-    stageCount: 180,
-    avgMatchPercent: 72.5,
-    achievements: [],
-    recentMatches: [],
+    matches: [],
+    stats: {
+      totalStages: 180,
+      overallMatchPct: 72.5,
+    },
     ...overrides,
   };
 }
@@ -97,9 +119,10 @@ describe("handleMatch", () => {
   });
 
   it("shows completed status with green color", async () => {
-    const event = makeEvent({ scoring_completed: 100 });
+    const event = makeEvent();
     const client = mockClient({
       searchEvents: vi.fn().mockResolvedValue([event]),
+      getMatch: vi.fn().mockResolvedValue(makeMatchResponse({ scoring_completed: 100 })),
     });
     const result = await handleMatch(client, BASE_URL, "Swedish");
     const statusField = result.embeds[0].fields?.find((f) => f.name === "Status");
@@ -108,9 +131,10 @@ describe("handleMatch", () => {
   });
 
   it("shows scoring percentage for in-progress matches", async () => {
-    const event = makeEvent({ scoring_completed: 45 });
+    const event = makeEvent();
     const client = mockClient({
       searchEvents: vi.fn().mockResolvedValue([event]),
+      getMatch: vi.fn().mockResolvedValue(makeMatchResponse({ scoring_completed: 45 })),
     });
     const result = await handleMatch(client, BASE_URL, "Swedish");
     const statusField = result.embeds[0].fields?.find((f) => f.name === "Status");
@@ -119,9 +143,10 @@ describe("handleMatch", () => {
   });
 
   it("shows 'Not started' for zero scoring", async () => {
-    const event = makeEvent({ scoring_completed: 0 });
+    const event = makeEvent();
     const client = mockClient({
       searchEvents: vi.fn().mockResolvedValue([event]),
+      getMatch: vi.fn().mockResolvedValue(makeMatchResponse({ scoring_completed: 0 })),
     });
     const result = await handleMatch(client, BASE_URL, "Swedish");
     const statusField = result.embeds[0].fields?.find((f) => f.name === "Status");
@@ -179,7 +204,9 @@ describe("handleShooter", () => {
   it("omits avg match % when null", async () => {
     const client = mockClient({
       searchShooters: vi.fn().mockResolvedValue([makeShooterResult()]),
-      getShooterDashboard: vi.fn().mockResolvedValue(makeDashboard({ avgMatchPercent: null })),
+      getShooterDashboard: vi.fn().mockResolvedValue(
+        makeDashboard({ stats: { totalStages: 0, overallMatchPct: null } }),
+      ),
     });
     const result = await handleShooter(client, BASE_URL, "Jane");
     const fields = result.embeds[0].fields!;
@@ -189,7 +216,10 @@ describe("handleShooter", () => {
   it("shows achievements when present", async () => {
     const dashboard = makeDashboard({
       achievements: [
-        { id: "competitor", name: "Competitor", tier: "Bronze", icon: "medal" },
+        {
+          definition: { id: "competitor", name: "Competitor", icon: "medal" },
+          unlockedTiers: [{ level: 1 }],
+        },
       ],
     });
     const client = mockClient({
@@ -199,13 +229,13 @@ describe("handleShooter", () => {
     const result = await handleShooter(client, BASE_URL, "Jane");
     const achField = result.embeds[0].fields!.find((f) => f.name === "Achievements");
     expect(achField?.value).toContain("Competitor");
-    expect(achField?.value).toContain("Bronze");
+    expect(achField?.value).toContain("medal");
   });
 
   it("shows recent matches when present", async () => {
     const dashboard = makeDashboard({
-      recentMatches: [
-        { name: "Regional Match", date: "2026-03-01", matchPercent: 68.2 },
+      matches: [
+        { name: "Regional Match", date: "2026-03-01", matchPct: 68.2, stageCount: 12 },
       ],
     });
     const client = mockClient({

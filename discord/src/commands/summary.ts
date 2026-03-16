@@ -115,10 +115,10 @@ export async function handleSummary(
 
   const matchUrl = `${baseUrl}/match/${event.content_type}/${event.id}`;
   const scoringLabel =
-    event.scoring_completed === 100
+    match.scoring_completed === 100
       ? "Completed"
-      : event.scoring_completed > 0
-        ? `${event.scoring_completed}% scored`
+      : match.scoring_completed > 0
+        ? `${match.scoring_completed}% scored`
         : "Not started";
 
   const embeds: APIEmbed[] = [];

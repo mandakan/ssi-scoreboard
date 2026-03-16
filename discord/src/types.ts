@@ -13,25 +13,41 @@ export interface Env {
 }
 
 // --- Scoreboard API response types (subset of what we need) ---
+// These must match the actual API responses from the Next.js app.
 
+/** GET /api/events?q=... — event search results. */
 export interface EventSearchResult {
   id: number;
   content_type: number;
   name: string;
-  venue: string;
+  venue: string | null;
   date: string;
   level: string;
+  status: string;
+  region: string;
+  discipline: string;
+}
+
+/** GET /api/match/{ct}/{id} — full match data. */
+export interface MatchResponse {
+  name: string;
+  venue: string | null;
+  date: string | null;
+  level: string | null;
   scoring_completed: number;
   competitors_count: number;
   stages_count: number;
+  stages: MatchStage[];
+  competitors: MatchCompetitor[];
+  squads: SquadInfo[];
 }
 
 export interface MatchCompetitor {
   id: number;
-  shooterId: number;
+  shooterId: number | null;
   name: string;
-  division: string;
-  club: string;
+  division: string | null;
+  club: string | null;
   category: string | null;
   region: string | null;
 }
@@ -40,9 +56,8 @@ export interface MatchStage {
   id: number;
   stage_number: number;
   name: string;
-  scoring_type: string;
   max_points: number;
-  min_rounds: number;
+  min_rounds: number | null;
 }
 
 export interface SquadInfo {
@@ -51,40 +66,33 @@ export interface SquadInfo {
   competitorIds: number[];
 }
 
-export interface MatchResponse {
-  id: number;
-  content_type: number;
-  name: string;
-  venue: string;
-  date: string;
-  level: string;
-  scoring_completed: number;
-  competitors: MatchCompetitor[];
-  stages: MatchStage[];
-  squads: SquadInfo[];
-}
-
+/** GET /api/shooter/{shooterId} — dashboard response. */
 export interface ShooterDashboardResponse {
   shooterId: number;
-  name: string;
-  club: string | null;
-  division: string | null;
+  profile: {
+    name: string;
+    club: string | null;
+    division: string | null;
+    lastSeen: string;
+  } | null;
   matchCount: number;
-  stageCount: number;
-  avgMatchPercent: number | null;
-  achievements: Array<{
-    id: string;
+  matches: Array<{
     name: string;
-    tier: string;
-    icon: string;
+    date: string | null;
+    matchPct: number | null;
+    stageCount: number;
   }>;
-  recentMatches: Array<{
-    name: string;
-    date: string;
-    matchPercent: number | null;
+  stats: {
+    totalStages: number;
+    overallMatchPct: number | null;
+  };
+  achievements?: Array<{
+    definition: { id: string; name: string; icon: string };
+    unlockedTiers: Array<{ level: number }>;
   }>;
 }
 
+/** GET /api/shooter/search?q=... — shooter search results. */
 export interface ShooterSearchResult {
   shooterId: number;
   name: string;
@@ -94,6 +102,8 @@ export interface ShooterSearchResult {
 
 // Subset of CompareResponse needed for stage-scored notifications.
 // We only care about per-competitor per-stage results.
+
+/** GET /api/compare?ct=...&id=...&competitor_ids=... */
 export interface CompareResult {
   stages: Array<{
     stage_id: number;
@@ -106,8 +116,8 @@ export interface CompareResult {
   competitors: Array<{
     id: number;
     name: string;
-    division: string;
-    club: string;
+    division: string | null;
+    club: string | null;
   }>;
 }
 
