@@ -95,7 +95,7 @@ async function handleSet(
     color: 0x22c55e, // green
     description,
     footer: {
-      text: "Posting the first digest now — check the channel. Repeats daily at ~08:00 UTC.",
+      text: "Runs daily at ~08:00 UTC. The first digest will appear within a few minutes.",
     },
   };
 

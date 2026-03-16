@@ -30,9 +30,9 @@ import { handleRemindRegistrations } from "./commands/remind-registrations";
 import { handleRemindSquads } from "./commands/remind-squads";
 import { handleAutocomplete } from "./commands/autocomplete";
 import { pollWatchedMatches } from "./notifications/stage-scored";
-import { pollRegistrationReminders, runRegistrationReminderForGuild } from "./notifications/registration-reminder";
+import { pollRegistrationReminders } from "./notifications/registration-reminder";
 import { landingPage, privacyPage, tosPage } from "./pages";
-import { pollSquadReminders, runSquadReminderForGuild } from "./notifications/squad-reminder";
+import { pollSquadReminders } from "./notifications/squad-reminder";
 
 const worker: ExportedHandler<Env> = {
   async fetch(request, env, ctx): Promise<Response> {
@@ -125,7 +125,7 @@ async function maybeWelcome(
 }
 
 // Commands where the response is only visible to the caller
-const EPHEMERAL_COMMANDS = new Set(["help", "link", "unlink", "me", "unwatch", "remind-registrations", "remind-squads"]);
+const EPHEMERAL_COMMANDS = new Set(["help", "link", "unlink", "me"]);
 
 /**
  * Edit the original deferred response via the Discord webhook API.
@@ -412,14 +412,6 @@ async function handleDeferredCommand(
         );
         content = reminderResult.content;
         embeds = reminderResult.embeds;
-        // On "set", run the reminder immediately so the user sees what it produces
-        if (reminderAction === "set" || reminderAction === undefined) {
-          try {
-            await runRegistrationReminderForGuild(env, guildId);
-          } catch (err) {
-            console.error("Immediate registration reminder failed:", err);
-          }
-        }
         break;
       }
 
@@ -443,14 +435,6 @@ async function handleDeferredCommand(
         );
         content = squadResult.content;
         embeds = squadResult.embeds;
-        // On "set", run the reminder immediately so the user sees what it produces
-        if (squadAction === "set" || squadAction === undefined) {
-          try {
-            await runSquadReminderForGuild(env, guildId);
-          } catch (err) {
-            console.error("Immediate squad reminder failed:", err);
-          }
-        }
         break;
       }
 

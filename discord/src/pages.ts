@@ -106,7 +106,7 @@ export function landingPage(): string {
     your server is on board before enabling them.</p>
     <ul class="commands">
       <li><code>/watch &lt;query&gt;</code> Watch a live match — posts score updates in this channel when linked shooters finish a stage <span class="badge badge-server">server-wide</span></li>
-      <li><code>/unwatch</code> Stop watching the current match <span class="badge badge-ephemeral">only you</span></li>
+      <li><code>/unwatch</code> Stop watching the current match <span class="badge badge-server">server-wide</span></li>
       <li><code>/remind-registrations set</code> Daily digest of upcoming matches with registration status. Filter by country, level, discipline, and lookahead window. <strong>Pings @here</strong> when a match opens registration that day — everyone in the channel gets notified <span class="badge badge-server">server-wide · @here</span></li>
       <li><code>/remind-squads set</code> Reminds linked shooters before squadding opens and on match day, with squad assignments. <strong>@mentions each linked user by name</strong> — only people who used <code>/link</code> get pinged <span class="badge badge-server">server-wide · @mentions</span></li>
     </ul>

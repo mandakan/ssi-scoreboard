@@ -123,7 +123,7 @@ async function handleSet(
     color: 0x22c55e, // green
     description,
     footer: {
-      text: "Running now — check the channel for a preview. Repeats daily. Shooters must /link to get mentioned.",
+      text: "Runs daily. The cron will pick this up within a few minutes. Shooters must /link to get mentioned.",
     },
   };
 
