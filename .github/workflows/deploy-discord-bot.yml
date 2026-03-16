@@ -12,6 +12,9 @@ on:
           - production
         default: staging
 
+permissions:
+  contents: read
+
 concurrency:
   group: deploy-discord-bot-${{ inputs.environment }}
 
