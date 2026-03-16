@@ -1,0 +1,26 @@
+{
+  "name": "ssi-discord-bot",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "cf:deploy": "wrangler deploy",
+    "cf:deploy:staging": "wrangler deploy --env staging",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "register": "tsx src/register.ts"
+  },
+  "dependencies": {
+    "discord-api-types": "0.38.42",
+    "discord-interactions": "4.4.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20260316.1",
+    "@types/node": "^22",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0",
+    "wrangler": "4.73.0"
+  }
+}
