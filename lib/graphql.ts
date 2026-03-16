@@ -241,14 +241,16 @@ export const EVENTS_QUERY = `
       region
       get_full_rule_display
       get_full_level_display
-      registration_starts
-      registration_closes
-      squadding_starts
-      squadding_closes
-      is_registration_possible
-      is_squadding_possible
-      max_competitors
-      registration
+      ... on IpscMatchNode {
+        registration_starts
+        registration_closes
+        squadding_starts
+        squadding_closes
+        is_registration_possible
+        is_squadding_possible
+        max_competitors
+        registration
+      }
     }
   }
 `;
