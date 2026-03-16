@@ -76,6 +76,15 @@ export interface RawMatchData {
     has_geopos?: boolean | null;
     lat?: number | string | null;
     lng?: number | string | null;
+    ends?: string | null;
+    registration_starts?: string | null;
+    registration_closes?: string | null;
+    squadding_starts?: string | null;
+    squadding_closes?: string | null;
+    is_registration_possible?: boolean | null;
+    is_squadding_possible?: boolean | null;
+    max_competitors?: number | null;
+    registration?: string | null;
     image?: { url?: string | null; width?: number | null; height?: number | null } | null;
     stages?: RawStage[];
     competitors_approved_w_wo_results_not_dnf?: RawCompetitor[];
@@ -249,18 +258,27 @@ export async function fetchMatchData(
     lat: ev.has_geopos && ev.lat != null ? parseFloat(String(ev.lat)) : null,
     lng: ev.has_geopos && ev.lng != null ? parseFloat(String(ev.lng)) : null,
     date: ev.starts ?? null,
+    ends: ev.ends ?? null,
     level: ev.level ?? null,
     sub_rule: ev.sub_rule ?? null,
     discipline: ev.get_full_rule_display ?? null,
     region: ev.region ?? null,
     stages_count: ev.stages_count ?? stages.length,
     competitors_count: ev.competitors_count ?? competitors.length,
+    max_competitors: ev.max_competitors ?? null,
     scoring_completed:
       ev.scoring_completed != null
         ? Math.round(parseFloat(String(ev.scoring_completed)))
         : 0,
     match_status: ev.status ?? "on",
     results_status: ev.results ?? "org",
+    registration_status: ev.registration ?? "cl",
+    registration_starts: ev.registration_starts ?? null,
+    registration_closes: ev.registration_closes ?? null,
+    is_registration_possible: ev.is_registration_possible ?? false,
+    squadding_starts: ev.squadding_starts ?? null,
+    squadding_closes: ev.squadding_closes ?? null,
+    is_squadding_possible: ev.is_squadding_possible ?? false,
     ssi_url: `https://shootnscoreit.com/event/${ct}/${id}/`,
     stages,
     competitors,

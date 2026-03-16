@@ -100,4 +100,48 @@ export const COMMANDS = [
     description: "Stop watching the current match",
     type: ApplicationCommandType.ChatInput,
   },
+  {
+    name: "remind-registrations",
+    description: "Daily digest of upcoming matches with open registration",
+    type: ApplicationCommandType.ChatInput,
+    options: [
+      {
+        name: "action",
+        description: "set = configure, show = view config, off = disable",
+        type: ApplicationCommandOptionType.String,
+        required: true,
+        choices: [
+          { name: "set — configure the daily reminder", value: "set" },
+          { name: "show — view current config", value: "show" },
+          { name: "off — disable the reminder", value: "off" },
+        ],
+      },
+      {
+        name: "country",
+        description: "ISO country code filter (e.g. SWE, NOR, FIN)",
+        type: ApplicationCommandOptionType.String,
+        required: false,
+      },
+      {
+        name: "level",
+        description: "Minimum match level (default: Level II+)",
+        type: ApplicationCommandOptionType.String,
+        required: false,
+        choices: [
+          { name: "All levels", value: "all" },
+          { name: "Level II+", value: "l2plus" },
+          { name: "Level III+", value: "l3plus" },
+          { name: "Level IV+", value: "l4plus" },
+        ],
+      },
+      {
+        name: "days",
+        description: "How many days ahead to look (default: 60, max: 365)",
+        type: ApplicationCommandOptionType.Integer,
+        required: false,
+        min_value: 1,
+        max_value: 365,
+      },
+    ],
+  },
 ] as const;

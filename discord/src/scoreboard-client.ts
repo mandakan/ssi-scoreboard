@@ -23,6 +23,22 @@ export class ScoreboardClient {
     return resp.json();
   }
 
+  /** Browse upcoming events with filters (no search query). */
+  async browseEvents(opts: {
+    country?: string;
+    minLevel?: string;
+    startsAfter?: string;
+    startsBefore?: string;
+  }): Promise<EventSearchResult[]> {
+    const params = new URLSearchParams();
+    if (opts.country) params.set("country", opts.country);
+    if (opts.minLevel) params.set("minLevel", opts.minLevel);
+    if (opts.startsAfter) params.set("starts_after", opts.startsAfter);
+    if (opts.startsBefore) params.set("starts_before", opts.startsBefore);
+    const resp = await this.fetch(`/api/events?${params}`);
+    return resp.json();
+  }
+
   /** Get full match data (competitors, stages, squads). */
   async getMatch(ct: number, id: number): Promise<MatchResponse> {
     const resp = await this.fetch(`/api/match/${ct}/${id}`);

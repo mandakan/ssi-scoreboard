@@ -10,10 +10,19 @@ interface RawEvent {
   name: string;
   venue: string | null;
   starts: string;
+  ends: string | null;
   status: string;
   region: string;
   get_full_rule_display: string;
   get_full_level_display: string;
+  registration_starts: string | null;
+  registration_closes: string | null;
+  squadding_starts: string | null;
+  squadding_closes: string | null;
+  is_registration_possible: boolean;
+  is_squadding_possible: boolean;
+  max_competitors: number | null;
+  registration: string;
 }
 
 interface RawEventsData {
@@ -155,10 +164,19 @@ export async function GET(req: Request) {
       name: e.name,
       venue: e.venue || null,
       date: e.starts,
+      ends: e.ends ?? null,
       status: e.status,
       region: e.region,
       discipline: e.get_full_rule_display,
       level: e.get_full_level_display,
+      registration_status: e.registration ?? "cl",
+      registration_starts: e.registration_starts ?? null,
+      registration_closes: e.registration_closes ?? null,
+      is_registration_possible: e.is_registration_possible ?? false,
+      squadding_starts: e.squadding_starts ?? null,
+      squadding_closes: e.squadding_closes ?? null,
+      is_squadding_possible: e.is_squadding_possible ?? false,
+      max_competitors: e.max_competitors ?? null,
     }));
 
   console.log(JSON.stringify({

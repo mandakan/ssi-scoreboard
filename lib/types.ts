@@ -73,6 +73,8 @@ export interface MatchResponse {
   /** Longitude of the match venue; null if not set in SSI. */
   lng: number | null;
   date: string | null;
+  /** Match end date (ISO timestamp); null if not set. */
+  ends: string | null;
   level: string | null;
   sub_rule: string | null;
   /** Human-readable discipline string, e.g. "IPSC Rifle", "IPSC Shotgun", "IPSC Handgun & PCC". */
@@ -80,11 +82,27 @@ export interface MatchResponse {
   region: string | null;
   stages_count: number;
   competitors_count: number;
+  /** Maximum number of competitors allowed; null if not set. */
+  max_competitors: number | null;
   scoring_completed: number; // percentage 0-100
   /** SSI match lifecycle status: "dr" Draft | "on" Active | "ol" Active/no-self-edit | "pr" Preliminary | "cp" Completed | "cs" Cancelled */
   match_status: string;
   /** SSI results visibility: "org" organizers-only | "stg" scores-public | "cmp" participants-only | "all" publicly published */
   results_status: string;
+  /** Registration status code: "op" open | "cl" closed | "ax" auto-approve on payment | "ox" waiting list + auto-approve | etc. */
+  registration_status: string;
+  /** When registration opens (ISO timestamp); null if not set. */
+  registration_starts: string | null;
+  /** When registration closes (ISO timestamp); null if not set. */
+  registration_closes: string | null;
+  /** Whether registration is currently possible. */
+  is_registration_possible: boolean;
+  /** When squadding opens (ISO timestamp); null if not set. */
+  squadding_starts: string | null;
+  /** When squadding closes (ISO timestamp); null if not set. */
+  squadding_closes: string | null;
+  /** Whether squadding is currently possible. */
+  is_squadding_possible: boolean;
   ssi_url: string | null;
   stages: StageInfo[];
   competitors: CompetitorInfo[];
@@ -501,10 +519,28 @@ export interface EventSummary {
   name: string;
   venue: string | null;
   date: string; // ISO timestamp
+  /** Match end date (ISO timestamp); null if not set. */
+  ends: string | null;
   status: string; // "on" | "cp" | "dr" | "cs" | "pr" | "ol"
   region: string;
   discipline: string; // e.g. "IPSC Handgun & PCC"
   level: string; // e.g. "Level II"
+  /** Registration status code: "op" open | "cl" closed | "ax" auto-approve on payment | "ox" waiting list + auto-approve | etc. */
+  registration_status: string;
+  /** When registration opens (ISO timestamp); null if not set. */
+  registration_starts: string | null;
+  /** When registration closes (ISO timestamp); null if not set. */
+  registration_closes: string | null;
+  /** Whether registration is currently possible. */
+  is_registration_possible: boolean;
+  /** When squadding opens (ISO timestamp); null if not set. */
+  squadding_starts: string | null;
+  /** When squadding closes (ISO timestamp); null if not set. */
+  squadding_closes: string | null;
+  /** Whether squadding is currently possible. */
+  is_squadding_possible: boolean;
+  /** Maximum number of competitors allowed; null if not set. */
+  max_competitors: number | null;
 }
 
 // ── Stage Simulator ──────────────────────────────────────────────────────────

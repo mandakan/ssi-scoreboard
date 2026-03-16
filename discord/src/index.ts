@@ -21,7 +21,9 @@ import { handleHelp, WELCOME_EMBED } from "./commands/help";
 import { handleLeaderboard } from "./commands/leaderboard";
 import { handleSummary } from "./commands/summary";
 import { handleWatch, handleUnwatch } from "./commands/watch";
+import { handleRemindRegistrations } from "./commands/remind-registrations";
 import { pollWatchedMatches } from "./notifications/stage-scored";
+import { pollRegistrationReminders } from "./notifications/registration-reminder";
 
 const worker: ExportedHandler<Env> = {
   async fetch(request, env): Promise<Response> {
@@ -60,7 +62,10 @@ const worker: ExportedHandler<Env> = {
   },
 
   async scheduled(_, env) {
-    await pollWatchedMatches(env);
+    await Promise.all([
+      pollWatchedMatches(env),
+      pollRegistrationReminders(env),
+    ]);
   },
 };
 
@@ -124,7 +129,7 @@ async function handleCommand(
   const guildId = getGuildId(interaction);
 
   // Commands where the response is only visible to the caller
-  const EPHEMERAL_COMMANDS = new Set(["help", "link", "me", "unwatch"]);
+  const EPHEMERAL_COMMANDS = new Set(["help", "link", "me", "unwatch", "remind-registrations"]);
 
   try {
     let content = "";
@@ -245,6 +250,30 @@ async function handleCommand(
           break;
         }
         content = await handleUnwatch(env.BOT_KV, guildId);
+        break;
+      }
+
+      case "remind-registrations": {
+        if (!guildId) {
+          content = "This command can only be used in a server, not in DMs.";
+          break;
+        }
+        const reminderChannelId = getChannelId(interaction);
+        if (!reminderChannelId) {
+          content = "Could not determine the channel.";
+          break;
+        }
+        const reminderResult = await handleRemindRegistrations(
+          env.BOT_KV,
+          guildId,
+          reminderChannelId,
+          options.action as string | undefined,
+          options.country as string | undefined,
+          options.level as string | undefined,
+          options.days as number | undefined,
+        );
+        content = reminderResult.content;
+        embeds = reminderResult.embeds;
         break;
       }
 
