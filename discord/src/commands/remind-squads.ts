@@ -54,15 +54,19 @@ export async function handleRemindSquads(
  * Always includes 0 (the day squadding opens). Clamps to 0–30.
  * Examples: "1,7" → [0, 1, 7], "" → [0], "0,1,1,3" → [0, 1, 3]
  */
+/** Default remind days: day-of + 1 day before + 7 days before. */
+const DEFAULT_REMIND_DAYS = [0, 1, 7];
+
 function parseRemindDays(raw: string | undefined): number[] {
+  // No input → use defaults
+  if (!raw) return [...DEFAULT_REMIND_DAYS];
+
   const days = new Set<number>([0]); // 0 is always included
 
-  if (raw) {
-    for (const part of raw.split(",")) {
-      const n = parseInt(part.trim(), 10);
-      if (!isNaN(n) && n >= 0 && n <= 30) {
-        days.add(n);
-      }
+  for (const part of raw.split(",")) {
+    const n = parseInt(part.trim(), 10);
+    if (!isNaN(n) && n >= 0 && n <= 30) {
+      days.add(n);
     }
   }
 

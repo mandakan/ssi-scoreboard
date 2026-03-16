@@ -162,7 +162,7 @@ export const COMMANDS = [
       },
       {
         name: "days",
-        description: "Days before squadding to remind, comma-separated (e.g. 1,7). Day 0 always included.",
+        description: "Days before squadding to remind, comma-separated (default: 1,7). Day 0 always included.",
         type: ApplicationCommandOptionType.String,
         required: false,
       },
