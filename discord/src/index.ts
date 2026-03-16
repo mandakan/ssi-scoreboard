@@ -28,11 +28,13 @@ import { handleSummary } from "./commands/summary";
 import { handleWatch, handleUnwatch } from "./commands/watch";
 import { handleRemindRegistrations } from "./commands/remind-registrations";
 import { handleRemindSquads } from "./commands/remind-squads";
+import { handleRemind } from "./commands/remind";
 import { handleAutocomplete } from "./commands/autocomplete";
 import { pollWatchedMatches } from "./notifications/stage-scored";
 import { pollRegistrationReminders } from "./notifications/registration-reminder";
 import { landingPage, privacyPage, tosPage } from "./pages";
 import { pollSquadReminders } from "./notifications/squad-reminder";
+import { pollPersonalReminders } from "./notifications/personal-reminder";
 
 const worker: ExportedHandler<Env> = {
   async fetch(request, env, ctx): Promise<Response> {
@@ -89,6 +91,7 @@ const worker: ExportedHandler<Env> = {
       pollWatchedMatches(env),
       pollRegistrationReminders(env),
       pollSquadReminders(env),
+      pollPersonalReminders(env),
     ]);
     for (const result of results) {
       if (result.status === "rejected") {
@@ -130,7 +133,7 @@ async function maybeWelcome(
 }
 
 // Commands where the response is only visible to the caller
-const EPHEMERAL_COMMANDS = new Set(["help", "link", "unlink", "me"]);
+const EPHEMERAL_COMMANDS = new Set(["help", "link", "unlink", "me", "remind"]);
 
 /**
  * Edit the original deferred response via the Discord webhook API.
@@ -417,6 +420,30 @@ async function handleDeferredCommand(
         );
         content = reminderResult.content;
         embeds = reminderResult.embeds;
+        break;
+      }
+
+      case "remind": {
+        if (!guildId) {
+          content = "This command can only be used in a server, not in DMs.";
+          break;
+        }
+        const remindUserId = getUserId(interaction);
+        if (!remindUserId) {
+          content = "Could not determine your Discord user ID.";
+          break;
+        }
+        const remindResult = await handleRemind(
+          client,
+          env.BOT_KV,
+          baseUrl,
+          guildId,
+          remindUserId,
+          options.action as string | undefined,
+          options.query as string | undefined,
+        );
+        content = remindResult.content;
+        embeds = remindResult.embeds;
         break;
       }
 
