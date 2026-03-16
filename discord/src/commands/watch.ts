@@ -9,6 +9,7 @@
 
 import type { APIEmbed } from "discord-api-types/v10";
 import type { ScoreboardClient } from "../scoreboard-client";
+import { parseEventRef } from "./autocomplete";
 
 export interface WatchState {
   matchCt: number;
@@ -46,16 +47,29 @@ export async function handleWatch(
     };
   }
 
-  // Search for the match
-  const events = await client.searchEvents(query);
-  if (events.length === 0) {
-    return {
-      content: `No matches found for "${query}".`,
-      embeds: [],
-    };
-  }
+  // Resolve the match — autocomplete pre-resolved or search fallback
+  let matchCt: number;
+  let matchId: number;
+  let matchName: string;
 
-  const event = events[0];
+  const ref = parseEventRef(query);
+  if (ref) {
+    matchCt = ref.ct;
+    matchId = ref.id;
+    matchName = ""; // filled from getMatch below
+  } else {
+    const events = await client.searchEvents(query);
+    if (events.length === 0) {
+      return {
+        content: `No matches found for "${query}".`,
+        embeds: [],
+      };
+    }
+    const event = events[0];
+    matchCt = event.content_type;
+    matchId = event.id;
+    matchName = event.name;
+  }
 
   // Validate that there are linked shooters competing in this match
   const linkedShooters = await getGuildLinkedShooters(kv, guildId);
@@ -69,11 +83,12 @@ export async function handleWatch(
   }
 
   // Fetch full match data for scoring status, counts, and competitor resolution
-  const fullMatch = await client.getMatch(event.content_type, event.id);
+  const fullMatch = await client.getMatch(matchCt, matchId);
+  if (!matchName) matchName = fullMatch.name;
 
   if (fullMatch.scoring_completed === 100) {
     return {
-      content: `**${event.name}** is already fully scored. Nothing to watch.`,
+      content: `**${matchName}** is already fully scored. Nothing to watch.`,
       embeds: [],
     };
   }
@@ -93,7 +108,7 @@ export async function handleWatch(
     const linkedNames = linkedShooters.map((s) => s.name).join(", ");
     return {
       content:
-        `None of the linked shooters are competing in **${event.name}**.\n` +
+        `None of the linked shooters are competing in **${matchName}**.\n` +
         `Linked in this server: ${linkedNames}\n\n` +
         `If someone is missing, they can use \`/link <name>\` to connect their account.`,
       embeds: [],
@@ -101,9 +116,9 @@ export async function handleWatch(
   }
 
   const state: WatchState = {
-    matchCt: event.content_type,
-    matchId: event.id,
-    matchName: event.name,
+    matchCt,
+    matchId,
+    matchName,
     channelId,
     lastScoringPct: fullMatch.scoring_completed,
     notifiedStages: {},
@@ -112,14 +127,14 @@ export async function handleWatch(
 
   await kv.put(watchKey(guildId), JSON.stringify(state));
 
-  const matchUrl = `${baseUrl}/match/${event.content_type}/${event.id}`;
+  const matchUrl = `${baseUrl}/match/${matchCt}/${matchId}`;
   const statusLabel =
     fullMatch.scoring_completed > 0
       ? `${fullMatch.scoring_completed}% scored`
       : "Not started yet";
 
   const embed: APIEmbed = {
-    title: `Now watching: ${event.name}`,
+    title: `Now watching: ${matchName}`,
     url: matchUrl,
     color: 0xf59e0b, // amber
     fields: [

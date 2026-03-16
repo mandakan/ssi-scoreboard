@@ -3,13 +3,24 @@
 
 import type { APIEmbed } from "discord-api-types/v10";
 import type { ScoreboardClient } from "../scoreboard-client";
+import type { ShooterSearchResult } from "../types";
+import { parseShooterRef } from "./autocomplete";
 
+/**
+ * Look up a shooter by name search, then show their dashboard.
+ * Used by `/shooter <name>`. Accepts autocomplete-resolved "sid:12345" values.
+ */
 export async function handleShooter(
   client: ScoreboardClient,
   baseUrl: string,
   name: string,
 ): Promise<{ content: string; embeds: APIEmbed[] }> {
-  // First search for the shooter
+  // If autocomplete resolved the value, skip the search
+  const shooterId = parseShooterRef(name);
+  if (shooterId != null) {
+    return buildShooterEmbed(client, baseUrl, shooterId);
+  }
+
   const results = await client.searchShooters(name);
 
   if (results.length === 0) {
@@ -20,13 +31,32 @@ export async function handleShooter(
   }
 
   const shooter = results[0];
+  return buildShooterEmbed(client, baseUrl, shooter.shooterId, results);
+}
 
-  // Fetch full dashboard
-  const dashboard = await client.getShooterDashboard(shooter.shooterId);
-  const dashUrl = `${baseUrl}/shooter/${shooter.shooterId}`;
+/**
+ * Show the dashboard for a known shooter ID (skips name search).
+ * Used by `/me` where we already have the shooterId from KV.
+ */
+export async function handleShooterById(
+  client: ScoreboardClient,
+  baseUrl: string,
+  shooterId: number,
+): Promise<{ content: string; embeds: APIEmbed[] }> {
+  return buildShooterEmbed(client, baseUrl, shooterId);
+}
+
+async function buildShooterEmbed(
+  client: ScoreboardClient,
+  baseUrl: string,
+  shooterId: number,
+  searchResults?: ShooterSearchResult[],
+): Promise<{ content: string; embeds: APIEmbed[] }> {
+  const dashboard = await client.getShooterDashboard(shooterId);
+  const dashUrl = `${baseUrl}/shooter/${shooterId}`;
 
   const profile = dashboard.profile;
-  const displayName = profile?.name ?? shooter.name;
+  const displayName = profile?.name ?? `Shooter #${shooterId}`;
 
   const fields: APIEmbed["fields"] = [
     {
@@ -105,12 +135,12 @@ export async function handleShooter(
   };
 
   let content = "";
-  if (results.length > 1) {
-    const others = results
+  if (searchResults && searchResults.length > 1) {
+    const others = searchResults
       .slice(1, 4)
       .map((r) => `• ${r.name}${r.club ? ` (${r.club})` : ""}`)
       .join("\n");
-    content = `Found ${results.length} shooters. Showing top result.\n\n**Did you mean:**\n${others}`;
+    content = `Found ${searchResults.length} shooters. Showing top result.\n\n**Did you mean:**\n${others}`;
   }
 
   return { content, embeds: [embed] };

@@ -4,6 +4,11 @@
 // SECURITY: All guild-specific data (user↔shooter links, watch state, reminders)
 // is scoped by guild_id in KV keys. Commands that access guild-scoped data
 // reject DM interactions to prevent cross-server data leaks.
+//
+// DEFERRED RESPONSES: Commands that do any async work (API calls, KV reads) return
+// a deferred response (type 5) immediately, then edit the original message via the
+// Discord webhook once the data is ready. This avoids Discord's 3-second interaction
+// response deadline.
 
 import { InteractionResponseType } from "discord-interactions";
 import {
@@ -15,7 +20,7 @@ import type { Env } from "./types";
 import { verifyDiscordRequest } from "./verify";
 import { ScoreboardClient } from "./scoreboard-client";
 import { handleMatch } from "./commands/match";
-import { handleShooter } from "./commands/shooter";
+import { handleShooter, handleShooterById } from "./commands/shooter";
 import { handleLink, getLinkedShooter } from "./commands/link";
 import { handleHelp, WELCOME_EMBED } from "./commands/help";
 import { handleLeaderboard } from "./commands/leaderboard";
@@ -23,13 +28,14 @@ import { handleSummary } from "./commands/summary";
 import { handleWatch, handleUnwatch } from "./commands/watch";
 import { handleRemindRegistrations } from "./commands/remind-registrations";
 import { handleRemindSquads } from "./commands/remind-squads";
+import { handleAutocomplete } from "./commands/autocomplete";
 import { pollWatchedMatches } from "./notifications/stage-scored";
 import { pollRegistrationReminders } from "./notifications/registration-reminder";
 import { landingPage, privacyPage, tosPage } from "./pages";
 import { pollSquadReminders } from "./notifications/squad-reminder";
 
 const worker: ExportedHandler<Env> = {
-  async fetch(request, env): Promise<Response> {
+  async fetch(request, env, ctx): Promise<Response> {
     const url = new URL(request.url);
 
     // Static pages and invite redirect (GET routes)
@@ -64,8 +70,12 @@ const worker: ExportedHandler<Env> = {
       return jsonResponse({ type: InteractionResponseType.PONG });
     }
 
+    if (body.type === InteractionType.ApplicationCommandAutocomplete) {
+      return handleAutocompleteInteraction(body, env);
+    }
+
     if (body.type === InteractionType.ApplicationCommand) {
-      return await handleCommand(body, env);
+      return handleCommand(body, env, ctx);
     }
 
     return jsonResponse({
@@ -85,7 +95,8 @@ const worker: ExportedHandler<Env> = {
 
 export default worker;
 
-/** Extract the Discord user ID from an interaction (guild or DM context). */
+// --- Helpers ---
+
 function getUserId(interaction: APIInteraction): string | undefined {
   const raw = interaction as Record<string, unknown>;
   const member = raw.member as Record<string, unknown> | undefined;
@@ -93,20 +104,14 @@ function getUserId(interaction: APIInteraction): string | undefined {
   return user?.id;
 }
 
-/** Extract the guild ID from an interaction. Undefined in DM context. */
 function getGuildId(interaction: APIInteraction): string | undefined {
   return (interaction as Record<string, unknown>).guild_id as string | undefined;
 }
 
-/** Extract the channel ID from an interaction. */
 function getChannelId(interaction: APIInteraction): string | undefined {
   return (interaction as Record<string, unknown>).channel_id as string | undefined;
 }
 
-/**
- * Check if this is the first interaction from a guild.
- * If so, mark it as seen and return the welcome embed to prepend.
- */
 async function maybeWelcome(
   kv: KVNamespace,
   guildId: string | undefined,
@@ -115,21 +120,101 @@ async function maybeWelcome(
   const key = `g:${guildId}:welcomed`;
   const seen = await kv.get(key);
   if (seen) return null;
-  // Mark as welcomed (no expiry — persists forever)
   await kv.put(key, "1");
   return WELCOME_EMBED;
 }
 
-async function handleCommand(
+// Commands where the response is only visible to the caller
+const EPHEMERAL_COMMANDS = new Set(["help", "link", "me", "unwatch", "remind-registrations", "remind-squads"]);
+
+/**
+ * Edit the original deferred response via the Discord webhook API.
+ */
+async function editOriginalResponse(
+  appId: string,
+  token: string,
+  data: { content?: string; embeds?: unknown[] },
+): Promise<void> {
+  const url = `https://discord.com/api/v10/webhooks/${appId}/${token}/messages/@original`;
+  const resp = await fetch(url, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    console.error(`Failed to edit deferred response: ${resp.status} ${text}`);
+  }
+}
+
+// --- Autocomplete ---
+
+async function handleAutocompleteInteraction(
   interaction: APIInteraction,
   env: Env,
 ): Promise<Response> {
   const data = (interaction as Record<string, unknown>).data as {
     name: string;
-    options?: Array<{ name: string; value: unknown }>;
+    options?: Array<{ name: string; value: unknown; focused?: boolean }>;
   };
 
+  const focused = data.options?.find((o) => o.focused);
+  if (!focused) {
+    return jsonResponse({
+      type: InteractionResponseType.APPLICATION_COMMAND_AUTOCOMPLETE_RESULT,
+      data: { choices: [] },
+    });
+  }
+
+  const client = new ScoreboardClient(env.SCOREBOARD_BASE_URL);
+  try {
+    const choices = await handleAutocomplete(
+      client,
+      data.name,
+      String(focused.value),
+    );
+    return jsonResponse({
+      type: InteractionResponseType.APPLICATION_COMMAND_AUTOCOMPLETE_RESULT,
+      data: { choices },
+    });
+  } catch (err) {
+    console.error(`Autocomplete for /${data.name} failed:`, err);
+    return jsonResponse({
+      type: InteractionResponseType.APPLICATION_COMMAND_AUTOCOMPLETE_RESULT,
+      data: { choices: [] },
+    });
+  }
+}
+
+// --- Command routing ---
+
+function handleCommand(
+  interaction: APIInteraction,
+  env: Env,
+  ctx: ExecutionContext,
+): Response {
+  const data = (interaction as Record<string, unknown>).data as {
+    name: string;
+    options?: Array<{ name: string; value: unknown }>;
+  };
   const commandName = data.name;
+  const ephemeral = EPHEMERAL_COMMANDS.has(commandName);
+
+  // /help is the only fully synchronous command — respond inline
+  if (commandName === "help") {
+    const result = handleHelp();
+    return jsonResponse({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        content: result.content || undefined,
+        embeds: result.embeds.length > 0 ? result.embeds : undefined,
+        flags: 64,
+      },
+    });
+  }
+
+  // All other commands: defer immediately, process in background
+  const token = (interaction as Record<string, unknown>).token as string;
   const options = (data.options ?? []).reduce(
     (acc, opt) => {
       acc[opt.name] = opt.value;
@@ -138,32 +223,43 @@ async function handleCommand(
     {} as Record<string, unknown>,
   );
 
+  ctx.waitUntil(
+    handleDeferredCommand(commandName, options, interaction, env, token, ephemeral),
+  );
+
+  return jsonResponse({
+    type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+    data: {
+      ...(ephemeral ? { flags: 64 } : {}),
+    },
+  });
+}
+
+/**
+ * Process a command in the background and edit the deferred response when done.
+ */
+async function handleDeferredCommand(
+  commandName: string,
+  options: Record<string, unknown>,
+  interaction: APIInteraction,
+  env: Env,
+  token: string,
+  ephemeral: boolean,
+): Promise<void> {
   const client = new ScoreboardClient(env.SCOREBOARD_BASE_URL);
   const baseUrl = env.SCOREBOARD_BASE_URL;
   const guildId = getGuildId(interaction);
 
-  // Commands where the response is only visible to the caller
-  const EPHEMERAL_COMMANDS = new Set(["help", "link", "me", "unwatch", "remind-registrations", "remind-squads"]);
-
   try {
     let content = "";
     let embeds: unknown[] = [];
-    const ephemeral = EPHEMERAL_COMMANDS.has(commandName);
 
     // On first-ever interaction in a guild, prepend the welcome embed
-    // (only for public commands so it's visible to the whole channel)
     const welcomeEmbed = !ephemeral
       ? await maybeWelcome(env.BOT_KV, guildId)
       : null;
 
     switch (commandName) {
-      case "help": {
-        const result = handleHelp();
-        content = result.content;
-        embeds = result.embeds;
-        break;
-      }
-
       case "match": {
         const result = await handleMatch(client, baseUrl, options.query as string);
         content = result.content;
@@ -234,7 +330,7 @@ async function handleCommand(
             "You haven't linked your account yet. Use `/link <your name>` first.";
           break;
         }
-        const result = await handleShooter(client, baseUrl, linked.name);
+        const result = await handleShooterById(client, baseUrl, linked.shooterId);
         content = result.content;
         embeds = result.embeds;
         break;
@@ -317,7 +413,6 @@ async function handleCommand(
         content = `Unknown command: ${commandName}`;
     }
 
-    // If this is the guild's first interaction, prepend the welcome embed
     if (welcomeEmbed) {
       embeds = [welcomeEmbed, ...embeds];
       if (!content) {
@@ -325,24 +420,15 @@ async function handleCommand(
       }
     }
 
-    return jsonResponse({
-      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        content: content || undefined,
-        embeds: embeds.length > 0 ? embeds : undefined,
-        // ephemeral = only visible to the user who ran the command
-        ...(ephemeral ? { flags: 64 } : {}),
-      },
+    await editOriginalResponse(env.DISCORD_APP_ID, token, {
+      content: content || undefined,
+      embeds: embeds.length > 0 ? embeds : undefined,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error(`Command /${commandName} failed:`, message);
-    return jsonResponse({
-      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        content: `Something went wrong: ${message}`,
-        flags: 64, // ephemeral
-      },
+    await editOriginalResponse(env.DISCORD_APP_ID, token, {
+      content: `Something went wrong: ${message}`,
     });
   }
 }

@@ -4,6 +4,7 @@
 
 import type { APIEmbed } from "discord-api-types/v10";
 import type { ScoreboardClient } from "../scoreboard-client";
+import { parseEventRef } from "./autocomplete";
 
 interface TrackedCompetitor {
   competitorId: number;
@@ -17,13 +18,29 @@ export async function handleLeaderboard(
   guildId: string,
   query: string,
 ): Promise<{ content: string; embeds: APIEmbed[] }> {
-  const events = await client.searchEvents(query);
-  if (events.length === 0) {
-    return { content: `No matches found for "${query}".`, embeds: [] };
+  // Resolve the match — autocomplete pre-resolved or search fallback
+  let matchCt: number;
+  let matchId: number;
+  let matchName: string;
+
+  const ref = parseEventRef(query);
+  if (ref) {
+    matchCt = ref.ct;
+    matchId = ref.id;
+    matchName = ""; // filled from getMatch below
+  } else {
+    const events = await client.searchEvents(query);
+    if (events.length === 0) {
+      return { content: `No matches found for "${query}".`, embeds: [] };
+    }
+    const event = events[0];
+    matchCt = event.content_type;
+    matchId = event.id;
+    matchName = event.name;
   }
 
-  const event = events[0];
-  const match = await client.getMatch(event.content_type, event.id);
+  const match = await client.getMatch(matchCt, matchId);
+  if (!matchName) matchName = match.name;
 
   const linkedShooters = await getGuildLinkedShooters(kv, guildId);
   if (linkedShooters.length === 0) {
@@ -46,14 +63,14 @@ export async function handleLeaderboard(
 
   if (tracked.length === 0) {
     return {
-      content: `None of the linked shooters are competing in **${event.name}**.`,
+      content: `None of the linked shooters are competing in **${matchName}**.`,
       embeds: [],
     };
   }
 
   const compareResult = await client.compare(
-    event.content_type,
-    event.id,
+    matchCt,
+    matchId,
     tracked.map((t) => t.competitorId),
   );
 
@@ -129,7 +146,7 @@ export async function handleLeaderboard(
   // Sort by avg percent descending
   shooterStats.sort((a, b) => b.avgPercent - a.avgPercent);
 
-  const matchUrl = `${baseUrl}/match/${event.content_type}/${event.id}`;
+  const matchUrl = `${baseUrl}/match/${matchCt}/${matchId}`;
   const fields: APIEmbed["fields"] = [];
 
   // Overall ranking table
@@ -191,7 +208,7 @@ export async function handleLeaderboard(
   else if (leader?.avgPercent >= 50) color = 0xf59e0b;
 
   const embed: APIEmbed = {
-    title: `Leaderboard: ${event.name}`,
+    title: `Leaderboard: ${matchName}`,
     url: matchUrl,
     description: leader
       ? `${leader.name} leads with ${leader.avgPercent.toFixed(1)}% avg — ${scoringLabel}`
