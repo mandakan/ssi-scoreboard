@@ -26,7 +26,13 @@ function mockKV(store: Record<string, string> = {}): KVNamespace {
       delete store[key];
       return Promise.resolve();
     }),
-    list: vi.fn().mockResolvedValue({ keys: [] }),
+    list: vi.fn(({ prefix }: { prefix: string }) =>
+      Promise.resolve({
+        keys: Object.keys(store)
+          .filter((k) => k.startsWith(prefix))
+          .map((name) => ({ name })),
+      }),
+    ),
   } as unknown as KVNamespace;
 }
 
@@ -50,22 +56,69 @@ function makeEvent(overrides: Partial<EventSearchResult> = {}): EventSearchResul
 // --- /watch ---
 
 describe("handleWatch", () => {
-  it("stores watch state and returns embed", async () => {
+  it("stores watch state and returns embed with tracked names", async () => {
     const event = makeEvent();
     const client = mockClient({
       searchEvents: vi.fn().mockResolvedValue([event]),
+      getMatch: vi.fn().mockResolvedValue({
+        competitors: [
+          { id: 1, shooterId: 42, name: "Jane Doe", division: "Production", club: "PSK" },
+        ],
+        stages: [],
+        squads: [],
+      }),
     });
-    const store: Record<string, string> = {};
+    const store: Record<string, string> = {
+      "g:guild-1:link:user-1": JSON.stringify({ shooterId: 42, name: "Jane Doe" }),
+    };
     const kv = mockKV(store);
 
     const result = await handleWatch(client, kv, BASE_URL, "guild-1", "channel-1", "Swedish");
 
     expect(result.embeds).toHaveLength(1);
     expect(result.embeds[0].title).toContain("Swedish Handgun 2026");
+    const trackingField = result.embeds[0].fields!.find((f) => f.name === "Tracking");
+    expect(trackingField?.value).toContain("Jane Doe");
     expect(kv.put).toHaveBeenCalledWith(
       "g:guild-1:watch",
       expect.stringContaining('"matchId":100'),
     );
+  });
+
+  it("rejects when no linked shooters exist", async () => {
+    const event = makeEvent();
+    const client = mockClient({
+      searchEvents: vi.fn().mockResolvedValue([event]),
+    });
+    const kv = mockKV();
+
+    const result = await handleWatch(client, kv, BASE_URL, "guild-1", "channel-1", "Swedish");
+    expect(result.content).toContain("No one in this server has linked");
+    expect(result.content).toContain("/link");
+    expect(result.embeds).toHaveLength(0);
+  });
+
+  it("rejects when linked shooters are not in the match", async () => {
+    const event = makeEvent();
+    const client = mockClient({
+      searchEvents: vi.fn().mockResolvedValue([event]),
+      getMatch: vi.fn().mockResolvedValue({
+        competitors: [
+          { id: 1, shooterId: 999, name: "Other Person", division: "Open", club: "ABC" },
+        ],
+        stages: [],
+        squads: [],
+      }),
+    });
+    const store: Record<string, string> = {
+      "g:guild-1:link:user-1": JSON.stringify({ shooterId: 42, name: "Jane Doe" }),
+    };
+    const kv = mockKV(store);
+
+    const result = await handleWatch(client, kv, BASE_URL, "guild-1", "channel-1", "Swedish");
+    expect(result.content).toContain("None of the linked shooters");
+    expect(result.content).toContain("Jane Doe");
+    expect(result.embeds).toHaveLength(0);
   });
 
   it("rejects when already watching", async () => {

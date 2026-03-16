@@ -64,6 +64,40 @@ export async function handleWatch(
     };
   }
 
+  // Validate that there are linked shooters competing in this match
+  const linkedShooters = await getGuildLinkedShooters(kv, guildId);
+  if (linkedShooters.length === 0) {
+    return {
+      content:
+        "No one in this server has linked their account yet.\n" +
+        "Use `/link <your name>` to connect your Discord account to your SSI shooter profile, then try `/watch` again.",
+      embeds: [],
+    };
+  }
+
+  // Resolve linked shooters to match competitors
+  const fullMatch = await client.getMatch(match.content_type, match.id);
+  const trackedNames: string[] = [];
+  for (const linked of linkedShooters) {
+    const competitor = fullMatch.competitors.find(
+      (c) => c.shooterId === linked.shooterId,
+    );
+    if (competitor) {
+      trackedNames.push(competitor.name);
+    }
+  }
+
+  if (trackedNames.length === 0) {
+    const linkedNames = linkedShooters.map((s) => s.name).join(", ");
+    return {
+      content:
+        `None of the linked shooters are competing in **${match.name}**.\n` +
+        `Linked in this server: ${linkedNames}\n\n` +
+        `If someone is missing, they can use \`/link <name>\` to connect their account.`,
+      embeds: [],
+    };
+  }
+
   const state: WatchState = {
     matchCt: match.content_type,
     matchId: match.id,
@@ -90,10 +124,11 @@ export async function handleWatch(
       { name: "Status", value: statusLabel, inline: true },
       { name: "Stages", value: String(match.stages_count), inline: true },
       { name: "Competitors", value: String(match.competitors_count), inline: true },
+      { name: "Tracking", value: trackedNames.join(", "), inline: false },
     ],
     footer: {
       text:
-        "I'll post here when linked shooters finish a stage. Use /unwatch to stop.",
+        "I'll post here when these shooters finish a stage. Use /unwatch to stop.",
     },
   };
 
@@ -113,4 +148,22 @@ export async function handleUnwatch(
   await kv.delete(watchKey(guildId));
 
   return `Stopped watching **${state.matchName}**.`;
+}
+
+async function getGuildLinkedShooters(
+  kv: KVNamespace,
+  guildId: string,
+): Promise<Array<{ shooterId: number; name: string }>> {
+  const prefix = `g:${guildId}:link:`;
+  const listed = await kv.list({ prefix });
+  const results: Array<{ shooterId: number; name: string }> = [];
+
+  for (const key of listed.keys) {
+    const raw = await kv.get(key.name);
+    if (raw) {
+      results.push(JSON.parse(raw));
+    }
+  }
+
+  return results;
 }
