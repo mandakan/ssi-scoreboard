@@ -39,6 +39,15 @@ function layout(title: string, body: string): string {
     .commands { list-style: none; padding: 0; }
     .commands li { padding: 0.5rem 0; border-bottom: 1px solid #2a2a4a; }
     .commands code { color: ${BRAND_COLOR}; background: none; font-weight: 600; }
+    .badge {
+      display: inline-block; font-size: 0.7rem; font-weight: 600;
+      padding: 0.1em 0.45em; border-radius: 3px; vertical-align: middle;
+      margin-left: 0.4em; letter-spacing: 0.02em;
+    }
+    .badge-ephemeral { background: #2a2a4a; color: #a0a0c0; }
+    .badge-public { background: #22c55e22; color: #4ade80; }
+    .badge-server { background: #f59e0b22; color: #fbbf24; }
+    .section-note { color: #888; font-size: 0.9rem; margin-bottom: 0.75rem; }
     footer {
       text-align: center; padding: 1.5rem 1rem; color: #666;
       font-size: 0.85rem; border-top: 1px solid #2a2a4a;
@@ -74,18 +83,38 @@ export function landingPage(): string {
     Look up match results, track live scoring, compare shooters, and get
     daily reminders about upcoming matches — all without leaving Discord.</p>
 
-    <h2>Commands</h2>
+    <h2>Look up matches &amp; shooters</h2>
+    <p class="section-note">Anyone can run these. Results are posted in the channel for everyone to see.</p>
     <ul class="commands">
-      <li><code>/match &lt;query&gt;</code> Search for a match and see its overview</li>
-      <li><code>/shooter &lt;name&gt;</code> Look up any shooter's stats and achievements</li>
-      <li><code>/link &lt;name&gt;</code> Connect your Discord account to your shooter profile</li>
-      <li><code>/me</code> View your personal dashboard</li>
-      <li><code>/summary &lt;query&gt;</code> Per-stage breakdown for linked shooters in a match</li>
-      <li><code>/leaderboard &lt;query&gt;</code> Rankings among linked shooters</li>
-      <li><code>/watch &lt;query&gt;</code> Get notified when linked shooters finish a stage</li>
-      <li><code>/unwatch</code> Stop watching the current match</li>
-      <li><code>/remind-registrations set</code> Daily digest of upcoming matches</li>
-      <li><code>/help</code> Show all commands in Discord</li>
+      <li><code>/match &lt;query&gt;</code> Search for a match and see its overview — stages, competitors, scoring status <span class="badge badge-public">visible to all</span></li>
+      <li><code>/shooter &lt;name&gt;</code> Look up any shooter's cross-competition stats and achievements <span class="badge badge-public">visible to all</span></li>
+      <li><code>/summary &lt;query&gt;</code> Per-stage breakdown for linked shooters in a match — HF, hit counts, % vs leader <span class="badge badge-public">visible to all</span></li>
+      <li><code>/leaderboard &lt;query&gt;</code> Who's leading among linked shooters? Overall ranking + stage winners <span class="badge badge-public">visible to all</span></li>
+    </ul>
+
+    <h2>Your shooter profile</h2>
+    <p class="section-note">These commands are based on your linked account. Responses are only visible to you.</p>
+    <ul class="commands">
+      <li><code>/link &lt;name&gt;</code> Connect your Discord account to your SSI shooter profile <span class="badge badge-ephemeral">only you</span></li>
+      <li><code>/unlink</code> Disconnect your Discord account from your shooter profile <span class="badge badge-ephemeral">only you</span></li>
+      <li><code>/me</code> View your personal dashboard — stats, achievements, upcoming matches (requires <code>/link</code> first) <span class="badge badge-ephemeral">only you</span></li>
+    </ul>
+
+    <h2>Server-wide features</h2>
+    <p class="section-note">Configured once per server by any member. Reminders and notifications are posted
+    in the channel where they were set up. <strong>These commands ping people</strong> — make sure
+    your server is on board before enabling them.</p>
+    <ul class="commands">
+      <li><code>/watch &lt;query&gt;</code> Watch a live match — posts score updates in this channel when linked shooters finish a stage <span class="badge badge-server">server-wide</span></li>
+      <li><code>/unwatch</code> Stop watching the current match <span class="badge badge-ephemeral">only you</span></li>
+      <li><code>/remind-registrations set</code> Daily digest of upcoming matches with registration status. Filter by country, level, discipline, and lookahead window. <strong>Pings @here</strong> when a match opens registration that day — everyone in the channel gets notified <span class="badge badge-server">server-wide · @here</span></li>
+      <li><code>/remind-squads set</code> Reminds linked shooters before squadding opens and on match day, with squad assignments. <strong>@mentions each linked user by name</strong> — only people who used <code>/link</code> get pinged <span class="badge badge-server">server-wide · @mentions</span></li>
+    </ul>
+
+    <h2>Utility</h2>
+    <ul class="commands">
+      <li><code>/introduction</code> Let the Range Officer introduce himself to the channel — great for onboarding new members <span class="badge badge-public">visible to all</span></li>
+      <li><code>/help</code> Show all commands and getting-started instructions <span class="badge badge-ephemeral">only you</span></li>
     </ul>
 
     <h2>Getting started</h2>
