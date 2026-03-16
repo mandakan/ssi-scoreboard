@@ -41,7 +41,13 @@ jobs:
 
       - run: pnpm typecheck   # tsc --noEmit
 
+      - name: Typecheck discord bot
+        run: cd discord && pnpm typecheck
+
       - run: pnpm test
+
+      - name: Test discord bot
+        run: cd discord && pnpm test
 
       - run: pnpm build
         env:
