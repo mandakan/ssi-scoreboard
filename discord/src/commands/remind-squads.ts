@@ -8,14 +8,19 @@ import type { APIEmbed } from "discord-api-types/v10";
 
 export interface SquadReminderConfig {
   channelId: string;
-  /** How many days before a match to send the "match coming up" reminder. 0 = match day only. */
-  daysBefore: number;
+  /**
+   * Days before squadding opens to send a heads-up reminder.
+   * 0 is always included (fires on the day squadding opens).
+   * Example: [0, 1, 7] = remind 7 days before, 1 day before, and on the day.
+   */
+  remindDays: number[];
   /** ISO date string (YYYY-MM-DD) of the last successful run. */
   lastRunDate: string | null;
   /**
    * Track which events have been notified for which trigger types,
    * so we don't repeat the same reminder if cron fires multiple times per day.
-   * Map of matchRef ("ct:matchId") -> array of trigger types ("squadding" | "match-day" | "match-eve").
+   * Map of matchRef ("ct:matchId") -> array of trigger types
+   * ("squadding-0" | "squadding-1" | "squadding-7" | "match-day").
    */
   notifiedEvents: Record<string, string[]>;
   createdAt: string;
@@ -31,7 +36,7 @@ export async function handleRemindSquads(
   guildId: string,
   channelId: string,
   action: string | undefined,
-  daysBefore: number | undefined,
+  daysRaw: string | undefined,
 ): Promise<{ content: string; embeds: APIEmbed[] }> {
   switch (action) {
     case "off":
@@ -40,21 +45,53 @@ export async function handleRemindSquads(
       return handleShow(kv, guildId);
     case "set":
     default:
-      return handleSet(kv, guildId, channelId, daysBefore);
+      return handleSet(kv, guildId, channelId, daysRaw);
   }
+}
+
+/**
+ * Parse a comma-separated list of days into a sorted, deduplicated number array.
+ * Always includes 0 (the day squadding opens). Clamps to 0–30.
+ * Examples: "1,7" → [0, 1, 7], "" → [0], "0,1,1,3" → [0, 1, 3]
+ */
+function parseRemindDays(raw: string | undefined): number[] {
+  const days = new Set<number>([0]); // 0 is always included
+
+  if (raw) {
+    for (const part of raw.split(",")) {
+      const n = parseInt(part.trim(), 10);
+      if (!isNaN(n) && n >= 0 && n <= 30) {
+        days.add(n);
+      }
+    }
+  }
+
+  return [...days].sort((a, b) => a - b);
+}
+
+function formatRemindDays(days: number[]): string {
+  if (days.length === 1 && days[0] === 0) {
+    return "On the day squadding opens";
+  }
+  const parts = days.map((d) => {
+    if (d === 0) return "day of";
+    if (d === 1) return "1 day before";
+    return `${d} days before`;
+  });
+  return parts.join(", ");
 }
 
 async function handleSet(
   kv: KVNamespace,
   guildId: string,
   channelId: string,
-  daysBefore: number | undefined,
+  daysRaw: string | undefined,
 ): Promise<{ content: string; embeds: APIEmbed[] }> {
-  const days = daysBefore != null && daysBefore >= 0 && daysBefore <= 7 ? daysBefore : 1;
+  const remindDays = parseRemindDays(daysRaw);
 
   const config: SquadReminderConfig = {
     channelId,
-    daysBefore: days,
+    remindDays,
     lastRunDate: null,
     notifiedEvents: {},
     createdAt: new Date().toISOString(),
@@ -69,7 +106,8 @@ async function handleSet(
       "I'll remind linked shooters when squadding opens for their upcoming matches, " +
       "and post match-day reminders with squad assignments.\n\n" +
       `Channel: <#${channelId}>\n` +
-      `Remind before match: **${days === 0 ? "match day only" : `${days} day${days > 1 ? "s" : ""} before + match day`}**`,
+      `Squadding reminders: **${formatRemindDays(remindDays)}**\n` +
+      "Match-day reminder: **always on**",
     footer: {
       text: "Runs daily. Shooters must /link their accounts to get mentioned.",
     },
@@ -116,10 +154,8 @@ async function handleShow(
   const fields: APIEmbed["fields"] = [
     { name: "Channel", value: `<#${config.channelId}>`, inline: true },
     {
-      name: "Remind before",
-      value: config.daysBefore === 0
-        ? "Match day only"
-        : `${config.daysBefore} day${config.daysBefore > 1 ? "s" : ""} before`,
+      name: "Squadding reminders",
+      value: formatRemindDays(config.remindDays),
       inline: true,
     },
   ];

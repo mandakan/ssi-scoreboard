@@ -70,10 +70,11 @@ const HELP_EMBED: APIEmbed = {
       inline: false,
     },
     {
-      name: "/remind-squads set [days_before]",
+      name: "/remind-squads set [days]",
       value:
-        "Notify linked shooters (with @mentions) when squadding opens for their matches " +
-        "and on match day with squad assignments. Requires `/link` first.",
+        "Notify linked shooters (with @mentions) before squadding opens " +
+        "(e.g. `1,7` = 7 days + 1 day + day-of). Also posts match-day reminders " +
+        "with squad assignments. Requires `/link` first.",
       inline: false,
     },
     {

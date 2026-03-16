@@ -3,6 +3,11 @@
 // 1. Scans linked shooters' upcoming matches (from dashboard API)
 // 2. Fetches match data for matches with relevant dates (squadding/match day)
 // 3. Posts reminders with @ mentions showing squad assignments
+//
+// Squadding reminders fire N days before squadding opens (configurable,
+// e.g. [0, 1, 7]). Day 0 = the day squadding opens. This is the most
+// important trigger: squadding is first-come-first-serve, so shooters
+// need to be ready at the exact opening time to squad together.
 
 import type { APIEmbed } from "discord-api-types/v10";
 import type { Env, MatchResponse, UpcomingMatch } from "../types";
@@ -53,7 +58,12 @@ interface MatchShooterInfo {
   squadName: string | null;
 }
 
-type TriggerType = "squadding" | "match-day" | "match-eve";
+/**
+ * Trigger types:
+ * - "squadding-N" — N days before squadding opens (0 = the day itself)
+ * - "match-day"   — the day the match starts
+ */
+type TriggerType = string;
 
 interface MatchNotification {
   ct: string;
@@ -63,13 +73,16 @@ interface MatchNotification {
   date: string | null;
   level: string | null;
   triggerType: TriggerType;
-  /** Shooters to @mention (unsquadded when squadding is open, all otherwise). */
+  /** Shooters to @mention (unsquadded when squadding is already open, all otherwise). */
   shooters: MatchShooterInfo[];
   /** Shooters already in a squad — shown without @mention so others know which squad to join. */
   alreadySquadded: MatchShooterInfo[];
   /** The raw ISO timestamp when squadding opens (for displaying exact time). */
   squaddingStartsRaw: string | null;
+  /** Whether squadding is currently open right now. */
   isSquaddingOpen: boolean;
+  /** Days until squadding opens (0 = today, 1 = tomorrow, etc.). */
+  daysUntilSquadding: number;
   stagesCount: number;
 }
 
@@ -129,37 +142,23 @@ async function processGuildSquadReminder(
   // Check each match for relevant dates and fetch full data if needed
   const notifications: MatchNotification[] = [];
   const baseUrl = env.SCOREBOARD_BASE_URL;
+  const todayTime = new Date(todayStr).getTime();
+  const msPerDay = 1000 * 60 * 60 * 24;
 
   for (const [ref, { upcoming, shooters }] of matchShooterMap) {
     const matchDate = upcoming.date ? upcoming.date.slice(0, 10) : null;
 
-    // Determine trigger types for this match
-    const triggers: TriggerType[] = [];
+    const triggers: Array<{ type: TriggerType; daysUntilSquadding: number }> = [];
 
-    // Match day check
+    // Match day check — always fires on match start date
     if (matchDate === todayStr) {
       if (!isAlreadyNotified(config, ref, "match-day")) {
-        triggers.push("match-day");
+        triggers.push({ type: "match-day", daysUntilSquadding: -1 });
       }
     }
 
-    // Match eve check (N days before)
-    if (config.daysBefore > 0 && matchDate) {
-      const matchTime = new Date(matchDate).getTime();
-      const todayTime = new Date(todayStr).getTime();
-      const daysUntil = Math.round((matchTime - todayTime) / (1000 * 60 * 60 * 24));
-      if (daysUntil > 0 && daysUntil <= config.daysBefore) {
-        if (!isAlreadyNotified(config, ref, "match-eve")) {
-          triggers.push("match-eve");
-        }
-      }
-    }
-
-    // Squadding check — need full match data for squadding_starts
-    // We fetch match data if there's any trigger, or to check squadding
+    // Squadding checks — need full match data for squadding_starts
     let matchData: MatchResponse | null = null;
-
-    // Always try to fetch match data to check squadding date
     try {
       matchData = await client.getMatch(
         parseInt(upcoming.ct, 10),
@@ -170,9 +169,18 @@ async function processGuildSquadReminder(
     }
 
     if (matchData?.squadding_starts) {
-      const squaddingDate = matchData.squadding_starts.slice(0, 10);
-      if (squaddingDate === todayStr && !isAlreadyNotified(config, ref, "squadding")) {
-        triggers.push("squadding");
+      const squaddingDateStr = matchData.squadding_starts.slice(0, 10);
+      const squaddingTime = new Date(squaddingDateStr).getTime();
+      const daysUntil = Math.round((squaddingTime - todayTime) / msPerDay);
+
+      // Check each configured remind day
+      for (const day of config.remindDays) {
+        if (daysUntil === day) {
+          const triggerKey = `squadding-${day}`;
+          if (!isAlreadyNotified(config, ref, triggerKey)) {
+            triggers.push({ type: triggerKey, daysUntilSquadding: day });
+          }
+        }
       }
     }
 
@@ -187,7 +195,6 @@ async function processGuildSquadReminder(
         );
         if (!competitor) continue;
 
-        // Find squad assignment
         let squadNumber: number | null = null;
         let squadName: string | null = null;
         for (const squad of matchData.squads) {
@@ -211,7 +218,6 @@ async function processGuildSquadReminder(
 
     if (shooterInfos.length === 0) continue;
 
-    // Create a notification for each trigger type
     const isOpen = matchData?.is_squadding_possible ?? false;
 
     for (const trigger of triggers) {
@@ -221,7 +227,7 @@ async function processGuildSquadReminder(
       // show them (without pinging) as a hint for which squad to join.
       let shootersToNotify = shooterInfos;
       let alreadySquadded: MatchShooterInfo[] = [];
-      if (trigger === "squadding" && isOpen) {
+      if (trigger.type.startsWith("squadding-") && isOpen) {
         shootersToNotify = shooterInfos.filter((s) => s.squadNumber == null);
         alreadySquadded = shooterInfos.filter((s) => s.squadNumber != null);
         if (shootersToNotify.length === 0) continue;
@@ -234,11 +240,12 @@ async function processGuildSquadReminder(
         venue: matchData?.venue ?? upcoming.venue,
         date: upcoming.date,
         level: matchData?.level ?? upcoming.level,
-        triggerType: trigger,
+        triggerType: trigger.type,
         shooters: shootersToNotify,
         alreadySquadded,
         squaddingStartsRaw: matchData?.squadding_starts ?? null,
         isSquaddingOpen: isOpen,
+        daysUntilSquadding: trigger.daysUntilSquadding,
         stagesCount: matchData?.stages_count ?? 0,
       });
     }
@@ -266,7 +273,7 @@ async function processGuildSquadReminder(
     config.notifiedEvents[ref].push(notification.triggerType);
   }
 
-  // Clean up old notified events (matches in the past)
+  // Clean up old notified events
   pruneNotifiedEvents(config);
 
   config.lastRunDate = todayStr;
@@ -284,12 +291,10 @@ function isAlreadyNotified(
 }
 
 /**
- * Remove entries for matches that were notified more than 7 days ago.
- * We don't have exact dates per entry, so we cap the map size instead.
+ * Cap the notifiedEvents map to prevent unbounded KV growth.
  */
 function pruneNotifiedEvents(config: SquadReminderConfig): void {
   const keys = Object.keys(config.notifiedEvents);
-  // Keep at most 50 entries to prevent unbounded KV growth
   if (keys.length > 50) {
     const toRemove = keys.slice(0, keys.length - 50);
     for (const key of toRemove) {
@@ -305,14 +310,11 @@ function buildReminderEmbed(
   const matchUrl = `${baseUrl}/match/${notification.ct}/${notification.matchId}`;
   const ssiUrl = `https://shootnscoreit.com/event/${notification.ct}/${notification.matchId}/`;
 
-  switch (notification.triggerType) {
-    case "squadding":
-      return buildSquaddingEmbed(notification, matchUrl, ssiUrl);
-    case "match-eve":
-      return buildMatchEveEmbed(notification, matchUrl, ssiUrl);
-    case "match-day":
-      return buildMatchDayEmbed(notification, matchUrl, ssiUrl);
+  if (notification.triggerType === "match-day") {
+    return buildMatchDayEmbed(notification, matchUrl, ssiUrl);
   }
+  // All squadding-N triggers
+  return buildSquaddingEmbed(notification, matchUrl, ssiUrl);
 }
 
 function buildSquaddingEmbed(
@@ -322,21 +324,30 @@ function buildSquaddingEmbed(
 ): APIEmbed {
   const lines: string[] = [];
 
-  // Show exact opening time — this is the critical info.
-  // Squadding is first-come-first-serve, so everyone needs to be ready.
-  if (n.squaddingStartsRaw) {
-    if (n.isSquaddingOpen) {
-      lines.push(`Squadding is **OPEN** for **${n.matchName}**!`);
+  if (n.daysUntilSquadding === 0) {
+    // Day of — show exact opening time
+    if (n.squaddingStartsRaw) {
+      if (n.isSquaddingOpen) {
+        lines.push(`Squadding is **OPEN** for **${n.matchName}**!`);
+      } else {
+        const unixTs = Math.floor(new Date(n.squaddingStartsRaw).getTime() / 1000);
+        lines.push(`Squadding opens **today** for **${n.matchName}**!`);
+        lines.push("");
+        lines.push(`Opens at: <t:${unixTs}:t> (<t:${unixTs}:R>)`);
+      }
     } else {
-      // Use Discord's timestamp format so each user sees it in their local timezone.
-      // <t:unix:t> = short time, <t:unix:R> = relative ("in 3 hours")
-      const unixTs = Math.floor(new Date(n.squaddingStartsRaw).getTime() / 1000);
-      lines.push(`Squadding opens **today** for **${n.matchName}**!`);
-      lines.push("");
-      lines.push(`Opens at: <t:${unixTs}:t> (<t:${unixTs}:R>)`);
+      lines.push(`Squadding opens today for **${n.matchName}**!`);
     }
   } else {
-    lines.push(`Squadding opens today for **${n.matchName}**!`);
+    // N days before
+    const dayWord = n.daysUntilSquadding === 1 ? "tomorrow" : `in ${n.daysUntilSquadding} days`;
+    lines.push(`Squadding opens **${dayWord}** for **${n.matchName}**!`);
+
+    if (n.squaddingStartsRaw) {
+      const unixTs = Math.floor(new Date(n.squaddingStartsRaw).getTime() / 1000);
+      lines.push("");
+      lines.push(`Opens: <t:${unixTs}:f> (<t:${unixTs}:R>)`);
+    }
   }
 
   lines.push("");
@@ -373,7 +384,6 @@ function buildSquaddingEmbed(
   // When squadding is open, show who already picked a squad (without pinging)
   // so the unsquadded shooters know which squad to join.
   if (n.alreadySquadded.length > 0) {
-    // Group by squad number for clarity
     const bySquad = new Map<number, string[]>();
     for (const s of n.alreadySquadded) {
       const sq = s.squadNumber!;
@@ -394,64 +404,26 @@ function buildSquaddingEmbed(
     });
   }
 
+  // Pick title based on state
+  let title: string;
+  if (n.daysUntilSquadding === 0) {
+    title = n.isSquaddingOpen ? "Squadding is OPEN!" : "Squadding opens today!";
+  } else if (n.daysUntilSquadding === 1) {
+    title = "Squadding opens tomorrow!";
+  } else {
+    title = `Squadding opens in ${n.daysUntilSquadding} days`;
+  }
+
+  // Color: red for today (urgent), amber for tomorrow, blue for further out
+  let color = 0x3b82f6; // blue
+  if (n.daysUntilSquadding === 0) color = 0xef4444; // red — urgent
+  else if (n.daysUntilSquadding === 1) color = 0xf59e0b; // amber
+
   return {
-    title: n.isSquaddingOpen ? "Squadding is OPEN!" : "Squadding opens today!",
-    color: 0xf59e0b, // amber
+    title,
+    color,
     description: lines.join("\n"),
     fields,
-    timestamp: new Date().toISOString(),
-  };
-}
-
-function buildMatchEveEmbed(
-  n: MatchNotification,
-  matchUrl: string,
-  ssiUrl: string,
-): APIEmbed {
-  const daysUntil = n.date
-    ? Math.round(
-        (new Date(n.date.slice(0, 10)).getTime() - new Date().setHours(0, 0, 0, 0)) /
-          (1000 * 60 * 60 * 24),
-      )
-    : 1;
-
-  const lines: string[] = [];
-  lines.push(
-    `**${n.matchName}** is ${daysUntil === 1 ? "tomorrow" : `in ${daysUntil} days`}!`,
-  );
-  lines.push("");
-
-  if (n.venue || n.date) {
-    const parts: string[] = [];
-    if (n.date) parts.push(formatDate(n.date));
-    if (n.venue) parts.push(n.venue);
-    if (n.level) parts.push(n.level);
-    lines.push(parts.join(" \u00b7 "));
-    lines.push("");
-  }
-
-  if (n.stagesCount > 0) {
-    lines.push(`${n.stagesCount} stages`);
-  }
-
-  lines.push(`[SSI](${ssiUrl}) \u00b7 [Scoreboard](${matchUrl})`);
-
-  const shooterLines = n.shooters.map((s) => {
-    const squad = s.squadNumber != null ? `Squad ${s.squadNumber}` : "No squad";
-    return `\u2022 <@${s.discordUserId}> \u2014 ${squad}`;
-  });
-
-  return {
-    title: `Match ${daysUntil === 1 ? "tomorrow" : "coming up"}!`,
-    color: 0x3b82f6, // blue
-    description: lines.join("\n"),
-    fields: [
-      {
-        name: "Squad assignments",
-        value: shooterLines.join("\n"),
-        inline: false,
-      },
-    ],
     timestamp: new Date().toISOString(),
   };
 }

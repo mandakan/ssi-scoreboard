@@ -306,7 +306,7 @@ async function handleCommand(
           guildId,
           squadChannelId,
           options.action as string | undefined,
-          options.days_before as number | undefined,
+          options.days as string | undefined,
         );
         content = squadResult.content;
         embeds = squadResult.embeds;
