@@ -142,15 +142,34 @@ async function pollGuildWatch(
     await env.BOT_KV.put(watchKey(guildId), JSON.stringify(state));
   }
 
-  // Auto-unwatch when match is fully scored
-  if (match.scoring_completed === 100) {
+  // Auto-unwatch when match is effectively done.
+  // Same heuristic as the main app: scoring >= 95% OR > 3 days past match date.
+  if (isMatchDone(match.scoring_completed, match.date)) {
     await env.BOT_KV.delete(watchKey(guildId));
+    const label = match.scoring_completed >= 95
+      ? `**${state.matchName}** is fully scored!`
+      : `**${state.matchName}** appears to be done (${match.scoring_completed}% scored, match date passed).`;
     await postChannelMessage(
       env.DISCORD_BOT_TOKEN,
       state.channelId,
-      `**${state.matchName}** is fully scored! Stopped watching.\nFull results: ${env.SCOREBOARD_BASE_URL}/match/${state.matchCt}/${state.matchId}`,
+      `${label} Stopped watching.\nFull results: ${env.SCOREBOARD_BASE_URL}/match/${state.matchCt}/${state.matchId}`,
     );
   }
+}
+
+/**
+ * Determines if a match should be considered done.
+ * Mirrors the main app heuristic from lib/match-ttl.ts:
+ *   scoring >= 95%  OR  match date is > 3 days ago
+ */
+export function isMatchDone(scoringPct: number, matchDate: string | null): boolean {
+  if (scoringPct >= 95) return true;
+  if (matchDate) {
+    const daysSince =
+      (Date.now() - new Date(matchDate).getTime()) / (1000 * 60 * 60 * 24);
+    if (daysSince > 3) return true;
+  }
+  return false;
 }
 
 interface StageGroup {

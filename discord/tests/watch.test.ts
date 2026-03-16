@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { handleWatch, handleUnwatch, watchKey } from "../src/commands/watch";
-import { buildStageGroupEmbed } from "../src/notifications/stage-scored";
+import { buildStageGroupEmbed, isMatchDone } from "../src/notifications/stage-scored";
 import type { ScoreboardClient } from "../src/scoreboard-client";
 import type { EventSearchResult, CompetitorStageResult } from "../src/types";
 
@@ -233,5 +233,34 @@ describe("buildStageGroupEmbed", () => {
       "https://example.com",
     );
     expect(embed.color).toBe(0xef4444);
+  });
+});
+
+// --- isMatchDone ---
+
+describe("isMatchDone", () => {
+  it("returns true when scoring >= 95%", () => {
+    expect(isMatchDone(95, null)).toBe(true);
+    expect(isMatchDone(100, null)).toBe(true);
+  });
+
+  it("returns false when scoring < 95% and no date", () => {
+    expect(isMatchDone(94, null)).toBe(false);
+    expect(isMatchDone(0, null)).toBe(false);
+  });
+
+  it("returns true when match date is > 3 days ago", () => {
+    const fourDaysAgo = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
+    expect(isMatchDone(50, fourDaysAgo)).toBe(true);
+  });
+
+  it("returns false when match date is recent", () => {
+    const yesterday = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString();
+    expect(isMatchDone(50, yesterday)).toBe(false);
+  });
+
+  it("returns false for future match dates", () => {
+    const tomorrow = new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString();
+    expect(isMatchDone(0, tomorrow)).toBe(false);
   });
 });
