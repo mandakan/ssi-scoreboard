@@ -1,5 +1,9 @@
 // Cloudflare Worker entry point for the SSI Discord bot.
 // Handles Discord Interactions (slash commands) via HTTP POST.
+//
+// SECURITY: All guild-specific data (user↔shooter links, watch state, reminders)
+// is scoped by guild_id in KV keys. Commands that access guild-scoped data
+// reject DM interactions to prevent cross-server data leaks.
 
 import { InteractionResponseType } from "discord-interactions";
 import {
@@ -16,13 +20,11 @@ import { handleLink, getLinkedShooter } from "./commands/link";
 
 const worker = {
   async fetch(request: Request, env: Env): Promise<Response> {
-    // Only accept POST to the root path
     const url = new URL(request.url);
     if (request.method !== "POST" || url.pathname !== "/") {
       return new Response("Not found", { status: 404 });
     }
 
-    // Verify the request signature
     const interaction = await verifyDiscordRequest(request, env.DISCORD_PUBLIC_KEY);
     if (!interaction) {
       return new Response("Invalid request signature", { status: 401 });
@@ -30,12 +32,10 @@ const worker = {
 
     const body = interaction as unknown as APIInteraction;
 
-    // Handle PING (required for Discord to verify the endpoint)
     if (body.type === InteractionType.Ping) {
       return jsonResponse({ type: InteractionResponseType.PONG });
     }
 
-    // Handle slash commands
     if (body.type === InteractionType.ApplicationCommand) {
       return await handleCommand(body, env);
     }
@@ -49,12 +49,17 @@ const worker = {
 
 export default worker;
 
-/** Extract the Discord user ID from an interaction (works in both guild and DM contexts). */
+/** Extract the Discord user ID from an interaction (guild or DM context). */
 function getUserId(interaction: APIInteraction): string | undefined {
   const raw = interaction as Record<string, unknown>;
   const member = raw.member as Record<string, unknown> | undefined;
   const user = (member?.user ?? raw.user) as Record<string, string> | undefined;
   return user?.id;
+}
+
+/** Extract the guild ID from an interaction. Undefined in DM context. */
+function getGuildId(interaction: APIInteraction): string | undefined {
+  return (interaction as Record<string, unknown>).guild_id as string | undefined;
 }
 
 async function handleCommand(
@@ -98,22 +103,32 @@ async function handleCommand(
       }
 
       case "link": {
+        const guildId = getGuildId(interaction);
+        if (!guildId) {
+          content = "This command can only be used in a server, not in DMs.";
+          break;
+        }
         const userId = getUserId(interaction);
         if (!userId) {
           content = "Could not determine your Discord user ID.";
           break;
         }
-        content = await handleLink(client, env.BOT_KV, userId, options.name as string);
+        content = await handleLink(client, env.BOT_KV, guildId, userId, options.name as string);
         break;
       }
 
       case "me": {
+        const guildId = getGuildId(interaction);
+        if (!guildId) {
+          content = "This command can only be used in a server, not in DMs.";
+          break;
+        }
         const userId = getUserId(interaction);
         if (!userId) {
           content = "Could not determine your Discord user ID.";
           break;
         }
-        const linked = await getLinkedShooter(env.BOT_KV, userId);
+        const linked = await getLinkedShooter(env.BOT_KV, guildId, userId);
         if (!linked) {
           content =
             "You haven't linked your account yet. Use `/link <your name>` first.";

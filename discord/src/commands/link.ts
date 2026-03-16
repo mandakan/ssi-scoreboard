@@ -1,11 +1,13 @@
 // Handler for /link <name>
 // Links a Discord user to an SSI shooter ID via KV.
+// All KV keys are scoped by guild ID to prevent cross-server data leaks.
 
 import type { ScoreboardClient } from "../scoreboard-client";
 
 export async function handleLink(
   client: ScoreboardClient,
   kv: KVNamespace,
+  guildId: string,
   discordUserId: string,
   name: string,
 ): Promise<string> {
@@ -17,9 +19,9 @@ export async function handleLink(
 
   const shooter = results[0];
 
-  // Store the mapping: discord user ID → shooter ID + name
+  // Store the mapping scoped to this guild
   await kv.put(
-    `link:${discordUserId}`,
+    kvKey(guildId, discordUserId),
     JSON.stringify({
       shooterId: shooter.shooterId,
       name: shooter.name,
@@ -41,12 +43,18 @@ export async function handleLink(
   return msg;
 }
 
-/** Look up the linked shooter ID for a Discord user. */
+/** Look up the linked shooter ID for a Discord user within a guild. */
 export async function getLinkedShooter(
   kv: KVNamespace,
+  guildId: string,
   discordUserId: string,
 ): Promise<{ shooterId: number; name: string } | null> {
-  const raw = await kv.get(`link:${discordUserId}`);
+  const raw = await kv.get(kvKey(guildId, discordUserId));
   if (!raw) return null;
   return JSON.parse(raw);
+}
+
+/** Guild-scoped KV key for user↔shooter links. */
+function kvKey(guildId: string, userId: string): string {
+  return `g:${guildId}:link:${userId}`;
 }

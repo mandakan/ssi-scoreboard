@@ -15,7 +15,7 @@ SCOREBOARD_BASE_URL = "https://scoreboard.urdr.dev"
 
 [[kv_namespaces]]
 binding = "BOT_KV"
-id = "PLACEHOLDER"
+id = "ecf4c93f6ca24bf79a5ba6ce392d70db"
 # Create with: wrangler kv namespace create BOT_KV
 # Then replace the id above.
 
