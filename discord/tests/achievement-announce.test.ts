@@ -5,7 +5,7 @@ import {
   buildAchievementEmbed,
   type AchievementSnapshot,
   type AchievementUnlock,
-} from "../../discord/src/notifications/achievement-announce";
+} from "../src/notifications/achievement-announce";
 
 // Helper to build a dashboard achievement entry
 function makeAchievement(
@@ -44,14 +44,11 @@ describe("diffAchievements", () => {
     expect(result).toEqual([]);
   });
 
-  it("returns empty array on first run (snapshot is null)", () => {
-    // First run should result in a snapshot, but diffAchievements doesn't
-    // know about first-run logic — it just sees null snapshot and reports all as new
+  it("returns all unlocked tiers on first run (null snapshot)", () => {
     const achievements = [
       makeAchievement("match-count", "Competitor", "trophy", COMPETITOR_TIERS, [1, 2]),
     ];
     const result = diffAchievements(achievements, null);
-    // With null snapshot, all unlocked tiers above 0 are "new"
     expect(result.length).toBe(2);
     expect(result[0].tierLevel).toBe(1);
     expect(result[1].tierLevel).toBe(2);
@@ -216,7 +213,6 @@ describe("buildAchievementEmbed", () => {
     expect(embed.fields).toHaveLength(1);
     expect(embed.fields![0].name).toContain("Competitor");
     expect(embed.fields![0].name).toContain("Veteran");
-    // Verify tier ladder content
     const value = embed.fields![0].value;
     expect(value).toContain("First Match");
     expect(value).toContain("NEW!");
