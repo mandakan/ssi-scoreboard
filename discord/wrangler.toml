@@ -1,0 +1,33 @@
+name = "ssi-discord-bot"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Secrets (set via `wrangler secret put`):
+#   DISCORD_BOT_TOKEN    — Bot token from Discord Developer Portal
+#   DISCORD_PUBLIC_KEY   — Public key for interaction signature verification
+#   DISCORD_APP_ID       — Application ID from Discord Developer Portal
+#   SCOREBOARD_BASE_URL  — Base URL of the SSI Scoreboard instance
+
+[vars]
+# Override per-environment below; these are safe defaults for development
+SCOREBOARD_BASE_URL = "https://scoreboard.urdr.dev"
+
+[[kv_namespaces]]
+binding = "BOT_KV"
+id = "PLACEHOLDER"
+# Create with: wrangler kv namespace create BOT_KV
+# Then replace the id above.
+
+# Cron trigger for live match notifications (every 2 minutes)
+# [triggers]
+# crons = ["*/2 * * * *"]
+
+# --- Staging environment ---
+# [env.staging]
+# name = "ssi-discord-bot-staging"
+# [env.staging.vars]
+# SCOREBOARD_BASE_URL = "https://staging.scoreboard.urdr.dev"
+# [[env.staging.kv_namespaces]]
+# binding = "BOT_KV"
+# id = "PLACEHOLDER_STAGING"
