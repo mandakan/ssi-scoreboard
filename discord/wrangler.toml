@@ -24,8 +24,8 @@ id = "ecf4c93f6ca24bf79a5ba6ce392d70db"
 # Then replace the id above.
 
 # Cron trigger for live match notifications (every 2 minutes)
-# [triggers]
-# crons = ["*/2 * * * *"]
+[triggers]
+crons = ["*/2 * * * *"]
 
 # --- Staging environment ---
 # [env.staging]

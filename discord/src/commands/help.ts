@@ -38,6 +38,18 @@ const HELP_EMBED: APIEmbed = {
       value: "Show your own shooter dashboard (requires `/link` first).",
       inline: false,
     },
+    {
+      name: "/watch <query>",
+      value:
+        "Watch a live match — I'll post updates when linked shooters finish a stage. " +
+        "Best used in a dedicated bot channel.",
+      inline: false,
+    },
+    {
+      name: "/unwatch",
+      value: "Stop watching the current match.",
+      inline: false,
+    },
   ],
 };
 

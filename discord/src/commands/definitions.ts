@@ -56,4 +56,22 @@ export const COMMANDS = [
     description: "Show available commands and how to get started",
     type: ApplicationCommandType.ChatInput,
   },
+  {
+    name: "watch",
+    description: "Watch a match — get notified when linked shooters finish a stage",
+    type: ApplicationCommandType.ChatInput,
+    options: [
+      {
+        name: "query",
+        description: "Match name to search for",
+        type: ApplicationCommandOptionType.String,
+        required: true,
+      },
+    ],
+  },
+  {
+    name: "unwatch",
+    description: "Stop watching the current match",
+    type: ApplicationCommandType.ChatInput,
+  },
 ] as const;
