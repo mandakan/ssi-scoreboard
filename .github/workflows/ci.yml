@@ -44,12 +44,10 @@ jobs:
               - 'eslint.config.*'
               - 'vitest.config.*'
               - 'playwright.config.*'
-              - '.github/workflows/ci.yml'
             discord:
               - 'discord/**'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
-              - '.github/workflows/ci.yml'
             lab:
               - 'lab/**'
 
