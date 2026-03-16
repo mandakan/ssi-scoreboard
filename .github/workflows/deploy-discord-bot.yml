@@ -1,6 +1,9 @@
 name: Deploy Discord Bot
 
 on:
+  push:
+    branches: [main]
+    paths: [discord/**]
   workflow_dispatch:
     inputs:
       environment:
@@ -16,12 +19,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-discord-bot-${{ inputs.environment }}
+  group: deploy-discord-bot
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    environment: ${{ inputs.environment || 'production' }}
     steps:
       - uses: actions/checkout@v6
 
