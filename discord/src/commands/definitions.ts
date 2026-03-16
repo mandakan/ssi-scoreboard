@@ -196,4 +196,29 @@ export const COMMANDS = [
       },
     ],
   },
+  {
+    name: "remind",
+    description: "Set personal DM reminders for a specific match",
+    type: ApplicationCommandType.ChatInput,
+    options: [
+      {
+        name: "action",
+        description: "set = add reminder, list = view active, cancel = remove",
+        type: ApplicationCommandOptionType.String,
+        required: true,
+        choices: [
+          { name: "set \u2014 remind me about a match", value: "set" },
+          { name: "list \u2014 show my active reminders", value: "list" },
+          { name: "cancel \u2014 remove a reminder", value: "cancel" },
+        ],
+      },
+      {
+        name: "query",
+        description: "Match name to search for (required for set/cancel)",
+        type: ApplicationCommandOptionType.String,
+        required: false,
+        autocomplete: true,
+      },
+    ],
+  },
 ] as const;
