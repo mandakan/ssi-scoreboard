@@ -112,8 +112,14 @@ export interface ShooterDashboardResponse {
     overallMatchPct: number | null;
   };
   achievements?: Array<{
-    definition: { id: string; name: string; icon: string };
+    definition: {
+      id: string;
+      name: string;
+      icon: string;
+      tiers: Array<{ level: number; name: string; label: string }>;
+    };
     unlockedTiers: Array<{ level: number }>;
+    nextTier: { name: string; label: string } | null;
   }>;
   /** Matches with start date in the future. Only present when non-empty. */
   upcomingMatches?: UpcomingMatch[];

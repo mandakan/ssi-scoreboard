@@ -35,6 +35,7 @@ import { pollRegistrationReminders } from "./notifications/registration-reminder
 import { landingPage, privacyPage, tosPage } from "./pages";
 import { pollSquadReminders } from "./notifications/squad-reminder";
 import { pollPersonalReminders } from "./notifications/personal-reminder";
+import { pollAchievements } from "./notifications/achievement-announce";
 
 const worker: ExportedHandler<Env> = {
   async fetch(request, env, ctx): Promise<Response> {
@@ -92,6 +93,7 @@ const worker: ExportedHandler<Env> = {
       pollRegistrationReminders(env),
       pollSquadReminders(env),
       pollPersonalReminders(env),
+      pollAchievements(env),
     ]);
     for (const result of results) {
       if (result.status === "rejected") {
