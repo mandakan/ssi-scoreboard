@@ -3,12 +3,40 @@
 
 import type { APIEmbed } from "discord-api-types/v10";
 import type { ScoreboardClient } from "../scoreboard-client";
+import { parseEventRef } from "./autocomplete";
 
 export async function handleMatch(
   client: ScoreboardClient,
   baseUrl: string,
   query: string,
 ): Promise<{ content: string; embeds: APIEmbed[] }> {
+  // If autocomplete resolved the value, skip the search
+  const ref = parseEventRef(query);
+  if (ref) {
+    const match = await client.getMatch(ref.ct, ref.id);
+    const matchUrl = `${baseUrl}/match/${ref.ct}/${ref.id}`;
+    const scoringLabel =
+      match.scoring_completed === 100
+        ? "Completed"
+        : match.scoring_completed > 0
+          ? `${match.scoring_completed}% scored`
+          : "Not started";
+    const embed: APIEmbed = {
+      title: match.name,
+      url: matchUrl,
+      color: match.scoring_completed === 100 ? 0x22c55e : 0x3b82f6,
+      fields: [
+        { name: "Venue", value: match.venue || "—", inline: true },
+        { name: "Date", value: match.date || "—", inline: true },
+        { name: "Stages", value: String(match.stages_count), inline: true },
+        { name: "Competitors", value: String(match.competitors_count), inline: true },
+        { name: "Status", value: scoringLabel, inline: true },
+      ],
+    };
+    return { content: "", embeds: [embed] };
+  }
+
+  // Fallback: search by name
   const events = await client.searchEvents(query);
 
   if (events.length === 0) {
@@ -18,7 +46,6 @@ export async function handleMatch(
     };
   }
 
-  // Take the top result and fetch full match data for scoring/counts
   const event = events[0];
   const match = await client.getMatch(event.content_type, event.id);
 

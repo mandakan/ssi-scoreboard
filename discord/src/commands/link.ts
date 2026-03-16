@@ -3,6 +3,7 @@
 // All KV keys are scoped by guild ID to prevent cross-server data leaks.
 
 import type { ScoreboardClient } from "../scoreboard-client";
+import { parseShooterRef } from "./autocomplete";
 
 export async function handleLink(
   client: ScoreboardClient,
@@ -11,6 +12,28 @@ export async function handleLink(
   discordUserId: string,
   name: string,
 ): Promise<string> {
+  // If autocomplete resolved the value, use the shooter ID directly
+  const resolvedId = parseShooterRef(name);
+  if (resolvedId != null) {
+    const dashboard = await client.getShooterDashboard(resolvedId);
+    const profile = dashboard.profile;
+    const shooterName = profile?.name ?? `Shooter #${resolvedId}`;
+
+    await kv.put(
+      kvKey(guildId, discordUserId),
+      JSON.stringify({
+        shooterId: resolvedId,
+        name: shooterName,
+      }),
+    );
+
+    let msg = `Linked your account to **${shooterName}** (ID: ${resolvedId}).`;
+    if (profile?.club) msg += `\nClub: ${profile.club}`;
+    msg += `\n\nYou can now use \`/me\` to see your dashboard.`;
+    return msg;
+  }
+
+  // Fallback: search by name
   const results = await client.searchShooters(name);
 
   if (results.length === 0) {

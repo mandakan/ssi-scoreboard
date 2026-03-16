@@ -5,6 +5,7 @@
 import type { APIEmbed } from "discord-api-types/v10";
 import type { ScoreboardClient } from "../scoreboard-client";
 import type { CompetitorStageResult } from "../types";
+import { parseEventRef } from "./autocomplete";
 
 interface ShooterStageRow {
   stageNum: number;
@@ -31,16 +32,30 @@ export async function handleSummary(
   guildId: string,
   query: string,
 ): Promise<{ content: string; embeds: APIEmbed[] }> {
-  // Find the match
-  const events = await client.searchEvents(query);
-  if (events.length === 0) {
-    return { content: `No matches found for "${query}".`, embeds: [] };
+  // Resolve the match — autocomplete pre-resolved or search fallback
+  let matchCt: number;
+  let matchId: number;
+  let matchName: string;
+
+  const ref = parseEventRef(query);
+  if (ref) {
+    matchCt = ref.ct;
+    matchId = ref.id;
+    matchName = ""; // filled from getMatch below
+  } else {
+    const events = await client.searchEvents(query);
+    if (events.length === 0) {
+      return { content: `No matches found for "${query}".`, embeds: [] };
+    }
+    const event = events[0];
+    matchCt = event.content_type;
+    matchId = event.id;
+    matchName = event.name;
   }
 
-  const event = events[0];
-
   // Get match data to resolve linked shooters → competitor IDs
-  const match = await client.getMatch(event.content_type, event.id);
+  const match = await client.getMatch(matchCt, matchId);
+  if (!matchName) matchName = match.name;
 
   // Find linked shooters in this guild
   const linkedShooters = await getGuildLinkedShooters(kv, guildId);
@@ -65,15 +80,15 @@ export async function handleSummary(
 
   if (tracked.length === 0) {
     return {
-      content: `None of the linked shooters are competing in **${event.name}**.`,
+      content: `None of the linked shooters are competing in **${matchName}**.`,
       embeds: [],
     };
   }
 
   // Fetch compare data
   const compareResult = await client.compare(
-    event.content_type,
-    event.id,
+    matchCt,
+    matchId,
     tracked.map((t) => t.competitorId),
   );
 
@@ -113,7 +128,7 @@ export async function handleSummary(
     });
   }
 
-  const matchUrl = `${baseUrl}/match/${event.content_type}/${event.id}`;
+  const matchUrl = `${baseUrl}/match/${matchCt}/${matchId}`;
   const scoringLabel =
     match.scoring_completed === 100
       ? "Completed"
@@ -125,7 +140,7 @@ export async function handleSummary(
 
   // One embed per shooter
   for (const summary of summaries) {
-    embeds.push(buildSummaryEmbed(summary, event.name, scoringLabel, matchUrl));
+    embeds.push(buildSummaryEmbed(summary, matchName, scoringLabel, matchUrl));
   }
 
   const content =
