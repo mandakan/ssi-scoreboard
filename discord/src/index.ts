@@ -18,9 +18,13 @@ import { handleMatch } from "./commands/match";
 import { handleShooter } from "./commands/shooter";
 import { handleLink, getLinkedShooter } from "./commands/link";
 import { handleHelp, WELCOME_EMBED } from "./commands/help";
+import { handleLeaderboard } from "./commands/leaderboard";
+import { handleSummary } from "./commands/summary";
+import { handleWatch, handleUnwatch } from "./commands/watch";
+import { pollWatchedMatches } from "./notifications/stage-scored";
 
-const worker = {
-  async fetch(request: Request, env: Env): Promise<Response> {
+const worker: ExportedHandler<Env> = {
+  async fetch(request, env): Promise<Response> {
     const url = new URL(request.url);
 
     // GET /invite → redirect to the Discord bot invite flow
@@ -54,6 +58,10 @@ const worker = {
       data: { content: "Unknown interaction type.", flags: 64 },
     });
   },
+
+  async scheduled(_, env) {
+    await pollWatchedMatches(env);
+  },
 };
 
 export default worker;
@@ -69,6 +77,11 @@ function getUserId(interaction: APIInteraction): string | undefined {
 /** Extract the guild ID from an interaction. Undefined in DM context. */
 function getGuildId(interaction: APIInteraction): string | undefined {
   return (interaction as Record<string, unknown>).guild_id as string | undefined;
+}
+
+/** Extract the channel ID from an interaction. */
+function getChannelId(interaction: APIInteraction): string | undefined {
+  return (interaction as Record<string, unknown>).channel_id as string | undefined;
 }
 
 /**
@@ -111,7 +124,7 @@ async function handleCommand(
   const guildId = getGuildId(interaction);
 
   // Commands where the response is only visible to the caller
-  const EPHEMERAL_COMMANDS = new Set(["help", "link", "me"]);
+  const EPHEMERAL_COMMANDS = new Set(["help", "link", "me", "unwatch"]);
 
   try {
     let content = "";
@@ -143,6 +156,32 @@ async function handleCommand(
         const result = await handleShooter(client, baseUrl, options.name as string);
         content = result.content;
         embeds = result.embeds;
+        break;
+      }
+
+      case "leaderboard": {
+        if (!guildId) {
+          content = "This command can only be used in a server, not in DMs.";
+          break;
+        }
+        const lbResult = await handleLeaderboard(
+          client, env.BOT_KV, baseUrl, guildId, options.query as string,
+        );
+        content = lbResult.content;
+        embeds = lbResult.embeds;
+        break;
+      }
+
+      case "summary": {
+        if (!guildId) {
+          content = "This command can only be used in a server, not in DMs.";
+          break;
+        }
+        const summaryResult = await handleSummary(
+          client, env.BOT_KV, baseUrl, guildId, options.query as string,
+        );
+        content = summaryResult.content;
+        embeds = summaryResult.embeds;
         break;
       }
 
@@ -179,6 +218,33 @@ async function handleCommand(
         const result = await handleShooter(client, baseUrl, linked.name);
         content = result.content;
         embeds = result.embeds;
+        break;
+      }
+
+      case "watch": {
+        if (!guildId) {
+          content = "This command can only be used in a server, not in DMs.";
+          break;
+        }
+        const channelId = getChannelId(interaction);
+        if (!channelId) {
+          content = "Could not determine the channel.";
+          break;
+        }
+        const watchResult = await handleWatch(
+          client, env.BOT_KV, baseUrl, guildId, channelId, options.query as string,
+        );
+        content = watchResult.content;
+        embeds = watchResult.embeds;
+        break;
+      }
+
+      case "unwatch": {
+        if (!guildId) {
+          content = "This command can only be used in a server, not in DMs.";
+          break;
+        }
+        content = await handleUnwatch(env.BOT_KV, guildId);
         break;
       }
 

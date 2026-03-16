@@ -38,6 +38,38 @@ const HELP_EMBED: APIEmbed = {
       value: "Show your own shooter dashboard (requires `/link` first).",
       inline: false,
     },
+    {
+      name: "/summary <query>",
+      value:
+        "Per-stage breakdown for linked shooters in a match — HF, A/C/D/M, and % vs leader.",
+      inline: false,
+    },
+    {
+      name: "/leaderboard <query>",
+      value:
+        "Who's leading among linked shooters? Overall ranking + stage winners at a glance.",
+      inline: false,
+    },
+    {
+      name: "/watch <query>",
+      value:
+        "Watch a live match — I'll post updates when linked shooters finish a stage. " +
+        "Best used in a dedicated bot channel.",
+      inline: false,
+    },
+    {
+      name: "/unwatch",
+      value: "Stop watching the current match.",
+      inline: false,
+    },
+    {
+      name: "Tip: restrict to a channel",
+      value:
+        "To keep bot output in a dedicated channel, go to Server Settings \u2192 Channels \u2192 " +
+        "select the channel \u2192 Permissions, and only grant Range Officer the " +
+        "\"Use Application Commands\" permission in your bot channel.",
+      inline: false,
+    },
   ],
 };
 

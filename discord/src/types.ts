@@ -91,3 +91,38 @@ export interface ShooterSearchResult {
   club: string | null;
   division: string | null;
 }
+
+// Subset of CompareResponse needed for stage-scored notifications.
+// We only care about per-competitor per-stage results.
+export interface CompareResult {
+  stages: Array<{
+    stage_id: number;
+    stage_name: string;
+    stage_num: number;
+    max_points: number;
+    overall_leader_hf: number | null;
+    competitors: Record<number, CompetitorStageResult>;
+  }>;
+  competitors: Array<{
+    id: number;
+    name: string;
+    division: string;
+    club: string;
+  }>;
+}
+
+export interface CompetitorStageResult {
+  competitor_id: number;
+  hit_factor: number | null;
+  points: number | null;
+  time: number | null;
+  overall_rank: number | null;
+  overall_percent: number | null;
+  a_hits: number | null;
+  c_hits: number | null;
+  d_hits: number | null;
+  miss_count: number | null;
+  dnf: boolean;
+  dq: boolean;
+  incomplete: boolean;
+}

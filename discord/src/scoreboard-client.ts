@@ -2,6 +2,7 @@
 // Calls the same endpoints that the web app uses.
 
 import type {
+  CompareResult,
   EventSearchResult,
   MatchResponse,
   ShooterDashboardResponse,
@@ -41,6 +42,37 @@ export class ScoreboardClient {
   ): Promise<ShooterDashboardResponse> {
     const resp = await this.fetch(`/api/shooter/${shooterId}`);
     return resp.json();
+  }
+
+  /** Compare specific competitors in a match (stage-by-stage data). */
+  async compare(
+    ct: number,
+    id: number,
+    competitorIds: number[],
+  ): Promise<CompareResult> {
+    const resp = await this.post("/api/compare", {
+      ct,
+      id,
+      competitors: competitorIds,
+      mode: "live",
+    });
+    return resp.json();
+  }
+
+  private async post(path: string, body: unknown): Promise<Response> {
+    const url = `${this.baseUrl}${path}`;
+    const resp = await globalThis.fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      throw new Error(`Scoreboard API error: ${resp.status} ${resp.statusText} (${path})`);
+    }
+    return resp;
   }
 
   private async fetch(path: string): Promise<Response> {
