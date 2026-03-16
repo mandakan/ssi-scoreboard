@@ -18,6 +18,8 @@ import { handleMatch } from "./commands/match";
 import { handleShooter } from "./commands/shooter";
 import { handleLink, getLinkedShooter } from "./commands/link";
 import { handleHelp, WELCOME_EMBED } from "./commands/help";
+import { handleLeaderboard } from "./commands/leaderboard";
+import { handleSummary } from "./commands/summary";
 import { handleWatch, handleUnwatch } from "./commands/watch";
 import { pollWatchedMatches } from "./notifications/stage-scored";
 
@@ -154,6 +156,32 @@ async function handleCommand(
         const result = await handleShooter(client, baseUrl, options.name as string);
         content = result.content;
         embeds = result.embeds;
+        break;
+      }
+
+      case "leaderboard": {
+        if (!guildId) {
+          content = "This command can only be used in a server, not in DMs.";
+          break;
+        }
+        const lbResult = await handleLeaderboard(
+          client, env.BOT_KV, baseUrl, guildId, options.query as string,
+        );
+        content = lbResult.content;
+        embeds = lbResult.embeds;
+        break;
+      }
+
+      case "summary": {
+        if (!guildId) {
+          content = "This command can only be used in a server, not in DMs.";
+          break;
+        }
+        const summaryResult = await handleSummary(
+          client, env.BOT_KV, baseUrl, guildId, options.query as string,
+        );
+        content = summaryResult.content;
+        embeds = summaryResult.embeds;
         break;
       }
 

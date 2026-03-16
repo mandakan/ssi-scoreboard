@@ -39,6 +39,18 @@ const HELP_EMBED: APIEmbed = {
       inline: false,
     },
     {
+      name: "/summary <query>",
+      value:
+        "Per-stage breakdown for linked shooters in a match — HF, A/C/D/M, and % vs leader.",
+      inline: false,
+    },
+    {
+      name: "/leaderboard <query>",
+      value:
+        "Who's leading among linked shooters? Overall ranking + stage winners at a glance.",
+      inline: false,
+    },
+    {
       name: "/watch <query>",
       value:
         "Watch a live match — I'll post updates when linked shooters finish a stage. " +
