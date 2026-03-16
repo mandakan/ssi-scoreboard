@@ -30,7 +30,15 @@ const HELP_EMBED: APIEmbed = {
     },
     {
       name: "/link <name>",
-      value: "Link your Discord account to your SSI shooter profile. Required for `/me`.",
+      value:
+        "Link your Discord account to your SSI shooter profile. " +
+        "Enables `/me`, and makes you appear in `/summary`, `/leaderboard`, " +
+        "`/watch` notifications, and `/remind-squads` @mentions.",
+      inline: false,
+    },
+    {
+      name: "/unlink",
+      value: "Disconnect your Discord account from your SSI shooter profile.",
       inline: false,
     },
     {
@@ -63,10 +71,11 @@ const HELP_EMBED: APIEmbed = {
       inline: false,
     },
     {
-      name: "/remind-registrations set [country] [level] [days]",
+      name: "/remind-registrations set [country] [level] [discipline] [days]",
       value:
-        "Daily digest of upcoming matches with open registration. " +
-        "Filter by country, level, and how far ahead to look.",
+        "Daily digest of upcoming matches with registration status. " +
+        "Filter by country, level, discipline, and how far ahead to look. " +
+        "Pings @here when registration opens today.",
       inline: false,
     },
     {

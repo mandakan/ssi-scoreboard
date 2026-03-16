@@ -50,6 +50,11 @@ export const COMMANDS = [
     ],
   },
   {
+    name: "unlink",
+    description: "Unlink your Discord account from your SSI shooter profile",
+    type: ApplicationCommandType.ChatInput,
+  },
+  {
     name: "me",
     description: "Show your own shooter dashboard (requires /link first)",
     type: ApplicationCommandType.ChatInput,

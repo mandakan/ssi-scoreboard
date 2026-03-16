@@ -1,9 +1,18 @@
-// Handler for /link <name>
-// Links a Discord user to an SSI shooter ID via KV.
+// Handler for /link <name> and /unlink
+// Links/unlinks a Discord user to an SSI shooter ID via KV.
 // All KV keys are scoped by guild ID to prevent cross-server data leaks.
 
 import type { ScoreboardClient } from "../scoreboard-client";
 import { parseShooterRef } from "./autocomplete";
+
+/** What linking your account enables — shown after /link. */
+const LINK_BENEFITS =
+  "\n\n**What this enables:**\n" +
+  "\u2022 `/me` — your personal shooter dashboard\n" +
+  "\u2022 `/summary` `/leaderboard` — you'll appear in match breakdowns\n" +
+  "\u2022 `/watch` — get stage-by-stage updates during live matches\n" +
+  "\u2022 `/remind-squads` — @mentions when squadding opens or match day arrives\n" +
+  "\nUse `/unlink` to disconnect your account.";
 
 export async function handleLink(
   client: ScoreboardClient,
@@ -29,7 +38,7 @@ export async function handleLink(
 
     let msg = `Linked your account to **${shooterName}** (ID: ${resolvedId}).`;
     if (profile?.club) msg += `\nClub: ${profile.club}`;
-    msg += `\n\nYou can now use \`/me\` to see your dashboard.`;
+    msg += LINK_BENEFITS;
     return msg;
   }
 
@@ -53,7 +62,7 @@ export async function handleLink(
 
   let msg = `Linked your account to **${shooter.name}** (ID: ${shooter.shooterId}).`;
   if (shooter.club) msg += `\nClub: ${shooter.club}`;
-  msg += `\n\nYou can now use \`/me\` to see your dashboard.`;
+  msg += LINK_BENEFITS;
 
   if (results.length > 1) {
     const others = results
@@ -64,6 +73,25 @@ export async function handleLink(
   }
 
   return msg;
+}
+
+export async function handleUnlink(
+  kv: KVNamespace,
+  guildId: string,
+  discordUserId: string,
+): Promise<string> {
+  const existing = await getLinkedShooter(kv, guildId, discordUserId);
+  if (!existing) {
+    return "You don't have a linked account in this server. Use `/link <name>` to connect one.";
+  }
+
+  await kv.delete(kvKey(guildId, discordUserId));
+  return (
+    `Unlinked your account from **${existing.name}**.\n\n` +
+    "You'll no longer appear in `/summary`, `/leaderboard`, `/watch` notifications, " +
+    "or `/remind-squads` @mentions in this server.\n\n" +
+    "Use `/link <name>` to reconnect."
+  );
 }
 
 /** Look up the linked shooter ID for a Discord user within a guild. */

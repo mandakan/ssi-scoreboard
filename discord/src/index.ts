@@ -21,7 +21,7 @@ import { verifyDiscordRequest } from "./verify";
 import { ScoreboardClient } from "./scoreboard-client";
 import { handleMatch } from "./commands/match";
 import { handleShooter, handleShooterById } from "./commands/shooter";
-import { handleLink, getLinkedShooter } from "./commands/link";
+import { handleLink, handleUnlink, getLinkedShooter } from "./commands/link";
 import { handleHelp, WELCOME_EMBED } from "./commands/help";
 import { handleLeaderboard } from "./commands/leaderboard";
 import { handleSummary } from "./commands/summary";
@@ -125,7 +125,7 @@ async function maybeWelcome(
 }
 
 // Commands where the response is only visible to the caller
-const EPHEMERAL_COMMANDS = new Set(["help", "link", "me", "unwatch", "remind-registrations", "remind-squads"]);
+const EPHEMERAL_COMMANDS = new Set(["help", "link", "unlink", "me", "unwatch", "remind-registrations", "remind-squads"]);
 
 /**
  * Edit the original deferred response via the Discord webhook API.
@@ -311,6 +311,20 @@ async function handleDeferredCommand(
           break;
         }
         content = await handleLink(client, env.BOT_KV, guildId, userId, options.name as string);
+        break;
+      }
+
+      case "unlink": {
+        if (!guildId) {
+          content = "This command can only be used in a server, not in DMs.";
+          break;
+        }
+        const unlinkUserId = getUserId(interaction);
+        if (!unlinkUserId) {
+          content = "Could not determine your Discord user ID.";
+          break;
+        }
+        content = await handleUnlink(env.BOT_KV, guildId, unlinkUserId);
         break;
       }
 
