@@ -52,7 +52,6 @@ jobs:
               - '.github/workflows/ci.yml'
             lab:
               - 'lab/**'
-              - '.github/workflows/ci.yml'
 
   # ---------------------------------------------------------------------------
   # Scoreboard: lint → typecheck → test → build → e2e
