@@ -5,6 +5,7 @@
 // Triggers:
 // - registration-open: registration_starts date is today
 // - squadding-open: squadding_starts date is today
+// - match-day-eve: match start date is tomorrow
 // - match-day: match start date is today
 //
 // After all milestones for a match have fired, the match is auto-removed.
@@ -21,6 +22,13 @@ import {
 // Matches keys like g:{guildId}:remind:{userId}
 // Does NOT match g:{guildId}:remind-registrations or g:{guildId}:remind-squads
 const PERSONAL_REMIND_RE = /^g:([^:]+):remind:([^:]+)$/;
+
+/** Return YYYY-MM-DD for tomorrow relative to today. */
+function tomorrowStr(todayStr: string): string {
+  const d = new Date(todayStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
 
 export async function pollPersonalReminders(env: Env): Promise<void> {
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -90,6 +98,19 @@ async function processUserReminders(
       triggers.push({
         type: "squadding-open",
         embed: buildSquaddingEmbed(reminder, baseUrl),
+      });
+    }
+
+    // Match day eve (24h before)
+    const tomorrow = tomorrowStr(todayStr);
+    if (
+      reminder.matchDate &&
+      reminder.matchDate.slice(0, 10) === tomorrow &&
+      !firedTriggers.includes("match-day-eve")
+    ) {
+      triggers.push({
+        type: "match-day-eve",
+        embed: buildMatchDayEveEmbed(reminder, baseUrl),
       });
     }
 
@@ -222,6 +243,28 @@ function buildSquaddingEmbed(
     color: 0xef4444, // red — urgent
     description: lines.join("\n"),
     footer: { text: "Personal match reminder" },
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function buildMatchDayEveEmbed(
+  reminder: PersonalReminder,
+  baseUrl: string,
+): APIEmbed {
+  const matchUrl = `${baseUrl}/match/${reminder.matchCt}/${reminder.matchId}`;
+  const ssiUrl = `https://shootnscoreit.com/event/${reminder.matchCt}/${reminder.matchId}/`;
+
+  const lines: string[] = [
+    `**${reminder.matchName}** starts tomorrow!`,
+    "",
+    `[SSI](${ssiUrl}) \u00b7 [Scoreboard](${matchUrl})`,
+  ];
+
+  return {
+    title: "Match starts tomorrow!",
+    color: 0xf59e0b, // amber
+    description: lines.join("\n"),
+    footer: { text: "Time to pack your gear!" },
     timestamp: new Date().toISOString(),
   };
 }

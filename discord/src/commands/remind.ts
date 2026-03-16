@@ -30,7 +30,7 @@ export interface PersonalReminderConfig {
   /**
    * Track which milestones have been notified to prevent duplicates.
    * Map of "ct:matchId" → array of trigger types
-   * ("registration-open" | "squadding-open" | "match-day").
+   * ("registration-open" | "squadding-open" | "match-day-eve" | "match-day").
    */
   notifiedEvents: Record<string, string[]>;
 }
@@ -186,7 +186,7 @@ async function handleSet(
   }
 
   if (reminder.matchDate) {
-    milestones.push(`Match day: **${formatDate(reminder.matchDate)}**`);
+    milestones.push(`Day before match + match day: **${formatDate(reminder.matchDate)}**`);
   }
 
   const description = milestones.length > 0

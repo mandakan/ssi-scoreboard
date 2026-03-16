@@ -112,8 +112,9 @@ export function landingPage(): string {
     </ul>
 
     <h2>Personal reminders</h2>
-    <p class="section-note">Track specific matches and get DM reminders when registration opens,
-    squadding opens, or match day arrives. No server setup needed — these are just for you.</p>
+    <p class="section-note">Track specific matches and get a DM on the day of each milestone:
+    registration opening, squadding opening, the day before the match, and match day.
+    No server setup needed — these are just for you. Matches are auto-removed after their date passes.</p>
     <ul class="commands">
       <li><code>/remind set &lt;match&gt;</code> Add a personal reminder for a match (up to 20 active) <span class="badge badge-ephemeral">only you · DM</span></li>
       <li><code>/remind list</code> View your active reminders <span class="badge badge-ephemeral">only you</span></li>

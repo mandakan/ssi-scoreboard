@@ -91,8 +91,8 @@ const HELP_EMBED: APIEmbed = {
     {
       name: "/remind set <match>",
       value:
-        "Personal DM reminders for a specific match — " +
-        "get notified when registration opens, squadding opens, or match day arrives. " +
+        "Personal DM reminders — you'll get a DM on the day registration opens, " +
+        "the day squadding opens, the day before the match, and on match day. " +
         "Up to 20 active reminders. Use `/remind list` to view and `/remind cancel` to remove.",
       inline: false,
     },
