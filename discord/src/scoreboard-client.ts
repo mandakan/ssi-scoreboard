@@ -3,6 +3,7 @@
 
 import type {
   CompareResult,
+  CompareResultWithPenaltyStats,
   EventSearchResult,
   MatchResponse,
   ShooterDashboardResponse,
@@ -66,6 +67,21 @@ export class ScoreboardClient {
     id: number,
     competitorIds: number[],
   ): Promise<CompareResult> {
+    const params = new URLSearchParams({
+      ct: String(ct),
+      id: String(id),
+      competitor_ids: competitorIds.join(","),
+    });
+    const resp = await this.fetch(`/api/compare?${params}`);
+    return resp.json();
+  }
+
+  /** Compare with penalty stats included (for prediction reveals). */
+  async compareWithPenaltyStats(
+    ct: number,
+    id: number,
+    competitorIds: number[],
+  ): Promise<CompareResultWithPenaltyStats> {
     const params = new URLSearchParams({
       ct: String(ct),
       id: String(id),

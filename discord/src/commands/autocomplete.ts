@@ -10,7 +10,7 @@
 import type { ScoreboardClient } from "../scoreboard-client";
 
 /** Commands whose query option searches for events. */
-const EVENT_COMMANDS = new Set(["match", "watch", "summary", "leaderboard", "remind"]);
+const EVENT_COMMANDS = new Set(["match", "watch", "summary", "leaderboard", "remind", "predict"]);
 
 /** Commands whose name option searches for shooters. */
 const SHOOTER_COMMANDS = new Set(["shooter", "link"]);

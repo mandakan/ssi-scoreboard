@@ -29,6 +29,7 @@ import { handleWatch, handleUnwatch } from "./commands/watch";
 import { handleRemindRegistrations } from "./commands/remind-registrations";
 import { handleRemindSquads } from "./commands/remind-squads";
 import { handleRemind } from "./commands/remind";
+import { handlePredict } from "./commands/predict";
 import { handleAutocomplete } from "./commands/autocomplete";
 import { pollWatchedMatches } from "./notifications/stage-scored";
 import { pollRegistrationReminders } from "./notifications/registration-reminder";
@@ -208,7 +209,13 @@ function handleCommand(
     options?: Array<{ name: string; value: unknown }>;
   };
   const commandName = data.name;
-  const ephemeral = EPHEMERAL_COMMANDS.has(commandName);
+  let ephemeral = EPHEMERAL_COMMANDS.has(commandName);
+
+  // /predict submit and status are ephemeral; reveal is public
+  if (commandName === "predict") {
+    const action = data.options?.find((o) => o.name === "action")?.value;
+    ephemeral = action !== "reveal";
+  }
 
   // Fully synchronous commands — respond inline
   if (commandName === "help") {
@@ -446,6 +453,34 @@ async function handleDeferredCommand(
         );
         content = remindResult.content;
         embeds = remindResult.embeds;
+        break;
+      }
+
+      case "predict": {
+        if (!guildId) {
+          content = "This command can only be used in a server, not in DMs.";
+          break;
+        }
+        const predictUserId = getUserId(interaction);
+        if (!predictUserId) {
+          content = "Could not determine your Discord user ID.";
+          break;
+        }
+        const predictAction = options.action as string | undefined;
+        // Make predict ephemeral for submit/status, but reveal is public
+        const predictResult = await handlePredict(
+          client,
+          env.BOT_KV,
+          baseUrl,
+          guildId,
+          predictUserId,
+          predictAction,
+          options.query as string | undefined,
+          options.percent as number | undefined,
+          options.mikes as number | undefined,
+        );
+        content = predictResult.content;
+        embeds = predictResult.embeds;
         break;
       }
 

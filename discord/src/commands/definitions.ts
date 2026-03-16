@@ -221,4 +221,44 @@ export const COMMANDS = [
       },
     ],
   },
+  {
+    name: "predict",
+    description: "Predict your match performance — % and mikes (misses)",
+    type: ApplicationCommandType.ChatInput,
+    options: [
+      {
+        name: "action",
+        description: "submit = make a prediction, reveal = show results, status = check predictions",
+        type: ApplicationCommandOptionType.String,
+        required: true,
+        choices: [
+          { name: "submit — predict your match performance", value: "submit" },
+          { name: "reveal — reveal predictions after match", value: "reveal" },
+          { name: "status — check who has predicted", value: "status" },
+        ],
+      },
+      {
+        name: "query",
+        description: "Match name to search for",
+        type: ApplicationCommandOptionType.String,
+        required: false,
+        autocomplete: true,
+      },
+      {
+        name: "percent",
+        description: "Your predicted overall match % (0-100)",
+        type: ApplicationCommandOptionType.Number,
+        required: false,
+        min_value: 0,
+        max_value: 100,
+      },
+      {
+        name: "mikes",
+        description: "Your predicted total number of mikes (misses)",
+        type: ApplicationCommandOptionType.Integer,
+        required: false,
+        min_value: 0,
+      },
+    ],
+  },
 ] as const;
