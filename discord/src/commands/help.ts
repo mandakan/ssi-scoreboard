@@ -89,6 +89,14 @@ const HELP_EMBED: APIEmbed = {
       inline: false,
     },
     {
+      name: "/remind set <match>",
+      value:
+        "Personal DM reminders for a specific match — " +
+        "get notified when registration opens, squadding opens, or match day arrives. " +
+        "Up to 20 active reminders. Use `/remind list` to view and `/remind cancel` to remove.",
+      inline: false,
+    },
+    {
       name: "Tip: restrict to a channel",
       value:
         "To keep bot output in a dedicated channel, go to Server Settings \u2192 Channels \u2192 " +

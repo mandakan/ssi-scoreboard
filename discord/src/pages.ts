@@ -111,6 +111,15 @@ export function landingPage(): string {
       <li><code>/remind-squads set</code> Reminds linked shooters before squadding opens and on match day, with squad assignments. <strong>@mentions each linked user by name</strong> — only people who used <code>/link</code> get pinged <span class="badge badge-server">server-wide · @mentions</span></li>
     </ul>
 
+    <h2>Personal reminders</h2>
+    <p class="section-note">Track specific matches and get DM reminders when registration opens,
+    squadding opens, or match day arrives. No server setup needed — these are just for you.</p>
+    <ul class="commands">
+      <li><code>/remind set &lt;match&gt;</code> Add a personal reminder for a match (up to 20 active) <span class="badge badge-ephemeral">only you · DM</span></li>
+      <li><code>/remind list</code> View your active reminders <span class="badge badge-ephemeral">only you</span></li>
+      <li><code>/remind cancel &lt;match&gt;</code> Remove a reminder <span class="badge badge-ephemeral">only you</span></li>
+    </ul>
+
     <h2>Utility</h2>
     <ul class="commands">
       <li><code>/introduction</code> Let the Range Officer introduce himself to the channel — great for onboarding new members <span class="badge badge-public">visible to all</span></li>
