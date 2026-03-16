@@ -51,4 +51,9 @@ export const COMMANDS = [
     description: "Show your own shooter dashboard (requires /link first)",
     type: ApplicationCommandType.ChatInput,
   },
+  {
+    name: "help",
+    description: "Show available commands and how to get started",
+    type: ApplicationCommandType.ChatInput,
+  },
 ] as const;

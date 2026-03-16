@@ -3,11 +3,15 @@ main = "src/index.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
+# Custom domain — set up in Cloudflare DNS (CNAME → workers.dev)
+routes = [
+  { pattern = "rangeofficer.urdr.dev", custom_domain = true }
+]
+
 # Secrets (set via `wrangler secret put`):
 #   DISCORD_BOT_TOKEN    — Bot token from Discord Developer Portal
 #   DISCORD_PUBLIC_KEY   — Public key for interaction signature verification
 #   DISCORD_APP_ID       — Application ID from Discord Developer Portal
-#   SCOREBOARD_BASE_URL  — Base URL of the SSI Scoreboard instance
 
 [vars]
 # Override per-environment below; these are safe defaults for development

@@ -1,17 +1,19 @@
-// One-time script to register slash commands with Discord.
+// Register slash commands with Discord (global by default).
 // Run: cd discord && pnpm register
 //
 // Required env vars:
 //   DISCORD_BOT_TOKEN  — Bot token
 //   DISCORD_APP_ID     — Application ID
-//   GUILD_ID           — (optional) Register per-guild for instant availability;
-//                        omit for global registration (takes up to 1 hour)
+//
+// Optional:
+//   GUILD_ID           — Register per-guild for instant testing;
+//                        omit for global registration (propagates within ~1 hour)
 
 import { COMMANDS } from "./commands/definitions";
 
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
 const APP_ID = process.env.DISCORD_APP_ID;
-const GUILD_ID = process.env.GUILD_ID;
+const GUILD_ID = process.env.GUILD_ID; // optional — global if omitted
 
 if (!TOKEN || !APP_ID) {
   console.error("Missing DISCORD_BOT_TOKEN or DISCORD_APP_ID environment variables.");

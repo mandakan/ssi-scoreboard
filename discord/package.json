@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "deploy:staging": "wrangler deploy --env staging",
+    "cf:deploy": "wrangler deploy",
+    "cf:deploy:staging": "wrangler deploy --env staging",
     "typecheck": "tsc --noEmit",
     "register": "tsx src/register.ts"
   },
