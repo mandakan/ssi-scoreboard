@@ -60,6 +60,10 @@ async function handleSet(
   const daysAhead = days && days >= 1 && days <= 730 ? days : 365;
   const normalizedCountry = country?.toUpperCase() ?? null;
 
+  // Check for existing config
+  const existingRaw = await kv.get(reminderKey(guildId));
+  const existing: RegistrationReminderConfig | null = existingRaw ? JSON.parse(existingRaw) : null;
+
   const config: RegistrationReminderConfig = {
     channelId,
     country: normalizedCountry,
@@ -79,12 +83,17 @@ async function handleSet(
   filters.push(`Window: **next ${daysAhead} days**`);
   filters.push(`Channel: <#${channelId}>`);
 
+  let description = "I'll post a daily digest of upcoming matches with registration status.\n\n" +
+    filters.join("\n");
+
+  if (existing) {
+    description += `\n\n*Replaced previous config (was posting to <#${existing.channelId}>).*`;
+  }
+
   const embed: APIEmbed = {
-    title: "Registration reminder configured",
+    title: existing ? "Registration reminder updated" : "Registration reminder configured",
     color: 0x22c55e, // green
-    description:
-      "I'll post a daily digest of upcoming matches with registration status.\n\n" +
-      filters.join("\n"),
+    description,
     footer: {
       text: "Posting the first digest now — check the channel. Repeats daily at ~08:00 UTC.",
     },

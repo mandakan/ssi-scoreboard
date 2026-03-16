@@ -75,7 +75,8 @@ const HELP_EMBED: APIEmbed = {
       value:
         "Daily digest of upcoming matches with registration status. " +
         "Filter by country, level, discipline, and how far ahead to look. " +
-        "Pings @here when registration opens today.",
+        "Pings @here when registration opens today. " +
+        "One config per server — running `set` again replaces the previous one.",
       inline: false,
     },
     {
@@ -83,7 +84,8 @@ const HELP_EMBED: APIEmbed = {
       value:
         "Notify linked shooters (with @mentions) before squadding opens " +
         "(e.g. `1,7` = 7 days + 1 day + day-of). Also posts match-day reminders " +
-        "with squad assignments. Requires `/link` first.",
+        "with squad assignments. Requires `/link` first. " +
+        "One config per server — running `set` again replaces the previous one.",
       inline: false,
     },
     {
