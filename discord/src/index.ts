@@ -22,7 +22,7 @@ import { ScoreboardClient } from "./scoreboard-client";
 import { handleMatch } from "./commands/match";
 import { handleShooter, handleShooterById } from "./commands/shooter";
 import { handleLink, handleUnlink, getLinkedShooter } from "./commands/link";
-import { handleHelp, WELCOME_EMBED } from "./commands/help";
+import { handleHelp, handleIntroduction, WELCOME_EMBED } from "./commands/help";
 import { handleLeaderboard } from "./commands/leaderboard";
 import { handleSummary } from "./commands/summary";
 import { handleWatch, handleUnwatch } from "./commands/watch";
@@ -200,7 +200,7 @@ function handleCommand(
   const commandName = data.name;
   const ephemeral = EPHEMERAL_COMMANDS.has(commandName);
 
-  // /help is the only fully synchronous command — respond inline
+  // Fully synchronous commands — respond inline
   if (commandName === "help") {
     const result = handleHelp();
     return jsonResponse({
@@ -209,6 +209,18 @@ function handleCommand(
         content: result.content || undefined,
         embeds: result.embeds.length > 0 ? result.embeds : undefined,
         flags: 64,
+      },
+    });
+  }
+
+  if (commandName === "introduction") {
+    const result = handleIntroduction();
+    return jsonResponse({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        content: result.content || undefined,
+        embeds: result.embeds.length > 0 ? result.embeds : undefined,
+        // NOT ephemeral — the whole point is for everyone to see it
       },
     });
   }

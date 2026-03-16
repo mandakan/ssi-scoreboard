@@ -65,6 +65,11 @@ export const COMMANDS = [
     type: ApplicationCommandType.ChatInput,
   },
   {
+    name: "introduction",
+    description: "Let the Range Officer introduce himself to the channel",
+    type: ApplicationCommandType.ChatInput,
+  },
+  {
     name: "summary",
     description: "Show a per-stage breakdown for linked shooters in a match",
     type: ApplicationCommandType.ChatInput,
