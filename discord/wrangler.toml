@@ -3,6 +3,13 @@ main = "src/index.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
+# Allow up to 30s CPU time for cold-cache API calls
+[limits]
+cpu_ms = 30_000
+
+[observability]
+enabled = true
+
 # Custom domain — set up in Cloudflare DNS (CNAME → workers.dev)
 routes = [
   { pattern = "rangeofficer.urdr.dev", custom_domain = true }

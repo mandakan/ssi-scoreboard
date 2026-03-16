@@ -85,11 +85,16 @@ const worker: ExportedHandler<Env> = {
   },
 
   async scheduled(_, env) {
-    await Promise.all([
+    const results = await Promise.allSettled([
       pollWatchedMatches(env),
       pollRegistrationReminders(env),
       pollSquadReminders(env),
     ]);
+    for (const result of results) {
+      if (result.status === "rejected") {
+        console.error("Cron task failed:", result.reason);
+      }
+    }
   },
 };
 
@@ -456,9 +461,13 @@ async function handleDeferredCommand(
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error(`Command /${commandName} failed:`, message);
-    await editOriginalResponse(env.DISCORD_APP_ID, token, {
-      content: `Something went wrong: ${message}`,
-    });
+    try {
+      await editOriginalResponse(env.DISCORD_APP_ID, token, {
+        content: `Something went wrong: ${message}`,
+      });
+    } catch (editErr) {
+      console.error("Failed to send error response:", editErr);
+    }
   }
 }
 
