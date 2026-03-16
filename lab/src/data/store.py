@@ -392,20 +392,22 @@ class Store:
                 else c.identity_key
                 for c in results.competitors
             ]
+            comps = results.competitors
+            n = len(comps)
             comp_tbl = pa.table({  # noqa: F841
-                "source":        pa.array([source] * len(results.competitors), type=pa.string()),
-                "ct":            pa.array([meta.ct] * len(results.competitors), type=pa.int32()),
-                "match_id":      pa.array([meta.match_id] * len(results.competitors), type=pa.string()),
-                "competitor_id": pa.array([c.competitor_id for c in results.competitors], type=pa.int32()),
-                "shooter_id":    pa.array([c.shooter_id for c in results.competitors], type=pa.int32()),
-                "identity_key":  pa.array(identity_keys, type=pa.string()),
-                "name":          pa.array([c.name for c in results.competitors], type=pa.string()),
-                "club":          pa.array([c.club for c in results.competitors], type=pa.string()),
-                "division":      pa.array([c.division for c in results.competitors], type=pa.string()),
-                "region":        pa.array([c.region for c in results.competitors], type=pa.string()),
-                "region_display": pa.array([c.region_display for c in results.competitors], type=pa.string()),
-                "category":      pa.array([c.category for c in results.competitors], type=pa.string()),
-                "alias":         pa.array([c.alias for c in results.competitors], type=pa.string()),
+                "source":         pa.array([source] * n, type=pa.string()),
+                "ct":             pa.array([meta.ct] * n, type=pa.int32()),
+                "match_id":       pa.array([meta.match_id] * n, type=pa.string()),
+                "competitor_id":  pa.array([c.competitor_id for c in comps], type=pa.int32()),
+                "shooter_id":     pa.array([c.shooter_id for c in comps], type=pa.int32()),
+                "identity_key":   pa.array(identity_keys, type=pa.string()),
+                "name":           pa.array([c.name for c in comps], type=pa.string()),
+                "club":           pa.array([c.club for c in comps], type=pa.string()),
+                "division":       pa.array([c.division for c in comps], type=pa.string()),
+                "region":         pa.array([c.region for c in comps], type=pa.string()),
+                "region_display": pa.array([c.region_display for c in comps], type=pa.string()),
+                "category":       pa.array([c.category for c in comps], type=pa.string()),
+                "alias":          pa.array([c.alias for c in comps], type=pa.string()),
             })
             self.db.execute("INSERT INTO competitors SELECT * FROM comp_tbl")
 

@@ -1391,5 +1391,5 @@ def generate_site(data: dict[str, Any], output_dir: Path, data_dir: Path | None 
         f"{len(data['algorithms'])} algorithms · "
         f"{len(data['matches'])} matches"
     )
-    console.print(f"[dim]Serve with: uv run rating serve[/dim]")
+    console.print("[dim]Serve with: uv run rating serve[/dim]")
     console.print(f"[dim]Manifest: {manifest_out}[/dim]")

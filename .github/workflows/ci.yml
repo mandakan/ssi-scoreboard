@@ -9,7 +9,54 @@ permissions:
   contents: read
 
 jobs:
-  ci:
+  # ---------------------------------------------------------------------------
+  # Detect which areas of the repo changed so downstream jobs can be skipped.
+  # ---------------------------------------------------------------------------
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      scoreboard: ${{ steps.filter.outputs.scoreboard }}
+      discord: ${{ steps.filter.outputs.discord }}
+      lab: ${{ steps.filter.outputs.lab }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            scoreboard:
+              - 'app/**'
+              - 'components/**'
+              - 'hooks/**'
+              - 'lib/**'
+              - 'mcp/**'
+              - 'public/**'
+              - 'scripts/**'
+              - 'tests/**'
+              - 'migrations/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'tsconfig.json'
+              - 'next.config.*'
+              - 'tailwind.config.*'
+              - 'postcss.config.*'
+              - 'eslint.config.*'
+              - 'vitest.config.*'
+              - 'playwright.config.*'
+            discord:
+              - 'discord/**'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+            lab:
+              - 'lab/**'
+
+  # ---------------------------------------------------------------------------
+  # Scoreboard: lint → typecheck → test → build → e2e
+  # ---------------------------------------------------------------------------
+  scoreboard:
+    needs: changes
+    if: needs.changes.outputs.scoreboard == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -41,13 +88,7 @@ jobs:
 
       - run: pnpm typecheck   # tsc --noEmit
 
-      - name: Typecheck discord bot
-        run: cd discord && pnpm typecheck
-
       - run: pnpm test
-
-      - name: Test discord bot
-        run: cd discord && pnpm test
 
       - run: pnpm build
         env:
@@ -70,3 +111,69 @@ jobs:
         with:
           name: playwright-report
           path: playwright-report/
+
+  # ---------------------------------------------------------------------------
+  # Discord bot: typecheck → test
+  # ---------------------------------------------------------------------------
+  discord:
+    needs: changes
+    if: needs.changes.outputs.discord == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Get pnpm store path
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - uses: actions/cache@v5
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        working-directory: discord
+        run: pnpm typecheck
+
+      - name: Test
+        working-directory: discord
+        run: pnpm test
+
+  # ---------------------------------------------------------------------------
+  # Lab: lint → typecheck → test (Python)
+  # ---------------------------------------------------------------------------
+  lab:
+    needs: changes
+    if: needs.changes.outputs.lab == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install dependencies
+        working-directory: lab
+        run: uv sync --extra dev
+
+      - name: Lint
+        working-directory: lab
+        run: uv run ruff check src/
+
+      - name: Typecheck
+        working-directory: lab
+        run: uv run mypy src/
+
+      - name: Test
+        working-directory: lab
+        run: uv run pytest
