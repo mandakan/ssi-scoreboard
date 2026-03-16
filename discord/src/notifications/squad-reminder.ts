@@ -64,6 +64,8 @@ interface MatchNotification {
   level: string | null;
   triggerType: TriggerType;
   shooters: MatchShooterInfo[];
+  /** The raw ISO timestamp when squadding opens (for displaying exact time). */
+  squaddingStartsRaw: string | null;
   isSquaddingOpen: boolean;
   stagesCount: number;
 }
@@ -217,6 +219,7 @@ async function processGuildSquadReminder(
         level: matchData?.level ?? upcoming.level,
         triggerType: trigger,
         shooters: shooterInfos,
+        squaddingStartsRaw: matchData?.squadding_starts ?? null,
         isSquaddingOpen: matchData?.is_squadding_possible ?? false,
         stagesCount: matchData?.stages_count ?? 0,
       });
@@ -300,7 +303,26 @@ function buildSquaddingEmbed(
   ssiUrl: string,
 ): APIEmbed {
   const lines: string[] = [];
-  lines.push(`Squadding is now open for **${n.matchName}**!`);
+
+  // Show exact opening time — this is the critical info.
+  // Squadding is first-come-first-serve, so everyone needs to be ready.
+  if (n.squaddingStartsRaw) {
+    if (n.isSquaddingOpen) {
+      lines.push(`Squadding is **OPEN** for **${n.matchName}**!`);
+    } else {
+      // Use Discord's timestamp format so each user sees it in their local timezone.
+      // <t:unix:t> = short time, <t:unix:R> = relative ("in 3 hours")
+      const unixTs = Math.floor(new Date(n.squaddingStartsRaw).getTime() / 1000);
+      lines.push(`Squadding opens **today** for **${n.matchName}**!`);
+      lines.push("");
+      lines.push(`Opens at: <t:${unixTs}:t> (<t:${unixTs}:R>)`);
+    }
+  } else {
+    lines.push(`Squadding opens today for **${n.matchName}**!`);
+  }
+
+  lines.push("");
+  lines.push("Squads are first-come-first-serve \u2014 be ready to squad together!");
   lines.push("");
 
   if (n.venue || n.date) {
@@ -312,20 +334,19 @@ function buildSquaddingEmbed(
     lines.push("");
   }
 
-  lines.push("**Go pick your squad:**");
-  lines.push(`[Open on SSI](${ssiUrl}) \u00b7 [View on Scoreboard](${matchUrl})`);
+  lines.push(`[Squad on SSI](${ssiUrl}) \u00b7 [View on Scoreboard](${matchUrl})`);
 
   const shooterList = n.shooters
-    .map((s) => `\u2022 <@${s.discordUserId}> (${s.shooterName})`)
+    .map((s) => `\u2022 <@${s.discordUserId}>`)
     .join("\n");
 
   return {
-    title: "Squadding open!",
+    title: n.isSquaddingOpen ? "Squadding is OPEN!" : "Squadding opens today!",
     color: 0xf59e0b, // amber
     description: lines.join("\n"),
     fields: [
       {
-        name: `Registered shooters (${n.shooters.length})`,
+        name: `Ready up (${n.shooters.length})`,
         value: shooterList,
         inline: false,
       },
