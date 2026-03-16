@@ -93,27 +93,37 @@ async function handleSet(
 ): Promise<{ content: string; embeds: APIEmbed[] }> {
   const remindDays = parseRemindDays(daysRaw);
 
+  // Check for existing config
+  const existingRaw = await kv.get(squadReminderKey(guildId));
+  const existing: SquadReminderConfig | null = existingRaw ? JSON.parse(existingRaw) : null;
+
   const config: SquadReminderConfig = {
     channelId,
     remindDays,
     lastRunDate: null,
-    notifiedEvents: {},
+    notifiedEvents: existing?.notifiedEvents ?? {},
     createdAt: new Date().toISOString(),
   };
 
   await kv.put(squadReminderKey(guildId), JSON.stringify(config));
 
+  let description =
+    "I'll remind linked shooters when squadding opens for their upcoming matches, " +
+    "and post match-day reminders with squad assignments.\n\n" +
+    `Channel: <#${channelId}>\n` +
+    `Squadding reminders: **${formatRemindDays(remindDays)}**\n` +
+    "Match-day reminder: **always on**";
+
+  if (existing) {
+    description += `\n\n*Replaced previous config (was posting to <#${existing.channelId}>).*`;
+  }
+
   const embed: APIEmbed = {
-    title: "Squad reminder configured",
+    title: existing ? "Squad reminder updated" : "Squad reminder configured",
     color: 0x22c55e, // green
-    description:
-      "I'll remind linked shooters when squadding opens for their upcoming matches, " +
-      "and post match-day reminders with squad assignments.\n\n" +
-      `Channel: <#${channelId}>\n` +
-      `Squadding reminders: **${formatRemindDays(remindDays)}**\n` +
-      "Match-day reminder: **always on**",
+    description,
     footer: {
-      text: "Runs daily. Shooters must /link their accounts to get mentioned.",
+      text: "Running now — check the channel for a preview. Repeats daily. Shooters must /link to get mentioned.",
     },
   };
 

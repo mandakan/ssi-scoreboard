@@ -50,6 +50,11 @@ export const COMMANDS = [
     ],
   },
   {
+    name: "unlink",
+    description: "Unlink your Discord account from your SSI shooter profile",
+    type: ApplicationCommandType.ChatInput,
+  },
+  {
     name: "me",
     description: "Show your own shooter dashboard (requires /link first)",
     type: ApplicationCommandType.ChatInput,
@@ -57,6 +62,11 @@ export const COMMANDS = [
   {
     name: "help",
     description: "Show available commands and how to get started",
+    type: ApplicationCommandType.ChatInput,
+  },
+  {
+    name: "introduction",
+    description: "Let the Range Officer introduce himself to the channel",
     type: ApplicationCommandType.ChatInput,
   },
   {
@@ -108,7 +118,7 @@ export const COMMANDS = [
   },
   {
     name: "remind-registrations",
-    description: "Daily digest of upcoming matches with open registration",
+    description: "Daily digest of upcoming matches and registration status",
     type: ApplicationCommandType.ChatInput,
     options: [
       {
@@ -141,12 +151,24 @@ export const COMMANDS = [
         ],
       },
       {
+        name: "discipline",
+        description: "Filter by discipline (default: all)",
+        type: ApplicationCommandOptionType.String,
+        required: false,
+        choices: [
+          { name: "Handgun (incl. PCC)", value: "handgun" },
+          { name: "Rifle", value: "rifle" },
+          { name: "Shotgun", value: "shotgun" },
+          { name: "Mini Rifle", value: "minirifle" },
+        ],
+      },
+      {
         name: "days",
-        description: "How many days ahead to look (default: 60, max: 365)",
+        description: "How many days ahead to look (default: 365, max: 730)",
         type: ApplicationCommandOptionType.Integer,
         required: false,
         min_value: 1,
-        max_value: 365,
+        max_value: 730,
       },
     ],
   },

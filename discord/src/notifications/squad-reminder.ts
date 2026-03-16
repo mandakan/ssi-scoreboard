@@ -28,6 +28,19 @@ const REMINDER_SUFFIX = ":remind-squads";
  * Called by the cron trigger. Scans all guilds with a squad reminder config,
  * checks linked shooters' upcoming matches, and posts reminders.
  */
+/**
+ * Run the squad reminder for a single guild immediately.
+ * Used to give instant feedback when a user configures the reminder.
+ */
+export async function runSquadReminderForGuild(
+  env: Env,
+  guildId: string,
+): Promise<void> {
+  const client = new ScoreboardClient(env.SCOREBOARD_BASE_URL);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  await processGuildSquadReminder(env, client, guildId, todayStr);
+}
+
 export async function pollSquadReminders(env: Env): Promise<void> {
   const client = new ScoreboardClient(env.SCOREBOARD_BASE_URL);
   const todayStr = new Date().toISOString().slice(0, 10);

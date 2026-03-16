@@ -30,7 +30,15 @@ const HELP_EMBED: APIEmbed = {
     },
     {
       name: "/link <name>",
-      value: "Link your Discord account to your SSI shooter profile. Required for `/me`.",
+      value:
+        "Link your Discord account to your SSI shooter profile. " +
+        "Enables `/me`, and makes you appear in `/summary`, `/leaderboard`, " +
+        "`/watch` notifications, and `/remind-squads` @mentions.",
+      inline: false,
+    },
+    {
+      name: "/unlink",
+      value: "Disconnect your Discord account from your SSI shooter profile.",
       inline: false,
     },
     {
@@ -63,10 +71,12 @@ const HELP_EMBED: APIEmbed = {
       inline: false,
     },
     {
-      name: "/remind-registrations set [country] [level] [days]",
+      name: "/remind-registrations set [country] [level] [discipline] [days]",
       value:
-        "Daily digest of upcoming matches with open registration. " +
-        "Filter by country, level, and how far ahead to look.",
+        "Daily digest of upcoming matches with registration status. " +
+        "Filter by country, level, discipline, and how far ahead to look. " +
+        "Pings @here when registration opens today. " +
+        "One config per server — running `set` again replaces the previous one.",
       inline: false,
     },
     {
@@ -74,7 +84,8 @@ const HELP_EMBED: APIEmbed = {
       value:
         "Notify linked shooters (with @mentions) before squadding opens " +
         "(e.g. `1,7` = 7 days + 1 day + day-of). Also posts match-day reminders " +
-        "with squad assignments. Requires `/link` first.",
+        "with squad assignments. Requires `/link` first. " +
+        "One config per server — running `set` again replaces the previous one.",
       inline: false,
     },
     {
@@ -100,4 +111,51 @@ export const WELCOME_EMBED: APIEmbed = {
 
 export function handleHelp(): { content: string; embeds: APIEmbed[] } {
   return { content: "", embeds: [HELP_EMBED] };
+}
+
+const INTRODUCTION_EMBED: APIEmbed = {
+  title: "Attention on the range!",
+  color: 0x22c55e, // green
+  description:
+    "Good morning, competitors. I'm your **Range Officer** for this server.\n\n" +
+    "My job is to keep you informed \u2014 match results, stage scores, registration deadlines, " +
+    "squad reminders, the works. Think of me as the RO who actually *wants* you to know " +
+    "what's going on.\n\n" +
+    "But I can't do my job if I don't know who you are.",
+  fields: [
+    {
+      name: "Step 1 \u2014 Link your account",
+      value:
+        "Run `/link <your name>` with your name exactly as it appears on " +
+        "[Shoot'n Score It](https://shootnscoreit.com). I'll match you to your shooter profile.\n\n" +
+        "Once linked, you unlock everything: your personal dashboard (`/me`), " +
+        "live stage updates, squad reminders with @mentions, and you'll show up " +
+        "in match summaries and leaderboards.",
+      inline: false,
+    },
+    {
+      name: "Step 2 \u2014 There is no step 2",
+      value:
+        "That's it. You're done. The rest is on your server admin to set up:\n\n" +
+        "\u2022 `/watch <match>` \u2014 live score updates as you finish stages\n" +
+        "\u2022 `/remind-registrations set` \u2014 daily digest of upcoming matches so you never miss a registration opening\n" +
+        "\u2022 `/remind-squads set` \u2014 @mentions when squadding opens (first-come-first-serve, be ready!)\n\n" +
+        "Or just use me casually \u2014 `/match`, `/shooter`, `/summary`, `/leaderboard` work for everyone.",
+      inline: false,
+    },
+    {
+      name: "The fine print",
+      value:
+        "I only see what's on [SSI Scoreboard](https://scoreboard.urdr.dev). " +
+        "If your match isn't there, I can't help you.\n\n" +
+        "Your link is per-server \u2014 link once in each server you use me in. " +
+        "`/unlink` if you change your mind.\n\n" +
+        "Now \u2014 load and make ready.",
+      inline: false,
+    },
+  ],
+};
+
+export function handleIntroduction(): { content: string; embeds: APIEmbed[] } {
+  return { content: "", embeds: [INTRODUCTION_EMBED] };
 }

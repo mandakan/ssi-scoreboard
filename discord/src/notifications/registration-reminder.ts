@@ -1,7 +1,9 @@
 // Cron-triggered registration reminder digest.
 // Scans all guilds with a configured reminder, checks if a digest
 // has already been posted today, and posts a list of upcoming matches
-// with open registration.
+// with their registration status — open, upcoming, or not yet announced.
+// The goal: make sure club mates don't miss registration openings
+// (first-come-first-serve under heavy server load).
 
 import type { APIEmbed } from "discord-api-types/v10";
 import type { Env, EventSearchResult } from "../types";
@@ -9,16 +11,26 @@ import { ScoreboardClient } from "../scoreboard-client";
 import { postChannelMessage } from "../discord-api";
 import {
   reminderKey,
+  matchesDiscipline,
+  formatDiscipline,
   type RegistrationReminderConfig,
 } from "../commands/remind-registrations";
 
-/** Prefix used to discover all guild reminder keys. */
 const REMINDER_SUFFIX = ":remind-registrations";
 
 /**
- * Called by the cron trigger. Scans all guilds with a registration reminder
- * config, and posts a digest if one hasn't been sent today.
+ * Run the registration reminder for a single guild immediately.
+ * Used to give instant feedback when a user configures the reminder.
  */
+export async function runRegistrationReminderForGuild(
+  env: Env,
+  guildId: string,
+): Promise<void> {
+  const client = new ScoreboardClient(env.SCOREBOARD_BASE_URL);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  await processGuildReminder(env, client, guildId, todayStr);
+}
+
 export async function pollRegistrationReminders(env: Env): Promise<void> {
   const client = new ScoreboardClient(env.SCOREBOARD_BASE_URL);
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -63,14 +75,42 @@ async function processGuildReminder(
     startsBefore: endDate.toISOString().slice(0, 10),
   });
 
-  // Filter to matches with open registration
-  const openEvents = events
-    .filter((e) => e.is_registration_possible)
-    // Sort by date ascending (soonest first)
+  // Apply discipline filter + exclude matches where registration already closed
+  const now = new Date();
+  const filtered = events
+    .filter((e) => !config.discipline || matchesDiscipline(e.discipline, config.discipline))
+    // Keep: registration open, registration not yet open, or no registration info
+    // Exclude: registration explicitly closed (closes date in the past and not currently possible)
+    .filter((e) => {
+      if (e.is_registration_possible) return true;
+      if (e.registration_starts) return true; // has a future/past start date — show it
+      if (e.registration_closes) {
+        // If closes is in the past and not currently possible, skip
+        return new Date(e.registration_closes) > now;
+      }
+      return true; // no registration info — show it anyway
+    })
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  // Build and post the digest
-  const embeds = buildDigestEmbeds(openEvents, config);
+  // Check for registrations opening today — these get a separate urgent alert
+  const opensToday = filtered.filter((e) => {
+    if (!e.registration_starts) return false;
+    return e.registration_starts.slice(0, 10) === todayStr;
+  });
+
+  // Post urgent alert for registrations opening today (with @here to ping the channel)
+  if (opensToday.length > 0) {
+    const urgentEmbed = buildOpensTodayEmbed(opensToday);
+    await postChannelMessage(
+      env.DISCORD_BOT_TOKEN,
+      config.channelId,
+      "@here",
+      [urgentEmbed],
+    );
+  }
+
+  // Build and post the full digest
+  const embeds = buildDigestEmbeds(filtered, config);
 
   if (embeds.length > 0) {
     await postChannelMessage(
@@ -79,8 +119,8 @@ async function processGuildReminder(
       "",
       embeds,
     );
-  } else {
-    // No matches — post a short "nothing open" message so users know it ran
+  } else if (opensToday.length === 0) {
+    // Only post "nothing found" if there was no urgent alert either
     await postChannelMessage(
       env.DISCORD_BOT_TOKEN,
       config.channelId,
@@ -93,14 +133,52 @@ async function processGuildReminder(
   await env.BOT_KV.put(reminderKey(guildId), JSON.stringify(config));
 }
 
+/**
+ * Build an urgent embed for registrations opening today.
+ * Posted with @here so the whole channel gets pinged.
+ */
+function buildOpensTodayEmbed(events: EventSearchResult[]): APIEmbed {
+  const fields: NonNullable<APIEmbed["fields"]> = events.map((e) => {
+    const parts: string[] = [];
+
+    parts.push(`${formatDate(e.date)} \u00b7 ${e.level} \u00b7 ${e.discipline}`);
+    if (e.venue) parts.push(e.venue);
+
+    // Show exact opening time if available
+    if (e.registration_starts) {
+      const unixTs = Math.floor(new Date(e.registration_starts).getTime() / 1000);
+      if (e.is_registration_possible) {
+        parts.push(`\u2705 **OPEN NOW** — go go go!`);
+      } else {
+        parts.push(`Opens at <t:${unixTs}:t> (<t:${unixTs}:R>)`);
+      }
+    }
+
+    if (e.max_competitors) {
+      parts.push(`Max ${e.max_competitors} competitors`);
+    }
+
+    const ssiUrl = `https://shootnscoreit.com/event/${e.content_type}/${e.id}/`;
+    parts.push(`[Register on SSI](${ssiUrl})`);
+
+    return { name: e.name, value: parts.join("\n"), inline: false };
+  });
+
+  return {
+    title: `\u{1F6A8} Registration opens TODAY \u2014 ${events.length} match${events.length === 1 ? "" : "es"}`,
+    color: 0xef4444, // red — urgent
+    description: "First-come-first-serve \u2014 be ready to register!",
+    fields,
+    timestamp: new Date().toISOString(),
+  };
+}
+
 function buildDigestEmbeds(
   events: EventSearchResult[],
   config: RegistrationReminderConfig,
 ): APIEmbed[] {
   if (events.length === 0) return [];
 
-  // Discord embed limit: max 25 fields per embed, max 10 embeds per message.
-  // Use one field per match, cap at 20 matches (leaving room for header).
   const capped = events.slice(0, 20);
   const hasMore = events.length > 20;
 
@@ -108,19 +186,15 @@ function buildDigestEmbeds(
     const date = formatDate(e.date);
     const parts: string[] = [];
 
-    parts.push(`${date} \u00b7 ${e.level}`);
+    parts.push(`${date} \u00b7 ${e.level} \u00b7 ${e.discipline}`);
     if (e.venue) parts.push(e.venue);
 
-    // Registration info
-    const regParts: string[] = [];
-    if (e.registration_closes) {
-      regParts.push(`Closes ${formatDate(e.registration_closes)}`);
-    }
+    // Registration status — the key info
+    parts.push(buildRegistrationStatus(e));
+
+    // Max competitors
     if (e.max_competitors) {
-      regParts.push(`Max ${e.max_competitors} competitors`);
-    }
-    if (regParts.length > 0) {
-      parts.push(regParts.join(" \u00b7 "));
+      parts.push(`Max ${e.max_competitors} competitors`);
     }
 
     // Squadding info
@@ -134,7 +208,7 @@ function buildDigestEmbeds(
     }
 
     const ssiUrl = `https://shootnscoreit.com/event/${e.content_type}/${e.id}/`;
-    parts.push(`[Register on SSI](${ssiUrl})`);
+    parts.push(`[SSI](${ssiUrl})`);
 
     return {
       name: e.name,
@@ -146,12 +220,19 @@ function buildDigestEmbeds(
   const filterDesc: string[] = [];
   if (config.country) filterDesc.push(config.country);
   filterDesc.push(formatLevel(config.minLevel));
+  if (config.discipline) filterDesc.push(formatDiscipline(config.discipline));
   filterDesc.push(`next ${config.daysAhead} days`);
 
+  // Count by status for the title
+  const openCount = events.filter((e) => e.is_registration_possible).length;
+  const titleParts: string[] = [];
+  if (openCount > 0) titleParts.push(`${openCount} open`);
+  titleParts.push(`${events.length} total`);
+
   const embed: APIEmbed = {
-    title: `Registration open \u2014 ${events.length} match${events.length === 1 ? "" : "es"}`,
-    color: 0x3b82f6, // blue
-    description: `Upcoming matches with open registration (${filterDesc.join(" \u00b7 ")})`,
+    title: `Upcoming matches \u2014 ${titleParts.join(", ")}`,
+    color: openCount > 0 ? 0x22c55e : 0x3b82f6, // green if any open, blue otherwise
+    description: `Registration status for upcoming matches (${filterDesc.join(" \u00b7 ")})`,
     fields,
     footer: {
       text: hasMore
@@ -164,13 +245,39 @@ function buildDigestEmbeds(
   return [embed];
 }
 
+/**
+ * Build a concise registration status line for an event.
+ */
+function buildRegistrationStatus(e: EventSearchResult): string {
+  if (e.is_registration_possible) {
+    if (e.registration_closes) {
+      return `\u2705 **Registration OPEN** — closes ${formatDate(e.registration_closes)}`;
+    }
+    return "\u2705 **Registration OPEN**";
+  }
+
+  // Registration not yet open — show when it will open
+  if (e.registration_starts) {
+    const starts = new Date(e.registration_starts);
+    if (starts > new Date()) {
+      const unixTs = Math.floor(starts.getTime() / 1000);
+      return `\u23f3 Registration opens <t:${unixTs}:f> (<t:${unixTs}:R>)`;
+    }
+    // Start date is in the past but not currently possible — likely closed
+    return "\u274c Registration closed";
+  }
+
+  return "\u2014 Registration dates not announced";
+}
+
 function buildNoMatchesMessage(config: RegistrationReminderConfig): string {
   const filterParts: string[] = [];
   if (config.country) filterParts.push(config.country);
   filterParts.push(formatLevel(config.minLevel));
+  if (config.discipline) filterParts.push(formatDiscipline(config.discipline));
   filterParts.push(`next ${config.daysAhead} days`);
 
-  return `No upcoming matches with open registration found (${filterParts.join(" \u00b7 ")}).`;
+  return `No upcoming matches found (${filterParts.join(" \u00b7 ")}).`;
 }
 
 function formatDate(iso: string): string {
