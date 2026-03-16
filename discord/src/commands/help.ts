@@ -63,6 +63,13 @@ const HELP_EMBED: APIEmbed = {
       inline: false,
     },
     {
+      name: "/remind-registrations set [country] [level] [days]",
+      value:
+        "Daily digest of upcoming matches with open registration. " +
+        "Filter by country, level, and how far ahead to look.",
+      inline: false,
+    },
+    {
       name: "Tip: restrict to a channel",
       value:
         "To keep bot output in a dedicated channel, go to Server Settings \u2192 Channels \u2192 " +

@@ -21,5 +21,8 @@ export const MAX_COMPETITORS = 12;
  *       added get_full_rule_display to IpscMatchNode (multi-discipline support)
  *   9 → added lat, lng to IpscMatchNode in MATCH_QUERY; lat/lng on MatchResponse (venue coordinates)
  *  10 → added procedure, firearm_condition to StageInfo on MatchResponse
+ *  11 → added registration/squadding fields (ends, registration_starts, registration_closes,
+ *       squadding_starts, squadding_closes, is_registration_possible, is_squadding_possible,
+ *       max_competitors, registration) to MATCH_QUERY and EVENTS_QUERY
  */
-export const CACHE_SCHEMA_VERSION = 10;
+export const CACHE_SCHEMA_VERSION = 11;

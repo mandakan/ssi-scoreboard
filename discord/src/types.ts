@@ -22,10 +22,19 @@ export interface EventSearchResult {
   name: string;
   venue: string | null;
   date: string;
+  ends: string | null;
   level: string;
   status: string;
   region: string;
   discipline: string;
+  registration_status: string;
+  registration_starts: string | null;
+  registration_closes: string | null;
+  is_registration_possible: boolean;
+  squadding_starts: string | null;
+  squadding_closes: string | null;
+  is_squadding_possible: boolean;
+  max_competitors: number | null;
 }
 
 /** GET /api/match/{ct}/{id} — full match data. */

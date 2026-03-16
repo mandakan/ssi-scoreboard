@@ -152,6 +152,15 @@ export const MATCH_QUERY = `
         has_geopos
         lat
         lng
+        ends
+        registration_starts
+        registration_closes
+        squadding_starts
+        squadding_closes
+        is_registration_possible
+        is_squadding_possible
+        max_competitors
+        registration
         image {
           url
           width
@@ -227,10 +236,19 @@ export const EVENTS_QUERY = `
       name
       venue
       starts
+      ends
       status
       region
       get_full_rule_display
       get_full_level_display
+      registration_starts
+      registration_closes
+      squadding_starts
+      squadding_closes
+      is_registration_possible
+      is_squadding_possible
+      max_competitors
+      registration
     }
   }
 `;
