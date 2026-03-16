@@ -111,6 +111,16 @@ export function landingPage(): string {
       <li><code>/remind-squads set</code> Reminds linked shooters before squadding opens and on match day, with squad assignments. <strong>@mentions each linked user by name</strong> — only people who used <code>/link</code> get pinged <span class="badge badge-server">server-wide · @mentions</span></li>
     </ul>
 
+    <h2>Match predictions</h2>
+    <p class="section-note">Predict your performance before a match starts. After it completes,
+    reveal everyone's predictions to see who called it best. Your prediction is private
+    until reveal — no anchoring bias!</p>
+    <ul class="commands">
+      <li><code>/predict submit &lt;match&gt; &lt;percent&gt; &lt;mikes&gt;</code> Predict your match % and total mikes before the match starts. Only registered competitors can predict <span class="badge badge-ephemeral">only you</span></li>
+      <li><code>/predict reveal &lt;match&gt;</code> Reveal all predictions after the match completes (95%+ scored). Awards: Most Accurate, Most Humble, Most Overconfident, Oracle, and more <span class="badge badge-public">visible to all</span></li>
+      <li><code>/predict status</code> Check how many predictions have been submitted <span class="badge badge-ephemeral">only you</span></li>
+    </ul>
+
     <h2>Personal reminders</h2>
     <p class="section-note">Track specific matches and get a DM on the day of each milestone:
     registration opening, squadding opening, the day before the match, and match day.
@@ -150,8 +160,10 @@ export function privacyPage(): string {
 
     <h2>What data we collect</h2>
     <p>When you use the <code>/link</code> command, Range Officer stores a mapping
-    between your Discord user ID and your SSI shooter ID. This is the only
-    personal data we store.</p>
+    between your Discord user ID and your SSI shooter ID.</p>
+    <p>When you use the <code>/predict</code> command, Range Officer stores your
+    prediction (match %, mikes) alongside your Discord user ID and shooter ID.
+    Predictions are automatically deleted after 30 days (or 7 days after reveal).</p>
 
     <h2>Where data is stored</h2>
     <p>All data is stored in <a href="https://developers.cloudflare.com/kv/">Cloudflare

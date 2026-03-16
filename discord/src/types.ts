@@ -163,3 +163,18 @@ export interface CompetitorStageResult {
   dq: boolean;
   incomplete: boolean;
 }
+
+/** Per-competitor penalty stats from the compare endpoint (coaching mode). */
+export interface CompetitorPenaltyStats {
+  totalPenalties: number;
+  penaltyCostPercent: number;
+  matchPctActual: number;
+  matchPctClean: number;
+  penaltiesPerStage: number;
+  penaltiesPer100Rounds: number;
+}
+
+/** CompareResult extended with penaltyStats for prediction reveals. */
+export interface CompareResultWithPenaltyStats extends CompareResult {
+  penaltyStats: Record<number, CompetitorPenaltyStats>;
+}
