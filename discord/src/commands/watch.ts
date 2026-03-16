@@ -55,14 +55,7 @@ export async function handleWatch(
     };
   }
 
-  const match = events[0];
-
-  if (match.scoring_completed === 100) {
-    return {
-      content: `**${match.name}** is already fully scored. Nothing to watch.`,
-      embeds: [],
-    };
-  }
+  const event = events[0];
 
   // Validate that there are linked shooters competing in this match
   const linkedShooters = await getGuildLinkedShooters(kv, guildId);
@@ -75,8 +68,17 @@ export async function handleWatch(
     };
   }
 
+  // Fetch full match data for scoring status, counts, and competitor resolution
+  const fullMatch = await client.getMatch(event.content_type, event.id);
+
+  if (fullMatch.scoring_completed === 100) {
+    return {
+      content: `**${event.name}** is already fully scored. Nothing to watch.`,
+      embeds: [],
+    };
+  }
+
   // Resolve linked shooters to match competitors
-  const fullMatch = await client.getMatch(match.content_type, match.id);
   const trackedNames: string[] = [];
   for (const linked of linkedShooters) {
     const competitor = fullMatch.competitors.find(
@@ -91,7 +93,7 @@ export async function handleWatch(
     const linkedNames = linkedShooters.map((s) => s.name).join(", ");
     return {
       content:
-        `None of the linked shooters are competing in **${match.name}**.\n` +
+        `None of the linked shooters are competing in **${event.name}**.\n` +
         `Linked in this server: ${linkedNames}\n\n` +
         `If someone is missing, they can use \`/link <name>\` to connect their account.`,
       embeds: [],
@@ -99,31 +101,31 @@ export async function handleWatch(
   }
 
   const state: WatchState = {
-    matchCt: match.content_type,
-    matchId: match.id,
-    matchName: match.name,
+    matchCt: event.content_type,
+    matchId: event.id,
+    matchName: event.name,
     channelId,
-    lastScoringPct: match.scoring_completed,
+    lastScoringPct: fullMatch.scoring_completed,
     notifiedStages: {},
     createdAt: new Date().toISOString(),
   };
 
   await kv.put(watchKey(guildId), JSON.stringify(state));
 
-  const matchUrl = `${baseUrl}/match/${match.content_type}/${match.id}`;
+  const matchUrl = `${baseUrl}/match/${event.content_type}/${event.id}`;
   const statusLabel =
-    match.scoring_completed > 0
-      ? `${match.scoring_completed}% scored`
+    fullMatch.scoring_completed > 0
+      ? `${fullMatch.scoring_completed}% scored`
       : "Not started yet";
 
   const embed: APIEmbed = {
-    title: `Now watching: ${match.name}`,
+    title: `Now watching: ${event.name}`,
     url: matchUrl,
     color: 0xf59e0b, // amber
     fields: [
       { name: "Status", value: statusLabel, inline: true },
-      { name: "Stages", value: String(match.stages_count), inline: true },
-      { name: "Competitors", value: String(match.competitors_count), inline: true },
+      { name: "Stages", value: String(fullMatch.stages_count), inline: true },
+      { name: "Competitors", value: String(fullMatch.competitors_count), inline: true },
       { name: "Tracking", value: trackedNames.join(", "), inline: false },
     ],
     footer: {

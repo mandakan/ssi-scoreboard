@@ -25,6 +25,9 @@ export async function handleShooter(
   const dashboard = await client.getShooterDashboard(shooter.shooterId);
   const dashUrl = `${baseUrl}/shooter/${shooter.shooterId}`;
 
+  const profile = dashboard.profile;
+  const displayName = profile?.name ?? shooter.name;
+
   const fields: APIEmbed["fields"] = [
     {
       name: "Matches",
@@ -33,40 +36,42 @@ export async function handleShooter(
     },
     {
       name: "Stages",
-      value: String(dashboard.stageCount),
+      value: String(dashboard.stats?.totalStages ?? 0),
       inline: true,
     },
   ];
 
-  if (dashboard.avgMatchPercent != null) {
+  if (dashboard.stats?.overallMatchPct != null) {
     fields.push({
       name: "Avg Match %",
-      value: `${dashboard.avgMatchPercent.toFixed(1)}%`,
+      value: `${dashboard.stats.overallMatchPct.toFixed(1)}%`,
       inline: true,
     });
   }
 
-  if (dashboard.club) {
+  if (profile?.club) {
     fields.push({
       name: "Club",
-      value: dashboard.club,
+      value: profile.club,
       inline: true,
     });
   }
 
-  if (dashboard.division) {
+  if (profile?.division) {
     fields.push({
       name: "Division",
-      value: dashboard.division,
+      value: profile.division,
       inline: true,
     });
   }
 
   // Show achievements if any
-  if (dashboard.achievements.length > 0) {
-    const achievementText = dashboard.achievements
+  const achievements = dashboard.achievements ?? [];
+  const unlocked = achievements.filter((a) => a.unlockedTiers.length > 0);
+  if (unlocked.length > 0) {
+    const achievementText = unlocked
       .slice(0, 6)
-      .map((a) => `${a.icon} ${a.name} (${a.tier})`)
+      .map((a) => `${a.definition.icon} ${a.definition.name}`)
       .join("\n");
     fields.push({
       name: "Achievements",
@@ -76,12 +81,13 @@ export async function handleShooter(
   }
 
   // Show recent matches
-  if (dashboard.recentMatches.length > 0) {
-    const recentText = dashboard.recentMatches
+  const matches = dashboard.matches ?? [];
+  if (matches.length > 0) {
+    const recentText = matches
       .slice(0, 3)
       .map((m) => {
-        const pct = m.matchPercent != null ? ` — ${m.matchPercent.toFixed(1)}%` : "";
-        return `• ${m.name} (${m.date})${pct}`;
+        const pct = m.matchPct != null ? ` — ${m.matchPct.toFixed(1)}%` : "";
+        return `• ${m.name} (${m.date ?? "?"})${pct}`;
       })
       .join("\n");
     fields.push({
@@ -92,7 +98,7 @@ export async function handleShooter(
   }
 
   const embed: APIEmbed = {
-    title: dashboard.name,
+    title: displayName,
     url: dashUrl,
     color: 0x8b5cf6, // purple
     fields,

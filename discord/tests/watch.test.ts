@@ -46,9 +46,9 @@ function makeEvent(overrides: Partial<EventSearchResult> = {}): EventSearchResul
     venue: "Gothenburg",
     date: "2026-06-15",
     level: "Level III",
-    scoring_completed: 30,
-    competitors_count: 120,
-    stages_count: 16,
+    status: "on",
+    region: "Sweden",
+    discipline: "IPSC Handgun",
     ...overrides,
   };
 }
@@ -61,6 +61,9 @@ describe("handleWatch", () => {
     const client = mockClient({
       searchEvents: vi.fn().mockResolvedValue([event]),
       getMatch: vi.fn().mockResolvedValue({
+        scoring_completed: 30,
+        competitors_count: 120,
+        stages_count: 16,
         competitors: [
           { id: 1, shooterId: 42, name: "Jane Doe", division: "Production", club: "PSK" },
         ],
@@ -103,6 +106,9 @@ describe("handleWatch", () => {
     const client = mockClient({
       searchEvents: vi.fn().mockResolvedValue([event]),
       getMatch: vi.fn().mockResolvedValue({
+        scoring_completed: 30,
+        competitors_count: 120,
+        stages_count: 16,
         competitors: [
           { id: 1, shooterId: 999, name: "Other Person", division: "Open", club: "ABC" },
         ],
@@ -142,11 +148,22 @@ describe("handleWatch", () => {
   });
 
   it("rejects fully scored matches", async () => {
-    const event = makeEvent({ scoring_completed: 100 });
+    const event = makeEvent();
     const client = mockClient({
       searchEvents: vi.fn().mockResolvedValue([event]),
+      getMatch: vi.fn().mockResolvedValue({
+        scoring_completed: 100,
+        competitors_count: 120,
+        stages_count: 16,
+        competitors: [],
+        stages: [],
+        squads: [],
+      }),
     });
-    const kv = mockKV();
+    const store: Record<string, string> = {
+      "g:guild-1:link:user-1": JSON.stringify({ shooterId: 42, name: "Jane Doe" }),
+    };
+    const kv = mockKV(store);
 
     const result = await handleWatch(client, kv, BASE_URL, "guild-1", "channel-1", "Swedish");
     expect(result.content).toContain("already fully scored");

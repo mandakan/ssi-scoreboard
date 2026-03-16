@@ -18,8 +18,10 @@ export async function handleMatch(
     };
   }
 
-  // Take the top result
-  const match = events[0];
+  // Take the top result and fetch full match data for scoring/counts
+  const event = events[0];
+  const match = await client.getMatch(event.content_type, event.id);
+
   const scoringLabel =
     match.scoring_completed === 100
       ? "Completed"
@@ -27,16 +29,16 @@ export async function handleMatch(
         ? `${match.scoring_completed}% scored`
         : "Not started";
 
-  const matchUrl = `${baseUrl}/match/${match.content_type}/${match.id}`;
+  const matchUrl = `${baseUrl}/match/${event.content_type}/${event.id}`;
 
   const embed: APIEmbed = {
-    title: match.name,
+    title: event.name,
     url: matchUrl,
     color: match.scoring_completed === 100 ? 0x22c55e : 0x3b82f6, // green or blue
     fields: [
-      { name: "Venue", value: match.venue || "—", inline: true },
-      { name: "Date", value: match.date || "—", inline: true },
-      { name: "Level", value: match.level || "—", inline: true },
+      { name: "Venue", value: event.venue || "—", inline: true },
+      { name: "Date", value: event.date || "—", inline: true },
+      { name: "Level", value: event.level || "—", inline: true },
       {
         name: "Stages",
         value: String(match.stages_count),
