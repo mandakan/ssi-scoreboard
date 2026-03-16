@@ -22,9 +22,11 @@ import { handleLeaderboard } from "./commands/leaderboard";
 import { handleSummary } from "./commands/summary";
 import { handleWatch, handleUnwatch } from "./commands/watch";
 import { handleRemindRegistrations } from "./commands/remind-registrations";
+import { handleRemindSquads } from "./commands/remind-squads";
 import { pollWatchedMatches } from "./notifications/stage-scored";
 import { pollRegistrationReminders } from "./notifications/registration-reminder";
 import { landingPage, privacyPage, tosPage } from "./pages";
+import { pollSquadReminders } from "./notifications/squad-reminder";
 
 const worker: ExportedHandler<Env> = {
   async fetch(request, env): Promise<Response> {
@@ -76,6 +78,7 @@ const worker: ExportedHandler<Env> = {
     await Promise.all([
       pollWatchedMatches(env),
       pollRegistrationReminders(env),
+      pollSquadReminders(env),
     ]);
   },
 };
@@ -140,7 +143,7 @@ async function handleCommand(
   const guildId = getGuildId(interaction);
 
   // Commands where the response is only visible to the caller
-  const EPHEMERAL_COMMANDS = new Set(["help", "link", "me", "unwatch", "remind-registrations"]);
+  const EPHEMERAL_COMMANDS = new Set(["help", "link", "me", "unwatch", "remind-registrations", "remind-squads"]);
 
   try {
     let content = "";
@@ -285,6 +288,28 @@ async function handleCommand(
         );
         content = reminderResult.content;
         embeds = reminderResult.embeds;
+        break;
+      }
+
+      case "remind-squads": {
+        if (!guildId) {
+          content = "This command can only be used in a server, not in DMs.";
+          break;
+        }
+        const squadChannelId = getChannelId(interaction);
+        if (!squadChannelId) {
+          content = "Could not determine the channel.";
+          break;
+        }
+        const squadResult = await handleRemindSquads(
+          env.BOT_KV,
+          guildId,
+          squadChannelId,
+          options.action as string | undefined,
+          options.days_before as number | undefined,
+        );
+        content = squadResult.content;
+        embeds = squadResult.embeds;
         break;
       }
 

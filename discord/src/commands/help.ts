@@ -70,6 +70,13 @@ const HELP_EMBED: APIEmbed = {
       inline: false,
     },
     {
+      name: "/remind-squads set [days_before]",
+      value:
+        "Notify linked shooters (with @mentions) when squadding opens for their matches " +
+        "and on match day with squad assignments. Requires `/link` first.",
+      inline: false,
+    },
+    {
       name: "Tip: restrict to a channel",
       value:
         "To keep bot output in a dedicated channel, go to Server Settings \u2192 Channels \u2192 " +
