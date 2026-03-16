@@ -46,6 +46,10 @@ export interface MatchResponse {
   scoring_completed: number;
   competitors_count: number;
   stages_count: number;
+  /** When squadding opens (ISO timestamp); null if not set. */
+  squadding_starts: string | null;
+  /** Whether squadding is currently open. */
+  is_squadding_possible: boolean;
   stages: MatchStage[];
   competitors: MatchCompetitor[];
   squads: SquadInfo[];
@@ -75,6 +79,18 @@ export interface SquadInfo {
   competitorIds: number[];
 }
 
+/** Upcoming match from the shooter dashboard. */
+export interface UpcomingMatch {
+  ct: string;
+  matchId: string;
+  name: string;
+  date: string | null;
+  venue: string | null;
+  level: string | null;
+  division: string | null;
+  competitorId: number;
+}
+
 /** GET /api/shooter/{shooterId} — dashboard response. */
 export interface ShooterDashboardResponse {
   shooterId: number;
@@ -99,6 +115,8 @@ export interface ShooterDashboardResponse {
     definition: { id: string; name: string; icon: string };
     unlockedTiers: Array<{ level: number }>;
   }>;
+  /** Matches with start date in the future. Only present when non-empty. */
+  upcomingMatches?: UpcomingMatch[];
 }
 
 /** GET /api/shooter/search?q=... — shooter search results. */

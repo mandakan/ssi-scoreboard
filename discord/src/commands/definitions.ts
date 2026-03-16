@@ -144,4 +144,28 @@ export const COMMANDS = [
       },
     ],
   },
+  {
+    name: "remind-squads",
+    description: "Remind linked shooters when squadding opens or match day arrives",
+    type: ApplicationCommandType.ChatInput,
+    options: [
+      {
+        name: "action",
+        description: "set = configure, show = view config, off = disable",
+        type: ApplicationCommandOptionType.String,
+        required: true,
+        choices: [
+          { name: "set — configure squad reminders", value: "set" },
+          { name: "show — view current config", value: "show" },
+          { name: "off — disable squad reminders", value: "off" },
+        ],
+      },
+      {
+        name: "days",
+        description: "Days before squadding to remind, comma-separated (default: 1,7). Day 0 always included.",
+        type: ApplicationCommandOptionType.String,
+        required: false,
+      },
+    ],
+  },
 ] as const;
