@@ -89,6 +89,13 @@ const HELP_EMBED: APIEmbed = {
       inline: false,
     },
     {
+      name: "/remind upcoming [days]",
+      value:
+        "Your personal action checklist — shows what you need to do about upcoming matches " +
+        "(register, pick squad, etc.) within the next N days (default 8). Requires `/link`.",
+      inline: false,
+    },
+    {
       name: "/remind set <match>",
       value:
         "Personal DM reminders — you'll get a DM on the day registration opens, " +
@@ -160,6 +167,7 @@ const INTRODUCTION_EMBED: APIEmbed = {
         "Run `/link <your name>` with your name exactly as it appears on " +
         "[Shoot'n Score It](https://shootnscoreit.com). I'll match you to your shooter profile.\n\n" +
         "Once linked, you unlock everything: your personal dashboard (`/me`), " +
+        "your upcoming match action checklist (`/remind upcoming`), " +
         "live stage updates, squad reminders with @mentions, and you'll show up " +
         "in match summaries and leaderboards.",
       inline: false,
