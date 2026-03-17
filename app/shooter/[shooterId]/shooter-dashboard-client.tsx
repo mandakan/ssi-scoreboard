@@ -1602,7 +1602,7 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
     shooterId,
   );
   const [historyOpen, setHistoryOpen] = useState(true);
-  const [upcomingOpen, setUpcomingOpen] = useState(false);
+  const [upcomingOpen, setUpcomingOpen] = useState(true);
   const [divisionFilter, setDivisionFilter] = useState<string | null | "unset">("unset");
 
   // Derive divisions and default filter once data loads
