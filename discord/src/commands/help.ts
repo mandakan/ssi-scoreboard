@@ -92,7 +92,8 @@ const HELP_EMBED: APIEmbed = {
       name: "/remind upcoming [days]",
       value:
         "Your personal action checklist — shows what you need to do about upcoming matches " +
-        "(register, pick squad, etc.) within the next N days (default 8). Requires `/link`.",
+        "(register, pick squad, etc.) within the next N days (default 8). Requires `/link`.\n" +
+        "Use `/remind upcoming daily` to get this as a daily DM, `/remind upcoming off` to disable.",
       inline: false,
     },
     {

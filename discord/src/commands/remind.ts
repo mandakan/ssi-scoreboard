@@ -24,6 +24,14 @@ export interface PersonalReminder {
   createdAt: string;
 }
 
+/** Daily upcoming action digest settings. */
+export interface DailyUpcomingConfig {
+  /** How many days ahead to look (default 8). */
+  days: number;
+  /** ISO date (YYYY-MM-DD) of the last digest sent — prevents re-sends on the same day. */
+  lastSentDate: string | null;
+}
+
 /** Per-user reminder config stored in KV. */
 export interface PersonalReminderConfig {
   matches: PersonalReminder[];
@@ -33,6 +41,8 @@ export interface PersonalReminderConfig {
    * ("registration-open" | "squadding-open" | "match-day-eve" | "match-day").
    */
   notifiedEvents: Record<string, string[]>;
+  /** When set, the cron sends a daily DM with the upcoming action checklist. */
+  dailyUpcoming?: DailyUpcomingConfig;
 }
 
 const MAX_REMINDERS = 20;
@@ -58,6 +68,10 @@ export async function handleRemind(
     case "cancel":
       return handleCancel(kv, guildId, userId, query);
     case "upcoming":
+      if (query?.toLowerCase() === "daily")
+        return handleUpcomingDaily(kv, guildId, userId, days ?? 8);
+      if (query?.toLowerCase() === "off")
+        return handleUpcomingOff(kv, guildId, userId);
       return handleUpcoming(client, kv, baseUrl, guildId, userId, days ?? 8);
     case "set":
     default:
@@ -342,7 +356,7 @@ async function handleCancel(
 // ─── /remind upcoming ────────────────────────────────────────────────────────
 
 /** Days from now to a date string. Negative = past. */
-function daysUntil(iso: string | null): number | null {
+export function daysUntil(iso: string | null): number | null {
   if (!iso) return null;
   const target = new Date(iso);
   if (isNaN(target.getTime())) return null;
@@ -352,7 +366,7 @@ function daysUntil(iso: string | null): number | null {
   return Math.round((targetDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-interface MatchAction {
+export interface MatchAction {
   emoji: string;
   label: string;
   /** 1 = most urgent */
@@ -360,7 +374,7 @@ interface MatchAction {
 }
 
 /** Determine the action status for an upcoming match. */
-function getMatchAction(match: UpcomingMatch): MatchAction {
+export function getMatchAction(match: UpcomingMatch): MatchAction {
   const days = daysUntil(match.date);
   const now = new Date();
 
@@ -513,6 +527,73 @@ async function handleUpcoming(
   };
 
   return { content: "", embeds: [embed] };
+}
+
+// ─── /remind upcoming daily / off ────────────────────────────────────────────
+
+async function handleUpcomingDaily(
+  kv: KVNamespace,
+  guildId: string,
+  userId: string,
+  days: number,
+): Promise<{ content: string; embeds: APIEmbed[] }> {
+  // Check if user is linked
+  const linkKey = `g:${guildId}:link:${userId}`;
+  const linkRaw = await kv.get(linkKey);
+  if (!linkRaw) {
+    return {
+      content: "You need to link your Discord account first.\nUse `/link <your name>` to get started.",
+      embeds: [],
+    };
+  }
+
+  const key = personalReminderKey(guildId, userId);
+  const raw = await kv.get(key);
+  const config: PersonalReminderConfig = raw
+    ? JSON.parse(raw)
+    : { matches: [], notifiedEvents: {} };
+
+  config.dailyUpcoming = { days, lastSentDate: null };
+  await kv.put(key, JSON.stringify(config));
+
+  const embed: APIEmbed = {
+    title: "Daily action digest enabled",
+    color: 0x22c55e,
+    description:
+      `I'll DM you once per day with your upcoming match action checklist (next ${days} days).\n\n` +
+      "The digest only sends when there are matches with actions needed \u2014 no spam on quiet days.\n\n" +
+      "Use `/remind upcoming off` to disable, or `/remind upcoming` for an instant check.",
+    footer: { text: "Make sure your DMs are open!" },
+  };
+
+  return { content: "", embeds: [embed] };
+}
+
+async function handleUpcomingOff(
+  kv: KVNamespace,
+  guildId: string,
+  userId: string,
+): Promise<{ content: string; embeds: APIEmbed[] }> {
+  const key = personalReminderKey(guildId, userId);
+  const raw = await kv.get(key);
+  if (!raw) {
+    return { content: "You don't have a daily digest enabled.", embeds: [] };
+  }
+
+  const config: PersonalReminderConfig = JSON.parse(raw);
+  if (!config.dailyUpcoming) {
+    return { content: "You don't have a daily digest enabled.", embeds: [] };
+  }
+
+  delete config.dailyUpcoming;
+
+  if (config.matches.length === 0 && Object.keys(config.notifiedEvents).length === 0) {
+    await kv.delete(key);
+  } else {
+    await kv.put(key, JSON.stringify(config));
+  }
+
+  return { content: "Daily action digest disabled.", embeds: [] };
 }
 
 function formatDate(iso: string): string {

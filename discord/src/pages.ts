@@ -126,7 +126,7 @@ export function landingPage(): string {
     registration opening, squadding opening, the day before the match, and match day.
     No server setup needed — these are just for you. Matches are auto-removed after their date passes.</p>
     <ul class="commands">
-      <li><code>/remind upcoming [days]</code> Your personal action checklist — what do you need to do about your upcoming matches? Shows whether you need to register, pick a squad, or are all set. Default: next 8 days <span class="badge badge-ephemeral">only you</span></li>
+      <li><code>/remind upcoming [days]</code> Your personal action checklist — what do you need to do about your upcoming matches? Shows whether you need to register, pick a squad, or are all set. Default: next 8 days. Use <code>daily</code> as match name to get a daily DM, <code>off</code> to disable <span class="badge badge-ephemeral">only you · DM</span></li>
       <li><code>/remind set &lt;match&gt;</code> Add a personal reminder for a match (up to 20 active) <span class="badge badge-ephemeral">only you · DM</span></li>
       <li><code>/remind list</code> View your active reminders <span class="badge badge-ephemeral">only you</span></li>
       <li><code>/remind cancel &lt;match&gt;</code> Remove a reminder <span class="badge badge-ephemeral">only you</span></li>

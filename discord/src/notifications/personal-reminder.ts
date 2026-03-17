@@ -11,10 +11,13 @@
 // After all milestones for a match have fired, the match is auto-removed.
 
 import type { APIEmbed } from "discord-api-types/v10";
-import type { Env } from "../types";
+import type { Env, UpcomingMatch } from "../types";
 import { sendDirectMessage } from "../discord-api";
+import { ScoreboardClient } from "../scoreboard-client";
 import {
   personalReminderKey,
+  daysUntil,
+  getMatchAction,
   type PersonalReminderConfig,
   type PersonalReminder,
 } from "../commands/remind";
@@ -140,6 +143,20 @@ async function processUserReminders(
       }
       config.notifiedEvents[matchRef].push(trigger.type);
       changed = true;
+    }
+  }
+
+  // ── Daily upcoming action digest ──────────────────────────────────────────
+  if (config.dailyUpcoming && config.dailyUpcoming.lastSentDate !== todayStr) {
+    try {
+      const sent = await sendDailyDigest(env, guildId, userId, config.dailyUpcoming.days);
+      config.dailyUpcoming.lastSentDate = todayStr;
+      changed = true;
+      if (sent) {
+        console.log(`Sent daily upcoming digest to user ${userId} in guild ${guildId}`);
+      }
+    } catch (err) {
+      console.error(`Failed to send daily digest for user ${userId}:`, err);
     }
   }
 
@@ -289,6 +306,87 @@ function buildMatchDayEmbed(
     footer: { text: "Good luck and shoot safe!" },
     timestamp: new Date().toISOString(),
   };
+}
+
+// ── Daily upcoming action digest ──────────────────────────────────────────────
+
+/**
+ * Fetch the shooter's dashboard and send a DM with actionable upcoming matches.
+ * Returns true if a DM was sent, false if skipped (no actionable items).
+ */
+async function sendDailyDigest(
+  env: Env,
+  guildId: string,
+  userId: string,
+  days: number,
+): Promise<boolean> {
+  // Resolve linked shooter
+  const linkRaw = await env.BOT_KV.get(`g:${guildId}:link:${userId}`);
+  if (!linkRaw) return false;
+  const { shooterId, name: shooterName } = JSON.parse(linkRaw) as { shooterId: number; name: string };
+
+  // Fetch dashboard
+  const client = new ScoreboardClient(env.SCOREBOARD_BASE_URL);
+  const dashboard = await client.getShooterDashboard(shooterId);
+  const upcoming = dashboard.upcomingMatches ?? [];
+  if (upcoming.length === 0) return false;
+
+  // Filter to matches with actions within the window
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() + days);
+  const cutoffStr = cutoff.toISOString();
+
+  const inWindow = upcoming.filter((m: UpcomingMatch) => {
+    if (!m.date) return true;
+    if (m.date <= cutoffStr) return true;
+    if (m.registrationCloses && m.registrationCloses <= cutoffStr) return true;
+    if (m.squaddingCloses && m.squaddingCloses <= cutoffStr) return true;
+    if (m.registrationStarts && m.registrationStarts <= cutoffStr) return true;
+    if (m.squaddingStarts && m.squaddingStarts <= cutoffStr) return true;
+    return false;
+  });
+  if (inWindow.length === 0) return false;
+
+  // Build action list sorted by priority
+  const withActions = inWindow.map((m: UpcomingMatch) => ({ match: m, action: getMatchAction(m) }));
+  withActions.sort((a, b) => {
+    if (a.action.priority !== b.action.priority) return a.action.priority - b.action.priority;
+    return (a.match.date ?? "").localeCompare(b.match.date ?? "");
+  });
+
+  // Only send if there's at least one actionable item (not all "you're set")
+  const hasAction = withActions.some((w) => w.action.priority <= 5);
+  if (!hasAction) return false;
+
+  const baseUrl = env.SCOREBOARD_BASE_URL;
+  const lines = withActions.map(({ match, action }) => {
+    const matchDays = daysUntil(match.date);
+    const countdown = matchDays != null && matchDays >= 0
+      ? matchDays === 0 ? "today" : matchDays === 1 ? "tomorrow" : `in ${matchDays}d`
+      : "";
+    const dateStr = match.date ? formatDate(match.date) : "Date TBD";
+    const ssiUrl = `https://shootnscoreit.com/event/${match.ct}/${match.matchId}/`;
+    const scoreboardUrl = `${baseUrl}/match/${match.ct}/${match.matchId}`;
+
+    return [
+      `**${match.name}**`,
+      `${dateStr}${match.venue ? ` \u2014 ${match.venue}` : ""}${countdown ? ` (${countdown})` : ""}`,
+      `${action.emoji} ${action.label}`,
+      `[Scoreboard](${scoreboardUrl}) \u00b7 [SSI](${ssiUrl})`,
+    ].join("\n");
+  });
+
+  const color = 0xf59e0b; // amber — there are actions to take
+
+  const embed: APIEmbed = {
+    title: `Daily checklist \u2014 ${inWindow.length} match${inWindow.length !== 1 ? "es" : ""}`,
+    color,
+    description: lines.join("\n\n"),
+    footer: { text: `Linked as ${shooterName} \u00b7 /remind upcoming off to disable` },
+    timestamp: new Date().toISOString(),
+  };
+
+  return sendDirectMessage(env.DISCORD_BOT_TOKEN, userId, "", [embed]);
 }
 
 function formatDate(iso: string): string {
