@@ -250,6 +250,14 @@ export async function fetchMatchData(
     stagesCount: ev.stages_count ?? stages.length,
     lat: ev.has_geopos && ev.lat != null ? parseFloat(String(ev.lat)) : null,
     lng: ev.has_geopos && ev.lng != null ? parseFloat(String(ev.lng)) : null,
+    registrationStarts: ev.registration_starts ?? null,
+    registrationCloses: ev.registration_closes ?? null,
+    registrationStatus: ev.registration ?? null,
+    squaddingStarts: ev.squadding_starts ?? null,
+    squaddingCloses: ev.squadding_closes ?? null,
+    isRegistrationPossible: ev.is_registration_possible ?? false,
+    isSquaddingPossible: ev.is_squadding_possible ?? false,
+    maxCompetitors: ev.max_competitors ?? null,
   }));
 
   const response: MatchResponse = {

@@ -58,6 +58,15 @@ export interface MatchMetadata {
   stagesCount: number | null;
   lat: number | null;
   lng: number | null;
+  // Registration & squadding metadata
+  registrationStarts: string | null;
+  registrationCloses: string | null;
+  registrationStatus: string | null;
+  squaddingStarts: string | null;
+  squaddingCloses: string | null;
+  isRegistrationPossible: boolean;
+  isSquaddingPossible: boolean;
+  maxCompetitors: number | null;
 }
 
 /**
@@ -126,6 +135,14 @@ export async function indexMatchShooters(
       lng: matchMeta.lng,
       data: null,
       updatedAt: lastSeen,
+      registrationStarts: matchMeta.registrationStarts,
+      registrationCloses: matchMeta.registrationCloses,
+      registrationStatus: matchMeta.registrationStatus,
+      squaddingStarts: matchMeta.squaddingStarts,
+      squaddingCloses: matchMeta.squaddingCloses,
+      isRegistrationPossible: matchMeta.isRegistrationPossible,
+      isSquaddingPossible: matchMeta.isSquaddingPossible,
+      maxCompetitors: matchMeta.maxCompetitors,
     };
     writes.push(db.upsertMatch(record).catch(() => {}));
   }

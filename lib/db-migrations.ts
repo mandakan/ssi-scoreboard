@@ -153,6 +153,22 @@ export const MIGRATIONS: Migration[] = [
       )`,
     ],
   },
+
+  // ── 0007_match_registration_fields.sql ─────────────────────────────────
+  {
+    version: 7,
+    label: "matches: registration & squadding metadata columns",
+    statements: [
+      `ALTER TABLE matches ADD COLUMN registration_starts TEXT`,
+      `ALTER TABLE matches ADD COLUMN registration_closes TEXT`,
+      `ALTER TABLE matches ADD COLUMN registration_status TEXT`,
+      `ALTER TABLE matches ADD COLUMN squadding_starts TEXT`,
+      `ALTER TABLE matches ADD COLUMN squadding_closes TEXT`,
+      `ALTER TABLE matches ADD COLUMN is_registration_possible INTEGER DEFAULT 0`,
+      `ALTER TABLE matches ADD COLUMN is_squadding_possible INTEGER DEFAULT 0`,
+      `ALTER TABLE matches ADD COLUMN max_competitors INTEGER`,
+    ],
+  },
 ];
 
 /** The latest schema version — used by adapters to skip the runner when already current. */

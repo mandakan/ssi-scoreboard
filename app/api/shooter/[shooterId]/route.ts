@@ -464,6 +464,12 @@ export async function GET(
         level: meta.level,
         division: profile?.division ?? null,
         competitorId: 0,
+        registrationStarts: meta.registrationStarts,
+        registrationCloses: meta.registrationCloses,
+        isRegistrationPossible: meta.isRegistrationPossible,
+        squaddingStarts: meta.squaddingStarts,
+        squaddingCloses: meta.squaddingCloses,
+        isSquaddingPossible: meta.isSquaddingPossible,
       });
     }
   }
