@@ -367,31 +367,47 @@ function getMatchAction(match: UpcomingMatch): MatchAction {
   if (days === 0) return { emoji: "\u{1F3C1}", label: "**Match day!**", priority: 1 };
   if (days === 1) return { emoji: "\u{1F4E3}", label: "**Match tomorrow** \u2014 gear check, travel plan", priority: 2 };
 
-  // Squadding open — derive from dates
+  // Derive open windows from dates (booleans may be stale)
   const squaddingOpen = match.squaddingStarts
     ? new Date(match.squaddingStarts) <= now && (!match.squaddingCloses || new Date(match.squaddingCloses) > now)
     : match.isSquaddingPossible;
-  if (squaddingOpen) {
-    const closeDays = daysUntil(match.squaddingCloses);
-    const closeNote = closeDays != null ? ` (closes in ${closeDays}d)` : "";
-    return { emoji: "\u26A1", label: `Squadding open${closeNote}`, priority: 3 };
-  }
-
-  // Registration open
   const regOpen = match.registrationStarts
     ? new Date(match.registrationStarts) <= now && (!match.registrationCloses || new Date(match.registrationCloses) > now)
     : match.isRegistrationPossible;
-  if (regOpen) {
+
+  // Not registered yet — registration is the top priority
+  if (match.isRegistered === false && regOpen) {
     const closeDays = daysUntil(match.registrationCloses);
     const closeNote = closeDays != null ? ` (closes in ${closeDays}d)` : "";
-    return { emoji: "\u{1F4DD}", label: `Registration open${closeNote}`, priority: 4 };
+    return { emoji: "\u{1F4DD}", label: `**Register now**${closeNote}`, priority: 3 };
+  }
+
+  // Registered but not squadded
+  if (match.isSquadded === false && squaddingOpen) {
+    const closeDays = daysUntil(match.squaddingCloses);
+    const closeNote = closeDays != null ? ` (closes in ${closeDays}d)` : "";
+    return { emoji: "\u26A1", label: `**Pick your squad**${closeNote}`, priority: 4 };
+  }
+
+  // Status unknown (no cached data) — show factual window status
+  if (match.isRegistered === null) {
+    if (squaddingOpen) {
+      const closeDays = daysUntil(match.squaddingCloses);
+      const closeNote = closeDays != null ? ` (closes in ${closeDays}d)` : "";
+      return { emoji: "\u26A1", label: `Squadding open${closeNote}`, priority: 4 };
+    }
+    if (regOpen) {
+      const closeDays = daysUntil(match.registrationCloses);
+      const closeNote = closeDays != null ? ` (closes in ${closeDays}d)` : "";
+      return { emoji: "\u{1F4DD}", label: `Registration open${closeNote}`, priority: 5 };
+    }
   }
 
   // Registration opens soon
   if (match.registrationStarts) {
     const regDays = daysUntil(match.registrationStarts);
     if (regDays != null && regDays > 0 && regDays <= 14) {
-      return { emoji: "\u{1F514}", label: `Registration opens ${formatDate(match.registrationStarts)}`, priority: 5 };
+      return { emoji: "\u{1F514}", label: `Registration opens ${formatDate(match.registrationStarts)}`, priority: 6 };
     }
   }
 
@@ -399,7 +415,7 @@ function getMatchAction(match: UpcomingMatch): MatchAction {
   if (match.squaddingStarts) {
     const sqDays = daysUntil(match.squaddingStarts);
     if (sqDays != null && sqDays > 0 && sqDays <= 14) {
-      return { emoji: "\u{1F514}", label: `Squadding opens ${formatDate(match.squaddingStarts)}`, priority: 5 };
+      return { emoji: "\u{1F514}", label: `Squadding opens ${formatDate(match.squaddingStarts)}`, priority: 6 };
     }
   }
 

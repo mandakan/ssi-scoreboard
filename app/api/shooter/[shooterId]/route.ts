@@ -437,15 +437,39 @@ export async function GET(
     }
   }
 
-  // ── 3b. Resolve upcoming match metadata from matches domain table ────────
-  // Reads structured metadata directly from D1/SQLite — no Redis/blob lookup needed.
-  // This ensures upcoming matches remain visible even after their Redis TTL expires.
+  // ── 3b. Resolve upcoming match metadata + registration/squad status ────────
+  // Reads structured metadata from D1/SQLite (always available), then enriches
+  // with per-competitor status from cached match data (Redis → D1 → null).
+  // This is the same cache read path used for past matches — typically 2-5 reads.
   const upcomingMatches: UpcomingMatch[] = [];
   if (upcomingRefs.length > 0) {
     let matchMetaMap = new Map<string, import("@/lib/types").MatchRecord>();
     try {
       matchMetaMap = await db.getMatchesByRefs(upcomingRefs);
     } catch { /* ignore DB errors */ }
+
+    // Load cached match data in parallel to check registration + squad status
+    const upcomingCacheResults = await Promise.all(
+      upcomingRefs.map(async (ref) => {
+        const [ct, ...idParts] = ref.split(":");
+        if (!ct) return { ref, data: null };
+        const matchId = idParts.join(":");
+        const ctNum = parseInt(ct, 10);
+        if (isNaN(ctNum)) return { ref, data: null };
+        const key = gqlCacheKey("GetMatch", { ct: ctNum, id: matchId });
+        try {
+          const raw = await getMatchDataWithFallback(key);
+          if (!raw) return { ref, data: null };
+          const entry = JSON.parse(raw) as CacheEntry<RawMatchData>;
+          if (!entry.data?.event) return { ref, data: null };
+          return { ref, data: entry.data.event };
+        } catch { return { ref, data: null }; }
+      }),
+    );
+    const upcomingEventMap = new Map<string, RawMatchEvent>();
+    for (const { ref, data } of upcomingCacheResults) {
+      if (data) upcomingEventMap.set(ref, data);
+    }
 
     for (const ref of upcomingRefs) {
       const meta = matchMetaMap.get(ref);
@@ -455,6 +479,26 @@ export async function GET(
       if (!ct) continue;
       const matchId = idParts.join(":");
 
+      // Check registration + squad status from cached match data
+      let competitorId = 0;
+      let isRegistered: boolean | null = null;
+      let isSquadded: boolean | null = null;
+      const ev = upcomingEventMap.get(ref);
+      if (ev) {
+        const competitors = ev.competitors_approved_w_wo_results_not_dnf ?? [];
+        const competitor = competitors.find(
+          (c) => decodeShooterId(c.shooter?.id) === shooterId,
+        );
+        isRegistered = !!competitor;
+        if (competitor) {
+          competitorId = parseInt(competitor.id, 10) || 0;
+          const squads = ev.squads ?? [];
+          isSquadded = squads.some(
+            (s) => s.competitors?.some((sc) => sc.id === competitor.id) ?? false,
+          );
+        }
+      }
+
       upcomingMatches.push({
         ct,
         matchId,
@@ -463,13 +507,15 @@ export async function GET(
         venue: meta.venue,
         level: meta.level,
         division: profile?.division ?? null,
-        competitorId: 0,
+        competitorId,
         registrationStarts: meta.registrationStarts,
         registrationCloses: meta.registrationCloses,
         isRegistrationPossible: meta.isRegistrationPossible,
         squaddingStarts: meta.squaddingStarts,
         squaddingCloses: meta.squaddingCloses,
         isSquaddingPossible: meta.isSquaddingPossible,
+        isRegistered,
+        isSquadded,
       });
     }
   }

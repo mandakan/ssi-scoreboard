@@ -669,6 +669,10 @@ export interface UpcomingMatch {
   squaddingStarts: string | null;
   squaddingCloses: string | null;
   isSquaddingPossible: boolean;
+  /** True when the shooter appears in the competitor list (null = unknown/no cached data). */
+  isRegistered: boolean | null;
+  /** True when the shooter is assigned to a squad (null = unknown/no cached data). */
+  isSquadded: boolean | null;
 }
 
 // ── Shooter Dashboard ─────────────────────────────────────────────────────────

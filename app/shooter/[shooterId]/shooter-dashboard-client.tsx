@@ -317,34 +317,58 @@ function getMatchAction(match: UpcomingMatch): MatchAction {
     return { label: "Match tomorrow", variant: "matchday" };
   }
 
-  // Squadding open — check dates since the boolean may be stale
+  // Derive open windows from dates (booleans may be stale from DB)
   const squaddingOpen = match.squaddingStarts
     ? new Date(match.squaddingStarts) <= now &&
       (!match.squaddingCloses || new Date(match.squaddingCloses) > now)
     : match.isSquaddingPossible;
-  if (squaddingOpen) {
-    const closeDays = daysUntil(match.squaddingCloses);
+  const regOpen = match.registrationStarts
+    ? new Date(match.registrationStarts) <= now &&
+      (!match.registrationCloses || new Date(match.registrationCloses) > now)
+    : match.isRegistrationPossible;
+
+  // Not registered yet — registration is the top priority
+  if (match.isRegistered === false && regOpen) {
+    const closeDays = daysUntil(match.registrationCloses);
     return {
-      label: "Squadding open",
+      label: "Register now",
       sublabel: closeDays != null ? `closes in ${closeDays}d` : undefined,
       variant: "action",
       ssiLink: true,
     };
   }
 
-  // Registration open
-  const regOpen = match.registrationStarts
-    ? new Date(match.registrationStarts) <= now &&
-      (!match.registrationCloses || new Date(match.registrationCloses) > now)
-    : match.isRegistrationPossible;
-  if (regOpen) {
-    const closeDays = daysUntil(match.registrationCloses);
+  // Registered but not squadded — squadding is the action
+  if (match.isSquadded === false && squaddingOpen) {
+    const closeDays = daysUntil(match.squaddingCloses);
     return {
-      label: "Registration open",
+      label: "Pick your squad",
       sublabel: closeDays != null ? `closes in ${closeDays}d` : undefined,
       variant: "action",
       ssiLink: true,
     };
+  }
+
+  // Status unknown (no cached match data) — show factual window status
+  if (match.isRegistered === null) {
+    if (squaddingOpen) {
+      const closeDays = daysUntil(match.squaddingCloses);
+      return {
+        label: "Squadding open",
+        sublabel: closeDays != null ? `closes in ${closeDays}d` : undefined,
+        variant: "action",
+        ssiLink: true,
+      };
+    }
+    if (regOpen) {
+      const closeDays = daysUntil(match.registrationCloses);
+      return {
+        label: "Registration open",
+        sublabel: closeDays != null ? `closes in ${closeDays}d` : undefined,
+        variant: "action",
+        ssiLink: true,
+      };
+    }
   }
 
   // Registration opens soon (within 14 days)
