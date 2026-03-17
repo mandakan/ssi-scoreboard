@@ -363,7 +363,7 @@ async function handleDeferredCommand(
           content = "This command can only be used in a server, not in DMs.";
           break;
         }
-        content = await handleLinked(env.BOT_KV, env.DISCORD_BOT_TOKEN, guildId);
+        content = await handleLinked(env.BOT_KV, guildId);
         break;
       }
 
