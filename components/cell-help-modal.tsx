@@ -244,7 +244,7 @@ function StageCellDiagram() {
         />
         <DiagramRow
           visual={
-            <span className="text-[10px] text-muted-foreground/70 tabular-nums leading-none">
+            <span className="text-xs text-muted-foreground/70 tabular-nums leading-none">
               P{Math.round(MOCK_PERCENTILE * 100)}
             </span>
           }
@@ -407,7 +407,7 @@ function SummaryRowDiagram() {
               <span className="text-xs font-medium tabular-nums border rounded px-1.5 py-0.5 border-border">
                 {`CI ${MOCK_CI.toFixed(2)}`}
               </span>
-              <span className="text-[10px] text-muted-foreground mt-0.5">consistent</span>
+              <span className="text-xs text-muted-foreground mt-0.5">consistent</span>
             </div>
           }
           badge="G"
@@ -420,7 +420,7 @@ function SummaryRowDiagram() {
             <span
               className={cn(
                 "inline-flex items-center gap-1 rounded border px-1.5 py-0.5",
-                "text-[10px] font-medium tabular-nums whitespace-nowrap",
+                "text-xs font-medium tabular-nums whitespace-nowrap",
                 "border-amber-400 text-amber-700 dark:text-amber-400"
               )}
             >

@@ -76,7 +76,7 @@ export function CompetitorPicker({
         </PopoverTrigger>
         <PopoverContent className="p-0 w-[min(22rem,calc(100vw-2rem))]" align="start">
           <Command>
-            <CommandInput placeholder="Search by name, number, or club…" />
+            <CommandInput aria-label="Search competitors" placeholder="Search by name, number, or club…" />
             <CommandList>
               <CommandEmpty>No competitors found.</CommandEmpty>
               <CommandGroup>
@@ -111,7 +111,7 @@ export function CompetitorPicker({
 
                       {hasTracking ? (
                         /* Tracking action buttons — only shown when tracking props provided */
-                        <span className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <span className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                           {onToggleTracked && (
                             <button
                               type="button"

@@ -200,14 +200,14 @@ function StatCard({
 }) {
   return (
     <div className="flex flex-col gap-0.5 bg-muted/40 rounded-lg px-3 py-2.5 min-w-0">
-      <span className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium leading-tight">
+      <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium leading-tight">
         {label}
       </span>
       <span className="text-base font-semibold tabular-nums leading-tight">
         {value}
       </span>
       {sub && (
-        <span className="text-[11px] text-muted-foreground leading-tight">
+        <span className="text-xs text-muted-foreground leading-tight">
           {sub}
         </span>
       )}
@@ -231,7 +231,7 @@ function MatchCard({ match }: { match: ShooterMatchSummary }) {
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-medium text-sm truncate">{match.name}</span>
           {badge && (
-            <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-wide">
+            <span className="shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-wide">
               {badge}
             </span>
           )}
@@ -412,7 +412,7 @@ function UpcomingMatchCard({ match }: { match: UpcomingMatch }) {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium text-sm truncate">{match.name}</span>
             {badge && (
-              <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-wide">
+              <span className="shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-wide">
                 {badge}
               </span>
             )}
@@ -570,7 +570,7 @@ function CustomTooltip({
           </>
         )}
         {d.level && (
-          <span className="text-[10px] font-semibold px-1 py-0.5 rounded bg-muted text-muted-foreground uppercase">
+          <span className="text-xs font-semibold px-1 py-0.5 rounded bg-muted text-muted-foreground uppercase">
             {levelBadge(d.level)}
           </span>
         )}
@@ -1392,7 +1392,7 @@ function AchievementBubbleButton({ achievement }: { achievement: AchievementProg
               className="h-1.5"
               aria-label={`${Math.round(progressToNext * 100)}% to ${nextTier.name}`}
             />
-            <p className="text-[10px] text-muted-foreground mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
               {Math.round(progressToNext * 100)}% to {nextTier.name} — {nextTier.label}
             </p>
           </div>
@@ -1436,7 +1436,7 @@ function AchievementCard({ achievement }: { achievement: AchievementProgress }) 
                   <Badge
                     variant="secondary"
                     className={cn(
-                      "text-[10px] px-1.5 py-0",
+                      "text-xs px-1.5 py-0",
                       TIER_COLORS[highestTier!.level] ?? TIER_COLORS[1],
                     )}
                   >
@@ -1452,7 +1452,7 @@ function AchievementCard({ achievement }: { achievement: AchievementProgress }) 
               className="h-1.5 flex-1"
               aria-label={nextTier ? `${Math.round(progressToNext * 100)}% to ${nextTier.name}` : "Complete"}
             />
-            <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+            <span className="text-xs text-muted-foreground tabular-nums shrink-0">
               {nextTier ? nextTier.label : "Complete"}
             </span>
           </div>
@@ -1519,7 +1519,7 @@ function AchievementsSection({
                 <span className="text-xs font-normal text-muted-foreground">
                   ({unlockedCount}/{totalTiers})
                 </span>
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                <Badge variant="outline" className="text-xs px-1.5 py-0">
                   Preview
                 </Badge>
               </span>
@@ -1740,7 +1740,7 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
               <div className="text-lg font-semibold tabular-nums">
                 {matchCount}
               </div>
-              <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
+              <div className="text-xs text-muted-foreground uppercase tracking-wide">
                 Matches
               </div>
             </div>
@@ -1748,7 +1748,7 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
               <div className="text-lg font-semibold tabular-nums">
                 {stats.totalStages}
               </div>
-              <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
+              <div className="text-xs text-muted-foreground uppercase tracking-wide">
                 Stages
               </div>
             </div>
@@ -1757,7 +1757,7 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
                 <div className="text-sm font-medium tabular-nums">
                   {formatDate(stats.dateRange.from)}
                 </div>
-                <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">
                   First match
                 </div>
               </div>
