@@ -15,6 +15,8 @@ export interface RegistrationReminderConfig {
   daysAhead: number;
   /** ISO date string (YYYY-MM-DD) of the last successful digest post. */
   lastRunDate: string | null;
+  /** Discord message ID of the pinned daily digest (edited in-place each day). */
+  pinnedMessageId: string | null;
   createdAt: string;
 }
 
@@ -71,6 +73,7 @@ async function handleSet(
     discipline: normalizedDiscipline,
     daysAhead,
     lastRunDate: null,
+    pinnedMessageId: null,
     createdAt: new Date().toISOString(),
   };
 

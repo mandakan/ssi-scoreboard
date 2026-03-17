@@ -8,7 +8,7 @@
 import type { APIEmbed } from "discord-api-types/v10";
 import type { Env, EventSearchResult } from "../types";
 import { ScoreboardClient } from "../scoreboard-client";
-import { postChannelMessage } from "../discord-api";
+import { postChannelMessage, editChannelMessage, pinMessage } from "../discord-api";
 import {
   reminderKey,
   matchesDiscipline,
@@ -98,7 +98,7 @@ async function processGuildReminder(
     return e.registration_starts.slice(0, 10) === todayStr;
   });
 
-  // Post urgent alert for registrations opening today (with @here to ping the channel)
+  // Post urgent alert for registrations opening today as a NEW message (with @here)
   if (opensToday.length > 0) {
     const urgentEmbed = buildOpensTodayEmbed(opensToday);
     await postChannelMessage(
@@ -109,26 +109,40 @@ async function processGuildReminder(
     );
   }
 
-  // Build and post the full digest
+  // Build the full digest — this goes into the pinned message (edited in-place)
   const embeds = buildDigestEmbeds(filtered, config);
+  const digestContent = embeds.length === 0 && opensToday.length === 0
+    ? buildNoMatchesMessage(config)
+    : "";
 
-  if (embeds.length > 0) {
-    await postChannelMessage(
+  // Try to edit the existing pinned message; create + pin a new one if it fails or doesn't exist
+  let pinnedOk = false;
+  if (config.pinnedMessageId) {
+    pinnedOk = await editChannelMessage(
       env.DISCORD_BOT_TOKEN,
       config.channelId,
-      "",
-      embeds,
-    );
-  } else if (opensToday.length === 0) {
-    // Only post "nothing found" if there was no urgent alert either
-    await postChannelMessage(
-      env.DISCORD_BOT_TOKEN,
-      config.channelId,
-      buildNoMatchesMessage(config),
+      config.pinnedMessageId,
+      digestContent,
+      embeds.length > 0 ? embeds : undefined,
     );
   }
 
-  // Update lastRunDate
+  if (!pinnedOk) {
+    // Create a new message and pin it
+    const messageId = await postChannelMessage(
+      env.DISCORD_BOT_TOKEN,
+      config.channelId,
+      digestContent,
+      embeds.length > 0 ? embeds : undefined,
+    );
+
+    if (messageId) {
+      await pinMessage(env.DISCORD_BOT_TOKEN, config.channelId, messageId);
+      config.pinnedMessageId = messageId;
+    }
+  }
+
+  // Update lastRunDate (and possibly pinnedMessageId)
   config.lastRunDate = todayStr;
   await env.BOT_KV.put(reminderKey(guildId), JSON.stringify(config));
 }
