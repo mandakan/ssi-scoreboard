@@ -414,8 +414,9 @@ function matchOverviewImage(match: OgMatchData) {
           >
             <div style={{ display: "flex", flexDirection: "row", gap: "20px" }}>
               {statBadge(String(match.stagesCount), "stages")}
+              {match.minRounds ? statBadge(String(match.minRounds), "rounds") : null}
               {statBadge(String(match.competitorsCount), "competitors")}
-              {statBadge(`${String(match.scoringCompleted)}%`, "scored")}
+              {match.scoringCompleted > 0 ? statBadge(`${String(match.scoringCompleted)}%`, "scored") : null}
               {match.region ? statBadge(match.region, "region") : null}
             </div>
             <div
@@ -487,7 +488,7 @@ function matchImageBgLayers(
   imageWidth: number | null,
   imageHeight: number | null,
 ) {
-  const MAX_W = Math.round(OG_W / 3); // 400px = rightmost 33%
+  const MAX_W = Math.round(OG_W * 0.65); // ~780px = rightmost 65%
 
   // Compute natural width when image is scaled to full OG height
   const scaledW =
@@ -519,7 +520,7 @@ function matchImageBgLayers(
         height={OG_H}
         style={{ objectFit: "cover", display: "flex" }}
       />
-      {/* Gradient spans the FULL display width → perfectly linear fade */}
+      {/* Two-stop gradient: solid bg on the left, fading to semi-transparent */}
       <div
         style={{
           position: "absolute",
@@ -527,7 +528,7 @@ function matchImageBgLayers(
           top: 0,
           width: displayW,
           height: OG_H,
-          backgroundImage: `linear-gradient(to right, ${C.bg}, transparent)`,
+          backgroundImage: `linear-gradient(to right, ${C.bg} 0%, ${C.bg} 30%, rgba(10,10,10,0.55) 70%, rgba(10,10,10,0.25) 100%)`,
           display: "flex",
         }}
       />
@@ -779,7 +780,7 @@ function singleCompetitorNoStats(
             <div style={{ display: "flex", gap: "20px" }}>
               {statBadge(String(match.stagesCount), "stages")}
               {statBadge(String(match.competitorsCount), "competitors")}
-              {statBadge(`${String(match.scoringCompleted)}%`, "scored")}
+              {match.scoringCompleted > 0 ? statBadge(`${String(match.scoringCompleted)}%`, "scored") : null}
             </div>
             <div
               style={{
@@ -988,7 +989,9 @@ function multiCompetitorWithStats(
           }}
         >
           <div style={{ display: "flex", fontSize: "20px", color: C.dim }}>
-            {`${String(match.stagesCount)} stages  \u00b7  ${String(match.competitorsCount)} competitors  \u00b7  ${String(match.scoringCompleted)}% scored`}
+            {match.scoringCompleted > 0
+              ? `${String(match.stagesCount)} stages  \u00b7  ${String(match.competitorsCount)} competitors  \u00b7  ${String(match.scoringCompleted)}% scored`
+              : `${String(match.stagesCount)} stages  \u00b7  ${String(match.competitorsCount)} competitors`}
           </div>
           <div style={{ fontSize: "22px", color: C.dim }}>
             scoreboard.urdr.dev
@@ -1129,7 +1132,7 @@ function multiCompetitorNoStats(
             <div style={{ display: "flex", gap: "20px" }}>
               {statBadge(String(match.stagesCount), "stages")}
               {statBadge(String(match.competitorsCount), "competitors")}
-              {statBadge(`${String(match.scoringCompleted)}%`, "scored")}
+              {match.scoringCompleted > 0 ? statBadge(`${String(match.scoringCompleted)}%`, "scored") : null}
             </div>
             <div style={{ fontSize: "22px", color: C.dim }}>
               scoreboard.urdr.dev

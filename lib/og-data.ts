@@ -19,6 +19,7 @@ export interface OgMatchData {
   stagesCount: number;
   competitorsCount: number;
   scoringCompleted: number;
+  minRounds: number | null;
   imageUrl: string | null;
   imageWidth: number | null;
   imageHeight: number | null;
@@ -93,6 +94,12 @@ async function fetchOgMatchDataImpl(
     const imageWidth = imageUrl && ev.image?.width ? ev.image.width : null;
     const imageHeight = imageUrl && ev.image?.height ? ev.image.height : null;
 
+    // Compute total minimum rounds from stage data
+    const totalMinRounds = (ev.stages ?? []).reduce(
+      (sum, s) => sum + (s.minimum_rounds ?? 0),
+      0,
+    );
+
     return {
       name: ev.name,
       venue: ev.venue ?? null,
@@ -101,6 +108,7 @@ async function fetchOgMatchDataImpl(
       region: ev.region ?? null,
       stagesCount: ev.stages_count ?? 0,
       competitorsCount: ev.competitors_count ?? competitors.length,
+      minRounds: totalMinRounds > 0 ? totalMinRounds : null,
       imageUrl,
       imageWidth,
       imageHeight,
