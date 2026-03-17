@@ -376,31 +376,17 @@ function getMatchAction(match: UpcomingMatch): MatchAction {
     : match.isRegistrationPossible;
 
   // Not registered yet — registration is the top priority
-  if (match.isRegistered === false && regOpen) {
+  if (!match.isRegistered && regOpen) {
     const closeDays = daysUntil(match.registrationCloses);
     const closeNote = closeDays != null ? ` (closes in ${closeDays}d)` : "";
     return { emoji: "\u{1F4DD}", label: `**Register now**${closeNote}`, priority: 3 };
   }
 
   // Registered but not squadded
-  if (match.isSquadded === false && squaddingOpen) {
+  if (!match.isSquadded && squaddingOpen) {
     const closeDays = daysUntil(match.squaddingCloses);
     const closeNote = closeDays != null ? ` (closes in ${closeDays}d)` : "";
     return { emoji: "\u26A1", label: `**Pick your squad**${closeNote}`, priority: 4 };
-  }
-
-  // Status unknown (no cached data) — show factual window status
-  if (match.isRegistered === null) {
-    if (squaddingOpen) {
-      const closeDays = daysUntil(match.squaddingCloses);
-      const closeNote = closeDays != null ? ` (closes in ${closeDays}d)` : "";
-      return { emoji: "\u26A1", label: `Squadding open${closeNote}`, priority: 4 };
-    }
-    if (regOpen) {
-      const closeDays = daysUntil(match.registrationCloses);
-      const closeNote = closeDays != null ? ` (closes in ${closeDays}d)` : "";
-      return { emoji: "\u{1F4DD}", label: `Registration open${closeNote}`, priority: 5 };
-    }
   }
 
   // Registration opens soon

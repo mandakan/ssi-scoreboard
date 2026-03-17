@@ -328,7 +328,7 @@ function getMatchAction(match: UpcomingMatch): MatchAction {
     : match.isRegistrationPossible;
 
   // Not registered yet — registration is the top priority
-  if (match.isRegistered === false && regOpen) {
+  if (!match.isRegistered && regOpen) {
     const closeDays = daysUntil(match.registrationCloses);
     return {
       label: "Register now",
@@ -339,7 +339,7 @@ function getMatchAction(match: UpcomingMatch): MatchAction {
   }
 
   // Registered but not squadded — squadding is the action
-  if (match.isSquadded === false && squaddingOpen) {
+  if (!match.isSquadded && squaddingOpen) {
     const closeDays = daysUntil(match.squaddingCloses);
     return {
       label: "Pick your squad",
@@ -347,28 +347,6 @@ function getMatchAction(match: UpcomingMatch): MatchAction {
       variant: "action",
       ssiLink: true,
     };
-  }
-
-  // Status unknown (no cached match data) — show factual window status
-  if (match.isRegistered === null) {
-    if (squaddingOpen) {
-      const closeDays = daysUntil(match.squaddingCloses);
-      return {
-        label: "Squadding open",
-        sublabel: closeDays != null ? `closes in ${closeDays}d` : undefined,
-        variant: "action",
-        ssiLink: true,
-      };
-    }
-    if (regOpen) {
-      const closeDays = daysUntil(match.registrationCloses);
-      return {
-        label: "Registration open",
-        sublabel: closeDays != null ? `closes in ${closeDays}d` : undefined,
-        variant: "action",
-        ssiLink: true,
-      };
-    }
   }
 
   // Registration opens soon (within 14 days)

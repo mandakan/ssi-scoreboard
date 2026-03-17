@@ -95,8 +95,8 @@ export interface UpcomingMatch {
   squaddingStarts: string | null;
   squaddingCloses: string | null;
   isSquaddingPossible: boolean;
-  isRegistered: boolean | null;
-  isSquadded: boolean | null;
+  isRegistered: boolean;
+  isSquadded: boolean;
 }
 
 /** GET /api/shooter/{shooterId} — dashboard response. */

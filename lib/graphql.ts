@@ -255,6 +255,40 @@ export const EVENTS_QUERY = `
   }
 `;
 
+// ─── Query: lightweight upcoming match status ────────────────────────────────
+// Minimal query for upcoming matches — only fetches competitor IDs and squad
+// assignments to determine registration/squadding status. ~5-10% of the data
+// volume of GetMatch (no names, stages, scorecards, divisions, etc.).
+export const UPCOMING_STATUS_QUERY = `
+  query GetUpcomingStatus($ct: Int!, $id: String!) {
+    event(content_type: $ct, id: $id) {
+      ... on IpscMatchNode {
+        is_registration_possible
+        is_squadding_possible
+        registration_starts
+        registration_closes
+        squadding_starts
+        squadding_closes
+        competitors_approved_w_wo_results_not_dnf {
+          id
+          ... on IpscCompetitorNode {
+            shooter {
+              id
+            }
+          }
+        }
+        squads {
+          ... on IpscSquadNode {
+            competitors {
+              id
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
 // ─── Redis cache helpers ──────────────────────────────────────────────────────
 
 export function gqlCacheKey(
