@@ -418,7 +418,7 @@ export default function MatchPageClient() {
       : matchCachedAt ?? compareCachedAt;
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
+    <main id="main-content" tabIndex={-1} className="min-h-screen p-4 sm:p-6 max-w-6xl mx-auto space-y-6 animate-fade-in">
       <LoadingBar
         matchLoaded={true}
         compareLoaded={!!compareQuery.data}
