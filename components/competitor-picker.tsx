@@ -117,10 +117,9 @@ export function CompetitorPicker({
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (hasShooterId) onToggleTracked(c);
+                                onToggleTracked(c);
                               }}
                               disabled={!hasShooterId}
-                              aria-disabled={!hasShooterId}
                               aria-label={isTracked ? `Untrack ${c.name}` : `Track ${c.name}`}
                               className={cn(
                                 "p-2 rounded transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
@@ -143,10 +142,9 @@ export function CompetitorPicker({
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (hasShooterId) onSetMyIdentity(c);
+                                onSetMyIdentity(c);
                               }}
                               disabled={!hasShooterId}
-                              aria-disabled={!hasShooterId}
                               aria-label={`Set as my identity: ${c.name}`}
                               className={cn(
                                 "p-2 rounded transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
