@@ -1510,22 +1510,24 @@ function AchievementsSection({
             <button
               type="button"
               id="achievements-heading"
-              className="flex flex-1 items-center gap-2 text-left min-h-[2.75rem]"
+              className="flex flex-1 items-center justify-between text-left gap-2 min-h-[2.75rem]"
             >
+              <span className="flex items-center gap-2">
+                <span className="text-muted-foreground uppercase tracking-wide text-xs">
+                  Achievements
+                </span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  ({unlockedCount}/{totalTiers})
+                </span>
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                  Preview
+                </Badge>
+              </span>
               {open ? (
-                <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
+                <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
               ) : (
-                <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
+                <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
               )}
-              <span className="text-muted-foreground uppercase tracking-wide text-xs">
-                Achievements
-              </span>
-              <span className="text-xs font-normal text-muted-foreground">
-                ({unlockedCount}/{totalTiers})
-              </span>
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                Preview
-              </Badge>
             </button>
           </CollapsibleTrigger>
           <Popover>
@@ -1533,7 +1535,7 @@ function AchievementsSection({
               <button
                 type="button"
                 aria-label="About achievements"
-                className="text-muted-foreground hover:text-foreground transition-colors"
+                className="ml-1 text-muted-foreground hover:text-foreground transition-colors"
               >
                 <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
               </button>
@@ -1557,7 +1559,7 @@ function AchievementsSection({
         {/* Collapsed: ribbon bar of tappable icon bubbles */}
         {!open && (
           <div
-            className="flex flex-wrap gap-1.5 mt-1.5 pl-6"
+            className="flex flex-wrap gap-1.5 mt-1.5"
             role="list"
             aria-label="Achievement overview — tap to inspect"
           >
