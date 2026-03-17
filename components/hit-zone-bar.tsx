@@ -84,7 +84,7 @@ export function HitZoneBar({
               </div>
             ))}
           {showPenalties && (
-            <span className="text-[10px] leading-none font-mono text-rose-600 dark:text-rose-400">
+            <span className="text-xs leading-none font-mono text-rose-600 dark:text-rose-400">
               {penaltyLabel}
             </span>
           )}

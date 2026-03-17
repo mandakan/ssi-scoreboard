@@ -560,7 +560,7 @@ function ArchetypePill({ archetype, color }: { archetype: ShooterArchetype; colo
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold cursor-default"
+          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold cursor-default"
           style={{ backgroundColor: color + "22", color }}
           aria-label={`Archetype: ${archetype}`}
         >
@@ -931,25 +931,25 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                               aria-label={`Run classification summary: ${classificationSummaryLabel}`}
                             >
                               {t.solidCount > 0 && (
-                                <span className="inline-flex items-center gap-px text-[10px] text-emerald-500">
+                                <span className="inline-flex items-center gap-px text-xs text-emerald-500">
                                   <CheckCircle2 className="w-2.5 h-2.5" aria-hidden={true} />
                                   {t.solidCount}
                                 </span>
                               )}
                               {t.conservativeCount > 0 && (
-                                <span className="inline-flex items-center gap-px text-[10px] text-yellow-500">
+                                <span className="inline-flex items-center gap-px text-xs text-yellow-500">
                                   <Shield className="w-2.5 h-2.5" aria-hidden={true} />
                                   {t.conservativeCount}
                                 </span>
                               )}
                               {t.overpushCount > 0 && (
-                                <span className="inline-flex items-center gap-px text-[10px] text-orange-500">
+                                <span className="inline-flex items-center gap-px text-xs text-orange-500">
                                   <Zap className="w-2.5 h-2.5" aria-hidden={true} />
                                   {t.overpushCount}
                                 </span>
                               )}
                               {t.meltdownCount > 0 && (
-                                <span className="inline-flex items-center gap-px text-[10px] text-red-500">
+                                <span className="inline-flex items-center gap-px text-xs text-red-500">
                                   <Flame className="w-2.5 h-2.5" aria-hidden={true} />
                                   {t.meltdownCount}
                                 </span>
@@ -1761,7 +1761,7 @@ function StageCell({
         <Tooltip>
           <TooltipTrigger asChild>
             <span
-              className="text-[10px] text-muted-foreground/70 tabular-nums cursor-help leading-none"
+              className="text-xs text-muted-foreground/70 tabular-nums cursor-help leading-none"
               aria-label={`Field percentile: P${Math.round(sc.overall_percentile * 100)}`}
             >
               {`P${Math.round(sc.overall_percentile * 100)}`}

@@ -242,6 +242,7 @@ export function EventSearch() {
     <section aria-label="Find competitions">
       <Command shouldFilter={false} className="rounded-lg border shadow-sm">
         <CommandInput
+          aria-label="Search competitions"
           placeholder="Search by name or paste a match URL…"
           value={inputValue}
           onValueChange={handleInputChange}

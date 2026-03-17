@@ -120,7 +120,7 @@ export function ShootingOrderBadge({ order }: { order: number }) {
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="text-[10px] text-muted-foreground/60 tabular-nums cursor-help leading-none"
+          className="text-xs text-muted-foreground/60 tabular-nums cursor-help leading-none"
           aria-label={`Shot this stage ${ordinal(order)} in their rotation`}
         >
           {ordinal(order)}
