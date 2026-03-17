@@ -1690,7 +1690,7 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
   const displayStats = isFiltered ? filteredStats : stats;
 
   return (
-    <main className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-6">
+    <main className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-6 animate-fade-in">
       {/* ── Back navigation ───────────────────────────────────────────── */}
       <Link
         href={from ?? "/"}

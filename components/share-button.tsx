@@ -55,11 +55,13 @@ export function ShareButton({ title, competitorCount = 0 }: ShareButtonProps) {
 
   return (
     <Button
-      variant="ghost"
+      variant={copied ? "default" : "ghost"}
       size="sm"
       onClick={handleShare}
       aria-label={copied ? copiedLabel : idleLabel}
+      aria-live="polite"
       title={idleLabel}
+      className="transition-colors duration-150"
     >
       {copied ? (
         <Check className="w-4 h-4" />
