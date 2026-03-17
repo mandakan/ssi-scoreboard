@@ -483,13 +483,40 @@ function singleCompetitorImage(
  *
  * Returns a SINGLE <div> (not a Fragment) — required for Satori.
  */
+/**
+ * Auto-detect layout based on image aspect ratio:
+ *
+ * **Landscape** (aspect ≥ 1.4 — wider than OG canvas ratio 1200/630 ≈ 1.9):
+ *   Full-width background spanning the entire canvas. Left-to-right gradient
+ *   keeps text readable on the left while the image dominates.
+ *
+ * **Portrait / square** (aspect < 1.4):
+ *   Image pinned to the right, scaled to full OG height. Left-to-right
+ *   gradient fades the image into the dark background.
+ *
+ * Falls back to landscape (full-width) when dimensions are unknown.
+ */
 function matchImageBgLayers(
   imageUrl: string,
-  _imageWidth: number | null,
-  _imageHeight: number | null,
+  imageWidth: number | null,
+  imageHeight: number | null,
 ) {
-  // Full-width background image — the match cover is the hero element.
-  // A left-to-right gradient keeps text on the left readable.
+  const aspect =
+    imageWidth != null && imageHeight != null && imageHeight > 0
+      ? imageWidth / imageHeight
+      : null;
+
+  // Landscape or unknown → full-width hero
+  if (aspect == null || aspect >= 1.4) {
+    return matchImageFullWidth(imageUrl);
+  }
+
+  // Portrait / square → right-aligned column
+  return matchImageRightAligned(imageUrl, imageWidth!, imageHeight!);
+}
+
+/** Landscape layout: image spans the full 1200×630 canvas. */
+function matchImageFullWidth(imageUrl: string) {
   return (
     <div
       style={{
@@ -509,7 +536,7 @@ function matchImageBgLayers(
         height={OG_H}
         style={{ objectFit: "cover", objectPosition: "center", display: "flex" }}
       />
-      {/* Gradient overlay: opaque left half for text, fading to let image show */}
+      {/* Gradient: opaque left → transparent right */}
       <div
         style={{
           position: "absolute",
@@ -518,6 +545,52 @@ function matchImageBgLayers(
           width: OG_W,
           height: OG_H,
           backgroundImage: `linear-gradient(to right, ${C.bg} 0%, rgba(10,10,10,0.85) 35%, rgba(10,10,10,0.4) 65%, rgba(10,10,10,0.15) 100%)`,
+          display: "flex",
+        }}
+      />
+    </div>
+  );
+}
+
+/** Portrait / square layout: image on the right ~50%, full height. */
+function matchImageRightAligned(
+  imageUrl: string,
+  imageWidth: number,
+  imageHeight: number,
+) {
+  // Scale image to full OG height, then cap at 50% of canvas width
+  const scaledW = Math.round(imageWidth * (OG_H / imageHeight));
+  const displayW = Math.min(scaledW, Math.round(OG_W * 0.5));
+  const containerLeft = OG_W - displayW;
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: containerLeft,
+        top: 0,
+        width: displayW,
+        height: OG_H,
+        display: "flex",
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={imageUrl}
+        alt=""
+        width={displayW}
+        height={OG_H}
+        style={{ objectFit: "cover", objectPosition: "center", display: "flex" }}
+      />
+      {/* Gradient: solid left edge fading to transparent */}
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          width: displayW,
+          height: OG_H,
+          backgroundImage: `linear-gradient(to right, ${C.bg} 0%, rgba(10,10,10,0.5) 40%, rgba(10,10,10,0.15) 100%)`,
           display: "flex",
         }}
       />
