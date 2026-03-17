@@ -340,7 +340,7 @@ export default function MatchPageClient() {
     return (
       <>
       <LoadingBar matchLoaded={false} compareLoaded={false} hasCompetitors={selectedIds.length > 0} />
-      <div className="min-h-screen p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
+      <main id="main-content" className="min-h-screen p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
         {/* nav row */}
         <div className="flex items-center justify-between">
           <Skeleton className="h-4 w-24" />
@@ -371,16 +371,16 @@ export default function MatchPageClient() {
           <Skeleton className="h-4 w-36" />
           <Skeleton className="h-10 w-full rounded-md" />
         </div>
-      </div>
+      </main>
       </>
     );
   }
 
   if (matchQuery.isError || !matchQuery.data) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-8">
+      <main id="main-content" className="min-h-screen flex flex-col items-center justify-center gap-4 p-8">
         <AlertCircle className="w-8 h-8 text-destructive" />
-        <p className="text-destructive font-medium">
+        <p className="text-destructive font-medium" role="alert">
           {matchQuery.error?.message ?? "Failed to load match"}
         </p>
         <Button variant="outline" asChild>
@@ -389,7 +389,7 @@ export default function MatchPageClient() {
             Back
           </Link>
         </Button>
-      </div>
+      </main>
     );
   }
 
@@ -418,7 +418,7 @@ export default function MatchPageClient() {
       : matchCachedAt ?? compareCachedAt;
 
   return (
-    <div className="min-h-screen p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
+    <main id="main-content" className="min-h-screen p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
       <LoadingBar
         matchLoaded={true}
         compareLoaded={!!compareQuery.data}
@@ -593,7 +593,7 @@ export default function MatchPageClient() {
           )}
 
           {compareQuery.isError && (
-            <div className="flex items-center gap-2 text-destructive text-sm">
+            <div role="alert" className="flex items-center gap-2 text-destructive text-sm">
               <AlertCircle className="w-4 h-4" />
               {compareQuery.error?.message ?? "Failed to load comparison"}
               <Button
@@ -1012,6 +1012,6 @@ export default function MatchPageClient() {
       )}
 
       <TrackedShootersSheet open={showManage} onOpenChange={setShowManage} />
-    </div>
+    </main>
   );
 }
