@@ -93,6 +93,56 @@ export function handleMike(): { content: string; embeds: APIEmbed[] } {
 }
 
 // ---------------------------------------------------------------------------
+// /doublemike — two misses on the same target, extra pain
+// ---------------------------------------------------------------------------
+
+const DOUBLE_MIKE_REACTIONS = [
+  "Two misses. On the same target. That takes commitment.",
+  "You missed it so hard the first time, you had to do it again.",
+  "Double mike. The target didn't even flinch. Twice.",
+  "That's -20 points. Your hit factor just filed for bankruptcy.",
+  "The good news: you're consistent. The bad news: consistently missing.",
+  "Two shots, zero hits. That target owes you nothing.",
+  "Even the no-shoot next to it was confused.",
+  "Statistically, you should have hit *something*.",
+  "That's not a double tap, that's a double nope.",
+  "The target is still in mint condition. Collectors will love it.",
+  "Two mikes walk into a bar. The bartender says 'you missed happy hour too.'",
+  "Your magazine is lighter. That's the only measurable effect.",
+] as const;
+
+export function handleDoubleMike(): { content: string; embeds: APIEmbed[] } {
+  const reaction = pick(DOUBLE_MIKE_REACTIONS);
+  const content = `**MIKE! MIKE!**\n> ${reaction}`;
+  return { content, embeds: [] };
+}
+
+// ---------------------------------------------------------------------------
+// /alpha — celebrate a perfect hit
+// ---------------------------------------------------------------------------
+
+const ALPHA_REACTIONS = [
+  "Clean. Surgical. The A-zone didn't stand a chance.",
+  "That's how it's done. Textbook.",
+  "The scoring overlay isn't even necessary. That's center mass.",
+  "If every hit looked like that, we wouldn't need tape.",
+  "A-zone. No discussion. Next target.",
+  "That hit was so clean the stats officer smiled.",
+  "Pure alpha energy. Literally.",
+  "Right where it belongs. Chef's kiss.",
+  "The target accepted that hit with grace and dignity.",
+  "That's the kind of hit you tell your grandchildren about.",
+  "A-zone. The only zone that matters.",
+  "Your sights, your trigger press, your follow-through — all of it. Perfect.",
+] as const;
+
+export function handleAlpha(): { content: string; embeds: APIEmbed[] } {
+  const reaction = pick(ALPHA_REACTIONS);
+  const content = `**ALPHA!** ${reaction}`;
+  return { content, embeds: [] };
+}
+
+// ---------------------------------------------------------------------------
 // /delta — passive-aggressive encouragement for a marginal hit
 // ---------------------------------------------------------------------------
 

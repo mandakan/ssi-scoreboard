@@ -23,7 +23,7 @@ import { handleMatch } from "./commands/match";
 import { handleShooter, handleShooterById } from "./commands/shooter";
 import { handleLink, handleUnlink, getLinkedShooter } from "./commands/link";
 import { handleHelp, handleIntroduction, WELCOME_EMBED } from "./commands/help";
-import { handleDq, handleStandby, getStandbyDelayMs, handleMike, handleDelta, handleProcedural } from "./commands/easter-eggs";
+import { handleDq, handleStandby, getStandbyDelayMs, handleAlpha, handleMike, handleDoubleMike, handleDelta, handleProcedural } from "./commands/easter-eggs";
 import { handleLinked } from "./commands/linked";
 import { handleLeaderboard } from "./commands/leaderboard";
 import { handleSummary } from "./commands/summary";
@@ -246,14 +246,16 @@ function handleCommand(
 
   // Easter-egg commands — synchronous, public (everyone should see the fun)
   // /standby is deferred (uses a real delay) — handled below in handleDeferredCommand
-  if (commandName === "dq" || commandName === "mike" ||
-      commandName === "delta" || commandName === "procedural") {
+  if (commandName === "dq" || commandName === "alpha" || commandName === "mike" ||
+      commandName === "doublemike" || commandName === "delta" || commandName === "procedural") {
     const opts = (data.options ?? []) as Array<{ name: string; value: unknown }>;
     const targetUser = opts.find((o) => o.name === "target")?.value as string | undefined;
     let result: { content: string; embeds: unknown[] };
     switch (commandName) {
       case "dq": result = handleDq(targetUser); break;
+      case "alpha": result = handleAlpha(); break;
       case "mike": result = handleMike(); break;
+      case "doublemike": result = handleDoubleMike(); break;
       case "delta": result = handleDelta(); break;
       case "procedural": result = handleProcedural(targetUser); break;
     }

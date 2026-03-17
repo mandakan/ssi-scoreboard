@@ -295,8 +295,18 @@ export const COMMANDS = [
     type: ApplicationCommandType.ChatInput,
   },
   {
+    name: "alpha",
+    description: "Call a perfect hit",
+    type: ApplicationCommandType.ChatInput,
+  },
+  {
     name: "mike",
     description: "Call a miss",
+    type: ApplicationCommandType.ChatInput,
+  },
+  {
+    name: "doublemike",
+    description: "Call a double miss on the same target",
     type: ApplicationCommandType.ChatInput,
   },
   {
