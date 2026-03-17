@@ -53,7 +53,7 @@ export function HfPercentChart({ data, stages: stagesProp }: HfPercentChartProps
   };
 
   return (
-    <div>
+    <div role="img" aria-label="Line chart showing hit factor percentage vs stage winner across stages">
       {/* Reference mode selector */}
       <div role="group" aria-label="Reference competitor" className="flex flex-wrap gap-2 pb-3">
         <span className="self-center text-xs text-muted-foreground">vs:</span>

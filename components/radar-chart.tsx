@@ -98,7 +98,7 @@ export function StageBalanceChart({ data }: StageBalanceChartProps) {
   const currentMode = PCT_MODES.find((m) => m.value === pctMode)!;
 
   return (
-    <div>
+    <div role="img" aria-label="Radar chart showing division position across stage balance dimensions">
       {/* Mode toggle */}
       <ToggleGroup
         type="single"

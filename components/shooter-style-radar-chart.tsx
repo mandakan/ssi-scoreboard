@@ -158,7 +158,7 @@ export function ShooterStyleRadarChart({ data }: ShooterStyleRadarChartProps) {
   };
 
   return (
-    <div>
+    <div role="img" aria-label="Radar chart showing shooter style fingerprint across performance dimensions">
       <ResponsiveContainer width="100%" height={300}>
         <RadarChart data={radarData} margin={{ top: 8, right: 24, bottom: 8, left: 24 }}>
           <PolarGrid stroke="var(--border)" />
