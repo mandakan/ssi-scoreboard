@@ -47,6 +47,11 @@ export function WhatsNewProvider({ children }: { children: React.ReactNode }) {
         const missed =
           seenIndex >= 1 ? RELEASES.slice(0, seenIndex) : [latest];
         setReleasesToShow(missed);
+        // Blur any focused element before opening the dialog so Radix's
+        // aria-hidden on the page root doesn't conflict with active focus.
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
         setOpenState(true);
       }
     }, 0);
