@@ -90,7 +90,22 @@ async function processGuildReminder(
       }
       return true; // no registration info — show it anyway
     })
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    .sort((a, b) => {
+      // Sort by registration urgency: open now → opens soonest → no date (by match date)
+      const aOpen = a.is_registration_possible ? 1 : 0;
+      const bOpen = b.is_registration_possible ? 1 : 0;
+      // Open registrations first
+      if (aOpen !== bOpen) return bOpen - aOpen;
+      // Both have registration_starts — sort by that date (soonest first)
+      if (a.registration_starts && b.registration_starts) {
+        return new Date(a.registration_starts).getTime() - new Date(b.registration_starts).getTime();
+      }
+      // Has a registration date beats no registration date
+      if (a.registration_starts && !b.registration_starts) return -1;
+      if (!a.registration_starts && b.registration_starts) return 1;
+      // Fallback: match date
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    });
 
   // Check for registrations opening today — these get a separate urgent alert
   const opensToday = filtered.filter((e) => {
