@@ -23,10 +23,16 @@ export const RELEASES: Release[] = [
       {
         heading: "New",
         items: [
-          "Upcoming match cards on the shooter dashboard now show what you need to do: register, pick your squad, or just show up. Action status is derived from registration and squadding dates.",
+          "Upcoming match cards on the shooter dashboard now show exactly what you need to do: register, pick your squad, or just show up. Status is checked against live match data — not guessed.",
           "Countdown badge (Today / Tomorrow / 5d) on each upcoming match card for quick orientation.",
           "Direct SSI link on actionable cards — tap to register or pick your squad on Shoot'n Score It without leaving the dashboard.",
           "Discord: /remind upcoming — a personal action checklist for your next 8 days of matches (configurable). Requires /link.",
+        ],
+      },
+      {
+        heading: "Improved",
+        items: [
+          "Dashboard reordered for courtside use: upcoming matches are now at the top (sorted by urgency), performance trend charts are collapsed by default.",
         ],
       },
     ],
