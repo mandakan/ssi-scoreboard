@@ -11,11 +11,34 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-03-12";
+export const LATEST_RELEASE_ID = "2026-03-17";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "March 17, 2026",
+    title: "Upcoming Match Actions",
+    screenshotScenes: ["shooter-dashboard"],
+    sections: [
+      {
+        heading: "New",
+        items: [
+          "Upcoming match cards on the shooter dashboard now show exactly what you need to do: register, pick your squad, or just show up. Status is checked against live match data — not guessed.",
+          "Countdown badge (Today / Tomorrow / 5d) on each upcoming match card for quick orientation.",
+          "Direct SSI link on actionable cards — tap to register or pick your squad on Shoot'n Score It without leaving the dashboard.",
+          "Discord: /remind upcoming — a personal action checklist for your next 8 days of matches (configurable). Requires /link.",
+        ],
+      },
+      {
+        heading: "Improved",
+        items: [
+          "Dashboard reordered for courtside use: upcoming matches are now at the top (sorted by urgency), performance trend charts are collapsed by default.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-03-12",
     date: "March 12, 2026",
     title: "Pre-match View",
     screenshotScenes: ["comparison-table"],

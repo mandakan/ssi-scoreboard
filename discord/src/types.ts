@@ -89,6 +89,14 @@ export interface UpcomingMatch {
   level: string | null;
   division: string | null;
   competitorId: number;
+  registrationStarts: string | null;
+  registrationCloses: string | null;
+  isRegistrationPossible: boolean;
+  squaddingStarts: string | null;
+  squaddingCloses: string | null;
+  isSquaddingPossible: boolean;
+  isRegistered: boolean;
+  isSquadded: boolean;
 }
 
 /** GET /api/shooter/{shooterId} — dashboard response. */

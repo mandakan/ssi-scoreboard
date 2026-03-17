@@ -42,6 +42,9 @@ import {
   CalendarDays,
   Sparkles,
   Flag,
+  ExternalLink,
+  CircleAlert,
+  CircleCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -271,50 +274,199 @@ function MatchCard({ match }: { match: ShooterMatchSummary }) {
 
 // ─── Upcoming match card ─────────────────────────────────────────────────────
 
+/** Compute days from now to a date string. Negative = past. */
+function daysUntil(iso: string | null): number | null {
+  if (!iso) return null;
+  const target = new Date(iso);
+  if (isNaN(target.getTime())) return null;
+  const now = new Date();
+  // Compare date-only (midnight-to-midnight) to avoid timezone edge cases
+  const targetDay = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((targetDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/** Format a countdown: "Today", "Tomorrow", "3d", etc. */
+function formatCountdown(days: number | null): string | null {
+  if (days == null) return null;
+  if (days < 0) return null;
+  if (days === 0) return "Today";
+  if (days === 1) return "Tomorrow";
+  return `${days}d`;
+}
+
+interface MatchAction {
+  label: string;
+  sublabel?: string;
+  /** "action" = amber (needs attention), "ready" = green, "info" = muted, "matchday" = primary */
+  variant: "action" | "ready" | "info" | "matchday";
+  ssiLink?: boolean;
+}
+
+/** Determine the action status for an upcoming match. */
+function getMatchAction(match: UpcomingMatch): MatchAction {
+  const days = daysUntil(match.date);
+  const now = new Date();
+
+  // Match day
+  if (days === 0) {
+    return { label: "Match day!", variant: "matchday" };
+  }
+  // Match tomorrow
+  if (days === 1) {
+    return { label: "Match tomorrow", variant: "matchday" };
+  }
+
+  // Derive open windows from dates (booleans may be stale from DB)
+  const squaddingOpen = match.squaddingStarts
+    ? new Date(match.squaddingStarts) <= now &&
+      (!match.squaddingCloses || new Date(match.squaddingCloses) > now)
+    : match.isSquaddingPossible;
+  const regOpen = match.registrationStarts
+    ? new Date(match.registrationStarts) <= now &&
+      (!match.registrationCloses || new Date(match.registrationCloses) > now)
+    : match.isRegistrationPossible;
+
+  // Not registered yet — registration is the top priority
+  if (!match.isRegistered && regOpen) {
+    const closeDays = daysUntil(match.registrationCloses);
+    return {
+      label: "Register now",
+      sublabel: closeDays != null ? `closes in ${closeDays}d` : undefined,
+      variant: "action",
+      ssiLink: true,
+    };
+  }
+
+  // Registered but not squadded — squadding is the action
+  if (!match.isSquadded && squaddingOpen) {
+    const closeDays = daysUntil(match.squaddingCloses);
+    return {
+      label: "Pick your squad",
+      sublabel: closeDays != null ? `closes in ${closeDays}d` : undefined,
+      variant: "action",
+      ssiLink: true,
+    };
+  }
+
+  // Registration opens soon (within 14 days)
+  if (match.registrationStarts) {
+    const regDays = daysUntil(match.registrationStarts);
+    if (regDays != null && regDays > 0 && regDays <= 14) {
+      return {
+        label: `Registration opens ${formatDate(match.registrationStarts)}`,
+        variant: "info",
+      };
+    }
+  }
+
+  // Squadding opens soon (within 14 days)
+  if (match.squaddingStarts) {
+    const sqDays = daysUntil(match.squaddingStarts);
+    if (sqDays != null && sqDays > 0 && sqDays <= 14) {
+      return {
+        label: `Squadding opens ${formatDate(match.squaddingStarts)}`,
+        variant: "info",
+      };
+    }
+  }
+
+  // All set — show countdown
+  const countdown = formatCountdown(days);
+  return {
+    label: countdown ? `You're set \u00b7 ${countdown}` : "You're set",
+    variant: "ready",
+  };
+}
+
+const ACTION_STYLES: Record<MatchAction["variant"], { icon: LucideIcon; className: string }> = {
+  action: { icon: CircleAlert, className: "text-[var(--perf-amber)]" },
+  ready: { icon: CircleCheck, className: "text-[var(--perf-green)]" },
+  info: { icon: Calendar, className: "text-muted-foreground" },
+  matchday: { icon: CalendarDays, className: "text-primary font-semibold" },
+};
+
 function UpcomingMatchCard({ match }: { match: UpcomingMatch }) {
   const href = `/match/${match.ct}/${match.matchId}?competitors=${match.competitorId}`;
   const badge = levelBadge(match.level);
+  const action = getMatchAction(match);
+  const days = daysUntil(match.date);
+  const countdown = formatCountdown(days);
+  const style = ACTION_STYLES[action.variant];
+  const ActionIcon = style.icon;
+  const ssiUrl = `https://shootnscoreit.com/event/${match.ct}/${match.matchId}/`;
 
   return (
-    <Link
-      href={href}
-      className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors group min-h-[44px]"
-      aria-label={`Upcoming: ${match.name}${match.date ? `, ${formatDate(match.date)}` : ""}`}
-    >
-      <Calendar
-        className="w-4 h-4 text-muted-foreground shrink-0"
-        aria-hidden="true"
-      />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium text-sm truncate">{match.name}</span>
-          {badge && (
-            <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-wide">
-              {badge}
+    <div className="rounded-lg border border-border overflow-hidden">
+      {/* Main card — links to scoreboard match page */}
+      <Link
+        href={href}
+        className="flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors group min-h-[44px]"
+        aria-label={`Upcoming: ${match.name}${match.date ? `, ${formatDate(match.date)}` : ""}`}
+      >
+        <Calendar
+          className="w-4 h-4 text-muted-foreground shrink-0"
+          aria-hidden="true"
+        />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-medium text-sm truncate">{match.name}</span>
+            {badge && (
+              <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-wide">
+                {badge}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            <span className="text-xs text-muted-foreground">
+              {formatDate(match.date)}
             </span>
-          )}
+            {match.venue && (
+              <span className="text-xs text-muted-foreground">
+                · {match.venue}
+              </span>
+            )}
+            {match.division && (
+              <span className="text-xs text-muted-foreground">
+                · {match.division}
+              </span>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-          <span className="text-xs text-muted-foreground">
-            {formatDate(match.date)}
+        {countdown && (
+          <span className="text-xs font-medium text-muted-foreground shrink-0">
+            {countdown}
           </span>
-          {match.venue && (
-            <span className="text-xs text-muted-foreground">
-              · {match.venue}
-            </span>
+        )}
+      </Link>
+
+      {/* Action status bar */}
+      <div className="flex items-center gap-2 px-3 py-2 border-t border-border bg-muted/30">
+        <ActionIcon
+          className={`w-3.5 h-3.5 shrink-0 ${style.className}`}
+          aria-hidden="true"
+        />
+        <span className={`text-xs ${style.className} flex-1 min-w-0`}>
+          {action.label}
+          {action.sublabel && (
+            <span className="text-muted-foreground"> · {action.sublabel}</span>
           )}
-          {match.division && (
-            <span className="text-xs text-muted-foreground">
-              · {match.division}
-            </span>
-          )}
-        </div>
+        </span>
+        {action.ssiLink && (
+          <a
+            href={ssiUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline shrink-0 min-h-[44px] min-w-[44px] justify-center"
+            aria-label={`${action.label} on ShootNScoreIt (opens in new tab)`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            SSI
+            <ExternalLink className="w-3 h-3" aria-hidden="true" />
+          </a>
+        )}
       </div>
-      <ChevronRight
-        className="w-4 h-4 text-muted-foreground shrink-0 group-hover:text-foreground transition-colors"
-        aria-hidden="true"
-      />
-    </Link>
+    </div>
   );
 }
 
@@ -1358,22 +1510,24 @@ function AchievementsSection({
             <button
               type="button"
               id="achievements-heading"
-              className="flex flex-1 items-center gap-2 text-left min-h-[2.75rem]"
+              className="flex flex-1 items-center justify-between text-left gap-2 min-h-[2.75rem]"
             >
+              <span className="flex items-center gap-2">
+                <span className="text-muted-foreground uppercase tracking-wide text-xs">
+                  Achievements
+                </span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  ({unlockedCount}/{totalTiers})
+                </span>
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                  Preview
+                </Badge>
+              </span>
               {open ? (
-                <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
+                <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
               ) : (
-                <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
+                <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
               )}
-              <span className="text-muted-foreground uppercase tracking-wide text-xs">
-                Achievements
-              </span>
-              <span className="text-xs font-normal text-muted-foreground">
-                ({unlockedCount}/{totalTiers})
-              </span>
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                Preview
-              </Badge>
             </button>
           </CollapsibleTrigger>
           <Popover>
@@ -1381,7 +1535,7 @@ function AchievementsSection({
               <button
                 type="button"
                 aria-label="About achievements"
-                className="text-muted-foreground hover:text-foreground transition-colors"
+                className="ml-1 text-muted-foreground hover:text-foreground transition-colors"
               >
                 <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
               </button>
@@ -1405,7 +1559,7 @@ function AchievementsSection({
         {/* Collapsed: ribbon bar of tappable icon bubbles */}
         {!open && (
           <div
-            className="flex flex-wrap gap-1.5 mt-1.5 pl-6"
+            className="flex flex-wrap gap-1.5 mt-1.5"
             role="list"
             aria-label="Achievement overview — tap to inspect"
           >
@@ -1452,7 +1606,8 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
     shooterId,
   );
   const [historyOpen, setHistoryOpen] = useState(true);
-  const [upcomingOpen, setUpcomingOpen] = useState(false);
+  const [upcomingOpen, setUpcomingOpen] = useState(true);
+  const [trendsOpen, setTrendsOpen] = useState(false);
   const [divisionFilter, setDivisionFilter] = useState<string | null | "unset">("unset");
 
   // Derive divisions and default filter once data loads
@@ -1702,33 +1857,47 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
         </section>
       )}
 
-      {/* ── Trend charts ───────────────────────────────────────────────── */}
+      {/* ── Trend charts (collapsed by default) ────────────────────── */}
       {hasChartData && (
-        <section
-          aria-labelledby="trends-heading"
-          className="border border-border rounded-xl p-4"
-        >
-          <h2
-            id="trends-heading"
-            className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4"
-          >
-            Performance trends
-          </h2>
-          <DivisionFilter
-            divisions={divisions}
-            selected={effectiveFilter}
-            onChange={handleFilterChange}
-          />
-          <TrendChart
-            matches={filteredMatches}
-            divisionFilter={effectiveFilter}
-          />
-        </section>
-      )}
-
-      {/* ── Achievements (preview) ──────────────────────────────────── */}
-      {data.achievements && data.achievements.length > 0 && (
-        <AchievementsSection achievements={data.achievements} />
+        <Collapsible open={trendsOpen} onOpenChange={setTrendsOpen} asChild>
+          <section className="border border-border rounded-xl p-4">
+            <h2 className="text-sm font-semibold m-0 leading-none">
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  id="trends-heading"
+                  className="flex w-full items-center justify-between text-left gap-2 min-h-[2.75rem]"
+                >
+                  <span className="text-muted-foreground uppercase tracking-wide">
+                    Performance trends
+                  </span>
+                  {trendsOpen ? (
+                    <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                  )}
+                </button>
+              </CollapsibleTrigger>
+            </h2>
+            {trendsOpen && (
+              <div
+                role="region"
+                aria-labelledby="trends-heading"
+                className="mt-3"
+              >
+                <DivisionFilter
+                  divisions={divisions}
+                  selected={effectiveFilter}
+                  onChange={handleFilterChange}
+                />
+                <TrendChart
+                  matches={filteredMatches}
+                  divisionFilter={effectiveFilter}
+                />
+              </div>
+            )}
+          </section>
+        </Collapsible>
       )}
 
       {/* ── Upcoming matches ──────────────────────────────────────────── */}
@@ -1765,16 +1934,28 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
                 aria-labelledby="upcoming-heading"
                 className="flex flex-col gap-2"
               >
-                {data.upcomingMatches.map((match) => (
-                  <UpcomingMatchCard
-                    key={`${match.ct}:${match.matchId}`}
-                    match={match}
-                  />
-                ))}
+                {[...data.upcomingMatches]
+                  .sort((a, b) => {
+                    const p: Record<MatchAction["variant"], number> = { matchday: 1, action: 2, info: 3, ready: 4 };
+                    const pa = p[getMatchAction(a).variant];
+                    const pb = p[getMatchAction(b).variant];
+                    return pa !== pb ? pa - pb : (a.date ?? "").localeCompare(b.date ?? "");
+                  })
+                  .map((match) => (
+                    <UpcomingMatchCard
+                      key={`${match.ct}:${match.matchId}`}
+                      match={match}
+                    />
+                  ))}
               </div>
             </CollapsibleContent>
           </section>
         </Collapsible>
+      )}
+
+      {/* ── Achievements (preview) ──────────────────────────────────── */}
+      {data.achievements && data.achievements.length > 0 && (
+        <AchievementsSection achievements={data.achievements} />
       )}
 
       {/* ── Match history ──────────────────────────────────────────────── */}

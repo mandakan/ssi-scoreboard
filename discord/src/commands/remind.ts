@@ -10,7 +10,7 @@
 
 import type { APIEmbed } from "discord-api-types/v10";
 import type { ScoreboardClient } from "../scoreboard-client";
-import type { EventSearchResult } from "../types";
+import type { EventSearchResult, UpcomingMatch } from "../types";
 import { parseEventRef } from "./autocomplete";
 
 /** A single match the user wants reminders for. */
@@ -50,12 +50,15 @@ export async function handleRemind(
   userId: string,
   action: string | undefined,
   query: string | undefined,
+  days?: number,
 ): Promise<{ content: string; embeds: APIEmbed[] }> {
   switch (action) {
     case "list":
       return handleList(kv, baseUrl, guildId, userId);
     case "cancel":
       return handleCancel(kv, guildId, userId, query);
+    case "upcoming":
+      return handleUpcoming(client, kv, baseUrl, guildId, userId, days ?? 8);
     case "set":
     default:
       return handleSet(client, kv, baseUrl, guildId, userId, query);
@@ -334,6 +337,171 @@ async function handleCancel(
     content: `Reminder cancelled for **${removed.matchName}**.`,
     embeds: [],
   };
+}
+
+// ─── /remind upcoming ────────────────────────────────────────────────────────
+
+/** Days from now to a date string. Negative = past. */
+function daysUntil(iso: string | null): number | null {
+  if (!iso) return null;
+  const target = new Date(iso);
+  if (isNaN(target.getTime())) return null;
+  const now = new Date();
+  const targetDay = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((targetDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+interface MatchAction {
+  emoji: string;
+  label: string;
+  /** 1 = most urgent */
+  priority: number;
+}
+
+/** Determine the action status for an upcoming match. */
+function getMatchAction(match: UpcomingMatch): MatchAction {
+  const days = daysUntil(match.date);
+  const now = new Date();
+
+  if (days === 0) return { emoji: "\u{1F3C1}", label: "**Match day!**", priority: 1 };
+  if (days === 1) return { emoji: "\u{1F4E3}", label: "**Match tomorrow** \u2014 gear check, travel plan", priority: 2 };
+
+  // Derive open windows from dates (booleans may be stale)
+  const squaddingOpen = match.squaddingStarts
+    ? new Date(match.squaddingStarts) <= now && (!match.squaddingCloses || new Date(match.squaddingCloses) > now)
+    : match.isSquaddingPossible;
+  const regOpen = match.registrationStarts
+    ? new Date(match.registrationStarts) <= now && (!match.registrationCloses || new Date(match.registrationCloses) > now)
+    : match.isRegistrationPossible;
+
+  // Not registered yet — registration is the top priority
+  if (!match.isRegistered && regOpen) {
+    const closeDays = daysUntil(match.registrationCloses);
+    const closeNote = closeDays != null ? ` (closes in ${closeDays}d)` : "";
+    return { emoji: "\u{1F4DD}", label: `**Register now**${closeNote}`, priority: 3 };
+  }
+
+  // Registered but not squadded
+  if (!match.isSquadded && squaddingOpen) {
+    const closeDays = daysUntil(match.squaddingCloses);
+    const closeNote = closeDays != null ? ` (closes in ${closeDays}d)` : "";
+    return { emoji: "\u26A1", label: `**Pick your squad**${closeNote}`, priority: 4 };
+  }
+
+  // Registration opens soon
+  if (match.registrationStarts) {
+    const regDays = daysUntil(match.registrationStarts);
+    if (regDays != null && regDays > 0 && regDays <= 14) {
+      return { emoji: "\u{1F514}", label: `Registration opens ${formatDate(match.registrationStarts)}`, priority: 6 };
+    }
+  }
+
+  // Squadding opens soon
+  if (match.squaddingStarts) {
+    const sqDays = daysUntil(match.squaddingStarts);
+    if (sqDays != null && sqDays > 0 && sqDays <= 14) {
+      return { emoji: "\u{1F514}", label: `Squadding opens ${formatDate(match.squaddingStarts)}`, priority: 6 };
+    }
+  }
+
+  // All set
+  const countdown = days != null && days > 0 ? `${days}d to go` : "";
+  return { emoji: "\u2705", label: `You're set${countdown ? ` \u2014 ${countdown}` : ""}`, priority: 6 };
+}
+
+async function handleUpcoming(
+  client: ScoreboardClient,
+  kv: KVNamespace,
+  baseUrl: string,
+  guildId: string,
+  userId: string,
+  days: number,
+): Promise<{ content: string; embeds: APIEmbed[] }> {
+  // Check if user is linked
+  const linkKey = `g:${guildId}:link:${userId}`;
+  const linkRaw = await kv.get(linkKey);
+  if (!linkRaw) {
+    return {
+      content: "You need to link your Discord account to an SSI shooter profile first.\nUse `/link <your name>` to get started.",
+      embeds: [],
+    };
+  }
+  const { shooterId, name: shooterName } = JSON.parse(linkRaw) as { shooterId: number; name: string };
+
+  // Fetch dashboard
+  let dashboard;
+  try {
+    dashboard = await client.getShooterDashboard(shooterId);
+  } catch {
+    return { content: "Could not load your shooter dashboard. Please try again later.", embeds: [] };
+  }
+
+  const upcoming = dashboard.upcomingMatches ?? [];
+  if (upcoming.length === 0) {
+    return {
+      content: `No upcoming matches found for **${shooterName}**.\nMatches appear here once you've been registered and the match page has been viewed on the scoreboard.`,
+      embeds: [],
+    };
+  }
+
+  // Filter to the requested window
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() + days);
+  const cutoffStr = cutoff.toISOString();
+
+  const inWindow = upcoming.filter((m) => {
+    if (!m.date) return true; // no date = include (can't determine)
+    return m.date <= cutoffStr;
+  });
+
+  if (inWindow.length === 0) {
+    // Show when the next match is
+    const nextMatch = upcoming[0];
+    const nextDays = daysUntil(nextMatch.date);
+    const nextNote = nextDays != null ? ` (in ${nextDays} days)` : "";
+    return {
+      content: `No matches in the next ${days} days.\nYour next match is **${nextMatch.name}**${nextNote}.`,
+      embeds: [],
+    };
+  }
+
+  // Build action list, sorted by priority then date
+  const withActions = inWindow.map((m) => ({ match: m, action: getMatchAction(m) }));
+  withActions.sort((a, b) => {
+    if (a.action.priority !== b.action.priority) return a.action.priority - b.action.priority;
+    return (a.match.date ?? "").localeCompare(b.match.date ?? "");
+  });
+
+  const lines = withActions.map(({ match, action }) => {
+    const matchDays = daysUntil(match.date);
+    const countdown = matchDays != null && matchDays >= 0
+      ? matchDays === 0 ? "today" : matchDays === 1 ? "tomorrow" : `in ${matchDays}d`
+      : "";
+    const dateStr = match.date ? formatDate(match.date) : "Date TBD";
+    const ssiUrl = `https://shootnscoreit.com/event/${match.ct}/${match.matchId}/`;
+    const scoreboardUrl = `${baseUrl}/match/${match.ct}/${match.matchId}`;
+
+    return [
+      `**${match.name}**`,
+      `${dateStr}${match.venue ? ` \u2014 ${match.venue}` : ""}${countdown ? ` (${countdown})` : ""}`,
+      `${action.emoji} ${action.label}`,
+      `[Scoreboard](${scoreboardUrl}) \u00b7 [SSI](${ssiUrl})`,
+    ].join("\n");
+  });
+
+  // Color: amber if any action needed, green if all set
+  const hasAction = withActions.some((w) => w.action.priority <= 4);
+  const color = hasAction ? 0xf59e0b : 0x22c55e;
+
+  const embed: APIEmbed = {
+    title: `Your next ${days} days \u2014 ${inWindow.length} match${inWindow.length !== 1 ? "es" : ""}`,
+    color,
+    description: lines.join("\n\n"),
+    footer: { text: `Linked as ${shooterName} \u00b7 /remind upcoming [days]` },
+  };
+
+  return { content: "", embeds: [embed] };
 }
 
 function formatDate(iso: string): string {

@@ -460,6 +460,7 @@ async function handleDeferredCommand(
           remindUserId,
           options.action as string | undefined,
           options.query as string | undefined,
+          options.days as number | undefined,
         );
         content = remindResult.content;
         embeds = remindResult.embeds;

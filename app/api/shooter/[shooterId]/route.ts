@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import cache from "@/lib/cache-impl";
 import db from "@/lib/db-impl";
-import { gqlCacheKey } from "@/lib/graphql";
+import { gqlCacheKey, cachedExecuteQuery, UPCOMING_STATUS_QUERY } from "@/lib/graphql";
 import { getMatchDataWithFallback } from "@/lib/match-data-store";
 import { decodeShooterId } from "@/lib/shooter-index";
 import type { ShooterProfile } from "@/lib/shooter-index";
@@ -61,6 +61,56 @@ interface RawMatchEvent {
 
 interface RawMatchData {
   event: RawMatchEvent | null;
+}
+
+// Lightweight response from UPCOMING_STATUS_QUERY — only competitor IDs + squads.
+interface RawUpcomingStatusEvent {
+  is_registration_possible?: boolean;
+  is_squadding_possible?: boolean;
+  registration_starts?: string | null;
+  registration_closes?: string | null;
+  squadding_starts?: string | null;
+  squadding_closes?: string | null;
+  competitors_approved_w_wo_results_not_dnf?: Array<{
+    id: string;
+    shooter?: { id: string } | null;
+  }>;
+  squads?: Array<{
+    competitors?: Array<{ id: string }> | null;
+  }> | null;
+}
+
+interface RawUpcomingStatusData {
+  event: RawUpcomingStatusEvent | null;
+}
+
+/** TTL for the lightweight upcoming status cache — 30 minutes. */
+const UPCOMING_STATUS_TTL = 1800;
+
+/**
+ * Extract registration + squad status for a specific shooter from match event data.
+ * Works with both the full RawMatchEvent (from cached GetMatch) and the lightweight
+ * RawUpcomingStatusEvent (from GetUpcomingStatus) since they share the same shape
+ * for competitor/squad ID fields.
+ */
+function resolveShooterStatus(
+  ref: string,
+  ev: { competitors_approved_w_wo_results_not_dnf?: Array<{ id: string; shooter?: { id: string } | null }>; squads?: Array<{ competitors?: Array<{ id: string }> | null }> | null },
+  shooterId: number,
+): { ref: string; competitorId: number; isRegistered: boolean; isSquadded: boolean } {
+  const competitors = ev.competitors_approved_w_wo_results_not_dnf ?? [];
+  const competitor = competitors.find(
+    (c) => decodeShooterId(c.shooter?.id) === shooterId,
+  );
+  if (!competitor) {
+    return { ref, competitorId: 0, isRegistered: false, isSquadded: false };
+  }
+  const competitorId = parseInt(competitor.id, 10) || 0;
+  const squads = ev.squads ?? [];
+  const isSquadded = squads.some(
+    (s) => s.competitors?.some((sc) => sc.id === competitor.id) ?? false,
+  );
+  return { ref, competitorId, isRegistered: true, isSquadded };
 }
 
 // ─── Computation helpers ──────────────────────────────────────────────────────
@@ -437,15 +487,56 @@ export async function GET(
     }
   }
 
-  // ── 3b. Resolve upcoming match metadata from matches domain table ────────
-  // Reads structured metadata directly from D1/SQLite — no Redis/blob lookup needed.
-  // This ensures upcoming matches remain visible even after their Redis TTL expires.
+  // ── 3b. Resolve upcoming match metadata + registration/squad status ────────
+  // Two-tier approach: first check cached GetMatch data (free — no API call),
+  // then fall back to a lightweight GraphQL query (cheap — only IDs + squads,
+  // ~5-10% of GetMatch payload, cached for 30min).
   const upcomingMatches: UpcomingMatch[] = [];
   if (upcomingRefs.length > 0) {
     let matchMetaMap = new Map<string, import("@/lib/types").MatchRecord>();
     try {
       matchMetaMap = await db.getMatchesByRefs(upcomingRefs);
     } catch { /* ignore DB errors */ }
+
+    // Resolve registration + squad status for each upcoming match in parallel.
+    // For each match: try cached GetMatch (free) → lightweight API query (cheap).
+    const statusResults = await Promise.all(
+      upcomingRefs.map(async (ref) => {
+        const [ct, ...idParts] = ref.split(":");
+        if (!ct) return { ref, competitorId: 0, isRegistered: false, isSquadded: false };
+        const matchId = idParts.join(":");
+        const ctNum = parseInt(ct, 10);
+        if (isNaN(ctNum)) return { ref, competitorId: 0, isRegistered: false, isSquadded: false };
+
+        // Tier 1: check cached GetMatch data (no API call)
+        const matchKey = gqlCacheKey("GetMatch", { ct: ctNum, id: matchId });
+        try {
+          const raw = await getMatchDataWithFallback(matchKey);
+          if (raw) {
+            const entry = JSON.parse(raw) as CacheEntry<RawMatchData>;
+            if (entry.data?.event) {
+              return resolveShooterStatus(ref, entry.data.event, shooterId);
+            }
+          }
+        } catch { /* fall through to lightweight query */ }
+
+        // Tier 2: lightweight GraphQL query (only IDs + squads, 30min cache)
+        try {
+          const statusKey = gqlCacheKey("GetUpcomingStatus", { ct: ctNum, id: matchId });
+          const { data } = await cachedExecuteQuery<RawUpcomingStatusData>(
+            statusKey, UPCOMING_STATUS_QUERY, { ct: ctNum, id: matchId }, UPCOMING_STATUS_TTL,
+          );
+          if (data.event) {
+            return resolveShooterStatus(ref, data.event, shooterId);
+          }
+        } catch {
+          // API error — return unknown status
+        }
+
+        return { ref, competitorId: 0, isRegistered: false, isSquadded: false };
+      }),
+    );
+    const statusMap = new Map(statusResults.map((s) => [s.ref, s]));
 
     for (const ref of upcomingRefs) {
       const meta = matchMetaMap.get(ref);
@@ -454,6 +545,7 @@ export async function GET(
       const [ct, ...idParts] = ref.split(":");
       if (!ct) continue;
       const matchId = idParts.join(":");
+      const status = statusMap.get(ref);
 
       upcomingMatches.push({
         ct,
@@ -463,7 +555,15 @@ export async function GET(
         venue: meta.venue,
         level: meta.level,
         division: profile?.division ?? null,
-        competitorId: 0,
+        competitorId: status?.competitorId ?? 0,
+        registrationStarts: meta.registrationStarts,
+        registrationCloses: meta.registrationCloses,
+        isRegistrationPossible: meta.isRegistrationPossible,
+        squaddingStarts: meta.squaddingStarts,
+        squaddingCloses: meta.squaddingCloses,
+        isSquaddingPossible: meta.isSquaddingPossible,
+        isRegistered: status?.isRegistered ?? false,
+        isSquadded: status?.isSquadded ?? false,
       });
     }
   }

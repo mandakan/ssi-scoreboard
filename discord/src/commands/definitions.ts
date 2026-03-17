@@ -208,13 +208,14 @@ export const COMMANDS = [
     options: [
       {
         name: "action",
-        description: "set = add reminder, list = view active, cancel = remove",
+        description: "set = add reminder, list = view active, cancel = remove, upcoming = action checklist",
         type: ApplicationCommandOptionType.String,
         required: true,
         choices: [
           { name: "set \u2014 remind me about a match", value: "set" },
           { name: "list \u2014 show my active reminders", value: "list" },
           { name: "cancel \u2014 remove a reminder", value: "cancel" },
+          { name: "upcoming \u2014 what do I need to do?", value: "upcoming" },
         ],
       },
       {
@@ -223,6 +224,14 @@ export const COMMANDS = [
         type: ApplicationCommandOptionType.String,
         required: false,
         autocomplete: true,
+      },
+      {
+        name: "days",
+        description: "Days ahead to look for upcoming matches (default: 8)",
+        type: ApplicationCommandOptionType.Integer,
+        required: false,
+        min_value: 1,
+        max_value: 90,
       },
     ],
   },

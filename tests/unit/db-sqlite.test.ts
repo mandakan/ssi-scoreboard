@@ -197,6 +197,14 @@ describe("AppDatabase (SQLite)", () => {
       lng: 11.9746,
       data: null,
       updatedAt: "2026-03-15T10:00:00Z",
+      registrationStarts: "2026-03-01T08:00:00Z",
+      registrationCloses: "2026-06-01T23:59:00Z",
+      registrationStatus: "op",
+      squaddingStarts: "2026-05-01T08:00:00Z",
+      squaddingCloses: "2026-06-10T23:59:00Z",
+      isRegistrationPossible: true,
+      isSquaddingPossible: false,
+      maxCompetitors: 200,
     };
 
     it("inserts and retrieves a match", async () => {
@@ -258,6 +266,14 @@ describe("AppDatabase (SQLite)", () => {
         lng: null,
         data: null,
         updatedAt: "2026-01-01T00:00:00Z",
+        registrationStarts: null,
+        registrationCloses: null,
+        registrationStatus: null,
+        squaddingStarts: null,
+        squaddingCloses: null,
+        isRegistrationPossible: false,
+        isSquaddingPossible: false,
+        maxCompetitors: null,
       };
       await db.upsertMatch(minimal);
       const result = await db.getMatchesByRefs(["22:2001"]);

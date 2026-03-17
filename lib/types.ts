@@ -640,6 +640,15 @@ export interface MatchRecord {
   lng: number | null;
   data: string | null;         // full raw GetMatch JSON blob (fallback)
   updatedAt: string;           // ISO 8601
+  // Registration & squadding metadata (populated from GraphQL IpscMatchNode)
+  registrationStarts: string | null;  // ISO 8601
+  registrationCloses: string | null;  // ISO 8601
+  registrationStatus: string | null;  // code: "op", "cl", etc.
+  squaddingStarts: string | null;     // ISO 8601
+  squaddingCloses: string | null;     // ISO 8601
+  isRegistrationPossible: boolean;
+  isSquaddingPossible: boolean;
+  maxCompetitors: number | null;
 }
 
 // ── Upcoming Matches ──────────────────────────────────────────────────────────
@@ -653,6 +662,17 @@ export interface UpcomingMatch {
   level: string | null;
   division: string | null;
   competitorId: number;
+  // Registration & squadding action context
+  registrationStarts: string | null;
+  registrationCloses: string | null;
+  isRegistrationPossible: boolean;
+  squaddingStarts: string | null;
+  squaddingCloses: string | null;
+  isSquaddingPossible: boolean;
+  /** True when the shooter appears in the competitor list. */
+  isRegistered: boolean;
+  /** True when the shooter is assigned to a squad. */
+  isSquadded: boolean;
 }
 
 // ── Shooter Dashboard ─────────────────────────────────────────────────────────

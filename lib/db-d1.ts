@@ -348,8 +348,8 @@ const db: AppDatabase = {
     const db = getDb();
     await db
       .prepare(
-        `INSERT INTO matches (match_ref, ct, match_id, name, venue, date, level, region, sub_rule, discipline, status, results_status, scoring_completed, competitors_count, stages_count, lat, lng, data, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO matches (match_ref, ct, match_id, name, venue, date, level, region, sub_rule, discipline, status, results_status, scoring_completed, competitors_count, stages_count, lat, lng, data, updated_at, registration_starts, registration_closes, registration_status, squadding_starts, squadding_closes, is_registration_possible, is_squadding_possible, max_competitors)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(match_ref)
          DO UPDATE SET name = excluded.name,
                        venue = excluded.venue,
@@ -366,7 +366,15 @@ const db: AppDatabase = {
                        lat = excluded.lat,
                        lng = excluded.lng,
                        data = excluded.data,
-                       updated_at = excluded.updated_at`,
+                       updated_at = excluded.updated_at,
+                       registration_starts = excluded.registration_starts,
+                       registration_closes = excluded.registration_closes,
+                       registration_status = excluded.registration_status,
+                       squadding_starts = excluded.squadding_starts,
+                       squadding_closes = excluded.squadding_closes,
+                       is_registration_possible = excluded.is_registration_possible,
+                       is_squadding_possible = excluded.is_squadding_possible,
+                       max_competitors = excluded.max_competitors`,
       )
       .bind(
         match.matchRef, match.ct, match.matchId, match.name,
@@ -374,6 +382,10 @@ const db: AppDatabase = {
         match.subRule, match.discipline, match.status, match.resultsStatus,
         match.scoringCompleted, match.competitorsCount, match.stagesCount,
         match.lat, match.lng, match.data, match.updatedAt,
+        match.registrationStarts, match.registrationCloses, match.registrationStatus,
+        match.squaddingStarts, match.squaddingCloses,
+        match.isRegistrationPossible ? 1 : 0, match.isSquaddingPossible ? 1 : 0,
+        match.maxCompetitors,
       )
       .run();
   },
@@ -390,12 +402,20 @@ const db: AppDatabase = {
       scoring_completed: number; competitors_count: number | null;
       stages_count: number | null; lat: number | null; lng: number | null;
       data: string | null; updated_at: string;
+      registration_starts: string | null; registration_closes: string | null;
+      registration_status: string | null;
+      squadding_starts: string | null; squadding_closes: string | null;
+      is_registration_possible: number | null; is_squadding_possible: number | null;
+      max_competitors: number | null;
     };
     const result = await db
       .prepare(
         `SELECT match_ref, ct, match_id, name, venue, date, level, region, sub_rule, discipline,
                 status, results_status, scoring_completed, competitors_count, stages_count,
-                lat, lng, data, updated_at
+                lat, lng, data, updated_at,
+                registration_starts, registration_closes, registration_status,
+                squadding_starts, squadding_closes,
+                is_registration_possible, is_squadding_possible, max_competitors
          FROM matches WHERE match_ref IN (${placeholders})`,
       )
       .bind(...matchRefs)
@@ -409,6 +429,12 @@ const db: AppDatabase = {
         resultsStatus: r.results_status, scoringCompleted: r.scoring_completed,
         competitorsCount: r.competitors_count, stagesCount: r.stages_count,
         lat: r.lat, lng: r.lng, data: r.data, updatedAt: r.updated_at,
+        registrationStarts: r.registration_starts, registrationCloses: r.registration_closes,
+        registrationStatus: r.registration_status,
+        squaddingStarts: r.squadding_starts, squaddingCloses: r.squadding_closes,
+        isRegistrationPossible: !!(r.is_registration_possible),
+        isSquaddingPossible: !!(r.is_squadding_possible),
+        maxCompetitors: r.max_competitors,
       });
     }
     return map;
