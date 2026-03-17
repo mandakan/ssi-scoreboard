@@ -1878,11 +1878,6 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
         </section>
       )}
 
-      {/* ── Achievements (preview) ──────────────────────────────────── */}
-      {data.achievements && data.achievements.length > 0 && (
-        <AchievementsSection achievements={data.achievements} />
-      )}
-
       {/* ── Upcoming matches ──────────────────────────────────────────── */}
       {data.upcomingMatches && data.upcomingMatches.length > 0 && (
         <Collapsible open={upcomingOpen} onOpenChange={setUpcomingOpen} asChild>
@@ -1917,16 +1912,28 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
                 aria-labelledby="upcoming-heading"
                 className="flex flex-col gap-2"
               >
-                {data.upcomingMatches.map((match) => (
-                  <UpcomingMatchCard
-                    key={`${match.ct}:${match.matchId}`}
-                    match={match}
-                  />
-                ))}
+                {[...data.upcomingMatches]
+                  .sort((a, b) => {
+                    const p: Record<MatchAction["variant"], number> = { matchday: 1, action: 2, info: 3, ready: 4 };
+                    const pa = p[getMatchAction(a).variant];
+                    const pb = p[getMatchAction(b).variant];
+                    return pa !== pb ? pa - pb : (a.date ?? "").localeCompare(b.date ?? "");
+                  })
+                  .map((match) => (
+                    <UpcomingMatchCard
+                      key={`${match.ct}:${match.matchId}`}
+                      match={match}
+                    />
+                  ))}
               </div>
             </CollapsibleContent>
           </section>
         </Collapsible>
+      )}
+
+      {/* ── Achievements (preview) ──────────────────────────────────── */}
+      {data.achievements && data.achievements.length > 0 && (
+        <AchievementsSection achievements={data.achievements} />
       )}
 
       {/* ── Match history ──────────────────────────────────────────────── */}
