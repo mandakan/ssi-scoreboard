@@ -69,6 +69,7 @@ interface MatchShooterInfo {
   competitorId: number;
   squadNumber: number | null;
   squadName: string | null;
+  isRegistered: boolean;
 }
 
 /**
@@ -206,25 +207,30 @@ async function processGuildSquadReminder(
         const competitor = matchData.competitors.find(
           (c) => c.shooterId === shooter.shooterId,
         );
-        if (!competitor) continue;
 
         let squadNumber: number | null = null;
         let squadName: string | null = null;
-        for (const squad of matchData.squads) {
-          if (squad.competitorIds.includes(competitor.id)) {
-            squadNumber = squad.number;
-            squadName = squad.name;
-            break;
+        // Check registration via dashboard's upcomingMatch data
+        const isRegistered = competitor != null;
+
+        if (competitor) {
+          for (const squad of matchData.squads) {
+            if (squad.competitorIds.includes(competitor.id)) {
+              squadNumber = squad.number;
+              squadName = squad.name;
+              break;
+            }
           }
         }
 
         shooterInfos.push({
           discordUserId: shooter.discordUserId,
           shooterId: shooter.shooterId,
-          shooterName: competitor.name,
-          competitorId: competitor.id,
+          shooterName: competitor?.name ?? shooter.name,
+          competitorId: competitor?.id ?? 0,
           squadNumber,
           squadName,
+          isRegistered,
         });
       }
     }
@@ -238,6 +244,7 @@ async function processGuildSquadReminder(
       // picked a squad yet. If everyone is squadded, skip entirely.
       // Already-squadded shooters are passed separately so the embed can
       // show them (without pinging) as a hint for which squad to join.
+      // Unregistered shooters are always included (they need to register first).
       let shootersToNotify = shooterInfos;
       let alreadySquadded: MatchShooterInfo[] = [];
       if (trigger.type.startsWith("squadding-") && isOpen) {
@@ -378,21 +385,39 @@ function buildSquaddingEmbed(
 
   lines.push(`[Squad on SSI](${ssiUrl}) \u00b7 [View on Scoreboard](${matchUrl})`);
 
-  const shooterList = n.shooters
-    .map((s) => `\u2022 <@${s.discordUserId}>`)
-    .join("\n");
+  // Separate unregistered shooters — they need to register before they can squad
+  const registeredShooters = n.shooters.filter((s) => s.isRegistered);
+  const unregisteredShooters = n.shooters.filter((s) => !s.isRegistered);
 
-  const fieldName = n.isSquaddingOpen
-    ? `Still need to squad (${n.shooters.length})`
-    : `Ready up (${n.shooters.length})`;
+  const fields: NonNullable<APIEmbed["fields"]> = [];
 
-  const fields: NonNullable<APIEmbed["fields"]> = [
-    {
+  if (registeredShooters.length > 0) {
+    const shooterList = registeredShooters
+      .map((s) => `\u2022 <@${s.discordUserId}>`)
+      .join("\n");
+
+    const fieldName = n.isSquaddingOpen
+      ? `Still need to squad (${registeredShooters.length})`
+      : `Ready up (${registeredShooters.length})`;
+
+    fields.push({
       name: fieldName,
       value: shooterList,
       inline: false,
-    },
-  ];
+    });
+  }
+
+  if (unregisteredShooters.length > 0) {
+    const unregList = unregisteredShooters
+      .map((s) => `\u2022 <@${s.discordUserId}> \u2014 register first!`)
+      .join("\n");
+
+    fields.push({
+      name: `Not yet registered (${unregisteredShooters.length})`,
+      value: unregList,
+      inline: false,
+    });
+  }
 
   // When squadding is open, show who already picked a squad (without pinging)
   // so the unsquadded shooters know which squad to join.
@@ -462,22 +487,39 @@ function buildMatchDayEmbed(
   lines.push("");
   lines.push(`[SSI](${ssiUrl}) \u00b7 [Scoreboard](${matchUrl})`);
 
-  const shooterLines = n.shooters.map((s) => {
-    const squad = s.squadNumber != null ? `Squad ${s.squadNumber}` : "No squad";
-    return `\u2022 <@${s.discordUserId}> \u2014 ${squad}`;
-  });
+  const registered = n.shooters.filter((s) => s.isRegistered);
+  const unregistered = n.shooters.filter((s) => !s.isRegistered);
+
+  const fields: NonNullable<APIEmbed["fields"]> = [];
+
+  if (registered.length > 0) {
+    const shooterLines = registered.map((s) => {
+      const squad = s.squadNumber != null ? `Squad ${s.squadNumber}` : "No squad";
+      return `\u2022 <@${s.discordUserId}> \u2014 ${squad}`;
+    });
+    fields.push({
+      name: "Squad assignments",
+      value: shooterLines.join("\n"),
+      inline: false,
+    });
+  }
+
+  if (unregistered.length > 0) {
+    const unregLines = unregistered.map((s) =>
+      `\u2022 <@${s.discordUserId}> \u2014 not registered`,
+    );
+    fields.push({
+      name: "Not registered",
+      value: unregLines.join("\n"),
+      inline: false,
+    });
+  }
 
   return {
     title: "Match day!",
     color: 0x22c55e, // green
     description: lines.join("\n"),
-    fields: [
-      {
-        name: "Squad assignments",
-        value: shooterLines.join("\n"),
-        inline: false,
-      },
-    ],
+    fields,
     footer: { text: "Good luck and shoot safe!" },
     timestamp: new Date().toISOString(),
   };
