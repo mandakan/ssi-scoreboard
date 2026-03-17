@@ -66,7 +66,7 @@ export function ComparisonChart({ data, stages: stagesProp, showBenchmark = fals
   };
 
   return (
-    <div>
+    <div role="img" aria-label="Bar chart comparing hit factor by stage for selected competitors">
       <ResponsiveContainer width="100%" height={320}>
         <ComposedChart
           data={chartData}

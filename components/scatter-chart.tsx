@@ -289,7 +289,7 @@ export function SpeedAccuracyChart({ data }: SpeedAccuracyChartProps) {
   }));
 
   return (
-    <div>
+    <div role="img" aria-label="Scatter plot showing speed vs accuracy trade-off for selected competitors">
       <ResponsiveContainer width="100%" height={360}>
         <ScatterChart margin={{ top: 16, right: 28, left: 0, bottom: 20 }}>
           <CartesianGrid strokeDasharray="3 3" className="stroke-border" />

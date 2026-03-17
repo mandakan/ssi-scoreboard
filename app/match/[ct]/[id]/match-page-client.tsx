@@ -128,10 +128,10 @@ export default function MatchPageClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // On mount: reset scroll position to top so navigating from a scrolled landing
-  // page doesn't land mid-page on the match view.
+  // On mount: reset scroll and move focus to main content for screen readers.
   useEffect(() => {
     window.scrollTo(0, 0);
+    document.getElementById("main-content")?.focus({ preventScroll: true });
   }, []);
 
   // On mount: seed localStorage from ?competitors= URL param (shared links),
@@ -340,7 +340,7 @@ export default function MatchPageClient() {
     return (
       <>
       <LoadingBar matchLoaded={false} compareLoaded={false} hasCompetitors={selectedIds.length > 0} />
-      <main id="main-content" className="min-h-screen p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
+      <main id="main-content" tabIndex={-1} className="min-h-screen p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
         {/* nav row */}
         <div className="flex items-center justify-between">
           <Skeleton className="h-4 w-24" />
@@ -378,7 +378,7 @@ export default function MatchPageClient() {
 
   if (matchQuery.isError || !matchQuery.data) {
     return (
-      <main id="main-content" className="min-h-screen flex flex-col items-center justify-center gap-4 p-8">
+      <main id="main-content" tabIndex={-1} className="min-h-screen flex flex-col items-center justify-center gap-4 p-8">
         <AlertCircle className="w-8 h-8 text-destructive" />
         <p className="text-destructive font-medium" role="alert">
           {matchQuery.error?.message ?? "Failed to load match"}
@@ -418,7 +418,7 @@ export default function MatchPageClient() {
       : matchCachedAt ?? compareCachedAt;
 
   return (
-    <main id="main-content" className="min-h-screen p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
+    <main id="main-content" tabIndex={-1} className="min-h-screen p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
       <LoadingBar
         matchLoaded={true}
         compareLoaded={!!compareQuery.data}

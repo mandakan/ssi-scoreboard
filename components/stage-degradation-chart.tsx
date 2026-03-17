@@ -272,7 +272,7 @@ export function StageDegradationChart({ data }: StageDegradationChartProps) {
   const xMax = allPoints.length;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" role="img" aria-label="Scatter chart showing performance degradation across shooting order">
       {/* Stage selector */}
       <ToggleGroup
         type="single"
