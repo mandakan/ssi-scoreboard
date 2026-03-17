@@ -23,6 +23,7 @@ import { handleMatch } from "./commands/match";
 import { handleShooter, handleShooterById } from "./commands/shooter";
 import { handleLink, handleUnlink, getLinkedShooter } from "./commands/link";
 import { handleHelp, handleIntroduction, WELCOME_EMBED } from "./commands/help";
+import { handleDq, handleStandby, handleMike, handleDelta, handleProcedural } from "./commands/easter-eggs";
 import { handleLinked } from "./commands/linked";
 import { handleLeaderboard } from "./commands/leaderboard";
 import { handleSummary } from "./commands/summary";
@@ -239,6 +240,28 @@ function handleCommand(
         content: result.content || undefined,
         embeds: result.embeds.length > 0 ? result.embeds : undefined,
         // NOT ephemeral — the whole point is for everyone to see it
+      },
+    });
+  }
+
+  // Easter-egg commands — synchronous, public (everyone should see the fun)
+  if (commandName === "dq" || commandName === "standby" || commandName === "mike" ||
+      commandName === "delta" || commandName === "procedural") {
+    const opts = (data.options ?? []) as Array<{ name: string; value: unknown }>;
+    const targetUser = opts.find((o) => o.name === "target")?.value as string | undefined;
+    let result: { content: string; embeds: unknown[] };
+    switch (commandName) {
+      case "dq": result = handleDq(targetUser); break;
+      case "standby": result = handleStandby(); break;
+      case "mike": result = handleMike(); break;
+      case "delta": result = handleDelta(); break;
+      case "procedural": result = handleProcedural(targetUser); break;
+    }
+    return jsonResponse({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        content: result!.content || undefined,
+        embeds: result!.embeds.length > 0 ? result!.embeds : undefined,
       },
     });
   }

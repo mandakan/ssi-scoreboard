@@ -275,4 +275,46 @@ export const COMMANDS = [
       },
     ],
   },
+  // --- Easter eggs ---
+  {
+    name: "dq",
+    description: "Disqualify someone (just for fun)",
+    type: ApplicationCommandType.ChatInput,
+    options: [
+      {
+        name: "target",
+        description: "The competitor to DQ",
+        type: ApplicationCommandOptionType.User,
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "standby",
+    description: "Issue the RO start command sequence",
+    type: ApplicationCommandType.ChatInput,
+  },
+  {
+    name: "mike",
+    description: "Call a miss",
+    type: ApplicationCommandType.ChatInput,
+  },
+  {
+    name: "delta",
+    description: "Call a delta hit",
+    type: ApplicationCommandType.ChatInput,
+  },
+  {
+    name: "procedural",
+    description: "Issue a procedural penalty (just for fun)",
+    type: ApplicationCommandType.ChatInput,
+    options: [
+      {
+        name: "target",
+        description: "The competitor to penalise",
+        type: ApplicationCommandOptionType.User,
+        required: false,
+      },
+    ],
+  },
 ] as const;
