@@ -6,6 +6,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { MatchHeader } from "@/components/match-header";
 import { ShareButton } from "@/components/share-button";
+import { ShareEventLink } from "@/components/share-event-link";
 import { CompetitorPicker } from "@/components/competitor-picker";
 import { TrackedShootersSheet } from "@/components/tracked-shooters-sheet";
 import { SquadPicker } from "@/components/squad-picker";
@@ -435,6 +436,7 @@ export default function MatchPageClient() {
         </Link>
         <div className="flex items-center gap-3">
           <CacheInfoBadge ct={ct} id={id} cachedAt={stalestCachedAt} />
+          <ShareEventLink ct={ct} id={id} matchName={match.name} />
           <ShareButton title={match.name} competitorCount={selectedIds.length} />
         </div>
       </div>
