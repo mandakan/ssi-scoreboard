@@ -485,29 +485,18 @@ function singleCompetitorImage(
  */
 function matchImageBgLayers(
   imageUrl: string,
-  imageWidth: number | null,
-  imageHeight: number | null,
+  _imageWidth: number | null,
+  _imageHeight: number | null,
 ) {
-  const MAX_W = Math.round(OG_W * 0.65); // ~780px = rightmost 65%
-
-  // Compute natural width when image is scaled to full OG height
-  const scaledW =
-    imageWidth != null && imageHeight != null && imageHeight > 0
-      ? Math.round(imageWidth * (OG_H / imageHeight))
-      : null;
-
-  // If the image is wide enough at full height, crop to MAX_W (objectFit:cover
-  // keeps it full-height). Otherwise show the full image right-aligned.
-  const displayW = scaledW == null || scaledW >= MAX_W ? MAX_W : scaledW;
-  const containerLeft = OG_W - displayW;
-
+  // Full-width background image — the match cover is the hero element.
+  // A left-to-right gradient keeps text on the left readable.
   return (
     <div
       style={{
         position: "absolute",
-        left: containerLeft,
+        left: 0,
         top: 0,
-        width: displayW,
+        width: OG_W,
         height: OG_H,
         display: "flex",
       }}
@@ -516,19 +505,19 @@ function matchImageBgLayers(
       <img
         src={imageUrl}
         alt=""
-        width={displayW}
+        width={OG_W}
         height={OG_H}
-        style={{ objectFit: "cover", display: "flex" }}
+        style={{ objectFit: "cover", objectPosition: "center", display: "flex" }}
       />
-      {/* Two-stop gradient: solid bg on the left, fading to semi-transparent */}
+      {/* Gradient overlay: opaque left half for text, fading to let image show */}
       <div
         style={{
           position: "absolute",
           left: 0,
           top: 0,
-          width: displayW,
+          width: OG_W,
           height: OG_H,
-          backgroundImage: `linear-gradient(to right, ${C.bg} 0%, ${C.bg} 30%, rgba(10,10,10,0.55) 70%, rgba(10,10,10,0.25) 100%)`,
+          backgroundImage: `linear-gradient(to right, ${C.bg} 0%, rgba(10,10,10,0.85) 35%, rgba(10,10,10,0.4) 65%, rgba(10,10,10,0.15) 100%)`,
           display: "flex",
         }}
       />
