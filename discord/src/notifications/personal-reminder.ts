@@ -22,6 +22,12 @@ import {
   type PersonalReminder,
 } from "../commands/remind";
 
+/** Live status for a specific match, resolved from the shooter dashboard. */
+interface MatchStatus {
+  isRegistered: boolean;
+  isSquadded: boolean;
+}
+
 // Matches keys like g:{guildId}:remind:{userId}
 // Does NOT match g:{guildId}:remind-registrations or g:{guildId}:remind-squads
 const PERSONAL_REMIND_RE = /^g:([^:]+):remind:([^:]+)$/;
@@ -71,9 +77,14 @@ async function processUserReminders(
   let changed = false;
   const baseUrl = env.SCOREBOARD_BASE_URL;
 
+  // Resolve live registration/squad status from the shooter dashboard.
+  // Only fetched when a registration-open or squadding-open trigger is pending.
+  const statusMap = await resolveMatchStatuses(env, guildId, userId, config, todayStr);
+
   for (const reminder of config.matches) {
     const matchRef = `${reminder.matchCt}:${reminder.matchId}`;
     const firedTriggers = config.notifiedEvents[matchRef] ?? [];
+    const status = statusMap.get(matchRef) ?? null;
 
     const triggers: Array<{
       type: string;
@@ -88,7 +99,7 @@ async function processUserReminders(
     ) {
       triggers.push({
         type: "registration-open",
-        embed: buildRegistrationEmbed(reminder, baseUrl),
+        embed: buildRegistrationEmbed(reminder, baseUrl, status),
       });
     }
 
@@ -100,7 +111,7 @@ async function processUserReminders(
     ) {
       triggers.push({
         type: "squadding-open",
-        embed: buildSquaddingEmbed(reminder, baseUrl),
+        embed: buildSquaddingEmbed(reminder, baseUrl, status),
       });
     }
 
@@ -191,19 +202,74 @@ async function processUserReminders(
   }
 }
 
+// ── Status resolution ────────────────────────────────────────────────────────
+
+/**
+ * Fetch the linked shooter's dashboard and build a map of matchRef → live status.
+ * Only called when at least one registration-open or squadding-open trigger is pending,
+ * to avoid unnecessary API calls on days with no status-sensitive triggers.
+ */
+async function resolveMatchStatuses(
+  env: Env,
+  guildId: string,
+  userId: string,
+  config: PersonalReminderConfig,
+  todayStr: string,
+): Promise<Map<string, MatchStatus>> {
+  const statusMap = new Map<string, MatchStatus>();
+
+  // Check if any registration-open or squadding-open trigger is pending today
+  const needsStatus = config.matches.some((m) => {
+    const ref = `${m.matchCt}:${m.matchId}`;
+    const fired = config.notifiedEvents[ref] ?? [];
+    const regToday = m.registrationStarts?.slice(0, 10) === todayStr && !fired.includes("registration-open");
+    const sqToday = m.squaddingStarts?.slice(0, 10) === todayStr && !fired.includes("squadding-open");
+    return regToday || sqToday;
+  });
+
+  if (!needsStatus) return statusMap;
+
+  // Resolve linked shooter
+  const linkRaw = await env.BOT_KV.get(`g:${guildId}:link:${userId}`);
+  if (!linkRaw) return statusMap;
+  const { shooterId } = JSON.parse(linkRaw) as { shooterId: number };
+
+  // Fetch dashboard — upcomingMatches includes live isRegistered/isSquadded
+  try {
+    const client = new ScoreboardClient(env.SCOREBOARD_BASE_URL);
+    const dashboard = await client.getShooterDashboard(shooterId);
+    for (const match of dashboard.upcomingMatches ?? []) {
+      statusMap.set(`${match.ct}:${match.matchId}`, {
+        isRegistered: match.isRegistered,
+        isSquadded: match.isSquadded,
+      });
+    }
+  } catch (err) {
+    console.error(`Failed to fetch dashboard for status check (shooter ${shooterId}):`, err);
+  }
+
+  return statusMap;
+}
+
 // ── Embed builders ──────────────────────────────────────────────────────────
 
 function buildRegistrationEmbed(
   reminder: PersonalReminder,
   baseUrl: string,
+  status: MatchStatus | null,
 ): APIEmbed {
   const matchUrl = `${baseUrl}/match/${reminder.matchCt}/${reminder.matchId}`;
   const ssiUrl = `https://shootnscoreit.com/event/${reminder.matchCt}/${reminder.matchId}/`;
 
-  const lines: string[] = [
-    `Registration opens **today** for **${reminder.matchName}**!`,
-    "",
-  ];
+  const alreadyRegistered = status?.isRegistered ?? false;
+
+  const lines: string[] = [];
+  if (alreadyRegistered) {
+    lines.push(`Registration opens **today** for **${reminder.matchName}** \u2014 you're already registered!`);
+  } else {
+    lines.push(`Registration opens **today** for **${reminder.matchName}**!`);
+  }
+  lines.push("");
 
   if (reminder.registrationStarts) {
     const unixTs = Math.floor(
@@ -218,11 +284,17 @@ function buildRegistrationEmbed(
     lines.push("");
   }
 
-  lines.push(`[Register on SSI](${ssiUrl}) \u00b7 [View on Scoreboard](${matchUrl})`);
+  if (alreadyRegistered) {
+    lines.push(`[View on Scoreboard](${matchUrl}) \u00b7 [SSI](${ssiUrl})`);
+  } else {
+    lines.push(`[Register on SSI](${ssiUrl}) \u00b7 [View on Scoreboard](${matchUrl})`);
+  }
 
   return {
-    title: "Registration opens today!",
-    color: 0xf59e0b, // amber
+    title: alreadyRegistered
+      ? "Registration opens today \u2014 you're in!"
+      : "Registration opens today!",
+    color: alreadyRegistered ? 0x22c55e : 0xf59e0b, // green if done, amber if action needed
     description: lines.join("\n"),
     footer: { text: "Personal match reminder" },
     timestamp: new Date().toISOString(),
@@ -232,14 +304,20 @@ function buildRegistrationEmbed(
 function buildSquaddingEmbed(
   reminder: PersonalReminder,
   baseUrl: string,
+  status: MatchStatus | null,
 ): APIEmbed {
   const matchUrl = `${baseUrl}/match/${reminder.matchCt}/${reminder.matchId}`;
   const ssiUrl = `https://shootnscoreit.com/event/${reminder.matchCt}/${reminder.matchId}/`;
 
-  const lines: string[] = [
-    `Squadding opens **today** for **${reminder.matchName}**!`,
-    "",
-  ];
+  const alreadySquadded = status?.isSquadded ?? false;
+
+  const lines: string[] = [];
+  if (alreadySquadded) {
+    lines.push(`Squadding opens **today** for **${reminder.matchName}** \u2014 you're already in a squad!`);
+  } else {
+    lines.push(`Squadding opens **today** for **${reminder.matchName}**!`);
+  }
+  lines.push("");
 
   if (reminder.squaddingStarts) {
     const unixTs = Math.floor(
@@ -249,15 +327,21 @@ function buildSquaddingEmbed(
     lines.push("");
   }
 
-  lines.push(
-    "Squads are first-come-first-serve \u2014 be ready to pick your squad!",
-  );
+  if (alreadySquadded) {
+    lines.push("Your squad is locked in. Share this with friends who still need to squad!");
+  } else {
+    lines.push(
+      "Squads are first-come-first-serve \u2014 be ready to pick your squad!",
+    );
+  }
   lines.push("");
   lines.push(`[Squad on SSI](${ssiUrl}) \u00b7 [View on Scoreboard](${matchUrl})`);
 
   return {
-    title: "Squadding opens today!",
-    color: 0xef4444, // red — urgent
+    title: alreadySquadded
+      ? "Squadding opens today \u2014 you're set!"
+      : "Squadding opens today!",
+    color: alreadySquadded ? 0x22c55e : 0xef4444, // green if done, red if urgent
     description: lines.join("\n"),
     footer: { text: "Personal match reminder" },
     timestamp: new Date().toISOString(),
