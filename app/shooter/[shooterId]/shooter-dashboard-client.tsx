@@ -1877,7 +1877,7 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
                 </button>
               </CollapsibleTrigger>
             </h2>
-            <CollapsibleContent>
+            {trendsOpen && (
               <div
                 role="region"
                 aria-labelledby="trends-heading"
@@ -1893,7 +1893,7 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
                   divisionFilter={effectiveFilter}
                 />
               </div>
-            </CollapsibleContent>
+            )}
           </section>
         </Collapsible>
       )}
