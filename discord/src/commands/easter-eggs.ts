@@ -49,29 +49,20 @@ export function handleDq(targetUserId?: string): { content: string; embeds: APIE
 // /standby — random-delay start signal
 // ---------------------------------------------------------------------------
 
-// No real delay in a slash command (we respond instantly), but we simulate
-// the tension with the RO sequence. The "delay" is narrative flavour.
-const STANDBY_DELAYS = [
-  "1.2",
-  "1.7",
-  "2.1",
-  "2.5",
-  "0.9",
-  "3.0",
-  "1.4",
-  "2.8",
-  "1.1",
-  "2.3",
-] as const;
+// Standby uses a real delay: the deferred response shows Discord's "thinking…"
+// indicator (building tension), then after 1–3 seconds the BEEP lands.
+
+/** Random delay in ms between 1000 and 3000. */
+export function getStandbyDelayMs(): number {
+  return 1000 + Math.floor(Math.random() * 2000);
+}
 
 export function handleStandby(): { content: string; embeds: APIEmbed[] } {
-  const delay = pick(STANDBY_DELAYS);
   const content =
     `*Load and make ready...*\n` +
     `*Are you ready?*\n` +
     `*Standby...*\n\n` +
-    `# BEEP!\n` +
-    `-# (${delay}s delay)`;
+    `# BEEP!`;
 
   return { content, embeds: [] };
 }

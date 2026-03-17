@@ -23,7 +23,7 @@ import { handleMatch } from "./commands/match";
 import { handleShooter, handleShooterById } from "./commands/shooter";
 import { handleLink, handleUnlink, getLinkedShooter } from "./commands/link";
 import { handleHelp, handleIntroduction, WELCOME_EMBED } from "./commands/help";
-import { handleDq, handleStandby, handleMike, handleDelta, handleProcedural } from "./commands/easter-eggs";
+import { handleDq, handleStandby, getStandbyDelayMs, handleMike, handleDelta, handleProcedural } from "./commands/easter-eggs";
 import { handleLinked } from "./commands/linked";
 import { handleLeaderboard } from "./commands/leaderboard";
 import { handleSummary } from "./commands/summary";
@@ -245,14 +245,14 @@ function handleCommand(
   }
 
   // Easter-egg commands — synchronous, public (everyone should see the fun)
-  if (commandName === "dq" || commandName === "standby" || commandName === "mike" ||
+  // /standby is deferred (uses a real delay) — handled below in handleDeferredCommand
+  if (commandName === "dq" || commandName === "mike" ||
       commandName === "delta" || commandName === "procedural") {
     const opts = (data.options ?? []) as Array<{ name: string; value: unknown }>;
     const targetUser = opts.find((o) => o.name === "target")?.value as string | undefined;
     let result: { content: string; embeds: unknown[] };
     switch (commandName) {
       case "dq": result = handleDq(targetUser); break;
-      case "standby": result = handleStandby(); break;
       case "mike": result = handleMike(); break;
       case "delta": result = handleDelta(); break;
       case "procedural": result = handleProcedural(targetUser); break;
@@ -538,6 +538,15 @@ async function handleDeferredCommand(
         );
         content = squadResult.content;
         embeds = squadResult.embeds;
+        break;
+      }
+
+      case "standby": {
+        const delayMs = getStandbyDelayMs();
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        const standbyResult = handleStandby();
+        content = standbyResult.content;
+        embeds = standbyResult.embeds;
         break;
       }
 
