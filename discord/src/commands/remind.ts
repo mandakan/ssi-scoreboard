@@ -374,7 +374,7 @@ function getMatchAction(match: UpcomingMatch): MatchAction {
   if (squaddingOpen) {
     const closeDays = daysUntil(match.squaddingCloses);
     const closeNote = closeDays != null ? ` (closes in ${closeDays}d)` : "";
-    return { emoji: "\u26A1", label: `Pick your squad${closeNote}`, priority: 3 };
+    return { emoji: "\u26A1", label: `Squadding open${closeNote}`, priority: 3 };
   }
 
   // Registration open
@@ -384,7 +384,7 @@ function getMatchAction(match: UpcomingMatch): MatchAction {
   if (regOpen) {
     const closeDays = daysUntil(match.registrationCloses);
     const closeNote = closeDays != null ? ` (closes in ${closeDays}d)` : "";
-    return { emoji: "\u{1F4DD}", label: `Register now${closeNote}`, priority: 4 };
+    return { emoji: "\u{1F4DD}", label: `Registration open${closeNote}`, priority: 4 };
   }
 
   // Registration opens soon

@@ -325,7 +325,7 @@ function getMatchAction(match: UpcomingMatch): MatchAction {
   if (squaddingOpen) {
     const closeDays = daysUntil(match.squaddingCloses);
     return {
-      label: "Pick your squad",
+      label: "Squadding open",
       sublabel: closeDays != null ? `closes in ${closeDays}d` : undefined,
       variant: "action",
       ssiLink: true,
@@ -340,7 +340,7 @@ function getMatchAction(match: UpcomingMatch): MatchAction {
   if (regOpen) {
     const closeDays = daysUntil(match.registrationCloses);
     return {
-      label: "Register now",
+      label: "Registration open",
       sublabel: closeDays != null ? `closes in ${closeDays}d` : undefined,
       variant: "action",
       ssiLink: true,
