@@ -55,6 +55,11 @@ export const COMMANDS = [
     type: ApplicationCommandType.ChatInput,
   },
   {
+    name: "linked",
+    description: "Show all linked and unlinked members in this server",
+    type: ApplicationCommandType.ChatInput,
+  },
+  {
     name: "me",
     description: "Show your own shooter dashboard (requires /link first)",
     type: ApplicationCommandType.ChatInput,

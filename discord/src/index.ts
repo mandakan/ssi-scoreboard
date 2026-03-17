@@ -23,6 +23,7 @@ import { handleMatch } from "./commands/match";
 import { handleShooter, handleShooterById } from "./commands/shooter";
 import { handleLink, handleUnlink, getLinkedShooter } from "./commands/link";
 import { handleHelp, handleIntroduction, WELCOME_EMBED } from "./commands/help";
+import { handleLinked } from "./commands/linked";
 import { handleLeaderboard } from "./commands/leaderboard";
 import { handleSummary } from "./commands/summary";
 import { handleWatch, handleUnwatch } from "./commands/watch";
@@ -136,7 +137,7 @@ async function maybeWelcome(
 }
 
 // Commands where the response is only visible to the caller
-const EPHEMERAL_COMMANDS = new Set(["help", "link", "unlink", "me", "remind"]);
+const EPHEMERAL_COMMANDS = new Set(["help", "link", "unlink", "me", "remind", "linked"]);
 
 /**
  * Edit the original deferred response via the Discord webhook API.
@@ -354,6 +355,15 @@ async function handleDeferredCommand(
           break;
         }
         content = await handleUnlink(env.BOT_KV, guildId, unlinkUserId);
+        break;
+      }
+
+      case "linked": {
+        if (!guildId) {
+          content = "This command can only be used in a server, not in DMs.";
+          break;
+        }
+        content = await handleLinked(env.BOT_KV, env.DISCORD_BOT_TOKEN, guildId);
         break;
       }
 

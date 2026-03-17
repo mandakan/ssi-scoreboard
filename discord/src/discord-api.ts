@@ -100,6 +100,56 @@ export async function pinMessage(
   return true;
 }
 
+/** Minimal guild member shape returned by the Discord REST API. */
+export interface GuildMember {
+  user?: { id: string; username: string; global_name?: string | null; bot?: boolean };
+  nick?: string | null;
+}
+
+/**
+ * List all (non-bot) members in a guild.
+ * Requires the GUILD_MEMBERS privileged intent enabled in the Developer Portal.
+ * Paginates automatically (1000 per page).
+ */
+export async function listGuildMembers(
+  botToken: string,
+  guildId: string,
+): Promise<GuildMember[]> {
+  const members: GuildMember[] = [];
+  let after = "0";
+
+  for (;;) {
+    const resp = await fetch(
+      `${DISCORD_API}/guilds/${guildId}/members?limit=1000&after=${after}`,
+      {
+        headers: { Authorization: `Bot ${botToken}` },
+      },
+    );
+
+    if (!resp.ok) {
+      console.error(
+        `Discord API error: ${resp.status} listing members for guild ${guildId}`,
+      );
+      break;
+    }
+
+    const batch = (await resp.json()) as GuildMember[];
+    if (batch.length === 0) break;
+
+    // Filter out bots
+    for (const m of batch) {
+      if (m.user && !m.user.bot) {
+        members.push(m);
+      }
+    }
+
+    after = batch[batch.length - 1]?.user?.id ?? "0";
+    if (batch.length < 1000) break;
+  }
+
+  return members;
+}
+
 /**
  * Send a direct message to a user via the bot.
  * Creates (or retrieves) a DM channel, then posts to it.
