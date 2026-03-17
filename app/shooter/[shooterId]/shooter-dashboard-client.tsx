@@ -1605,6 +1605,7 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
   );
   const [historyOpen, setHistoryOpen] = useState(true);
   const [upcomingOpen, setUpcomingOpen] = useState(true);
+  const [trendsOpen, setTrendsOpen] = useState(false);
   const [divisionFilter, setDivisionFilter] = useState<string | null | "unset">("unset");
 
   // Derive divisions and default filter once data loads
@@ -1854,28 +1855,47 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
         </section>
       )}
 
-      {/* ── Trend charts ───────────────────────────────────────────────── */}
+      {/* ── Trend charts (collapsed by default) ────────────────────── */}
       {hasChartData && (
-        <section
-          aria-labelledby="trends-heading"
-          className="border border-border rounded-xl p-4"
-        >
-          <h2
-            id="trends-heading"
-            className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4"
-          >
-            Performance trends
-          </h2>
-          <DivisionFilter
-            divisions={divisions}
-            selected={effectiveFilter}
-            onChange={handleFilterChange}
-          />
-          <TrendChart
-            matches={filteredMatches}
-            divisionFilter={effectiveFilter}
-          />
-        </section>
+        <Collapsible open={trendsOpen} onOpenChange={setTrendsOpen} asChild>
+          <section className="border border-border rounded-xl p-4">
+            <h2 className="text-sm font-semibold m-0 leading-none">
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  id="trends-heading"
+                  className="flex w-full items-center justify-between text-left gap-2 min-h-[2.75rem]"
+                >
+                  <span className="text-muted-foreground uppercase tracking-wide">
+                    Performance trends
+                  </span>
+                  {trendsOpen ? (
+                    <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
+                  )}
+                </button>
+              </CollapsibleTrigger>
+            </h2>
+            <CollapsibleContent>
+              <div
+                role="region"
+                aria-labelledby="trends-heading"
+                className="mt-3"
+              >
+                <DivisionFilter
+                  divisions={divisions}
+                  selected={effectiveFilter}
+                  onChange={handleFilterChange}
+                />
+                <TrendChart
+                  matches={filteredMatches}
+                  divisionFilter={effectiveFilter}
+                />
+              </div>
+            </CollapsibleContent>
+          </section>
+        </Collapsible>
       )}
 
       {/* ── Upcoming matches ──────────────────────────────────────────── */}
