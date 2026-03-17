@@ -55,6 +55,12 @@ interface RawMatchEvent {
   level?: string | null;
   region?: string | null;
   get_full_rule_display?: string | null;
+  registration_starts?: string | null;
+  registration_closes?: string | null;
+  squadding_starts?: string | null;
+  squadding_closes?: string | null;
+  is_registration_possible?: boolean;
+  is_squadding_possible?: boolean;
   competitors_approved_w_wo_results_not_dnf?: RawCompetitor[];
   squads?: RawSquad[] | null;
 }
@@ -87,30 +93,68 @@ interface RawUpcomingStatusData {
 /** TTL for the lightweight upcoming status cache — 30 minutes. */
 const UPCOMING_STATUS_TTL = 1800;
 
+/** Result from resolveShooterStatus — includes fresh registration/squadding dates. */
+interface ShooterStatusResult {
+  ref: string;
+  competitorId: number;
+  isRegistered: boolean;
+  isSquadded: boolean;
+  // Fresh dates from the API (may be null if the source didn't include them)
+  registrationStarts: string | null;
+  registrationCloses: string | null;
+  squaddingStarts: string | null;
+  squaddingCloses: string | null;
+  isRegistrationPossible: boolean;
+  isSquaddingPossible: boolean;
+}
+
 /**
  * Extract registration + squad status for a specific shooter from match event data.
  * Works with both the full RawMatchEvent (from cached GetMatch) and the lightweight
  * RawUpcomingStatusEvent (from GetUpcomingStatus) since they share the same shape
  * for competitor/squad ID fields.
+ *
+ * Also extracts fresh registration/squadding dates from the event data to override
+ * potentially stale values in the matches domain table (e.g. rows written before
+ * migration 0007 have null for these columns).
  */
 function resolveShooterStatus(
   ref: string,
-  ev: { competitors_approved_w_wo_results_not_dnf?: Array<{ id: string; shooter?: { id: string } | null }>; squads?: Array<{ competitors?: Array<{ id: string }> | null }> | null },
+  ev: {
+    competitors_approved_w_wo_results_not_dnf?: Array<{ id: string; shooter?: { id: string } | null }>;
+    squads?: Array<{ competitors?: Array<{ id: string }> | null }> | null;
+    registration_starts?: string | null;
+    registration_closes?: string | null;
+    squadding_starts?: string | null;
+    squadding_closes?: string | null;
+    is_registration_possible?: boolean;
+    is_squadding_possible?: boolean;
+  },
   shooterId: number,
-): { ref: string; competitorId: number; isRegistered: boolean; isSquadded: boolean } {
+): ShooterStatusResult {
   const competitors = ev.competitors_approved_w_wo_results_not_dnf ?? [];
   const competitor = competitors.find(
     (c) => decodeShooterId(c.shooter?.id) === shooterId,
   );
-  if (!competitor) {
-    return { ref, competitorId: 0, isRegistered: false, isSquadded: false };
-  }
+  const base: ShooterStatusResult = {
+    ref,
+    competitorId: 0,
+    isRegistered: false,
+    isSquadded: false,
+    registrationStarts: ev.registration_starts ?? null,
+    registrationCloses: ev.registration_closes ?? null,
+    squaddingStarts: ev.squadding_starts ?? null,
+    squaddingCloses: ev.squadding_closes ?? null,
+    isRegistrationPossible: ev.is_registration_possible ?? false,
+    isSquaddingPossible: ev.is_squadding_possible ?? false,
+  };
+  if (!competitor) return base;
   const competitorId = parseInt(competitor.id, 10) || 0;
   const squads = ev.squads ?? [];
   const isSquadded = squads.some(
     (s) => s.competitors?.some((sc) => sc.id === competitor.id) ?? false,
   );
-  return { ref, competitorId, isRegistered: true, isSquadded };
+  return { ...base, competitorId, isRegistered: true, isSquadded };
 }
 
 // ─── Computation helpers ──────────────────────────────────────────────────────
@@ -503,10 +547,10 @@ export async function GET(
     const statusResults = await Promise.all(
       upcomingRefs.map(async (ref) => {
         const [ct, ...idParts] = ref.split(":");
-        if (!ct) return { ref, competitorId: 0, isRegistered: false, isSquadded: false };
+        if (!ct) return { ref, competitorId: 0, isRegistered: false, isSquadded: false, registrationStarts: null, registrationCloses: null, squaddingStarts: null, squaddingCloses: null, isRegistrationPossible: false, isSquaddingPossible: false };
         const matchId = idParts.join(":");
         const ctNum = parseInt(ct, 10);
-        if (isNaN(ctNum)) return { ref, competitorId: 0, isRegistered: false, isSquadded: false };
+        if (isNaN(ctNum)) return { ref, competitorId: 0, isRegistered: false, isSquadded: false, registrationStarts: null, registrationCloses: null, squaddingStarts: null, squaddingCloses: null, isRegistrationPossible: false, isSquaddingPossible: false };
 
         // Tier 1: check cached GetMatch data (no API call)
         const matchKey = gqlCacheKey("GetMatch", { ct: ctNum, id: matchId });
@@ -533,7 +577,7 @@ export async function GET(
           // API error — return unknown status
         }
 
-        return { ref, competitorId: 0, isRegistered: false, isSquadded: false };
+        return { ref, competitorId: 0, isRegistered: false, isSquadded: false, registrationStarts: null, registrationCloses: null, squaddingStarts: null, squaddingCloses: null, isRegistrationPossible: false, isSquaddingPossible: false };
       }),
     );
     const statusMap = new Map(statusResults.map((s) => [s.ref, s]));
@@ -547,6 +591,8 @@ export async function GET(
       const matchId = idParts.join(":");
       const status = statusMap.get(ref);
 
+      // Prefer fresh dates from the status query (API/cache) over the matches
+      // domain table, which may have nulls for rows written before migration 0007.
       upcomingMatches.push({
         ct,
         matchId,
@@ -556,12 +602,12 @@ export async function GET(
         level: meta.level,
         division: profile?.division ?? null,
         competitorId: status?.competitorId ?? 0,
-        registrationStarts: meta.registrationStarts,
-        registrationCloses: meta.registrationCloses,
-        isRegistrationPossible: meta.isRegistrationPossible,
-        squaddingStarts: meta.squaddingStarts,
-        squaddingCloses: meta.squaddingCloses,
-        isSquaddingPossible: meta.isSquaddingPossible,
+        registrationStarts: status?.registrationStarts ?? meta.registrationStarts,
+        registrationCloses: status?.registrationCloses ?? meta.registrationCloses,
+        isRegistrationPossible: status?.isRegistrationPossible ?? meta.isRegistrationPossible,
+        squaddingStarts: status?.squaddingStarts ?? meta.squaddingStarts,
+        squaddingCloses: status?.squaddingCloses ?? meta.squaddingCloses,
+        isSquaddingPossible: status?.isSquaddingPossible ?? meta.isSquaddingPossible,
         isRegistered: status?.isRegistered ?? false,
         isSquadded: status?.isSquadded ?? false,
       });

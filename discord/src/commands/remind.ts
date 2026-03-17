@@ -445,14 +445,25 @@ async function handleUpcoming(
     };
   }
 
-  // Filter to the requested window
+  // Filter to matches with actions or start dates within the requested window.
+  // A match qualifies if ANY relevant date falls within N days:
+  // match start, registration close, or squadding close.
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() + days);
   const cutoffStr = cutoff.toISOString();
 
   const inWindow = upcoming.filter((m) => {
     if (!m.date) return true; // no date = include (can't determine)
-    return m.date <= cutoffStr;
+    // Match starts within window
+    if (m.date <= cutoffStr) return true;
+    // Registration closes within window (action needed soon even if match is later)
+    if (m.registrationCloses && m.registrationCloses <= cutoffStr) return true;
+    // Squadding closes within window
+    if (m.squaddingCloses && m.squaddingCloses <= cutoffStr) return true;
+    // Registration or squadding opens within window
+    if (m.registrationStarts && m.registrationStarts <= cutoffStr) return true;
+    if (m.squaddingStarts && m.squaddingStarts <= cutoffStr) return true;
+    return false;
   });
 
   if (inWindow.length === 0) {
