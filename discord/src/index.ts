@@ -160,6 +160,27 @@ async function editOriginalResponse(
   }
 }
 
+/**
+ * Send a follow-up message via the Discord webhook API.
+ * Each follow-up appears as a new message in the channel.
+ */
+async function sendFollowupMessage(
+  appId: string,
+  token: string,
+  data: { content?: string; embeds?: unknown[] },
+): Promise<void> {
+  const url = `https://discord.com/api/v10/webhooks/${appId}/${token}`;
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    console.error(`Failed to send follow-up message: ${resp.status} ${text}`);
+  }
+}
+
 // --- Autocomplete ---
 
 async function handleAutocompleteInteraction(
@@ -563,10 +584,26 @@ async function handleDeferredCommand(
       }
     }
 
-    await editOriginalResponse(env.DISCORD_APP_ID, token, {
-      content: content || undefined,
-      embeds: embeds.length > 0 ? embeds : undefined,
-    });
+    // Discord has a 6000-char total embed limit per message.
+    // When there are multiple embeds, send the first with the original response
+    // and the rest as follow-up messages to avoid hitting the limit.
+    if (embeds.length > 1) {
+      const [firstEmbed, ...restEmbeds] = embeds;
+      await editOriginalResponse(env.DISCORD_APP_ID, token, {
+        content: content || undefined,
+        embeds: [firstEmbed],
+      });
+      for (const embed of restEmbeds) {
+        await sendFollowupMessage(env.DISCORD_APP_ID, token, {
+          embeds: [embed],
+        });
+      }
+    } else {
+      await editOriginalResponse(env.DISCORD_APP_ID, token, {
+        content: content || undefined,
+        embeds: embeds.length > 0 ? embeds : undefined,
+      });
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error(`Command /${commandName} failed:`, message);
