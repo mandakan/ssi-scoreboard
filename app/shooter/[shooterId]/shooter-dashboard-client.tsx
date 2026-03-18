@@ -70,6 +70,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { ShareDrawer } from "@/components/share-drawer";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useShooterDashboardQuery } from "@/lib/queries";
 import { triggerBackfill, addMatchToShooter } from "@/lib/api";
@@ -1691,14 +1692,24 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
 
   return (
     <main className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-6 animate-fade-in">
-      {/* ── Back navigation ───────────────────────────────────────────── */}
-      <Link
-        href={from ?? "/"}
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground self-start"
-      >
-        <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
-        {from ? "Back to match" : "All matches"}
-      </Link>
+      {/* ── Back navigation + share ────────────────────────────────────── */}
+      <div className="flex items-center justify-between">
+        <Link
+          href={from ?? "/"}
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
+          {from ? "Back to match" : "All matches"}
+        </Link>
+        <ShareDrawer
+          title="Share shooter profile"
+          description="Share this shooter's dashboard — the link includes a rich preview image for social media."
+          sharePath={`/shooter/${String(shooterId)}`}
+          ogImageUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/api/og/shooter/${String(shooterId)}`}
+          ogImageAlt={`Preview of ${displayName}'s profile on SSI Scoreboard`}
+          shareTitle={`${displayName} — SSI Scoreboard`}
+        />
+      </div>
       {/* ── Identity card ─────────────────────────────────────────────── */}
       <section
         aria-labelledby="identity-heading"

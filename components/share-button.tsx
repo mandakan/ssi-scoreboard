@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Share2, Check } from "lucide-react";
+import { Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ShareDrawer } from "@/components/share-drawer";
 
 interface ShareButtonProps {
   title?: string;
@@ -10,75 +10,72 @@ interface ShareButtonProps {
 }
 
 export function ShareButton({ title, competitorCount = 0 }: ShareButtonProps) {
-  const [copied, setCopied] = useState(false);
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const currentPath =
+    typeof window !== "undefined"
+      ? window.location.pathname + window.location.search
+      : "";
+
+  // OG image URL: include competitors param if any are selected
+  const ogPath =
+    typeof window !== "undefined"
+      ? window.location.pathname.replace(/^\/match\//, "/api/og/match/")
+      : "";
+  const competitorsParam =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("competitors")
+      : null;
+  const ogImageUrl = competitorsParam
+    ? `${origin}${ogPath}?competitors=${competitorsParam}`
+    : `${origin}${ogPath}`;
 
   const competitorSuffix =
     competitorCount > 0
-      ? ` · ${competitorCount} competitor${competitorCount === 1 ? "" : "s"}`
+      ? ` with ${competitorCount} competitor${competitorCount === 1 ? "" : "s"}`
       : "";
 
-  async function copyToClipboard(url: string) {
-    await navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  async function handleShare() {
-    const url = window.location.href;
-    const text =
-      competitorCount > 0
-        ? `${competitorCount} competitor${competitorCount === 1 ? "" : "s"} selected`
-        : undefined;
-
-    if (navigator.share) {
-      try {
-        const shareData: ShareData = { url, title };
-        if (text) shareData.text = text;
-        await navigator.share(shareData);
-      } catch (err) {
-        if ((err as { name?: unknown }).name === "AbortError") return;
-        await copyToClipboard(url);
-      }
-    } else {
-      await copyToClipboard(url);
-    }
-  }
-
-  const idleLabel =
+  const description =
     competitorCount > 0
-      ? `Share comparison link with ${competitorCount} competitor${competitorCount === 1 ? "" : "s"}`
-      : "Share match link";
-  const copiedLabel =
-    competitorCount > 0
-      ? `Link copied with ${competitorCount} competitor${competitorCount === 1 ? "" : "s"}`
-      : "Link copied";
+      ? `Share this comparison of ${competitorCount} competitor${competitorCount === 1 ? "" : "s"} — the link includes a rich preview image for social media.`
+      : "Share this match page — the link includes a rich preview image for social media.";
 
   return (
-    <Button
-      variant={copied ? "default" : "ghost"}
-      size="sm"
-      onClick={handleShare}
-      aria-label={copied ? copiedLabel : idleLabel}
-      aria-live="polite"
-      title={idleLabel}
-      className="transition-colors duration-150"
-    >
-      {copied ? (
-        <Check className="w-4 h-4" />
-      ) : (
-        <span className="relative inline-flex">
-          <Share2 className="w-4 h-4" />
-          {competitorCount > 0 && (
-            <span
-              aria-hidden="true"
-              className="absolute -top-1.5 -right-1.5 flex size-3.5 items-center justify-center rounded-full bg-primary text-[10px] font-bold leading-none text-primary-foreground tabular-nums"
-            >
-              {competitorCount}
-            </span>
-          )}
-        </span>
-      )}
-      {copied ? `Copied${competitorSuffix}` : "Share"}
-    </Button>
+    <ShareDrawer
+      title={`Share${competitorSuffix}`}
+      description={description}
+      sharePath={currentPath}
+      ogImageUrl={ogImageUrl}
+      ogImageAlt={`Preview of ${title ?? "this match"} on SSI Scoreboard`}
+      shareTitle={title}
+      trigger={
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label={
+            competitorCount > 0
+              ? `Share comparison link with ${competitorCount} competitor${competitorCount === 1 ? "" : "s"}`
+              : "Share match link"
+          }
+          title={
+            competitorCount > 0
+              ? `Share comparison link with ${competitorCount} competitor${competitorCount === 1 ? "" : "s"}`
+              : "Share match link"
+          }
+        >
+          <span className="relative inline-flex">
+            <Share2 className="w-4 h-4" />
+            {competitorCount > 0 && (
+              <span
+                aria-hidden="true"
+                className="absolute -top-1.5 -right-1.5 flex size-3.5 items-center justify-center rounded-full bg-primary text-[10px] font-bold leading-none text-primary-foreground tabular-nums"
+              >
+                {competitorCount}
+              </span>
+            )}
+          </span>
+          Share
+        </Button>
+      }
+    />
   );
 }
