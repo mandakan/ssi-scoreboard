@@ -128,6 +128,14 @@ const HELP_EMBED: APIEmbed = {
       inline: false,
     },
     {
+      name: "/timezone <timezone> [hour]",
+      value:
+        "Set when daily notifications arrive for this server. " +
+        "Uses IANA timezones (e.g. `Europe/Stockholm`, `America/New_York`). " +
+        "Default: 10:00 Europe/Stockholm (CET).",
+      inline: false,
+    },
+    {
       name: "Tip: restrict to a channel",
       value:
         "To keep bot output in a dedicated channel, go to Server Settings \u2192 Channels \u2192 " +

@@ -21,6 +21,7 @@ import {
   type PersonalReminderConfig,
   type PersonalReminder,
 } from "../commands/remind";
+import { isGuildNotificationHour } from "../guild-settings";
 
 /** Live status for a specific match, resolved from the shooter dashboard. */
 interface MatchStatus {
@@ -43,12 +44,23 @@ export async function pollPersonalReminders(env: Env): Promise<void> {
   const todayStr = new Date().toISOString().slice(0, 10);
   const listed = await env.BOT_KV.list({ prefix: "g:" });
 
+  // Cache per-guild notification hour check to avoid redundant KV reads
+  const guildHourCache = new Map<string, boolean>();
+
   for (const key of listed.keys) {
     const match = PERSONAL_REMIND_RE.exec(key.name);
     if (!match) continue;
 
     const guildId = match[1];
     const userId = match[2];
+
+    // Check if it's notification hour for this guild
+    let isHour = guildHourCache.get(guildId);
+    if (isHour === undefined) {
+      isHour = await isGuildNotificationHour(env.BOT_KV, guildId);
+      guildHourCache.set(guildId, isHour);
+    }
+    if (!isHour) continue;
 
     try {
       await processUserReminders(env, guildId, userId, todayStr);

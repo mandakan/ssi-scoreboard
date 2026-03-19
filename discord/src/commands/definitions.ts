@@ -275,6 +275,27 @@ export const COMMANDS = [
       },
     ],
   },
+  {
+    name: "timezone",
+    description: "Set when daily notifications arrive (timezone + hour)",
+    type: ApplicationCommandType.ChatInput,
+    options: [
+      {
+        name: "timezone",
+        description: "IANA timezone (e.g. Europe/Stockholm, America/New_York, Asia/Tokyo)",
+        type: ApplicationCommandOptionType.String,
+        required: true,
+      },
+      {
+        name: "hour",
+        description: "Hour to send daily notifications (0–23, default: 10)",
+        type: ApplicationCommandOptionType.Integer,
+        required: false,
+        min_value: 0,
+        max_value: 23,
+      },
+    ],
+  },
   // --- Easter eggs ---
   {
     name: "dq",

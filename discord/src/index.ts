@@ -32,6 +32,7 @@ import { handleRemindRegistrations } from "./commands/remind-registrations";
 import { handleRemindSquads } from "./commands/remind-squads";
 import { handleRemind } from "./commands/remind";
 import { handlePredict } from "./commands/predict";
+import { handleTimezone } from "./commands/timezone";
 import { handleAutocomplete } from "./commands/autocomplete";
 import { pollWatchedMatches } from "./notifications/stage-scored";
 import { pollRegistrationReminders } from "./notifications/registration-reminder";
@@ -91,28 +92,13 @@ const worker: ExportedHandler<Env> = {
   },
 
   async scheduled(_, env) {
-    // Real-time pollers — run on every cron cycle (every 2 min)
-    const tasks: Promise<void>[] = [
+    const results = await Promise.allSettled([
       pollWatchedMatches(env),
+      pollRegistrationReminders(env),
+      pollSquadReminders(env),
+      pollPersonalReminders(env),
       pollAchievements(env),
-    ];
-
-    // Daily pollers — only run during the configured notification hour.
-    // Defaults to 10:00 Europe/Stockholm (CET/CEST).
-    // Each poller still has its own lastRunDate dedup, so multiple cycles
-    // within the same hour are safe — only the first one actually sends.
-    const tz = env.NOTIFICATION_TIMEZONE || "Europe/Stockholm";
-    const targetHour = parseInt(env.NOTIFICATION_HOUR || "10", 10);
-    const localHour = getLocalHour(tz);
-    if (localHour === targetHour) {
-      tasks.push(
-        pollRegistrationReminders(env),
-        pollSquadReminders(env),
-        pollPersonalReminders(env),
-      );
-    }
-
-    const results = await Promise.allSettled(tasks);
+    ]);
     for (const result of results) {
       if (result.status === "rejected") {
         console.error("Cron task failed:", result.reason);
@@ -579,6 +565,20 @@ async function handleDeferredCommand(
         break;
       }
 
+      case "timezone": {
+        if (!guildId) {
+          content = "This command can only be used in a server, not in DMs.";
+          break;
+        }
+        content = await handleTimezone(
+          env.BOT_KV,
+          guildId,
+          options.timezone as string,
+          options.hour as number | undefined,
+        );
+        break;
+      }
+
       case "standby": {
         const delayMs = getStandbyDelayMs();
         await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -630,16 +630,6 @@ async function handleDeferredCommand(
       console.error("Failed to send error response:", editErr);
     }
   }
-}
-
-/** Get the current hour (0–23) in the given IANA timezone. */
-function getLocalHour(timezone: string): number {
-  const formatter = new Intl.DateTimeFormat("en", {
-    hour: "numeric",
-    hour12: false,
-    timeZone: timezone,
-  });
-  return parseInt(formatter.format(new Date()), 10);
 }
 
 function jsonResponse(body: unknown, status = 200): Response {

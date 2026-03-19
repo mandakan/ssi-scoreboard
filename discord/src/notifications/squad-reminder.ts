@@ -21,6 +21,7 @@ import {
   getGuildLinkedShootersWithUsers,
   type LinkedShooterWithUser,
 } from "../linked-shooters";
+import { isGuildNotificationHour } from "../guild-settings";
 
 const REMINDER_SUFFIX = ":remind-squads";
 
@@ -38,7 +39,7 @@ export async function runSquadReminderForGuild(
 ): Promise<void> {
   const client = new ScoreboardClient(env.SCOREBOARD_BASE_URL);
   const todayStr = new Date().toISOString().slice(0, 10);
-  await processGuildSquadReminder(env, client, guildId, todayStr);
+  await processGuildSquadReminder(env, client, guildId, todayStr, true);
 }
 
 export async function pollSquadReminders(env: Env): Promise<void> {
@@ -107,6 +108,7 @@ async function processGuildSquadReminder(
   client: ScoreboardClient,
   guildId: string,
   todayStr: string,
+  skipTimeCheck = false,
 ): Promise<void> {
   const raw = await env.BOT_KV.get(squadReminderKey(guildId));
   if (!raw) return;
@@ -115,6 +117,9 @@ async function processGuildSquadReminder(
 
   // Already ran today — skip
   if (config.lastRunDate === todayStr) return;
+
+  // Wait until the guild's configured notification hour (default 10:00 CET)
+  if (!skipTimeCheck && !(await isGuildNotificationHour(env.BOT_KV, guildId))) return;
 
   // Get all linked shooters with Discord user IDs
   const linkedShooters = await getGuildLinkedShootersWithUsers(env.BOT_KV, guildId);

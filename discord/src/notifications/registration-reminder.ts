@@ -15,6 +15,7 @@ import {
   formatDiscipline,
   type RegistrationReminderConfig,
 } from "../commands/remind-registrations";
+import { isGuildNotificationHour } from "../guild-settings";
 
 const REMINDER_SUFFIX = ":remind-registrations";
 
@@ -28,7 +29,7 @@ export async function runRegistrationReminderForGuild(
 ): Promise<void> {
   const client = new ScoreboardClient(env.SCOREBOARD_BASE_URL);
   const todayStr = new Date().toISOString().slice(0, 10);
-  await processGuildReminder(env, client, guildId, todayStr);
+  await processGuildReminder(env, client, guildId, todayStr, true);
 }
 
 export async function pollRegistrationReminders(env: Env): Promise<void> {
@@ -55,6 +56,7 @@ async function processGuildReminder(
   client: ScoreboardClient,
   guildId: string,
   todayStr: string,
+  skipTimeCheck = false,
 ): Promise<void> {
   const raw = await env.BOT_KV.get(reminderKey(guildId));
   if (!raw) return;
@@ -63,6 +65,9 @@ async function processGuildReminder(
 
   // Already posted today — skip
   if (config.lastRunDate === todayStr) return;
+
+  // Wait until the guild's configured notification hour (default 10:00 CET)
+  if (!skipTimeCheck && !(await isGuildNotificationHour(env.BOT_KV, guildId))) return;
 
   // Compute date window
   const endDate = new Date();
