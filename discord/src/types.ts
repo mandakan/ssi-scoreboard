@@ -8,6 +8,12 @@ export interface Env {
   // Variables (set in wrangler.toml or secrets)
   SCOREBOARD_BASE_URL: string;
 
+  // Notification scheduling (set in wrangler.toml [vars])
+  // IANA timezone for daily notifications (e.g. "Europe/Stockholm"). Default: "Europe/Stockholm".
+  NOTIFICATION_TIMEZONE?: string;
+  // Hour (0–23) in that timezone to fire daily notifications. Default: "10".
+  NOTIFICATION_HOUR?: string;
+
   // KV namespace for shooter mapping + watch state
   BOT_KV: KVNamespace;
 }

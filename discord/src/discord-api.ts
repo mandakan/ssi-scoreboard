@@ -23,6 +23,10 @@ export async function postChannelMessage(
     body: JSON.stringify({
       content: content || undefined,
       embeds: embeds && embeds.length > 0 ? embeds : undefined,
+      // Suppress all @mention pings. The mention text still renders as
+      // clickable usernames, but no notification is sent. To re-enable
+      // pings, change parse to ["users", "everyone"] or remove the field.
+      allowed_mentions: { parse: [] },
     }),
   });
 
@@ -58,6 +62,7 @@ export async function editChannelMessage(
       body: JSON.stringify({
         content: content || undefined,
         embeds: embeds && embeds.length > 0 ? embeds : undefined,
+        allowed_mentions: { parse: [] },
       }),
     },
   );

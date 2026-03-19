@@ -23,6 +23,10 @@ routes = [
 [vars]
 # Override per-environment below; these are safe defaults for development
 SCOREBOARD_BASE_URL = "https://scoreboard.urdr.dev"
+# Daily notifications (registration, squad, personal) fire at this hour
+# in this timezone. Real-time pollers (stage-scored, achievements) are unaffected.
+NOTIFICATION_TIMEZONE = "Europe/Stockholm"
+NOTIFICATION_HOUR = "10"
 
 [[kv_namespaces]]
 binding = "BOT_KV"
