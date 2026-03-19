@@ -33,7 +33,7 @@ const HELP_EMBED: APIEmbed = {
       value:
         "Link your Discord account to your SSI shooter profile. " +
         "Enables `/me`, and makes you appear in `/summary`, `/leaderboard`, " +
-        "`/watch` notifications, and `/remind-squads` @mentions.",
+        "`/watch` notifications, and `/remind-squads` reminders.",
       inline: false,
     },
     {
@@ -75,14 +75,13 @@ const HELP_EMBED: APIEmbed = {
       value:
         "Daily digest of upcoming matches with registration status. " +
         "Filter by country, level, discipline, and how far ahead to look. " +
-        "Pings @here when registration opens today. " +
         "One config per server — running `set` again replaces the previous one.",
       inline: false,
     },
     {
       name: "/remind-squads set [days]",
       value:
-        "Notify linked shooters (with @mentions) before squadding opens " +
+        "Notify linked shooters before squadding opens " +
         "(e.g. `1,7` = 7 days + 1 day + day-of). Also posts match-day reminders " +
         "with squad assignments. Requires `/link` first. " +
         "One config per server — running `set` again replaces the previous one.",
@@ -177,7 +176,7 @@ const INTRODUCTION_EMBED: APIEmbed = {
         "[Shoot'n Score It](https://shootnscoreit.com). I'll match you to your shooter profile.\n\n" +
         "Once linked, you unlock everything: your personal dashboard (`/me`), " +
         "your upcoming match action checklist (`/remind upcoming`), " +
-        "live stage updates, squad reminders with @mentions, and you'll show up " +
+        "live stage updates, squad reminders, and you'll show up " +
         "in match summaries and leaderboards.",
       inline: false,
     },

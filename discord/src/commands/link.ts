@@ -11,7 +11,7 @@ const LINK_BENEFITS =
   "\u2022 `/me` — your personal shooter dashboard\n" +
   "\u2022 `/summary` `/leaderboard` — you'll appear in match breakdowns\n" +
   "\u2022 `/watch` — get stage-by-stage updates during live matches\n" +
-  "\u2022 `/remind-squads` — @mentions when squadding opens or match day arrives\n" +
+  "\u2022 `/remind-squads` — reminders when squadding opens or match day arrives\n" +
   "\nUse `/unlink` to disconnect your account.";
 
 export async function handleLink(
