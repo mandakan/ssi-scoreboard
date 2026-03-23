@@ -19,6 +19,12 @@ import {
 import { watchKey } from "../commands/watch";
 import { squadReminderKey } from "../commands/remind-squads";
 
+// ── Snapshot migrations ───────────────────────────────────────────────────
+// Achievement IDs listed here are stripped from KV snapshots on load so that
+// rule changes (e.g. adding a min-match gate) cause a clean re-evaluation.
+// Safe to remove this set (and the filter below) after one full cron cycle.
+const SNAPSHOT_RESET_IDS = new Set(["sharpshooter"]);
+
 // ── KV schema ──────────────────────────────────────────────────────────────
 
 /** Stored achievement snapshot for a shooter in a guild. */
@@ -367,11 +373,19 @@ async function checkShooterAchievements(
 
   if (achievements.length === 0) return;
 
-  // Load existing snapshot
+  // Load existing snapshot, stripping any reset achievements
   const snapshotRaw = await env.BOT_KV.get(kvKey);
-  const snapshot: AchievementSnapshot | null = snapshotRaw
+  let snapshot: AchievementSnapshot | null = snapshotRaw
     ? JSON.parse(snapshotRaw)
     : null;
+  if (snapshot && SNAPSHOT_RESET_IDS.size > 0) {
+    snapshot = {
+      ...snapshot,
+      achievements: snapshot.achievements.filter(
+        (a) => !SNAPSHOT_RESET_IDS.has(a.id),
+      ),
+    };
+  }
 
   // First time seeing this shooter — snapshot silently (no spam)
   if (!snapshot) {

@@ -169,6 +169,15 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE matches ADD COLUMN max_competitors INTEGER`,
     ],
   },
+
+  // ── 0008_reset_sharpshooter.sql ────────────────────────────────────────
+  {
+    version: 8,
+    label: "achievements: reset sharpshooter (new min-match rule)",
+    statements: [
+      `DELETE FROM shooter_achievements WHERE achievement_id = 'sharpshooter'`,
+    ],
+  },
 ];
 
 /** The latest schema version — used by adapters to skip the runner when already current. */
