@@ -137,8 +137,12 @@ describe("evaluateAchievements", () => {
     expect(stageAch.currentValue).toBe(20);
   });
 
-  it("unlocks multiple sharpshooter tiers at 75% A-zone", () => {
+  it("unlocks multiple sharpshooter tiers at 75% A-zone with 10+ L2 matches", () => {
     const ctx = makeCtx({
+      matchCount: 10,
+      matches: Array.from({ length: 10 }, (_, i) =>
+        makeMatch({ matchId: String(i + 1), level: "Level II" }),
+      ),
       stats: makeStats({ aPercent: 75 }),
     });
     const { achievements } = evaluateAchievements(ctx, []);
@@ -146,6 +150,20 @@ describe("evaluateAchievements", () => {
     const sharpshooter = achievements.find((a) => a.definition.id === "sharpshooter")!;
     expect(sharpshooter.unlockedTiers).toHaveLength(2); // 60% and 70%
     expect(sharpshooter.nextTier?.threshold).toBe(80);
+  });
+
+  it("does not unlock sharpshooter with fewer than 10 L2+ matches", () => {
+    const ctx = makeCtx({
+      matchCount: 3,
+      matches: Array.from({ length: 3 }, (_, i) =>
+        makeMatch({ matchId: String(i + 1), level: "Level II" }),
+      ),
+      stats: makeStats({ aPercent: 90 }),
+    });
+    const { achievements } = evaluateAchievements(ctx, []);
+
+    const sharpshooter = achievements.find((a) => a.definition.id === "sharpshooter")!;
+    expect(sharpshooter.unlockedTiers).toHaveLength(0);
   });
 
   it("does not re-emit stored tiers as new unlocks", () => {

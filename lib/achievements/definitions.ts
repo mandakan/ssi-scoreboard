@@ -172,11 +172,14 @@ const dqClub: AchievementEntry = {
 
 // ── Accuracy ─────────────────────────────────────────────────────────────────
 
+/** Minimum number of L2+ matches required before Sharpshooter tiers unlock. */
+const SHARPSHOOTER_MIN_MATCHES = 10;
+
 const sharpshooter: AchievementEntry = {
   definition: {
     id: "sharpshooter",
     name: "Sharpshooter",
-    description: "Achieve a high A-zone hit percentage across all matches.",
+    description: `Achieve a high A-zone hit percentage across all matches (requires ${SHARPSHOOTER_MIN_MATCHES}+ Level II matches).`,
     category: "accuracy",
     icon: "crosshair",
     tiers: [
@@ -186,7 +189,11 @@ const sharpshooter: AchievementEntry = {
       { level: 4, name: "Master", threshold: 85, label: "85% A-zone" },
     ],
   },
-  evaluate: (ctx) => ctx.stats.aPercent ?? 0,
+  evaluate: (ctx) => {
+    // Gate: require enough matches for a meaningful accuracy sample
+    if (ctx.matches.filter(isL2Plus).length < SHARPSHOOTER_MIN_MATCHES) return 0;
+    return ctx.stats.aPercent ?? 0;
+  },
 };
 
 const perfectStages: AchievementEntry = {

@@ -120,19 +120,45 @@ export function diffAchievements(
 /**
  * Build the new snapshot from dashboard achievements.
  * Stores the highest unlocked tier per achievement.
+ *
+ * When `previous` is provided the snapshot applies a **conditional monotonic
+ * floor**: if the dashboard currently reports at least one unlocked tier for
+ * an achievement, the stored tier is `max(current, previous)` — this prevents
+ * temporary stat fluctuations from downgrading the snapshot and causing
+ * re-announcements.  When the dashboard reports zero unlocked tiers (rule
+ * change, DB migration reset), the snapshot drops to 0 so the achievement
+ * can be properly re-announced when re-earned.  This means resets propagate
+ * automatically without maintaining a hardcoded list of reset IDs.
  */
 export function buildSnapshot(
   dashboardAchievements: Array<{
     definition: { id: string };
     unlockedTiers: Array<{ level: number }>;
   }>,
+  previous?: AchievementSnapshot | null,
 ): AchievementSnapshot {
+  // Index previous tiers for merging
+  const prevMap = new Map<string, number>();
+  if (previous) {
+    for (const a of previous.achievements) {
+      prevMap.set(a.id, a.tier);
+    }
+  }
+
   const achievements: AchievementSnapshot["achievements"] = [];
 
   for (const a of dashboardAchievements) {
-    if (a.unlockedTiers.length === 0) continue;
-    const highest = Math.max(...a.unlockedTiers.map((t) => t.level));
-    achievements.push({ id: a.definition.id, tier: highest });
+    const id = a.definition.id;
+    const current = a.unlockedTiers.length > 0
+      ? Math.max(...a.unlockedTiers.map((t) => t.level))
+      : 0;
+    // Only apply the monotonic floor when the dashboard reports unlocked
+    // tiers.  A current of 0 means the achievement was deliberately reset
+    // (e.g. rule change + DB migration) — respect that.
+    const best = current > 0 ? Math.max(current, prevMap.get(id) ?? 0) : 0;
+    if (best > 0) {
+      achievements.push({ id, tier: best });
+    }
   }
 
   return {
@@ -368,7 +394,8 @@ async function checkShooterAchievements(
     ]);
   }
 
-  // Always update snapshot (even if no unlocks, to update lastChecked)
-  const newSnapshot = buildSnapshot(achievements);
+  // Always update snapshot (even if no unlocks, to update lastChecked).
+  // Pass the previous snapshot so tiers never downgrade (monotonic merge).
+  const newSnapshot = buildSnapshot(achievements, snapshot);
   await env.BOT_KV.put(kvKey, JSON.stringify(newSnapshot));
 }
