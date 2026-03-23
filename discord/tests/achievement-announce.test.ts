@@ -188,6 +188,52 @@ describe("buildSnapshot", () => {
     const snapshot = buildSnapshot([]);
     expect(snapshot.achievements).toEqual([]);
   });
+
+  it("never downgrades tiers when previous snapshot has higher tier", () => {
+    const previous: AchievementSnapshot = {
+      achievements: [{ id: "sharpshooter", tier: 4 }],
+      lastChecked: "2026-01-01T00:00:00Z",
+    };
+    // Dashboard temporarily shows tier 2 (stats fluctuation)
+    const achievements = [
+      makeAchievement("sharpshooter", "Sharpshooter", "crosshair", SHARPSHOOTER_TIERS, [1, 2]),
+    ];
+
+    const snapshot = buildSnapshot(achievements, previous);
+    const entry = snapshot.achievements.find((a) => a.id === "sharpshooter")!;
+    expect(entry.tier).toBe(4); // kept at 4, not downgraded to 2
+  });
+
+  it("preserves previous-only achievements absent from current dashboard", () => {
+    const previous: AchievementSnapshot = {
+      achievements: [
+        { id: "match-count", tier: 3 },
+        { id: "sharpshooter", tier: 2 },
+      ],
+      lastChecked: "2026-01-01T00:00:00Z",
+    };
+    // Dashboard only returns match-count this time
+    const achievements = [
+      makeAchievement("match-count", "Competitor", "trophy", COMPETITOR_TIERS, [1, 2, 3]),
+    ];
+
+    const snapshot = buildSnapshot(achievements, previous);
+    expect(snapshot.achievements).toHaveLength(2);
+    expect(snapshot.achievements).toContainEqual({ id: "sharpshooter", tier: 2 });
+  });
+
+  it("upgrades tier when dashboard shows higher than previous", () => {
+    const previous: AchievementSnapshot = {
+      achievements: [{ id: "match-count", tier: 2 }],
+      lastChecked: "2026-01-01T00:00:00Z",
+    };
+    const achievements = [
+      makeAchievement("match-count", "Competitor", "trophy", COMPETITOR_TIERS, [1, 2, 3, 4]),
+    ];
+
+    const snapshot = buildSnapshot(achievements, previous);
+    expect(snapshot.achievements).toContainEqual({ id: "match-count", tier: 4 });
+  });
 });
 
 describe("buildAchievementEmbed", () => {
