@@ -19,12 +19,6 @@ import {
 import { watchKey } from "../commands/watch";
 import { squadReminderKey } from "../commands/remind-squads";
 
-// ── Snapshot migrations ───────────────────────────────────────────────────
-// Achievement IDs listed here are stripped from KV snapshots on load so that
-// rule changes (e.g. adding a min-match gate) cause a clean re-evaluation.
-// Safe to remove this set (and the filter below) after one full cron cycle.
-const SNAPSHOT_RESET_IDS = new Set(["sharpshooter"]);
-
 // ── KV schema ──────────────────────────────────────────────────────────────
 
 /** Stored achievement snapshot for a shooter in a guild. */
@@ -127,10 +121,14 @@ export function diffAchievements(
  * Build the new snapshot from dashboard achievements.
  * Stores the highest unlocked tier per achievement.
  *
- * When `previous` is provided the snapshot is **monotonically increasing**:
- * the stored tier per achievement is `max(current, previous)`.  This prevents
- * temporary dashboard fluctuations (e.g. stats dipping below a threshold due
- * to cache state) from downgrading the snapshot and causing re-announcements.
+ * When `previous` is provided the snapshot applies a **conditional monotonic
+ * floor**: if the dashboard currently reports at least one unlocked tier for
+ * an achievement, the stored tier is `max(current, previous)` — this prevents
+ * temporary stat fluctuations from downgrading the snapshot and causing
+ * re-announcements.  When the dashboard reports zero unlocked tiers (rule
+ * change, DB migration reset), the snapshot drops to 0 so the achievement
+ * can be properly re-announced when re-earned.  This means resets propagate
+ * automatically without maintaining a hardcoded list of reset IDs.
  */
 export function buildSnapshot(
   dashboardAchievements: Array<{
@@ -147,27 +145,19 @@ export function buildSnapshot(
     }
   }
 
-  const seen = new Set<string>();
   const achievements: AchievementSnapshot["achievements"] = [];
 
   for (const a of dashboardAchievements) {
     const id = a.definition.id;
-    seen.add(id);
     const current = a.unlockedTiers.length > 0
       ? Math.max(...a.unlockedTiers.map((t) => t.level))
       : 0;
-    const prev = prevMap.get(id) ?? 0;
-    const best = Math.max(current, prev);
+    // Only apply the monotonic floor when the dashboard reports unlocked
+    // tiers.  A current of 0 means the achievement was deliberately reset
+    // (e.g. rule change + DB migration) — respect that.
+    const best = current > 0 ? Math.max(current, prevMap.get(id) ?? 0) : 0;
     if (best > 0) {
       achievements.push({ id, tier: best });
-    }
-  }
-
-  // Preserve achievements that were in the previous snapshot but absent
-  // from the current dashboard response (should not happen, but be safe).
-  for (const [id, tier] of prevMap) {
-    if (!seen.has(id)) {
-      achievements.push({ id, tier });
     }
   }
 
@@ -373,19 +363,11 @@ async function checkShooterAchievements(
 
   if (achievements.length === 0) return;
 
-  // Load existing snapshot, stripping any reset achievements
+  // Load existing snapshot
   const snapshotRaw = await env.BOT_KV.get(kvKey);
-  let snapshot: AchievementSnapshot | null = snapshotRaw
+  const snapshot: AchievementSnapshot | null = snapshotRaw
     ? JSON.parse(snapshotRaw)
     : null;
-  if (snapshot && SNAPSHOT_RESET_IDS.size > 0) {
-    snapshot = {
-      ...snapshot,
-      achievements: snapshot.achievements.filter(
-        (a) => !SNAPSHOT_RESET_IDS.has(a.id),
-      ),
-    };
-  }
 
   // First time seeing this shooter — snapshot silently (no spam)
   if (!snapshot) {

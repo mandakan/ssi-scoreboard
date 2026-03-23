@@ -189,7 +189,7 @@ describe("buildSnapshot", () => {
     expect(snapshot.achievements).toEqual([]);
   });
 
-  it("never downgrades tiers when previous snapshot has higher tier", () => {
+  it("applies monotonic floor when dashboard shows partial downgrade", () => {
     const previous: AchievementSnapshot = {
       achievements: [{ id: "sharpshooter", tier: 4 }],
       lastChecked: "2026-01-01T00:00:00Z",
@@ -204,22 +204,18 @@ describe("buildSnapshot", () => {
     expect(entry.tier).toBe(4); // kept at 4, not downgraded to 2
   });
 
-  it("preserves previous-only achievements absent from current dashboard", () => {
+  it("respects full reset when dashboard shows zero unlocked tiers", () => {
     const previous: AchievementSnapshot = {
-      achievements: [
-        { id: "match-count", tier: 3 },
-        { id: "sharpshooter", tier: 2 },
-      ],
+      achievements: [{ id: "sharpshooter", tier: 4 }],
       lastChecked: "2026-01-01T00:00:00Z",
     };
-    // Dashboard only returns match-count this time
+    // Dashboard shows 0 tiers (rule change + DB migration reset)
     const achievements = [
-      makeAchievement("match-count", "Competitor", "trophy", COMPETITOR_TIERS, [1, 2, 3]),
+      makeAchievement("sharpshooter", "Sharpshooter", "crosshair", SHARPSHOOTER_TIERS, []),
     ];
 
     const snapshot = buildSnapshot(achievements, previous);
-    expect(snapshot.achievements).toHaveLength(2);
-    expect(snapshot.achievements).toContainEqual({ id: "sharpshooter", tier: 2 });
+    expect(snapshot.achievements.find((a) => a.id === "sharpshooter")).toBeUndefined();
   });
 
   it("upgrades tier when dashboard shows higher than previous", () => {
