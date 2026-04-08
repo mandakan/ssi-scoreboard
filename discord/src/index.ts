@@ -97,7 +97,7 @@ const worker: ExportedHandler<Env> = {
       pollRegistrationReminders(env),
       pollSquadReminders(env),
       pollPersonalReminders(env),
-      pollAchievements(env),
+      // pollAchievements(env), // disabled: spamming channel — re-enable after fixing
     ]);
     for (const result of results) {
       if (result.status === "rejected") {
