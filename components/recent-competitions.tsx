@@ -61,7 +61,7 @@ export function CompetitionCard({
         <div className="flex items-start justify-between gap-2 pr-6">
           <span className="font-semibold leading-snug">{comp.name}</span>
           <span className="text-sm font-medium text-muted-foreground shrink-0">
-            {comp.scoring_completed}%
+            {Math.round(comp.scoring_completed)}%
           </span>
         </div>
 
@@ -74,7 +74,7 @@ export function CompetitionCard({
         <Progress
           value={comp.scoring_completed}
           className="mt-3 h-1.5"
-          aria-label={`${comp.scoring_completed}% scored`}
+          aria-label={`${Math.round(comp.scoring_completed)}% scored`}
         />
       </button>
     </div>

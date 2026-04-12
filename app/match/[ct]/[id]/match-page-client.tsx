@@ -402,8 +402,15 @@ export default function MatchPageClient() {
   const matchCancelled = match.match_status === "cs";
   const aiAvailable = coachingAvailability.data?.available === true;
   // Pre-match: no scores yet and match not completed or cancelled.
+  // Also check compare data: if any stage has competitor scores, scoring has
+  // started regardless of what scoring_completed reports (handles rounding
+  // edge cases and delayed API updates for large matches).
+  const hasActualScores = compareQuery.data?.stages.some(
+    (s) => Object.keys(s.competitors).length > 0,
+  ) ?? false;
   const isPreMatch =
     match.scoring_completed === 0 &&
+    !hasActualScores &&
     match.match_status !== "cp" &&
     match.match_status !== "cs";
 
