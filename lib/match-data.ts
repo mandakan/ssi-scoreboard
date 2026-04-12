@@ -144,7 +144,7 @@ export async function fetchMatchData(
 
   const ev = raw.event;
 
-  const scoringPct = Math.round(parseFloat(String(ev.scoring_completed ?? 0)));
+  const scoringPct = parseFloat(String(ev.scoring_completed ?? 0));
   const matchDate = ev.starts ? new Date(ev.starts) : null;
   const daysSince = matchDate ? (Date.now() - matchDate.getTime()) / 86_400_000 : 0;
   const resultsPublished = ev.results === "all";
@@ -276,7 +276,7 @@ export async function fetchMatchData(
     max_competitors: ev.max_competitors ?? null,
     scoring_completed:
       ev.scoring_completed != null
-        ? Math.round(parseFloat(String(ev.scoring_completed)))
+        ? parseFloat(String(ev.scoring_completed))
         : 0,
     match_status: ev.status ?? "on",
     results_status: ev.results ?? "org",

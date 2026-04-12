@@ -119,8 +119,8 @@ export async function GET(req: Request) {
   }
 
   // Determine match state and compute TTL
-  const scoringPct = Math.round(
-    parseFloat(String(matchData.event?.scoring_completed ?? 0))
+  const scoringPct = parseFloat(
+    String(matchData.event?.scoring_completed ?? 0)
   );
   const matchDate = matchData.event?.starts ? new Date(matchData.event.starts) : null;
   const daysSince = matchDate ? (Date.now() - matchDate.getTime()) / 86_400_000 : 0;
