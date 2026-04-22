@@ -1,6 +1,7 @@
 // Pure functions — no I/O, no side effects. Fully unit-tested.
 // Extracted following the app/api/compare/logic.ts pattern.
 
+import { isMatchComplete } from "@/lib/match-ttl";
 import type {
   CompetitorInfo,
   StageComparison,
@@ -405,8 +406,8 @@ export function checkCoachingEligibility(
   stages: StageComparison[],
   competitorId: number,
 ): string | null {
-  const isComplete = scoringCompleted >= 95 || daysSince > 3;
-  if (!isComplete) return "Match scoring is not yet complete";
+  if (!isMatchComplete(scoringCompleted, daysSince))
+    return "Match scoring is not yet complete";
 
   const missingStages = stages.filter((s) => !s.competitors[competitorId]);
   if (missingStages.length > 0) return "Missing scorecards on some stages";

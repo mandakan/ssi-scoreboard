@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { computeMatchTtl } from "@/lib/match-ttl";
+import { computeMatchTtl, isMatchComplete } from "@/lib/match-ttl";
 
 const NOW = new Date("2025-06-15T12:00:00Z").getTime();
 
@@ -28,18 +28,30 @@ function rawTtl(
 describe("computeMatchTtl", () => {
   // ── Completed matches ──────────────────────────────────────────────────────
 
-  it("returns null (permanent) when scoring >= 95%", () => {
+  it("returns null (permanent) when scoring >= 95% AND daysSince >= 1", () => {
     expect(computeMatchTtl(95, 1, isoHoursFromNow(-24))).toBeNull();
     expect(computeMatchTtl(100, 1, isoHoursFromNow(-24))).toBeNull();
   });
 
-  it("returns null (permanent) when daysSince > 3", () => {
+  it("returns null (permanent) when daysSince > 3 regardless of scoring", () => {
     expect(computeMatchTtl(0, 3.1, null)).toBeNull();
     expect(computeMatchTtl(50, 10, isoHoursFromNow(-240))).toBeNull();
   });
 
-  it("returns null at boundary: scoring exactly 95, daysSince 0", () => {
-    expect(computeMatchTtl(95, 0, isoHoursFromNow(0))).toBeNull();
+  // Regression: during an active match day the upstream scoring_completed
+  // can climb past 95% before all squads' scorecards are in. If we flipped
+  // the cache to permanent at that point, the last scorecards would never
+  // be fetched. Require at least 1 day since start before trusting the
+  // scoring threshold.
+  it("stays in active-scoring tier when scoring >= 95% but match started same day", () => {
+    // 95% scored, match started 6 hours ago → NOT complete
+    expect(computeMatchTtl(95, 0.25, isoHoursFromNow(-6))).not.toBeNull();
+    expect(computeMatchTtl(98, 0.5, isoHoursFromNow(-12))).not.toBeNull();
+    expect(rawTtl(99, 0.9, isoHoursFromNow(-21))).toBe(30);
+  });
+
+  it("returns null at boundary: scoring exactly 95, daysSince exactly 1", () => {
+    expect(computeMatchTtl(95, 1, isoHoursFromNow(-24))).toBeNull();
   });
 
   // ── Active scoring ─────────────────────────────────────────────────────────
@@ -149,5 +161,34 @@ describe("computeMatchTtl", () => {
 
     const soon = isoHoursFromNow(24);
     expect(computeMatchTtl(0, -1, soon)).toBe(30 * 60);
+  });
+});
+
+describe("isMatchComplete", () => {
+  it("true when daysSince > 3, regardless of scoring", () => {
+    expect(isMatchComplete(0, 3.1)).toBe(true);
+    expect(isMatchComplete(50, 10)).toBe(true);
+  });
+
+  it("true when scoring >= 95% AND daysSince >= 1", () => {
+    expect(isMatchComplete(95, 1)).toBe(true);
+    expect(isMatchComplete(100, 2)).toBe(true);
+  });
+
+  it("false when scoring >= 95% but match started same day", () => {
+    // Primary regression: high scoring % mid-match-day must not mark complete
+    expect(isMatchComplete(95, 0)).toBe(false);
+    expect(isMatchComplete(98, 0.5)).toBe(false);
+    expect(isMatchComplete(100, 0.99)).toBe(false);
+  });
+
+  it("false when scoring low and match is recent", () => {
+    expect(isMatchComplete(50, 1)).toBe(false);
+    expect(isMatchComplete(0, 0)).toBe(false);
+  });
+
+  it("false for future matches", () => {
+    expect(isMatchComplete(0, -1)).toBe(false);
+    expect(isMatchComplete(0, -10)).toBe(false);
   });
 });

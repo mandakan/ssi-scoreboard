@@ -5,7 +5,7 @@
 import { cache } from "react";
 import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
 import cacheAdapter from "@/lib/cache-impl";
-import { computeMatchTtl } from "@/lib/match-ttl";
+import { computeMatchTtl, isMatchComplete } from "@/lib/match-ttl";
 import { extractDivision } from "@/lib/divisions";
 import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
 import { afterResponse } from "@/lib/background-impl";
@@ -153,7 +153,7 @@ export async function fetchMatchData(
   const ttl = (resultsPublished || cancelled)
     ? null
     : computeMatchTtl(scoringPct, daysSince, ev.starts ?? null);
-  const isComplete = resultsPublished || scoringPct >= 95 || daysSince > 3;
+  const isComplete = resultsPublished || isMatchComplete(scoringPct, daysSince);
 
   try {
     if (ttl === null) {

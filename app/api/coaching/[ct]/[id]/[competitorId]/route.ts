@@ -22,7 +22,7 @@ import {
   computeStageDegradationData,
   type RawScorecard,
 } from "@/app/api/compare/logic";
-import { computeMatchTtl } from "@/lib/match-ttl";
+import { computeMatchTtl, isMatchComplete } from "@/lib/match-ttl";
 import { extractDivision } from "@/lib/divisions";
 import { decodeShooterId } from "@/lib/shooter-index";
 import cache from "@/lib/cache-impl";
@@ -206,7 +206,7 @@ export async function GET(
   const daysSince = matchDate
     ? (Date.now() - matchDate.getTime()) / 86_400_000
     : 0;
-  const isComplete = scoringPct >= 95 || daysSince > 3;
+  const isComplete = isMatchComplete(scoringPct, daysSince);
   const matchName = matchData.event.name ?? "Unknown Match";
 
   // 5. Fetch scorecards (reuses existing Redis cache)

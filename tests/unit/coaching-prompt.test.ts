@@ -839,10 +839,18 @@ describe("checkCoachingEligibility", () => {
     ).toBeNull();
   });
 
-  it("accepts match at exactly 95% scoring", () => {
+  it("accepts match at exactly 95% scoring once a day has passed", () => {
     expect(
-      checkCoachingEligibility(95, 0, stagesWithCompetitor(), competitorId),
+      checkCoachingEligibility(95, 1, stagesWithCompetitor(), competitorId),
     ).toBeNull();
+  });
+
+  it("rejects 95%+ scoring while match is still on the first day", () => {
+    // Regression: during an active match day the scoring_completed can
+    // climb past 95% before all scorecards are in — coaching should wait.
+    expect(
+      checkCoachingEligibility(98, 0.5, stagesWithCompetitor(), competitorId),
+    ).toBe("Match scoring is not yet complete");
   });
 
   it("accepts match at boundary daysSince = 3.1", () => {

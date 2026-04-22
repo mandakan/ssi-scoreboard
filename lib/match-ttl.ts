@@ -3,7 +3,7 @@
  * Returns null for permanent (no expiry).
  *
  * TTL tiers:
- *   completed (scoring ≥95% OR >3 days old)  → null (permanent)
+ *   completed (see isMatchComplete)           → null (permanent)
  *   active scoring (scoring > 0%)             → 30 s
  *   pre-match, start > 7 days away            → 4 h
  *   pre-match, start 2–7 days away            → 1 h
@@ -20,13 +20,31 @@ const DEFAULT_MIN_TTL = parseInt(
   10,
 );
 
+/**
+ * Is a match "done" from our caching/UI perspective?
+ *
+ * A high `scoring_completed` value on its own is not enough — during an
+ * active match day the upstream percentage can cross 95% while some
+ * squads still have unscored stages, so we also require at least one full
+ * day has passed since the match start. Matches more than 3 days old are
+ * considered complete regardless of scoring (handles users viewing
+ * historical matches where scoring_completed was never finalised).
+ */
+export function isMatchComplete(
+  scoringPct: number,
+  daysSince: number,
+): boolean {
+  if (daysSince > 3) return true;
+  return scoringPct >= 95 && daysSince >= 1;
+}
+
 export function computeMatchTtl(
   scoringPct: number,
   daysSince: number, // negative = future match
   dateStr: string | null,
   minTtl = DEFAULT_MIN_TTL,
 ): number | null {
-  if (scoringPct >= 95 || daysSince > 3) return null; // permanent
+  if (isMatchComplete(scoringPct, daysSince)) return null; // permanent
 
   let ttl: number;
 
