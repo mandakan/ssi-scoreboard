@@ -1,3 +1,7 @@
+// @vitest-environment node
+// Sharp's typedArray check compares val.constructor === Uint8Array, which fails
+// under jsdom because jsdom creates a separate realm. Next's bundled @vercel/og
+// hits this path starting in 16.2.x. Production runs in a single Node realm.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { OgMatchData } from "@/lib/og-data";
 
