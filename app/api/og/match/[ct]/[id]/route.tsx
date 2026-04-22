@@ -12,6 +12,7 @@ import {
   assignArchetype,
 } from "@/app/api/compare/logic";
 import { PALETTE } from "@/lib/colors";
+import { isMatchComplete } from "@/lib/match-ttl";
 import {
   C,
   OG_W,
@@ -82,7 +83,10 @@ export async function GET(
     });
   }
 
-  const isComplete = match.scoringCompleted >= 95;
+  const daysSince = match.date
+    ? (Date.now() - new Date(match.date).getTime()) / 86_400_000
+    : 0;
+  const isComplete = isMatchComplete(match.scoringCompleted, daysSince);
 
   // Resolve which of the requested IDs actually exist in the match.
   const selectedCompetitors = rawCompetitorIds

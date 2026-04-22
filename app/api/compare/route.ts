@@ -3,7 +3,7 @@ import { MAX_COMPETITORS } from "@/lib/constants";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY, MATCH_QUERY } from "@/lib/graphql";
 import cache from "@/lib/cache-impl";
-import { computeMatchTtl } from "@/lib/match-ttl";
+import { computeMatchTtl, isMatchComplete } from "@/lib/match-ttl";
 import { persistToMatchStore } from "@/lib/match-data-store";
 import { afterResponse } from "@/lib/background-impl";
 
@@ -124,7 +124,7 @@ export async function GET(req: Request) {
   );
   const matchDate = matchData.event?.starts ? new Date(matchData.event.starts) : null;
   const daysSince = matchDate ? (Date.now() - matchDate.getTime()) / 86_400_000 : 0;
-  const isComplete = scoringPct >= 95 || daysSince > 3;
+  const isComplete = isMatchComplete(scoringPct, daysSince);
   const dataTtl = computeMatchTtl(scoringPct, daysSince, matchData.event?.starts ?? null);
 
   // Upgrade match cache entry TTL based on match state
