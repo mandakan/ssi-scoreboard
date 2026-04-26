@@ -30,7 +30,7 @@ export const RELEASES: Release[] = [
       {
         heading: "Improved",
         items: [
-          "Smarter auto-view: pre-match stays the default until scoring is meaningfully underway, and now considers the match end date so multi-day matches don't flip to live too early. Coaching kicks in once results are published, scoring hits 95%, or three days have passed since the match ended.",
+          "Smarter auto-view: pre-match stays the default until scoring is meaningfully underway. Coaching kicks in once results are published, scoring hits 95%, or three days have passed since the match ended. Multi-day matches whose end date isn't published get a 3-day grace window so late squads still see pre-match info.",
           "Live freshness: cache TTL for active matches is now ~30 s (was 5 min), so fresh scorecards appear within seconds of the upstream update — no more waiting after a stage finishes.",
         ],
       },

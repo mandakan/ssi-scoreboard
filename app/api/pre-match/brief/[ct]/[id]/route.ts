@@ -67,17 +67,11 @@ export async function GET(
   // Mirror the frontend's pre-match eligibility gate: the brief stays available
   // while the match isn't fully wrapped up, even if early squads have started
   // scoring (e.g. multi-day matches, RO squads shooting the day before).
-  const matchDateMs = match.date ? new Date(match.date).getTime() : null;
-  const matchEndsMs = match.ends ? new Date(match.ends).getTime() : null;
-  const nowMs = Date.now();
-  const daysSinceMatchStart = matchDateMs != null ? (nowMs - matchDateMs) / 86_400_000 : 0;
-  const daysSinceMatchEnd = matchEndsMs != null ? (nowMs - matchEndsMs) / 86_400_000 : null;
   if (
     !isPreMatchEligible({
       scoringPct: match.scoring_completed,
-      daysSinceMatchStart,
-      daysSinceMatchEnd,
       resultsStatus: match.results_status,
+      matchStatus: match.match_status,
     })
   ) {
     return NextResponse.json({ error: "Match no longer in pre-match state" }, { status: 400 });
