@@ -11,11 +11,30 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-04-26";
+export const LATEST_RELEASE_ID = "2026-04-27";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "April 27, 2026",
+    title: "Heads-up When SSI Is Down",
+    sections: [
+      {
+        heading: "New",
+        items: [
+          "When ShootNScoreIt isn't responding, the match page now shows a clear 'Live updates paused' banner with how old the displayed scores are, so you know whether you're looking at current data or a snapshot from a few minutes ago.",
+        ],
+      },
+      {
+        heading: "Improved",
+        items: [
+          "During upstream outages, the app keeps serving the last good scores from durable storage instead of failing — combined with the new banner, courtside refreshing no longer feels broken.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-04-26",
     date: "April 26, 2026",
     title: "Pick Your View",
     screenshotScenes: ["comparison-table"],

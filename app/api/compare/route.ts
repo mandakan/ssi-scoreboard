@@ -5,6 +5,7 @@ import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY, MATCH_QUERY, refresh
 import cache from "@/lib/cache-impl";
 import { computeMatchFreshness, computeMatchSwrTtl, isMatchComplete } from "@/lib/match-ttl";
 import { persistToMatchStore } from "@/lib/match-data-store";
+import { isUpstreamDegraded } from "@/lib/upstream-status";
 import { afterResponse } from "@/lib/background-impl";
 
 import { extractDivision } from "@/lib/divisions";
@@ -208,7 +209,12 @@ export async function GET(req: Request) {
   let fingerprintCacheHit: boolean | null = null;
 
   // Report the older of the two cache timestamps (most stale data wins)
-  const cacheInfo = { cachedAt: matchCachedAt ?? scorecardsCachedAt };
+  const cacheInfo: CompareResponse["cacheInfo"] = {
+    cachedAt: matchCachedAt ?? scorecardsCachedAt,
+  };
+  if (cacheInfo.cachedAt && (await isUpstreamDegraded())) {
+    cacheInfo.upstreamDegraded = true;
+  }
 
   const tFetch = performance.now();
 

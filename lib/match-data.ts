@@ -10,6 +10,7 @@ import { extractDivision } from "@/lib/divisions";
 import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
 import { afterResponse } from "@/lib/background-impl";
 import { persistToMatchStore } from "@/lib/match-data-store";
+import { isUpstreamDegraded } from "@/lib/upstream-status";
 import type { MatchResponse, StageInfo, CompetitorInfo, SquadInfo } from "@/lib/types";
 
 // ── Raw GraphQL response shapes ─────────────────────────────────────────────
@@ -315,6 +316,13 @@ export async function fetchMatchData(
     squads,
     cacheInfo: { cachedAt },
   };
+
+  // Decorate with upstream-degraded flag so the client can surface a banner.
+  // Only meaningful for cache hits — a fresh fetch by definition means upstream
+  // just succeeded for this caller.
+  if (cachedAt && (await isUpstreamDegraded())) {
+    response.cacheInfo.upstreamDegraded = true;
+  }
 
   return { data: response, cachedAt, isComplete, msFetch };
 }

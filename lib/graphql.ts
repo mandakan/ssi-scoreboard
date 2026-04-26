@@ -7,6 +7,7 @@ import db from "@/lib/db-impl";
 import { afterResponse } from "@/lib/background-impl";
 import { CACHE_SCHEMA_VERSION } from "@/lib/constants";
 import { parseMatchCacheKey, persistActiveMatchToD1 } from "@/lib/match-data-store";
+import { markUpstreamDegraded } from "@/lib/upstream-status";
 
 /**
  * Check if the current request is an admin-authenticated request
@@ -349,6 +350,9 @@ export async function refreshCachedQuery<T>(
     }
   } catch (err) {
     console.error("[cache] background refresh failed for key:", cacheKey, err);
+    // Mark the upstream as degraded so handlers can surface a banner to users.
+    // Best-effort — failure to write the flag is silently swallowed.
+    await markUpstreamDegraded();
     // Stale-on-error: extend the existing entry's TTL so users keep seeing
     // last-known-good data through transient upstream outages. Without this,
     // the entry would tick toward eviction while every refresh attempt fails,

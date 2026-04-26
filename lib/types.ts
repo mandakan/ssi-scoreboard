@@ -63,6 +63,9 @@ export interface SquadInfo {
 
 export interface CacheInfo {
   cachedAt: string | null; // ISO string of when data was cached; null if just fetched fresh
+  /** True when an upstream refresh failed within the last ~60s.
+   *  Drives the "live updates paused" banner. Absent on fresh successful fetches. */
+  upstreamDegraded?: boolean;
 }
 
 export interface MatchResponse {
