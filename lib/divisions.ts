@@ -37,6 +37,51 @@ export function formatDivisionDisplay(
  * competitors — for all other disciplines `shoots_handgun_major` is false and
  * no suffix is added.
  */
+/**
+ * Returns a short code (1-4 chars) for an IPSC division string. Used in
+ * mobile-first table cells where the full division name would dominate the
+ * row. Pair with the full division name in `title` / `aria-label` so screen
+ * readers and tooltips still surface the unabbreviated form.
+ *
+ * Major/minor power factor is encoded as "+" / "-" (e.g. "Open Major" -> "O+").
+ * Unknown divisions fall back to the first letter of each word, capped at 3.
+ */
+const DIVISION_ABBREVIATIONS: Record<string, string> = {
+  "Open Major": "O+",
+  "Open Minor": "O-",
+  "Open": "O",
+  "Standard Major": "S+",
+  "Standard Minor": "S-",
+  "Standard": "S",
+  "Classic Major": "C+",
+  "Classic Minor": "C-",
+  "Classic": "C",
+  "Production": "P",
+  "Production Optics": "PO",
+  "Production Optics Light": "POL",
+  "Revolver": "R",
+  "PCC": "PCC",
+  "PCC Optics": "PCCO",
+  "PCC Iron": "PCCI",
+  "Modified": "M",
+  "Mini Rifle": "MR",
+  "Semi-Auto Open": "SAO",
+  "Semi-Auto Standard": "SAS",
+  "Manual Action": "MA",
+};
+
+export function abbreviateDivision(division: string | null | undefined): string {
+  if (!division) return "";
+  const trimmed = division.trim();
+  const known = DIVISION_ABBREVIATIONS[trimmed];
+  if (known) return known;
+  const initials = trimmed
+    .split(/\s+/)
+    .map((word) => word[0]?.toUpperCase() ?? "")
+    .join("");
+  return initials.slice(0, 3) || trimmed.slice(0, 3).toUpperCase();
+}
+
 export function extractDivision(c: {
   get_division_display?: string | null;
   get_handgun_div_display?: string | null;

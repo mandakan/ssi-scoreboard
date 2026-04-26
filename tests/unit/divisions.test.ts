@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatDivisionDisplay } from "@/lib/divisions";
+import { formatDivisionDisplay, abbreviateDivision } from "@/lib/divisions";
 
 describe("formatDivisionDisplay", () => {
   it("appends Major when shoots_handgun_major is true", () => {
@@ -40,5 +40,45 @@ describe("formatDivisionDisplay", () => {
 
   it("returns null when display name is empty string", () => {
     expect(formatDivisionDisplay("", true)).toBeNull();
+  });
+});
+
+describe("abbreviateDivision", () => {
+  it("returns short codes for known IPSC divisions with power factor", () => {
+    expect(abbreviateDivision("Open Major")).toBe("O+");
+    expect(abbreviateDivision("Open Minor")).toBe("O-");
+    expect(abbreviateDivision("Standard Major")).toBe("S+");
+    expect(abbreviateDivision("Standard Minor")).toBe("S-");
+    expect(abbreviateDivision("Classic Major")).toBe("C+");
+    expect(abbreviateDivision("Classic Minor")).toBe("C-");
+  });
+
+  it("returns short codes for single-power-factor divisions", () => {
+    expect(abbreviateDivision("Production")).toBe("P");
+    expect(abbreviateDivision("Production Optics")).toBe("PO");
+    expect(abbreviateDivision("Production Optics Light")).toBe("POL");
+    expect(abbreviateDivision("Revolver")).toBe("R");
+    expect(abbreviateDivision("PCC")).toBe("PCC");
+  });
+
+  it("returns base division when power factor is unknown", () => {
+    expect(abbreviateDivision("Open")).toBe("O");
+    expect(abbreviateDivision("Standard")).toBe("S");
+    expect(abbreviateDivision("Classic")).toBe("C");
+  });
+
+  it("falls back to first letters of each word for unknown divisions", () => {
+    expect(abbreviateDivision("Air Soft Tactical")).toBe("AST");
+    expect(abbreviateDivision("Foo")).toBe("F");
+  });
+
+  it("trims whitespace before lookup", () => {
+    expect(abbreviateDivision("  Production Optics  ")).toBe("PO");
+  });
+
+  it("returns empty string for null/undefined/empty", () => {
+    expect(abbreviateDivision(null)).toBe("");
+    expect(abbreviateDivision(undefined)).toBe("");
+    expect(abbreviateDivision("")).toBe("");
   });
 });
