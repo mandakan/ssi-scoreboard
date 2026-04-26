@@ -80,6 +80,10 @@ export interface AppDatabase {
   /** Retrieve a cached match data entry by its cache key. Returns the raw JSON string or null. */
   getMatchDataCache(cacheKey: string): Promise<string | null>;
 
+  /** Retrieve only the `stored_at` timestamp of a match data cache row.
+   *  Used by throttled writers to skip redundant updates. */
+  getMatchDataCacheStoredAt(cacheKey: string): Promise<string | null>;
+
   /** Store a match data entry. Upserts on cache_key. */
   setMatchDataCache(
     cacheKey: string,

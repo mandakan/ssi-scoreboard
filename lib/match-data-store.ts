@@ -2,7 +2,12 @@
 // Shared helpers for the tiered match data store: Redis → D1/SQLite → GraphQL.
 //
 // getMatchDataWithFallback() — read from Redis, fall back to D1.
+// persistActiveMatchToD1()   — write to D1 only (no Redis touch), throttled.
+//                              Used on every successful upstream fetch so D1
+//                              has a recent "last known good" snapshot if Redis
+//                              evicts during an upstream outage.
 // persistToMatchStore()      — write to D1, set Redis TTL to 24h (drain).
+//                              Used only when a match is definitively done.
 
 import cache from "@/lib/cache-impl";
 import db from "@/lib/db-impl";
@@ -10,6 +15,9 @@ import { CACHE_SCHEMA_VERSION } from "@/lib/constants";
 
 /** 24 hours — Redis drain TTL for completed matches written to D1. */
 const REDIS_DRAIN_TTL = 86_400;
+
+/** Default minimum age (seconds) before re-writing an active-match D1 row. */
+const ACTIVE_MATCH_D1_THROTTLE_SECONDS = 120;
 
 interface CacheEntryMeta {
   v?: number;
@@ -83,6 +91,52 @@ export function parseMatchCacheKey(
   }
 
   return null;
+}
+
+/**
+ * Persist active-match data to D1/SQLite as a "last known good" fallback.
+ * Does NOT touch Redis (TTL stays whatever the caller set), so SWR freshness
+ * windows are preserved.
+ *
+ * Throttled: skips the write if the existing D1 row is younger than
+ * `minAgeSeconds` (default 120s) to bound D1 write volume on hot paths.
+ *
+ * Fire-and-forget — errors are logged but not thrown.
+ */
+export async function persistActiveMatchToD1(
+  cacheKey: string,
+  rawJson: string,
+  minAgeSeconds: number = ACTIVE_MATCH_D1_THROTTLE_SECONDS,
+): Promise<void> {
+  const parsed = parseMatchCacheKey(cacheKey);
+  if (!parsed) return;
+
+  const { keyType, ct, matchId } = parsed;
+
+  try {
+    const storedAt = await db.getMatchDataCacheStoredAt(cacheKey);
+    if (storedAt) {
+      const ageMs = Date.now() - new Date(storedAt).getTime();
+      if (ageMs < minAgeSeconds * 1000) return; // throttled — recent enough
+    }
+  } catch { /* if the read fails, fall through and try the write */ }
+
+  let schemaVersion = CACHE_SCHEMA_VERSION;
+  try {
+    const meta = JSON.parse(rawJson) as CacheEntryMeta;
+    if (meta.v != null) schemaVersion = meta.v;
+  } catch { /* use default */ }
+
+  try {
+    await db.setMatchDataCache(cacheKey, rawJson, {
+      keyType,
+      ct,
+      matchId,
+      schemaVersion,
+    });
+  } catch (err) {
+    console.error("[match-data-store] active D1 write error:", cacheKey, err);
+  }
 }
 
 /**
