@@ -17,7 +17,7 @@ import Link from "next/link";
 import { cn, formatHF, formatTime, formatPct, computePointsDelta, formatDelta } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
 import { abbreviateDivision } from "@/lib/divisions";
-import { compactName } from "@/lib/competitor-name";
+import { rollCallName } from "@/lib/competitor-name";
 import { HitZoneBar } from "@/components/hit-zone-bar";
 import { RankBadge, PenaltyBadge, ShootingOrderBadge, StageClassificationBadge, ConditionsBadge, ordinal } from "@/components/stage-cell-parts";
 import { CellHelpModal } from "@/components/cell-help-modal";
@@ -813,7 +813,7 @@ function StageScorecardRow({
       </span>
     );
 
-  const shortName = compactName(comp.name);
+  const shortName = rollCallName(comp.name);
   const shortDivision = abbreviateDivision(comp.division);
   const nameLinkClass = "font-medium hover:underline truncate";
   const nameContent = (

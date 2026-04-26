@@ -1,5 +1,33 @@
 import { describe, it, expect } from "vitest";
-import { compactName, initialsName } from "@/lib/competitor-name";
+import { compactName, initialsName, rollCallName } from "@/lib/competitor-name";
+
+describe("rollCallName", () => {
+  it("keeps the first name and abbreviates the last name", () => {
+    expect(rollCallName("Mathias Andersson")).toBe("Mathias A.");
+  });
+
+  it("uses the final token as the surname for multi-token names", () => {
+    expect(rollCallName("Maria del Carmen Lopez")).toBe("Maria L.");
+  });
+
+  it("returns the only token when name has one part", () => {
+    expect(rollCallName("Cher")).toBe("Cher");
+  });
+
+  it("uppercases the surname initial regardless of input casing", () => {
+    expect(rollCallName("mathias andersson")).toBe("mathias A.");
+  });
+
+  it("trims and collapses whitespace", () => {
+    expect(rollCallName("  Mathias   Andersson  ")).toBe("Mathias A.");
+  });
+
+  it("returns empty string for null/undefined/empty", () => {
+    expect(rollCallName(null)).toBe("");
+    expect(rollCallName(undefined)).toBe("");
+    expect(rollCallName("")).toBe("");
+  });
+});
 
 describe("compactName", () => {
   it("abbreviates the first name to a single initial", () => {
