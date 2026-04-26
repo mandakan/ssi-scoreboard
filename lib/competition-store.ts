@@ -1,4 +1,4 @@
-import type { CompareMode, MatchResponse } from "@/lib/types";
+import type { MatchResponse, MatchView } from "@/lib/types";
 
 export interface StoredCompetition {
   ct: string;
@@ -172,8 +172,8 @@ function modeKey(ct: string, id: string): string {
   return `ssi_mode_${ct}_${id}`;
 }
 
-/** Save a mode override for this match. Pass null to clear (revert to auto). */
-export function saveModeOverride(ct: string, id: string, mode: CompareMode | null): void {
+/** Save a view override for this match. Pass null to clear (revert to auto). */
+export function saveModeOverride(ct: string, id: string, mode: MatchView | null): void {
   if (typeof window === "undefined") return;
   try {
     const key = modeKey(ct, id);
@@ -188,16 +188,17 @@ export function saveModeOverride(ct: string, id: string, mode: CompareMode | nul
   }
 }
 
-/** Stable-reference snapshot cache for mode override. */
-const _modeCache = new Map<string, { raw: string | null; mode: CompareMode | null }>();
+/** Stable-reference snapshot cache for view override. */
+const _modeCache = new Map<string, { raw: string | null; mode: MatchView | null }>();
 
-export function getModeOverrideSnapshot(ct: string, id: string): CompareMode | null {
+export function getModeOverrideSnapshot(ct: string, id: string): MatchView | null {
   if (typeof window === "undefined") return null;
   const key = modeKey(ct, id);
   const raw = localStorage.getItem(key);
   const cached = _modeCache.get(key);
   if (cached && cached.raw === raw) return cached.mode;
-  const mode = raw === "live" || raw === "coaching" ? raw : null;
+  const mode =
+    raw === "live" || raw === "coaching" || raw === "prematch" ? raw : null;
   _modeCache.set(key, { raw, mode });
   return mode;
 }

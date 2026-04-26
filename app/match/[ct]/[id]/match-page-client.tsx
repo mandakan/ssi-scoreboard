@@ -14,7 +14,8 @@ import { BenchmarkPicker } from "@/components/benchmark-picker";
 import { ComparisonTable } from "@/components/comparison-table";
 import { ModeToggle } from "@/components/mode-toggle";
 import { useMatchQuery, useCompareQuery, useCoachingAvailability } from "@/lib/queries";
-import { detectMode } from "@/lib/mode";
+import { detectMatchView, isPreMatchEligible } from "@/lib/mode";
+import type { CompareMode } from "@/lib/types";
 import { CacheInfoBadge } from "@/components/cache-info-badge";
 import { LoadingBar } from "@/components/loading-bar";
 import { Button } from "@/components/ui/button";
@@ -195,17 +196,53 @@ export default function MatchPageClient() {
   // Capture mount timestamp once to avoid impure Date.now() in render path.
   const [mountMs] = useState(() => Date.now());
 
-  // Compute auto mode from match data (defaults to "coaching" until loaded).
+  // Compute auto view from match data (defaults to "coaching" until loaded).
   const matchDateMs = matchQuery.data?.date ? new Date(matchQuery.data.date).getTime() : null;
-  const autoMode = matchQuery.data
-    ? detectMode(
-        matchQuery.data.scoring_completed,
-        matchDateMs != null ? (mountMs - matchDateMs) / 86_400_000 : 0,
-      )
-    : "coaching";
+  const matchEndsMs = matchQuery.data?.ends ? new Date(matchQuery.data.ends).getTime() : null;
+  const daysSinceMatchStart =
+    matchDateMs != null ? (mountMs - matchDateMs) / 86_400_000 : 0;
+  const daysSinceMatchEnd =
+    matchEndsMs != null ? (mountMs - matchEndsMs) / 86_400_000 : null;
+
+  // Auto view is computed from match-only data first, then refined once the
+  // compare response confirms whether any stage already has scores.
+  // (This enables falling back to "live" if `scoring_completed` is still 0
+  // but the API has scores — handles rounding / delayed reporting.)
+  const autoMode = useMemo(() => {
+    if (!matchQuery.data) return "coaching" as const;
+    return detectMatchView({
+      scoringPct: matchQuery.data.scoring_completed,
+      daysSinceMatchStart,
+      daysSinceMatchEnd,
+      resultsStatus: matchQuery.data.results_status,
+      matchStatus: matchQuery.data.match_status,
+      hasActualScores: false,
+    });
+  }, [matchQuery.data, daysSinceMatchStart, daysSinceMatchEnd]);
+
   const effectiveMode = modeOverride ?? autoMode;
 
-  const compareQuery = useCompareQuery(ct, id, selectedIds, effectiveMode);
+  // Pre-match selectability — offered as a manual choice while the match
+  // isn't fully wrapped up.
+  const preMatchEligible = matchQuery.data
+    ? isPreMatchEligible({
+        scoringPct: matchQuery.data.scoring_completed,
+        daysSinceMatchStart,
+        daysSinceMatchEnd,
+        resultsStatus: matchQuery.data.results_status,
+      })
+    : false;
+
+  // Compare query: skipped when in the pre-match view (no scores to fetch).
+  // The mode passed to the API is always "live" or "coaching".
+  const compareMode: CompareMode = effectiveMode === "coaching" ? "coaching" : "live";
+  const compareEnabled = effectiveMode !== "prematch";
+  const compareQuery = useCompareQuery(
+    ct,
+    id,
+    compareEnabled ? selectedIds : EMPTY_IDS,
+    compareMode,
+  );
   const coachingAvailability = useCoachingAvailability();
 
   // ── Stage sort (shared by table + charts) ─────────────────────────────────
@@ -401,18 +438,10 @@ export default function MatchPageClient() {
   const resultsPublished = match.results_status === "all";
   const matchCancelled = match.match_status === "cs";
   const aiAvailable = coachingAvailability.data?.available === true;
-  // Pre-match: no scores yet and match not completed or cancelled.
-  // Also check compare data: if any stage has competitor scores, scoring has
-  // started regardless of what scoring_completed reports (handles rounding
-  // edge cases and delayed API updates for large matches).
-  const hasActualScores = compareQuery.data?.stages.some(
-    (s) => Object.keys(s.competitors).length > 0,
-  ) ?? false;
-  const isPreMatch =
-    match.scoring_completed === 0 &&
-    !hasActualScores &&
-    match.match_status !== "cp" &&
-    match.match_status !== "cs";
+  // The active view drives what's rendered. Auto-detection chooses pre-match
+  // when scoring hasn't really started; the user can override via ModeToggle
+  // (e.g. early squads have finished but their afternoon/day-2 squad hasn't).
+  const isPreMatch = effectiveMode === "prematch";
 
   // Pick the older (more stale) cachedAt between match and compare responses.
   // null means "just fetched live" — prefer non-null if one is cached.
@@ -483,42 +512,48 @@ export default function MatchPageClient() {
         </div>
       )}
 
-      {/* Mode toggle — hidden pre-match (no scores to analyse yet) */}
-      {!isPreMatch && <div className="space-y-1">
+      {/* View toggle — pre-match / live / coaching. Pre-match stays available
+          while the match is in progress so users in late squads can still see
+          squad rotation, weather, and field info. */}
+      <div className="space-y-1">
         <div className="flex items-center gap-1.5">
           <ModeToggle
             autoMode={autoMode}
             effectiveMode={effectiveMode}
+            preMatchEligible={preMatchEligible}
             onModeChange={(mode) => saveModeOverride(ct, id, mode)}
           />
           <Popover>
             <PopoverTrigger asChild>
               <button
                 className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                aria-label="About live and coaching modes"
+                aria-label="About pre-match, live, and coaching views"
               >
                 <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
               </button>
             </PopoverTrigger>
             <PopoverContent className="w-80" side="bottom" align="start">
               <PopoverHeader>
-                <PopoverTitle>Live vs Coaching mode</PopoverTitle>
-                <PopoverDescription>The app picks a mode based on match state. You can override it.</PopoverDescription>
+                <PopoverTitle>Pre-match, Live, and Coaching</PopoverTitle>
+                <PopoverDescription>The app picks a view based on match state. You can override it.</PopoverDescription>
               </PopoverHeader>
               <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+                <p><strong>Pre-match</strong> — squad rotation, weather, registered field, and AI brief. Useful when your squad hasn&apos;t shot yet, even if early squads have finished.</p>
                 <p><strong>Live</strong> — for active matches. Refreshes every 30 seconds. Shows stage results, charts, and core stats only. Skips heavy analytics to keep things fast courtside.</p>
                 <p><strong>Coaching</strong> — for completed matches. Full analysis: style fingerprints, archetype breakdown, course-length splits, constraint performance, and the stage simulator.</p>
-                <p>The mode is auto-detected: matches with ≥ 95% scored or older than 3 days default to Coaching. Tap the other mode to override, or tap the active mode to reset to auto.</p>
+                <p>The view is auto-detected: pre-match before scoring really gets going, live once scoring is underway, and coaching for ≥ 95% scored or matches older than 3 days. Tap any mode to override, or tap the active mode to reset to auto.</p>
               </div>
             </PopoverContent>
           </Popover>
         </div>
         <p className="text-xs text-muted-foreground">
-          {effectiveMode === "live"
+          {effectiveMode === "prematch"
+            ? "Squad rotation, weather, and registered field. No scores shown."
+            : effectiveMode === "live"
             ? "Fast refresh, stage-focused view. Coaching analytics hidden."
             : "Full analysis with style fingerprints, breakdowns, and simulator."}
         </p>
-      </div>}
+      </div>
 
       {/* Competitor picker */}
       <div className="space-y-1">
