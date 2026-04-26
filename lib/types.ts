@@ -248,6 +248,14 @@ export type PctMode = "group" | "division" | "overall";
 // "coaching" — post-match; full fingerprint, archetype, what-if, etc.
 export type CompareMode = "live" | "coaching";
 
+// View selection for the match page.
+// "prematch" — squad rotation, weather, registered field (no scores yet, or user's squad
+//              hasn't shot yet — useful when early squads have finished but the user is
+//              in an afternoon/second-day squad).
+// "live"     — fast-refresh comparison + charts; no heavy coaching analytics.
+// "coaching" — full post-match analysis (style fingerprint, simulator, etc.).
+export type MatchView = "prematch" | "live" | "coaching";
+
 // View mode for the comparison table.
 // "absolute" — shows raw hit factor, points, and percentage
 // "delta"    — shows gap to the group leader per stage (±X.X pts)
