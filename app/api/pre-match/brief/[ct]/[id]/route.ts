@@ -10,6 +10,7 @@ import { createAIProvider } from "@/lib/ai-provider";
 import { buildPreMatchBriefPrompt, computeSquadContext, PRE_MATCH_PROMPT_VERSION } from "@/lib/pre-match-prompt";
 import { fetchMatchData } from "@/lib/match-data";
 import { getShooterDashboard } from "@/lib/api-data";
+import { isPreMatchEligible } from "@/lib/mode";
 import cache from "@/lib/cache-impl";
 import type { ShooterDashboardResponse } from "@/lib/types";
 import type { CoachingTipResponse } from "@/lib/types";
@@ -63,9 +64,23 @@ export async function GET(
   }
   const match = matchResult.data;
 
-  // Only generate briefs for pre-match state.
-  if (match.scoring_completed > 0 || match.match_status === "cp" || match.match_status === "cs") {
-    return NextResponse.json({ error: "Match already has results" }, { status: 400 });
+  // Mirror the frontend's pre-match eligibility gate: the brief stays available
+  // while the match isn't fully wrapped up, even if early squads have started
+  // scoring (e.g. multi-day matches, RO squads shooting the day before).
+  const matchDateMs = match.date ? new Date(match.date).getTime() : null;
+  const matchEndsMs = match.ends ? new Date(match.ends).getTime() : null;
+  const nowMs = Date.now();
+  const daysSinceMatchStart = matchDateMs != null ? (nowMs - matchDateMs) / 86_400_000 : 0;
+  const daysSinceMatchEnd = matchEndsMs != null ? (nowMs - matchEndsMs) / 86_400_000 : null;
+  if (
+    !isPreMatchEligible({
+      scoringPct: match.scoring_completed,
+      daysSinceMatchStart,
+      daysSinceMatchEnd,
+      resultsStatus: match.results_status,
+    })
+  ) {
+    return NextResponse.json({ error: "Match no longer in pre-match state" }, { status: 400 });
   }
 
   // Build a cache key that encodes the prompt version and model.
