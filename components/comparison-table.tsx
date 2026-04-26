@@ -478,6 +478,20 @@ function ModeToggle({
   );
 }
 
+/**
+ * localStorage key used to remember the user's last comparison-table view
+ * mode. Persisting across reloads matters most courtside on an ongoing
+ * match — the user shouldn't have to re-pick "Stages" every time the page
+ * is refreshed mid-day. The value is intentionally global (not per-match)
+ * because in practice users have a preferred view, not a preference per
+ * specific competition.
+ */
+const VIEW_MODE_STORAGE_KEY = "ssi-comparison-view-mode";
+
+function isViewMode(value: unknown): value is ViewMode {
+  return value === "absolute" || value === "delta" || value === "stages";
+}
+
 const VIEW_MODE_LABELS: Record<ViewMode, string> = {
   absolute: "Absolute",
   delta: "Delta",
@@ -891,7 +905,17 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
   const [mode, setMode] = useState<PctMode>(
     competitors.length < 2 ? "division" : "group"
   );
-  const [viewMode, setViewMode] = useState<ViewMode>("absolute");
+  const [viewMode, setViewModeState] = useState<ViewMode>("absolute");
+  const setViewMode = (m: ViewMode) => {
+    setViewModeState(m);
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, m);
+      } catch {
+        // localStorage may be unavailable (private mode, quota) — ignore
+      }
+    }
+  };
   const [showConditions, setShowConditions] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [showWhatIf, setShowWhatIf] = useState(false);
@@ -910,6 +934,17 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
     if (!localStorage.getItem("ssi-cell-help-seen")) {
       localStorage.setItem("ssi-cell-help-seen", "1");
       startTransition(() => setHelpOpen(true));
+    }
+  }, []);
+
+  // Restore the user's last-picked view mode (Absolute / Delta / Stages).
+  // Runs once on mount; client-only so SSR isn't affected.
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+      if (isViewMode(stored)) setViewModeState(stored);
+    } catch {
+      // localStorage may be unavailable (private mode, quota) — ignore
     }
   }, []);
 

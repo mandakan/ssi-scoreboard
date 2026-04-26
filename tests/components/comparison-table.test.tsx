@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ComparisonTable } from "@/components/comparison-table";
@@ -113,6 +113,18 @@ const baseData: CompareResponse = {
     },
   ],
 };
+
+// View-mode preference is now persisted in localStorage. Without resetting
+// it between tests, a click on the "Delta" toggle in one test would carry
+// over and break "Absolute is the default" expectations in the next test.
+// We do NOT call localStorage.clear() because the component also reads
+// "ssi-cell-help-seen" — clearing it would auto-open the help dialog on
+// mount, whose focus trap marks the rest of the page aria-hidden and
+// breaks every getByRole query.
+beforeEach(() => {
+  window.localStorage.removeItem("ssi-comparison-view-mode");
+  window.localStorage.setItem("ssi-cell-help-seen", "1");
+});
 
 describe("ComparisonTable", () => {
   it("renders competitor names", () => {
@@ -614,5 +626,39 @@ describe("ComparisonTable — stages (per-stage scorecard) view", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Stages" }));
     // It should disappear once stages mode is active
     expect(screen.queryByRole("radio", { name: "Group" })).not.toBeInTheDocument();
+  });
+});
+
+describe("ComparisonTable — view mode persistence", () => {
+  it("restores the previously selected view mode on remount (page reload)", () => {
+    const { unmount } = renderWithProviders(
+      <ComparisonTable scoringCompleted={100} data={baseData} />,
+    );
+    fireEvent.click(screen.getByRole("radio", { name: "Stages" }));
+    expect(screen.getByRole("radio", { name: "Stages" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    unmount();
+
+    // Simulating a fresh page load — same localStorage, new component tree.
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
+    expect(screen.getByRole("radio", { name: "Stages" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    expect(screen.getByRole("radio", { name: "Absolute" })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
+  });
+
+  it("falls back to Absolute when localStorage holds an unknown value", () => {
+    window.localStorage.setItem("ssi-comparison-view-mode", "bogus");
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
+    expect(screen.getByRole("radio", { name: "Absolute" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
   });
 });
