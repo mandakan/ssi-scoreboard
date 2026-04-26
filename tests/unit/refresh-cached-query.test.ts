@@ -18,8 +18,13 @@ const dbMock = vi.hoisted(() => ({
   setMatchDataCache: vi.fn(() => Promise.resolve()),
 }));
 
+const upstreamMock = vi.hoisted(() => ({
+  markUpstreamDegraded: vi.fn(() => Promise.resolve()),
+}));
+
 vi.mock("@/lib/cache-impl", () => ({ default: cacheMock }));
 vi.mock("@/lib/db-impl", () => ({ default: dbMock }));
+vi.mock("@/lib/upstream-status", () => upstreamMock);
 vi.mock("@/lib/background-impl", () => ({
   // Run background work synchronously in tests so we can assert on its effects.
   afterResponse: (p: Promise<unknown>) => {
@@ -48,6 +53,7 @@ describe("refreshCachedQuery — stale-on-error", () => {
     cacheMock.set.mockResolvedValue(undefined);
     cacheMock.expire.mockResolvedValue(undefined);
     cacheMock.del.mockResolvedValue(undefined);
+    upstreamMock.markUpstreamDegraded.mockClear();
 
     fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
@@ -106,6 +112,29 @@ describe("refreshCachedQuery — stale-on-error", () => {
 
     expect(cacheMock.del).toHaveBeenCalledWith(`inflight:${KEY}`);
     expect(cacheMock.expire).toHaveBeenCalledWith(KEY, 90);
+  });
+
+  it("marks the upstream as degraded when the fetch fails", async () => {
+    const { refreshCachedQuery } = await import("@/lib/graphql");
+    fetchSpy.mockRejectedValue(new Error("network down"));
+
+    await refreshCachedQuery(KEY, QUERY, VARS, 90);
+
+    expect(upstreamMock.markUpstreamDegraded).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT mark the upstream as degraded on success", async () => {
+    const { refreshCachedQuery } = await import("@/lib/graphql");
+    fetchSpy.mockResolvedValue(
+      new Response(JSON.stringify({ data: { event: { name: "ok" } } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    await refreshCachedQuery(KEY, QUERY, VARS, 90);
+
+    expect(upstreamMock.markUpstreamDegraded).not.toHaveBeenCalled();
   });
 
   it("skips the work entirely if the lock was already taken", async () => {

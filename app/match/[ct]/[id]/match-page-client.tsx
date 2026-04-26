@@ -17,6 +17,7 @@ import { useMatchQuery, useCompareQuery, useCoachingAvailability } from "@/lib/q
 import { detectMatchView, isPreMatchEligible } from "@/lib/mode";
 import type { CompareMode } from "@/lib/types";
 import { CacheInfoBadge } from "@/components/cache-info-badge";
+import { UpstreamDegradedBanner } from "@/components/upstream-degraded-banner";
 import { LoadingBar } from "@/components/loading-bar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -454,6 +455,12 @@ export default function MatchPageClient() {
         : compareCachedAt
       : matchCachedAt ?? compareCachedAt;
 
+  // Either response can flag the upstream as degraded. Show the banner when
+  // any active query reports it — disappears as soon as a fresh response lands.
+  const upstreamDegraded =
+    match.cacheInfo.upstreamDegraded === true ||
+    compareQuery.data?.cacheInfo.upstreamDegraded === true;
+
   return (
     <main id="main-content" tabIndex={-1} className="min-h-screen p-4 sm:p-6 max-w-6xl mx-auto space-y-6 animate-fade-in">
       <LoadingBar
@@ -486,6 +493,11 @@ export default function MatchPageClient() {
           <ShareButton title={match.name} competitorCount={selectedIds.length} />
         </div>
       </div>
+
+      {/* Upstream degraded banner — shown when SSI is failing and we're serving stale data */}
+      {upstreamDegraded && (
+        <UpstreamDegradedBanner cachedAt={stalestCachedAt} />
+      )}
 
       {/* Match header */}
       <MatchHeader match={match} />
