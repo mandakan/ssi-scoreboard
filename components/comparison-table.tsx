@@ -522,27 +522,22 @@ function ViewModeToggle({
       className="w-auto inline-flex rounded-md border text-xs"
     >
       {order.map((m, i, arr) => (
-        <Tooltip key={m}>
-          <TooltipTrigger asChild>
-            <ToggleGroupItem
-              value={m}
-              className={cn(
-                "h-auto min-w-0 gap-0 rounded-none px-2.5 py-1 font-normal text-xs transition-colors",
-                i === 0 ? "rounded-l-md" : "",
-                i === arr.length - 1 ? "rounded-r-md" : "",
-                "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
-                viewMode === m
-                  ? "bg-foreground text-background font-medium"
-                  : "text-muted-foreground hover:bg-muted"
-              )}
-            >
-              {VIEW_MODE_LABELS[m]}
-            </ToggleGroupItem>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="max-w-60 text-center text-xs">
-            {VIEW_MODE_TOOLTIPS[m]}
-          </TooltipContent>
-        </Tooltip>
+        <ToggleGroupItem
+          key={m}
+          value={m}
+          title={VIEW_MODE_TOOLTIPS[m]}
+          className={cn(
+            "h-auto min-w-0 gap-0 rounded-none px-2.5 py-1 font-normal text-xs transition-colors",
+            i === 0 ? "rounded-l-md" : "",
+            i === arr.length - 1 ? "rounded-r-md" : "",
+            "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+            viewMode === m
+              ? "bg-foreground text-background font-medium"
+              : "text-muted-foreground hover:bg-muted"
+          )}
+        >
+          {VIEW_MODE_LABELS[m]}
+        </ToggleGroupItem>
       ))}
     </ToggleGroup>
   );
@@ -1077,7 +1072,10 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
       ))}
 
       {/* View mode toggle (Absolute / Delta) + percentage context + help */}
-      <div className="flex items-center gap-2">
+      {/* Toolbar wraps on narrow screens — at 390px the three view-mode
+          toggles + percentage-context toggle + help icon don't fit on one
+          row without overflowing the window. */}
+      <div className="flex flex-wrap items-center gap-2">
         <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
         {viewMode === "absolute" && (
           <ModeToggle mode={mode} onChange={setMode} competitorCount={competitors.length} />
