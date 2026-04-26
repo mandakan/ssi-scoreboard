@@ -47,6 +47,11 @@ const adapter: CacheAdapter = {
     await redis.expire(pk(key), ttlSeconds);
   },
 
+  async setIfAbsent(key, value, ttlSeconds) {
+    const res = await redis.set(pk(key), value, "EX", ttlSeconds, "NX");
+    return res === "OK";
+  },
+
   async scanCachedMatchKeys() {
     const pattern = `${PREFIX}gql:GetMatch:*`;
     const keys: string[] = [];

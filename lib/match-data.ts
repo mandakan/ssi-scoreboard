@@ -3,9 +3,9 @@
 // in the match page server component.
 
 import { cache } from "react";
-import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
+import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY, refreshCachedQuery } from "@/lib/graphql";
 import cacheAdapter from "@/lib/cache-impl";
-import { computeMatchTtl, isMatchComplete } from "@/lib/match-ttl";
+import { computeMatchFreshness, computeMatchSwrTtl, isMatchComplete } from "@/lib/match-ttl";
 import { extractDivision } from "@/lib/divisions";
 import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
 import { afterResponse } from "@/lib/background-impl";
@@ -150,9 +150,12 @@ export async function fetchMatchData(
   const resultsPublished = ev.results === "all";
   const cancelled = ev.status === "cs";
   // results=all or cancelled are definitive — cache permanently regardless of scoring %.
+  // For non-permanent entries we use the SWR-aware TTL (≥ 5min) so live-match
+  // entries outlive their 30s freshness window, leaving room for the background
+  // refresh below to land before Redis evicts.
   const ttl = (resultsPublished || cancelled)
     ? null
-    : computeMatchTtl(scoringPct, daysSince, ev.starts ?? null);
+    : computeMatchSwrTtl(scoringPct, daysSince, ev.starts ?? null);
   const isComplete = resultsPublished || isMatchComplete(scoringPct, daysSince);
 
   try {
@@ -167,6 +170,20 @@ export async function fetchMatchData(
       await cacheAdapter.expire(matchKey, ttl);
     }
   } catch { /* ignore */ }
+
+  // Stale-while-revalidate: a cache hit older than the freshness window
+  // triggers a single-flight background refresh. The current request returns
+  // cached data immediately; the next poll (client polls every 30s while
+  // matches are active) sees the refreshed entry.
+  const freshness = computeMatchFreshness(scoringPct, daysSince, ev.starts ?? null);
+  if (cachedAt && ttl != null && freshness != null) {
+    const ageSeconds = (Date.now() - new Date(cachedAt).getTime()) / 1000;
+    if (ageSeconds > freshness) {
+      afterResponse(
+        refreshCachedQuery<RawMatchData>(matchKey, MATCH_QUERY, { ct: ctNum, id }, ttl),
+      );
+    }
+  }
 
   const stages: StageInfo[] = (ev.stages ?? []).map((s) => ({
     id: parseInt(s.id, 10),

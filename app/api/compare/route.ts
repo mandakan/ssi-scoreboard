@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { MAX_COMPETITORS } from "@/lib/constants";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY, MATCH_QUERY } from "@/lib/graphql";
+import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY, MATCH_QUERY, refreshCachedQuery } from "@/lib/graphql";
 import cache from "@/lib/cache-impl";
-import { computeMatchTtl, isMatchComplete } from "@/lib/match-ttl";
+import { computeMatchFreshness, computeMatchSwrTtl, isMatchComplete } from "@/lib/match-ttl";
 import { persistToMatchStore } from "@/lib/match-data-store";
 import { afterResponse } from "@/lib/background-impl";
 
@@ -125,7 +125,9 @@ export async function GET(req: Request) {
   const matchDate = matchData.event?.starts ? new Date(matchData.event.starts) : null;
   const daysSince = matchDate ? (Date.now() - matchDate.getTime()) / 86_400_000 : 0;
   const isComplete = isMatchComplete(scoringPct, daysSince);
-  const dataTtl = computeMatchTtl(scoringPct, daysSince, matchData.event?.starts ?? null);
+  // SWR-aware TTL — keeps Redis entries alive past the 30s freshness window
+  // for live matches so the background refresh below can land before eviction.
+  const dataTtl = computeMatchSwrTtl(scoringPct, daysSince, matchData.event?.starts ?? null);
 
   // Upgrade match cache entry TTL based on match state
   try {
@@ -141,6 +143,19 @@ export async function GET(req: Request) {
       await cache.expire(matchKey, dataTtl);
     }
   } catch { /* ignore */ }
+
+  // Stale-while-revalidate: schedule a background refresh of the match key
+  // when the cached value is older than its freshness window. Single-flight
+  // via SETNX so concurrent readers trigger at most one upstream fetch.
+  const matchFreshness = computeMatchFreshness(scoringPct, daysSince, matchData.event?.starts ?? null);
+  if (matchCachedAt && dataTtl != null && matchFreshness != null) {
+    const age = (Date.now() - new Date(matchCachedAt).getTime()) / 1000;
+    if (age > matchFreshness) {
+      afterResponse(
+        refreshCachedQuery<RawMatchData>(matchKey, MATCH_QUERY, { ct: ctNum, id }, dataTtl),
+      );
+    }
+  }
 
   // Step 2 — fetch scorecards with TTL determined by match state
   const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
@@ -172,6 +187,16 @@ export async function GET(req: Request) {
       await cache.expire(scorecardsKey, dataTtl);
     }
   } catch { /* ignore */ }
+
+  // SWR for scorecards (the slowest upstream call) — same single-flight pattern.
+  if (scorecardsCachedAt && dataTtl != null && matchFreshness != null) {
+    const age = (Date.now() - new Date(scorecardsCachedAt).getTime()) / 1000;
+    if (age > matchFreshness) {
+      afterResponse(
+        refreshCachedQuery<RawScorecardsData>(scorecardsKey, SCORECARDS_QUERY, { ct: ctNum, id }, dataTtl),
+      );
+    }
+  }
 
   // Start match-global cache read early so the Redis round-trip can resolve
   // during the synchronous computation below (computeGroupRankings, etc.)

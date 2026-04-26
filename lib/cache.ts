@@ -16,6 +16,13 @@ export interface CacheAdapter {
   expire(key: string, ttlSeconds: number): Promise<void>;
 
   /**
+   * Atomic set-if-absent. Returns true if the key was set, false if it already
+   * existed. Used as a single-flight lock primitive (e.g. for SWR background
+   * refresh dedup). Backed by Redis `SET NX EX`.
+   */
+  setIfAbsent(key: string, value: string, ttlSeconds: number): Promise<boolean>;
+
+  /**
    * Scan for all cached GetMatch keys using Redis SCAN (cursor-based, non-blocking).
    * Returns bare cache keys (without CACHE_KEY_PREFIX) matching `gql:GetMatch:*`.
    */
