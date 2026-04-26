@@ -24,10 +24,17 @@ export function useMatchQuery(ct: string, id: string) {
     refetchInterval: (query) => {
       const data = query.state.data;
       if (!data) return false;
+      // Stop polling only when the match is unambiguously over: SSI status
+      // marks it completed/cancelled, or 100% scored. `results_status === "all"`
+      // and `scoring_completed >= 95` were both false-positive triggers — the
+      // organizer can publish results before all scorecards are submitted, and
+      // the scoring percentage can sit at 95-99% mid-match while squads still
+      // have unscored stages. Keep polling in those cases so late scorecards
+      // surface.
       const isComplete =
-        data.results_status === "all" ||
         data.match_status === "cp" ||
-        data.scoring_completed >= 95;
+        data.match_status === "cs" ||
+        data.scoring_completed >= 100;
       return isComplete ? false : 30_000;
     },
     enabled: Boolean(ct && id),

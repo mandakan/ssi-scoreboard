@@ -149,14 +149,19 @@ export async function fetchMatchData(
   const daysSince = matchDate ? (Date.now() - matchDate.getTime()) / 86_400_000 : 0;
   const resultsPublished = ev.results === "all";
   const cancelled = ev.status === "cs";
-  // results=all or cancelled are definitive — cache permanently regardless of scoring %.
-  // For non-permanent entries we use the SWR-aware TTL (≥ 5min) so live-match
-  // entries outlive their 30s freshness window, leaving room for the background
-  // refresh below to land before Redis evicts.
-  const ttl = (resultsPublished || cancelled)
+  // Cache permanently only when we're sure the match is truly done:
+  // cancelled, or `isMatchComplete()` returns true (scoring=100 or >7 days
+  // old). `results === "all"` alone is not enough — organizers sometimes
+  // flip it before every RO has submitted scorecards, which used to pin a
+  // mid-match snapshot to D1 with no way to refresh.
+  const trulyDone = cancelled || isMatchComplete(scoringPct, daysSince);
+  const ttl = trulyDone
     ? null
     : computeMatchSwrTtl(scoringPct, daysSince, ev.starts ?? null);
-  const isComplete = resultsPublished || isMatchComplete(scoringPct, daysSince);
+  // `isComplete` flag (returned to callers / used for UI badges) stays
+  // lenient — once results are published or scoring is high we treat the
+  // match as "done enough" to display, even if we keep refreshing.
+  const isComplete = trulyDone || resultsPublished;
 
   try {
     if (ttl === null) {

@@ -28,30 +28,34 @@ function rawTtl(
 describe("computeMatchTtl", () => {
   // ── Completed matches ──────────────────────────────────────────────────────
 
-  it("returns null (permanent) when scoring >= 95% AND daysSince >= 1", () => {
-    expect(computeMatchTtl(95, 1, isoHoursFromNow(-24))).toBeNull();
+  it("returns null (permanent) when scoring is 100%", () => {
+    expect(computeMatchTtl(100, 0.5, isoHoursFromNow(-12))).toBeNull();
     expect(computeMatchTtl(100, 1, isoHoursFromNow(-24))).toBeNull();
+    expect(computeMatchTtl(100, 30, null)).toBeNull();
   });
 
-  it("returns null (permanent) when daysSince > 3 regardless of scoring", () => {
-    expect(computeMatchTtl(0, 3.1, null)).toBeNull();
+  it("returns null (permanent) when daysSince > 7 regardless of scoring", () => {
+    expect(computeMatchTtl(0, 7.1, null)).toBeNull();
     expect(computeMatchTtl(50, 10, isoHoursFromNow(-240))).toBeNull();
+    expect(computeMatchTtl(98, 365, null)).toBeNull();
   });
 
-  // Regression: during an active match day the upstream scoring_completed
-  // can climb past 95% before all squads' scorecards are in. If we flipped
-  // the cache to permanent at that point, the last scorecards would never
-  // be fetched. Require at least 1 day since start before trusting the
-  // scoring threshold.
-  it("stays in active-scoring tier when scoring >= 95% but match started same day", () => {
-    // 95% scored, match started 6 hours ago → NOT complete
+  // Regression: during an active multi-day match the upstream scoring_completed
+  // can climb past 95% on day 1 while squads still have unscored stages on
+  // day 2. The previous "scoring >= 95% AND daysSince >= 1" rule pinned a
+  // mid-match snapshot to the durable store. Now we require either truly
+  // 100% scoring or > 7 days since start.
+  it("stays in active-scoring tier when scoring >= 95% but match is recent", () => {
     expect(computeMatchTtl(95, 0.25, isoHoursFromNow(-6))).not.toBeNull();
     expect(computeMatchTtl(98, 0.5, isoHoursFromNow(-12))).not.toBeNull();
+    expect(computeMatchTtl(95, 1, isoHoursFromNow(-24))).not.toBeNull();
+    expect(computeMatchTtl(98, 3, isoHoursFromNow(-72))).not.toBeNull();
     expect(rawTtl(99, 0.9, isoHoursFromNow(-21))).toBe(30);
   });
 
-  it("returns null at boundary: scoring exactly 95, daysSince exactly 1", () => {
-    expect(computeMatchTtl(95, 1, isoHoursFromNow(-24))).toBeNull();
+  it("returns null at boundary: scoring exactly 100, any daysSince", () => {
+    expect(computeMatchTtl(100, 0, isoHoursFromNow(0))).toBeNull();
+    expect(computeMatchTtl(100, 0.1, isoHoursFromNow(-2))).toBeNull();
   });
 
   // ── Active scoring ─────────────────────────────────────────────────────────
@@ -166,8 +170,8 @@ describe("computeMatchTtl", () => {
 
 describe("computeMatchFreshness", () => {
   it("returns null for completed matches", () => {
-    expect(computeMatchFreshness(95, 1, isoHoursFromNow(-24))).toBeNull();
-    expect(computeMatchFreshness(0, 4, null)).toBeNull();
+    expect(computeMatchFreshness(100, 0.5, isoHoursFromNow(-12))).toBeNull();
+    expect(computeMatchFreshness(0, 8, null)).toBeNull();
   });
 
   it("returns 30s for active scoring (raw, unclamped)", () => {
@@ -217,21 +221,27 @@ describe("computeMatchFreshness", () => {
 });
 
 describe("isMatchComplete", () => {
-  it("true when daysSince > 3, regardless of scoring", () => {
-    expect(isMatchComplete(0, 3.1)).toBe(true);
+  it("true when daysSince > 7, regardless of scoring", () => {
+    expect(isMatchComplete(0, 7.1)).toBe(true);
     expect(isMatchComplete(50, 10)).toBe(true);
+    expect(isMatchComplete(98, 365)).toBe(true);
   });
 
-  it("true when scoring >= 95% AND daysSince >= 1", () => {
-    expect(isMatchComplete(95, 1)).toBe(true);
-    expect(isMatchComplete(100, 2)).toBe(true);
+  it("true when scoring is 100%, regardless of daysSince", () => {
+    expect(isMatchComplete(100, 0)).toBe(true);
+    expect(isMatchComplete(100, 0.5)).toBe(true);
+    expect(isMatchComplete(100, 5)).toBe(true);
   });
 
-  it("false when scoring >= 95% but match started same day", () => {
-    // Primary regression: high scoring % mid-match-day must not mark complete
+  // Primary regression: high scoring % mid-match must not flip the cache to
+  // permanent. Multi-day matches with pre-match day can run 2-3 days while
+  // late scorecards trickle in — keep refreshing until 100% or > 7 days old.
+  it("false when scoring >= 95% but match is within 7 days", () => {
     expect(isMatchComplete(95, 0)).toBe(false);
     expect(isMatchComplete(98, 0.5)).toBe(false);
-    expect(isMatchComplete(100, 0.99)).toBe(false);
+    expect(isMatchComplete(99, 1)).toBe(false);
+    expect(isMatchComplete(98, 3)).toBe(false);
+    expect(isMatchComplete(95, 7)).toBe(false);
   });
 
   it("false when scoring low and match is recent", () => {

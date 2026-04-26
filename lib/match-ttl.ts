@@ -23,21 +23,27 @@ const DEFAULT_MIN_TTL = parseInt(
 );
 
 /**
- * Is a match "done" from our caching/UI perspective?
+ * Is a match definitively "done" — safe to cache permanently and stop
+ * hitting the upstream API?
  *
- * A high `scoring_completed` value on its own is not enough — during an
- * active match day the upstream percentage can cross 95% while some
- * squads still have unscored stages, so we also require at least one full
- * day has passed since the match start. Matches more than 3 days old are
- * considered complete regardless of scoring (handles users viewing
- * historical matches where scoring_completed was never finalised).
+ * `scoring_completed` can cross 95% mid-match while squads still have
+ * unscored stages, and `results === "all"` can flip true on the SSI side
+ * before every RO has submitted scorecards. Neither is reliable on its
+ * own. We require either:
+ *   - 100% scoring (literally every stage scored for every approved
+ *     competitor), or
+ *   - more than 7 days since match start — covers 2-3 day matches plus
+ *     extra margin for late scorecard submissions, and still pins
+ *     historical matches that finished at 98%.
+ *
+ * Cancelled matches (`status === "cs"`) are handled separately by callers.
  */
 export function isMatchComplete(
   scoringPct: number,
   daysSince: number,
 ): boolean {
-  if (daysSince > 3) return true;
-  return scoringPct >= 95 && daysSince >= 1;
+  if (daysSince > 7) return true;
+  return scoringPct >= 100;
 }
 
 /**

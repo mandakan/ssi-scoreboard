@@ -42,7 +42,7 @@ const MOCK_MATCH: OgMatchData = {
 };
 
 // Active match: recent date + low scoring so isMatchComplete() is false.
-// (A completed-but-recent match would also need to be within 3 days, so we
+// (A completed-but-recent match would also need to be within 7 days, so we
 // set date to a few hours ago — mirrors the real "match in progress" case.)
 const ACTIVE_MATCH: OgMatchData = {
   ...MOCK_MATCH,

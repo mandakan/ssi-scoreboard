@@ -798,19 +798,19 @@ describe("checkCoachingEligibility", () => {
     ];
   }
 
-  it("returns null for eligible competitor in complete match (scoring >= 95)", () => {
+  it("returns null for eligible competitor in complete match (scoring = 100)", () => {
     expect(
-      checkCoachingEligibility(95, 1, stagesWithCompetitor(), competitorId),
+      checkCoachingEligibility(100, 0.5, stagesWithCompetitor(), competitorId),
     ).toBeNull();
   });
 
-  it("returns null for eligible competitor in complete match (daysSince > 3)", () => {
+  it("returns null for eligible competitor in complete match (daysSince > 7)", () => {
     expect(
-      checkCoachingEligibility(50, 4, stagesWithCompetitor(), competitorId),
+      checkCoachingEligibility(50, 8, stagesWithCompetitor(), competitorId),
     ).toBeNull();
   });
 
-  it("rejects incomplete match (scoring < 95 and daysSince <= 3)", () => {
+  it("rejects incomplete match (scoring < 100 and daysSince <= 7)", () => {
     const result = checkCoachingEligibility(
       80,
       2,
@@ -839,30 +839,34 @@ describe("checkCoachingEligibility", () => {
     ).toBeNull();
   });
 
-  it("accepts match at exactly 95% scoring once a day has passed", () => {
+  it("accepts match at exactly 100% scoring even within 7 days", () => {
     expect(
-      checkCoachingEligibility(95, 1, stagesWithCompetitor(), competitorId),
+      checkCoachingEligibility(100, 1, stagesWithCompetitor(), competitorId),
     ).toBeNull();
   });
 
-  it("rejects 95%+ scoring while match is still on the first day", () => {
-    // Regression: during an active match day the scoring_completed can
-    // climb past 95% before all scorecards are in — coaching should wait.
+  it("rejects 95-99% scoring while match is within 7 days", () => {
+    // Regression: scoring_completed can climb past 95% mid-match while
+    // squads still have unscored stages (especially on multi-day matches).
+    // Coaching must wait for true 100% or 7+ days post-match.
     expect(
       checkCoachingEligibility(98, 0.5, stagesWithCompetitor(), competitorId),
     ).toBe("Match scoring is not yet complete");
+    expect(
+      checkCoachingEligibility(99, 3, stagesWithCompetitor(), competitorId),
+    ).toBe("Match scoring is not yet complete");
   });
 
-  it("accepts match at boundary daysSince = 3.1", () => {
+  it("accepts match at boundary daysSince = 7.1", () => {
     expect(
-      checkCoachingEligibility(0, 3.1, stagesWithCompetitor(), competitorId),
+      checkCoachingEligibility(0, 7.1, stagesWithCompetitor(), competitorId),
     ).toBeNull();
   });
 
-  it("rejects at boundary daysSince = 3.0 with low scoring", () => {
+  it("rejects at boundary daysSince = 7.0 with low scoring", () => {
     const result = checkCoachingEligibility(
       50,
-      3.0,
+      7.0,
       stagesWithCompetitor(),
       competitorId,
     );
