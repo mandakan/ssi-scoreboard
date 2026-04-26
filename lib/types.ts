@@ -259,7 +259,9 @@ export type MatchView = "prematch" | "live" | "coaching";
 // View mode for the comparison table.
 // "absolute" — shows raw hit factor, points, and percentage
 // "delta"    — shows gap to the group leader per stage (±X.X pts)
-export type ViewMode = "absolute" | "delta";
+// "stages"   — one mini-table per stage (SSI-style): each selected competitor
+//              on its own row showing time, HF, A, C, D, NS, M, P
+export type ViewMode = "absolute" | "delta" | "stages";
 
 export interface CompetitorPenaltyStats {
   totalPenalties: number;        // total miss + no_shoot + procedural count across all fired stages

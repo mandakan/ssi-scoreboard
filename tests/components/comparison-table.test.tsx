@@ -551,3 +551,68 @@ describe("ComparisonTable — delta view mode", () => {
     expect(screen.getAllByText("±0.0 pts").length).toBeGreaterThanOrEqual(2);
   });
 });
+
+describe("ComparisonTable — stages (per-stage scorecard) view", () => {
+  it("offers a Stages toggle alongside Absolute and Delta", () => {
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
+    expect(screen.getByRole("radio", { name: "Stages" })).toBeInTheDocument();
+  });
+
+  it("renders one section per stage in stages mode with the SSI-style column headers", () => {
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Stages" }));
+
+    // Section heading per stage (region with stage label)
+    const region = screen.getByRole("region", { name: /Stage One/i });
+    expect(region).toBeInTheDocument();
+
+    // Required scorecard columns
+    const headers = ["Time", "HF", "Pts", "A", "C", "D", "NS", "M", "P"];
+    for (const h of headers) {
+      expect(screen.getByRole("columnheader", { name: h })).toBeInTheDocument();
+    }
+  });
+
+  it("shows per-competitor time and hit factor in stages mode", () => {
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Stages" }));
+    expect(screen.getByText("14.34s")).toBeInTheDocument();
+    expect(screen.getByText("13.49s")).toBeInTheDocument();
+    // Hit factors render in the rows (and may also appear in table caption metadata)
+    expect(screen.getAllByText("5.02").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("5.63").length).toBeGreaterThan(0);
+  });
+
+  it("renders a status badge for non-fired runs (DNF) in stages mode", () => {
+    const data: CompareResponse = {
+      ...baseData,
+      stages: [
+        {
+          ...baseData.stages[0],
+          competitors: {
+            1: {
+              ...baseData.stages[0].competitors[1],
+              dnf: true,
+              hit_factor: null,
+              points: null,
+              time: null,
+            },
+            2: baseData.stages[0].competitors[2],
+          },
+        },
+      ],
+    };
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Stages" }));
+    expect(screen.getByText("DNF")).toBeInTheDocument();
+  });
+
+  it("hides the percentage-context (Group/Div/Overall) toggle in stages mode", () => {
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
+    // Group toggle is visible in absolute mode
+    expect(screen.getByRole("radio", { name: "Group" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: "Stages" }));
+    // It should disappear once stages mode is active
+    expect(screen.queryByRole("radio", { name: "Group" })).not.toBeInTheDocument();
+  });
+});

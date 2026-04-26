@@ -62,10 +62,10 @@ describe("computeMatchTtl", () => {
     expect(rawTtl(94, 1, isoHoursFromNow(-24))).toBe(30);
   });
 
-  it("active scoring is clamped to minTtl (default 300s)", () => {
-    // raw = 30, minTtl default = 300 → result = 300
-    expect(computeMatchTtl(1, 1, isoHoursFromNow(-24))).toBe(300);
-    expect(computeMatchTtl(50, 1, isoHoursFromNow(-24))).toBe(300);
+  it("active scoring uses the 30s tier under the default 30s floor", () => {
+    // raw = 30, minTtl default = 30 → result = 30 (kept near-real-time for live matches)
+    expect(computeMatchTtl(1, 1, isoHoursFromNow(-24))).toBe(30);
+    expect(computeMatchTtl(50, 1, isoHoursFromNow(-24))).toBe(30);
   });
 
   it("active scoring respects an explicit minTtl above the raw tier", () => {
@@ -127,10 +127,10 @@ describe("computeMatchTtl", () => {
     expect(rawTtl(0, 0, null)).toBe(30);
   });
 
-  it("fallback is clamped to minTtl (default 300s) when dateStr is null", () => {
-    expect(computeMatchTtl(0, 0, null)).toBe(300);
-    expect(computeMatchTtl(0, -1, null)).toBe(300);
-    expect(computeMatchTtl(0, 1, null)).toBe(300);
+  it("fallback uses the 30s tier under the default 30s floor when dateStr is null", () => {
+    expect(computeMatchTtl(0, 0, null)).toBe(30);
+    expect(computeMatchTtl(0, -1, null)).toBe(30);
+    expect(computeMatchTtl(0, 1, null)).toBe(30);
   });
 
   // ── Minimum TTL floor ──────────────────────────────────────────────────────
