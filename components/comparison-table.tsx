@@ -16,6 +16,8 @@ import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, CheckCircle
 import Link from "next/link";
 import { cn, formatHF, formatTime, formatPct, computePointsDelta, formatDelta } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
+import { abbreviateDivision } from "@/lib/divisions";
+import { compactName } from "@/lib/competitor-name";
 import { HitZoneBar } from "@/components/hit-zone-bar";
 import { RankBadge, PenaltyBadge, ShootingOrderBadge, StageClassificationBadge, ConditionsBadge, ordinal } from "@/components/stage-cell-parts";
 import { CellHelpModal } from "@/components/cell-help-modal";
@@ -811,6 +813,16 @@ function StageScorecardRow({
       </span>
     );
 
+  const shortName = compactName(comp.name);
+  const shortDivision = abbreviateDivision(comp.division);
+  const nameLinkClass = "font-medium hover:underline truncate";
+  const nameContent = (
+    <>
+      <span className="sm:hidden" aria-hidden="true">{shortName}</span>
+      <span className="hidden sm:inline">{comp.name}</span>
+    </>
+  );
+
   const nameCell = (
     <span className="inline-flex items-center gap-2 min-w-0">
       <span
@@ -823,21 +835,28 @@ function StageScorecardRow({
           {comp.shooterId != null ? (
             <Link
               href={`/shooter/${comp.shooterId}${ct && matchId ? `?from=/match/${ct}/${matchId}` : ""}`}
-              className="truncate font-medium hover:underline"
+              className={nameLinkClass}
               aria-label={`View ${comp.name}'s stats`}
+              title={`${comp.name} · #${comp.competitor_number}`}
             >
-              {comp.name}
+              {nameContent}
             </Link>
           ) : (
-            <span className="truncate font-medium">{comp.name}</span>
+            <span className={nameLinkClass} title={`${comp.name} · #${comp.competitor_number}`}>
+              {nameContent}
+            </span>
           )}
-          <span className="font-mono text-xs text-muted-foreground shrink-0">
+          <span className="hidden sm:inline font-mono text-xs text-muted-foreground shrink-0">
             #{comp.competitor_number}
           </span>
         </span>
         {comp.division && (
-          <span className="text-xs text-muted-foreground uppercase tracking-wide truncate">
-            {comp.division}
+          <span
+            className="text-xs text-muted-foreground uppercase tracking-wide truncate"
+            title={comp.division}
+          >
+            <span className="sm:hidden" aria-hidden="true">{shortDivision}</span>
+            <span className="hidden sm:inline">{comp.division}</span>
           </span>
         )}
       </span>
