@@ -12,11 +12,13 @@
  *   fallback (unknown state)                  → 30 s
  *
  * All non-null results are clamped to at least MIN_CACHE_TTL_SECONDS
- * (default 300 s / 5 min; override via the MIN_CACHE_TTL_SECONDS env var).
+ * (default 30 s; override via the MIN_CACHE_TTL_SECONDS env var). The
+ * default lets active matches stay near-real-time courtside — fresh
+ * scorecards become visible within ~30 s of the upstream update.
  */
 
 const DEFAULT_MIN_TTL = parseInt(
-  process.env.MIN_CACHE_TTL_SECONDS ?? "300",
+  process.env.MIN_CACHE_TTL_SECONDS ?? "30",
   10,
 );
 

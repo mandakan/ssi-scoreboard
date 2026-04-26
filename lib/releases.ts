@@ -24,12 +24,14 @@ export const RELEASES: Release[] = [
         heading: "New",
         items: [
           "Pre-match view is now selectable next to Live and Coaching, even after the match has started. Useful when early squads have finished but yours hasn't shot yet — afternoon squads, day-2 squads, or competitors when RO squads shot the day before.",
+          "Stages view: a new SSI-style toggle on the comparison table renders one mini scorecard per stage, with selected competitors as rows and Time, HF, Pts, A, C, D, NS, M, P as columns — quick to read right after a stage is scored.",
         ],
       },
       {
         heading: "Improved",
         items: [
           "Smarter auto-view: pre-match stays the default until scoring is meaningfully underway, and now considers the match end date so multi-day matches don't flip to live too early. Coaching kicks in once results are published, scoring hits 95%, or three days have passed since the match ended.",
+          "Live freshness: cache TTL for active matches is now ~30 s (was 5 min), so fresh scorecards appear within seconds of the upstream update — no more waiting after a stage finishes.",
         ],
       },
     ],

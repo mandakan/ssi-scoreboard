@@ -367,7 +367,7 @@ handles new achievements and tiers automatically.
 |---|---|---|---|
 | `SSI_API_KEY` | `lib/graphql.ts` (server-only) | Both | Never use `NEXT_PUBLIC_` prefix |
 | `CACHE_PURGE_SECRET` | `app/api/admin/cache/purge/route.ts`, `app/api/admin/cache/health/route.ts` | Both | Any strong random string; never `NEXT_PUBLIC_` |
-| `MIN_CACHE_TTL_SECONDS` | `lib/match-ttl.ts` (server-only) | Both | Minimum TTL floor for all non-permanent cache entries. Default `300` (5 min). Set to `0` to disable. Never `NEXT_PUBLIC_`. |
+| `MIN_CACHE_TTL_SECONDS` | `lib/match-ttl.ts` (server-only) | Both | Minimum TTL floor for all non-permanent cache entries. Default `30` (s) — keeps active matches near-real-time so courtside polling picks up fresh scorecards within seconds. Raise it to reduce upstream load on shared deployments. Set to `0` to disable. Never `NEXT_PUBLIC_`. |
 | `NEXT_PUBLIC_BUILD_ID` | `components/update-banner.tsx`, `app/api/version/route.ts` | Both | Git SHA baked into the client bundle at Docker build time; powers new-version detection. Auto-injected by `pnpm docker:build`. Unset in `pnpm dev` — version check is skipped. |
 | `REDIS_URL` | `lib/cache-node.ts` | Docker only | `redis://localhost:6379` locally, `rediss://...` for managed Redis. Not needed for CF builds. |
 | `APP_DB_PATH` | `lib/db-sqlite.ts` | Docker only | Path to SQLite database file. Defaults to `./data/shooter-index.db`. Not needed for CF builds. |

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ComparisonTable } from "@/components/comparison-table";
@@ -113,6 +113,18 @@ const baseData: CompareResponse = {
     },
   ],
 };
+
+// View-mode preference is now persisted in localStorage. Without resetting
+// it between tests, a click on the "Delta" toggle in one test would carry
+// over and break "Absolute is the default" expectations in the next test.
+// We do NOT call localStorage.clear() because the component also reads
+// "ssi-cell-help-seen" — clearing it would auto-open the help dialog on
+// mount, whose focus trap marks the rest of the page aria-hidden and
+// breaks every getByRole query.
+beforeEach(() => {
+  window.localStorage.removeItem("ssi-comparison-view-mode");
+  window.localStorage.setItem("ssi-cell-help-seen", "1");
+});
 
 describe("ComparisonTable", () => {
   it("renders competitor names", () => {
@@ -549,5 +561,104 @@ describe("ComparisonTable — delta view mode", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Delta" }));
     // Both competitors show ±0.0 pts (per-stage); totals row also shows ±0.0 pts
     expect(screen.getAllByText("±0.0 pts").length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("ComparisonTable — stages (per-stage scorecard) view", () => {
+  it("offers a Stages toggle alongside Absolute and Delta", () => {
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
+    expect(screen.getByRole("radio", { name: "Stages" })).toBeInTheDocument();
+  });
+
+  it("renders one section per stage in stages mode with the SSI-style column headers", () => {
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Stages" }));
+
+    // Section heading per stage (region with stage label)
+    const region = screen.getByRole("region", { name: /Stage One/i });
+    expect(region).toBeInTheDocument();
+
+    // Required scorecard columns
+    const headers = ["Time", "HF", "Pts", "A", "C", "D", "NS", "M", "P"];
+    for (const h of headers) {
+      expect(screen.getByRole("columnheader", { name: h })).toBeInTheDocument();
+    }
+  });
+
+  it("shows per-competitor time and hit factor in stages mode", () => {
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Stages" }));
+    expect(screen.getByText("14.34s")).toBeInTheDocument();
+    expect(screen.getByText("13.49s")).toBeInTheDocument();
+    // Hit factors render in the rows (and may also appear in table caption metadata)
+    expect(screen.getAllByText("5.02").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("5.63").length).toBeGreaterThan(0);
+  });
+
+  it("renders a status badge for non-fired runs (DNF) in stages mode", () => {
+    const data: CompareResponse = {
+      ...baseData,
+      stages: [
+        {
+          ...baseData.stages[0],
+          competitors: {
+            1: {
+              ...baseData.stages[0].competitors[1],
+              dnf: true,
+              hit_factor: null,
+              points: null,
+              time: null,
+            },
+            2: baseData.stages[0].competitors[2],
+          },
+        },
+      ],
+    };
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={data} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Stages" }));
+    expect(screen.getByText("DNF")).toBeInTheDocument();
+  });
+
+  it("hides the percentage-context (Group/Div/Overall) toggle in stages mode", () => {
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
+    // Group toggle is visible in absolute mode
+    expect(screen.getByRole("radio", { name: "Group" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: "Stages" }));
+    // It should disappear once stages mode is active
+    expect(screen.queryByRole("radio", { name: "Group" })).not.toBeInTheDocument();
+  });
+});
+
+describe("ComparisonTable — view mode persistence", () => {
+  it("restores the previously selected view mode on remount (page reload)", () => {
+    const { unmount } = renderWithProviders(
+      <ComparisonTable scoringCompleted={100} data={baseData} />,
+    );
+    fireEvent.click(screen.getByRole("radio", { name: "Stages" }));
+    expect(screen.getByRole("radio", { name: "Stages" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    unmount();
+
+    // Simulating a fresh page load — same localStorage, new component tree.
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
+    expect(screen.getByRole("radio", { name: "Stages" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    expect(screen.getByRole("radio", { name: "Absolute" })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
+  });
+
+  it("falls back to Absolute when localStorage holds an unknown value", () => {
+    window.localStorage.setItem("ssi-comparison-view-mode", "bogus");
+    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
+    expect(screen.getByRole("radio", { name: "Absolute" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
   });
 });

@@ -478,6 +478,33 @@ function ModeToggle({
   );
 }
 
+/**
+ * localStorage key used to remember the user's last comparison-table view
+ * mode. Persisting across reloads matters most courtside on an ongoing
+ * match — the user shouldn't have to re-pick "Stages" every time the page
+ * is refreshed mid-day. The value is intentionally global (not per-match)
+ * because in practice users have a preferred view, not a preference per
+ * specific competition.
+ */
+const VIEW_MODE_STORAGE_KEY = "ssi-comparison-view-mode";
+
+function isViewMode(value: unknown): value is ViewMode {
+  return value === "absolute" || value === "delta" || value === "stages";
+}
+
+const VIEW_MODE_LABELS: Record<ViewMode, string> = {
+  absolute: "Absolute",
+  delta: "Delta",
+  stages: "Stages",
+};
+
+const VIEW_MODE_TOOLTIPS: Record<ViewMode, string> = {
+  absolute: "Hit factor, points, and HF % per stage (default)",
+  delta: "Gap to the group leader per stage (±X.X pts heatmap)",
+  stages:
+    "One scorecard table per stage — rows are the selected competitors, columns are time, HF, A, C, D, NS, M, P (SSI-style)",
+};
+
 function ViewModeToggle({
   viewMode,
   onChange,
@@ -485,6 +512,7 @@ function ViewModeToggle({
   viewMode: ViewMode;
   onChange: (m: ViewMode) => void;
 }) {
+  const order: ViewMode[] = ["absolute", "delta", "stages"];
   return (
     <ToggleGroup
       type="single"
@@ -493,12 +521,13 @@ function ViewModeToggle({
       aria-label="Table view mode"
       className="w-auto inline-flex rounded-md border text-xs"
     >
-      {(["absolute", "delta"] as ViewMode[]).map((m, i, arr) => (
+      {order.map((m, i, arr) => (
         <ToggleGroupItem
           key={m}
           value={m}
+          title={VIEW_MODE_TOOLTIPS[m]}
           className={cn(
-            "h-auto min-w-0 gap-0 rounded-none px-2.5 py-1 font-normal text-xs transition-colors capitalize",
+            "h-auto min-w-0 gap-0 rounded-none px-2.5 py-1 font-normal text-xs transition-colors",
             i === 0 ? "rounded-l-md" : "",
             i === arr.length - 1 ? "rounded-r-md" : "",
             "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
@@ -507,7 +536,7 @@ function ViewModeToggle({
               : "text-muted-foreground hover:bg-muted"
           )}
         >
-          {m === "absolute" ? "Absolute" : "Delta"}
+          {VIEW_MODE_LABELS[m]}
         </ToggleGroupItem>
       ))}
     </ToggleGroup>
@@ -580,6 +609,288 @@ function ArchetypePill({ archetype, color }: { archetype: ShooterArchetype; colo
   );
 }
 
+/**
+ * SSI-style stage-by-stage view: one mini-table per stage, with the selected
+ * competitors as rows and the base scoring fields as columns
+ * (Time, HF, Pts, A, C, D, NS, M, P). Sorted by hit factor descending.
+ *
+ * Optimised for live comparison during an active match — values are raw
+ * scorecard data, no derived analytics. DQ / DNF / zeroed runs sink to the
+ * bottom and render their status in place of the numeric columns.
+ */
+function StageByStageView({
+  stages,
+  competitors,
+  colorMap,
+  ct,
+  matchId,
+}: {
+  stages: StageComparison[];
+  competitors: CompetitorInfo[];
+  colorMap: Record<number, string>;
+  ct?: string;
+  matchId?: string;
+}) {
+  return (
+    <div className="space-y-4">
+      {stages.map((stage) => (
+        <StageScorecardTable
+          key={stage.stage_id}
+          stage={stage}
+          competitors={competitors}
+          colorMap={colorMap}
+          ct={ct}
+          matchId={matchId}
+        />
+      ))}
+    </div>
+  );
+}
+
+function StageScorecardTable({
+  stage,
+  competitors,
+  colorMap,
+  ct,
+  matchId,
+}: {
+  stage: StageComparison;
+  competitors: CompetitorInfo[];
+  colorMap: Record<number, string>;
+  ct?: string;
+  matchId?: string;
+}) {
+  // Sort: fired runs by hit factor desc; non-fired (DQ/DNF/zeroed/missing) at the bottom.
+  const sorted = [...competitors].sort((a, b) => {
+    const sa = stage.competitors[a.id];
+    const sb = stage.competitors[b.id];
+    const aFired = sa && !sa.dq && !sa.dnf && !sa.zeroed && sa.hit_factor != null;
+    const bFired = sb && !sb.dq && !sb.dnf && !sb.zeroed && sb.hit_factor != null;
+    if (aFired && !bFired) return -1;
+    if (!aFired && bFired) return 1;
+    if (aFired && bFired) return (sb!.hit_factor ?? 0) - (sa!.hit_factor ?? 0);
+    return 0;
+  });
+
+  const headingId = `stage-scorecard-${stage.stage_id}`;
+  const targetSummary = [
+    stage.min_rounds != null ? `${stage.min_rounds} rds` : null,
+    stage.paper_targets != null ? `${stage.paper_targets} paper` : null,
+    stage.steel_targets != null && stage.steel_targets > 0
+      ? `${stage.steel_targets} steel`
+      : null,
+  ].filter(Boolean).join(" · ");
+
+  return (
+    <section
+      role="region"
+      aria-labelledby={headingId}
+      className="rounded-lg border border-border bg-card overflow-hidden"
+    >
+      <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-3 py-2 border-b border-border bg-muted/40">
+        <h3 id={headingId} className="text-sm font-semibold inline-flex items-center gap-1.5">
+          {stage.ssi_url ? (
+            <a
+              href={stage.ssi_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-0.5 hover:underline"
+              aria-label={`Open ${stage.stage_name} on ShootNScoreIt (opens in new tab)`}
+            >
+              <span>Stage {stage.stage_num}</span>
+              <ExternalLink className="w-3 h-3 text-muted-foreground" aria-hidden="true" />
+            </a>
+          ) : (
+            <span>Stage {stage.stage_num}</span>
+          )}
+          <span className="font-normal text-muted-foreground truncate max-w-[12rem] sm:max-w-xs">
+            {stage.stage_name}
+          </span>
+        </h3>
+        {targetSummary && (
+          <span className="text-xs text-muted-foreground tabular-nums">{targetSummary}</span>
+        )}
+        <span className="text-xs text-muted-foreground tabular-nums ml-auto">
+          {`max ${stage.max_points} pts`}
+        </span>
+      </header>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border-collapse">
+          <caption className="sr-only">{`Stage ${stage.stage_num} ${stage.stage_name} scorecards for the selected competitors`}</caption>
+          <thead>
+            <tr className="border-b border-border text-xs text-muted-foreground">
+              <th scope="col" className="text-left py-1.5 pl-3 pr-2 font-medium">
+                Competitor
+              </th>
+              <th scope="col" className="text-right py-1.5 px-2 font-medium tabular-nums">
+                Time
+              </th>
+              <th scope="col" className="text-right py-1.5 px-2 font-medium tabular-nums">
+                HF
+              </th>
+              <th scope="col" className="text-right py-1.5 px-2 font-medium tabular-nums">
+                Pts
+              </th>
+              <th scope="col" className="text-right py-1.5 px-1.5 font-medium tabular-nums" title="Alpha hits">
+                A
+              </th>
+              <th scope="col" className="text-right py-1.5 px-1.5 font-medium tabular-nums" title="Charlie hits">
+                C
+              </th>
+              <th scope="col" className="text-right py-1.5 px-1.5 font-medium tabular-nums" title="Delta hits">
+                D
+              </th>
+              <th scope="col" className="text-right py-1.5 px-1.5 font-medium tabular-nums" title="No-shoots">
+                NS
+              </th>
+              <th scope="col" className="text-right py-1.5 px-1.5 font-medium tabular-nums" title="Misses">
+                M
+              </th>
+              <th scope="col" className="text-right py-1.5 pl-1.5 pr-3 font-medium tabular-nums" title="Procedural penalties">
+                P
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((comp) => (
+              <StageScorecardRow
+                key={comp.id}
+                comp={comp}
+                sc={stage.competitors[comp.id]}
+                color={colorMap[comp.id]}
+                ct={ct}
+                matchId={matchId}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function StageScorecardRow({
+  comp,
+  sc,
+  color,
+  ct,
+  matchId,
+}: {
+  comp: CompetitorInfo;
+  sc: CompetitorSummary | undefined;
+  color: string;
+  ct?: string;
+  matchId?: string;
+}) {
+  const status = !sc
+    ? "Not shot"
+    : sc.dq
+      ? "DQ"
+      : sc.dnf
+        ? "DNF"
+        : sc.zeroed
+          ? "Zero"
+          : null;
+
+  const numCell = (value: number | null | undefined, formatted: string, highlight?: "penalty") =>
+    value != null && value > 0 ? (
+      <span
+        className={cn(
+          "tabular-nums",
+          highlight === "penalty" && "text-red-600 dark:text-red-400 font-medium",
+        )}
+      >
+        {formatted}
+      </span>
+    ) : value === 0 ? (
+      <span className="text-muted-foreground tabular-nums">{formatted}</span>
+    ) : (
+      <span className="text-muted-foreground" aria-label="no data">
+        —
+      </span>
+    );
+
+  const nameCell = (
+    <span className="inline-flex items-center gap-2 min-w-0">
+      <span
+        className="inline-block w-2 h-2 rounded-full shrink-0"
+        style={{ backgroundColor: color }}
+        aria-hidden="true"
+      />
+      <span className="flex flex-col min-w-0">
+        <span className="inline-flex items-center gap-1.5 min-w-0">
+          {comp.shooterId != null ? (
+            <Link
+              href={`/shooter/${comp.shooterId}${ct && matchId ? `?from=/match/${ct}/${matchId}` : ""}`}
+              className="truncate font-medium hover:underline"
+              aria-label={`View ${comp.name}'s stats`}
+            >
+              {comp.name}
+            </Link>
+          ) : (
+            <span className="truncate font-medium">{comp.name}</span>
+          )}
+          <span className="font-mono text-xs text-muted-foreground shrink-0">
+            #{comp.competitor_number}
+          </span>
+        </span>
+        {comp.division && (
+          <span className="text-xs text-muted-foreground uppercase tracking-wide truncate">
+            {comp.division}
+          </span>
+        )}
+      </span>
+    </span>
+  );
+
+  if (status) {
+    return (
+      <tr className="border-b border-border/40 last:border-0">
+        <td className="py-1.5 pl-3 pr-2 align-middle">{nameCell}</td>
+        <td colSpan={9} className="py-1.5 px-2 text-center text-xs text-muted-foreground">
+          <Badge variant="outline" className="font-medium">
+            {status}
+          </Badge>
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr className="border-b border-border/40 last:border-0 hover:bg-muted/30">
+      <td className="py-1.5 pl-3 pr-2 align-middle">{nameCell}</td>
+      <td className="py-1.5 px-2 text-right tabular-nums">
+        {sc?.time != null ? formatTime(sc.time) : <span className="text-muted-foreground">—</span>}
+      </td>
+      <td className="py-1.5 px-2 text-right tabular-nums font-semibold">
+        {sc?.hit_factor != null ? formatHF(sc.hit_factor) : <span className="text-muted-foreground font-normal">—</span>}
+      </td>
+      <td className="py-1.5 px-2 text-right tabular-nums">
+        {sc?.points != null ? sc.points.toFixed(0) : <span className="text-muted-foreground">—</span>}
+      </td>
+      <td className="py-1.5 px-1.5 text-right">
+        {numCell(sc?.a_hits, sc?.a_hits != null ? String(sc.a_hits) : "—")}
+      </td>
+      <td className="py-1.5 px-1.5 text-right">
+        {numCell(sc?.c_hits, sc?.c_hits != null ? String(sc.c_hits) : "—")}
+      </td>
+      <td className="py-1.5 px-1.5 text-right">
+        {numCell(sc?.d_hits, sc?.d_hits != null ? String(sc.d_hits) : "—")}
+      </td>
+      <td className="py-1.5 px-1.5 text-right">
+        {numCell(sc?.no_shoots, sc?.no_shoots != null ? String(sc.no_shoots) : "—", "penalty")}
+      </td>
+      <td className="py-1.5 px-1.5 text-right">
+        {numCell(sc?.miss_count, sc?.miss_count != null ? String(sc.miss_count) : "—", "penalty")}
+      </td>
+      <td className="py-1.5 pl-1.5 pr-3 text-right">
+        {numCell(sc?.procedurals, sc?.procedurals != null ? String(sc.procedurals) : "—", "penalty")}
+      </td>
+    </tr>
+  );
+}
+
 export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable, isComplete, ct, matchId, stageSort = "stage", onSortChange = () => {}, sortedStages: sortedStagesProp }: ComparisonTableProps) {
   const { stages, competitors, penaltyStats, efficiencyStats, consistencyStats, lossBreakdownStats } = data;
   // When sortedStages is not provided by the parent, fall back to natural stage order.
@@ -589,7 +900,17 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
   const [mode, setMode] = useState<PctMode>(
     competitors.length < 2 ? "division" : "group"
   );
-  const [viewMode, setViewMode] = useState<ViewMode>("absolute");
+  const [viewMode, setViewModeState] = useState<ViewMode>("absolute");
+  const setViewMode = (m: ViewMode) => {
+    setViewModeState(m);
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, m);
+      } catch {
+        // localStorage may be unavailable (private mode, quota) — ignore
+      }
+    }
+  };
   const [showConditions, setShowConditions] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [showWhatIf, setShowWhatIf] = useState(false);
@@ -608,6 +929,17 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
     if (!localStorage.getItem("ssi-cell-help-seen")) {
       localStorage.setItem("ssi-cell-help-seen", "1");
       startTransition(() => setHelpOpen(true));
+    }
+  }, []);
+
+  // Restore the user's last-picked view mode (Absolute / Delta / Stages).
+  // Runs once on mount; client-only so SSR isn't affected.
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+      if (isViewMode(stored)) setViewModeState(stored);
+    } catch {
+      // localStorage may be unavailable (private mode, quota) — ignore
     }
   }, []);
 
@@ -740,7 +1072,10 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
       ))}
 
       {/* View mode toggle (Absolute / Delta) + percentage context + help */}
-      <div className="flex items-center gap-2">
+      {/* Toolbar wraps on narrow screens — at 390px the three view-mode
+          toggles + percentage-context toggle + help icon don't fit on one
+          row without overflowing the window. */}
+      <div className="flex flex-wrap items-center gap-2">
         <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
         {viewMode === "absolute" && (
           <ModeToggle mode={mode} onChange={setMode} competitorCount={competitors.length} />
@@ -801,6 +1136,15 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
         </div>
       )}
 
+      {viewMode === "stages" ? (
+        <StageByStageView
+          stages={sortedStages}
+          competitors={competitors}
+          colorMap={colorMap}
+          ct={ct}
+          matchId={matchId}
+        />
+      ) : (
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>
@@ -1321,6 +1665,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
           </tbody>
         </table>
       </div>
+      )}
 
       {/* Points on the table panel — collapsible, hidden by default */}
       {competitors.some((c) => {
