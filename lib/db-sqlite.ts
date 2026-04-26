@@ -278,6 +278,13 @@ export function createSqliteDatabase(
       return row?.data ?? null;
     },
 
+    async getMatchDataCacheStoredAt(cacheKey) {
+      const row = getDb()
+        .prepare(`SELECT stored_at FROM match_data_cache WHERE cache_key = ?`)
+        .get(cacheKey) as { stored_at: string } | undefined;
+      return row?.stored_at ?? null;
+    },
+
     async setMatchDataCache(cacheKey, data, meta) {
       getDb()
         .prepare(

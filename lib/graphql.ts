@@ -6,7 +6,7 @@ import cache from "@/lib/cache-impl";
 import db from "@/lib/db-impl";
 import { afterResponse } from "@/lib/background-impl";
 import { CACHE_SCHEMA_VERSION } from "@/lib/constants";
-import { parseMatchCacheKey } from "@/lib/match-data-store";
+import { parseMatchCacheKey, persistActiveMatchToD1 } from "@/lib/match-data-store";
 
 /**
  * Check if the current request is an admin-authenticated request
@@ -340,9 +340,24 @@ export async function refreshCachedQuery<T>(
       cachedAt: new Date().toISOString(),
       v: CACHE_SCHEMA_VERSION,
     };
-    await cache.set(cacheKey, JSON.stringify(entry), ttlSeconds);
+    const payload = JSON.stringify(entry);
+    await cache.set(cacheKey, payload, ttlSeconds);
+    // Mirror the fresh payload into D1 for match keys so the durable store
+    // stays current with the hot Redis cache. Throttled inside the helper.
+    if (parseMatchCacheKey(cacheKey)) {
+      afterResponse(persistActiveMatchToD1(cacheKey, payload));
+    }
   } catch (err) {
     console.error("[cache] background refresh failed for key:", cacheKey, err);
+    // Stale-on-error: extend the existing entry's TTL so users keep seeing
+    // last-known-good data through transient upstream outages. Without this,
+    // the entry would tick toward eviction while every refresh attempt fails,
+    // and a Redis miss during the outage would surface a hard 502 to clients.
+    if (ttlSeconds !== null) {
+      try {
+        await cache.expire(cacheKey, ttlSeconds);
+      } catch { /* entry may already be gone — D1 fallback covers it */ }
+    }
   } finally {
     try {
       await cache.del(lockKey);
@@ -407,12 +422,19 @@ export async function cachedExecuteQuery<T>(
   const data = await executeQuery<T>(query, variables);
   const cachedAt = new Date().toISOString();
 
+  const entry: CacheEntry<T> = { data, cachedAt, v: CACHE_SCHEMA_VERSION };
+  const payload = JSON.stringify(entry);
   try {
-    const entry: CacheEntry<T> = { data, cachedAt, v: CACHE_SCHEMA_VERSION };
-    const payload = JSON.stringify(entry);
     await cache.set(cacheKey, payload, ttlSeconds);
   } catch (err) {
     console.error("[cache] write error for key:", cacheKey, err);
+  }
+
+  // Mirror match keys to D1 as a "last known good" durable fallback so a
+  // Redis eviction during an upstream outage doesn't surface a 502. Throttled
+  // inside the helper to bound write volume on hot paths.
+  if (parseMatchCacheKey(cacheKey)) {
+    afterResponse(persistActiveMatchToD1(cacheKey, payload));
   }
 
   // Record access for popularity tracking (fire-and-forget, non-fatal).
