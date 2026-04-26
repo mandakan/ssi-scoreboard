@@ -767,12 +767,15 @@ export function PreMatchView({
   }, [selectedSquadNum, match.squads, match.competitors]);
 
   // Index of the tracked/selected shooter within the squad (-1 if not found).
-  const mySquadIdx = useMemo(
-    () => squadMembers.findIndex(
-      (c) => c.shooterId === myShooterId || selectedIds.includes(c.id),
-    ),
-    [squadMembers, myShooterId, selectedIds],
-  );
+  // Prefer the configured tracked shooter; fall back to a selected competitor only
+  // if the tracked shooter is not in this squad.
+  const mySquadIdx = useMemo(() => {
+    if (myShooterId !== null) {
+      const idx = squadMembers.findIndex((c) => c.shooterId === myShooterId);
+      if (idx !== -1) return idx;
+    }
+    return squadMembers.findIndex((c) => selectedIds.includes(c.id));
+  }, [squadMembers, myShooterId, selectedIds]);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
