@@ -272,6 +272,15 @@ const db: AppDatabase = {
     return row?.data ?? null;
   },
 
+  async getMatchDataCacheStoredAt(cacheKey) {
+    const db = getDb();
+    const row = await db
+      .prepare(`SELECT stored_at FROM match_data_cache WHERE cache_key = ?`)
+      .bind(cacheKey)
+      .first<{ stored_at: string }>();
+    return row?.stored_at ?? null;
+  },
+
   async setMatchDataCache(cacheKey, data, meta) {
     const db = getDb();
     await db
