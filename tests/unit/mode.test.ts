@@ -34,10 +34,18 @@ describe("detectMatchView", () => {
     ).toBe("coaching");
   });
 
-  it("falls back to start date when end date is null and start is > 3 days ago", () => {
+  it("requires start > 6 days ago when end date is null (3-day grace buffer)", () => {
+    // No ends date and start 7 days ago → coaching
     expect(
-      detectMatchView({ ...baseArgs, scoringPct: 0, daysSinceMatchStart: 4 }),
+      detectMatchView({ ...baseArgs, scoringPct: 50, daysSinceMatchStart: 7 }),
     ).toBe("coaching");
+  });
+
+  it("does NOT auto-flip to coaching for a multi-day match with ends=null and start 4 days ago", () => {
+    // Buffer keeps multi-day matches in the live tier even when ends is missing.
+    expect(
+      detectMatchView({ ...baseArgs, scoringPct: 50, daysSinceMatchStart: 4 }),
+    ).toBe("live");
   });
 
   // ── Cancelled ─────────────────────────────────────────────────────────────
@@ -65,6 +73,17 @@ describe("detectMatchView", () => {
         scoringPct: 15,
         daysSinceMatchStart: 0,
         daysSinceMatchEnd: -1, // multi-day match, ends tomorrow
+      }),
+    ).toBe("prematch");
+  });
+
+  it("returns 'prematch' early in match with ends=null and start today", () => {
+    expect(
+      detectMatchView({
+        ...baseArgs,
+        scoringPct: 10,
+        daysSinceMatchStart: 0.5,
+        daysSinceMatchEnd: null,
       }),
     ).toBe("prematch");
   });
@@ -109,24 +128,25 @@ describe("detectMatchView", () => {
 describe("isPreMatchEligible", () => {
   const baseEligible = {
     scoringPct: 0,
-    daysSinceMatchStart: 0,
-    daysSinceMatchEnd: null,
     resultsStatus: "stg",
+    matchStatus: "on",
   };
 
   it("offered while match is in progress", () => {
     expect(isPreMatchEligible(baseEligible)).toBe(true);
   });
 
-  it("offered for upcoming match", () => {
+  it("offered with 30% scoring (early squads done, my squad in afternoon)", () => {
     expect(
-      isPreMatchEligible({ ...baseEligible, daysSinceMatchStart: -3 }),
+      isPreMatchEligible({ ...baseEligible, scoringPct: 30 }),
     ).toBe(true);
   });
 
-  it("offered with partial scoring, end date still close", () => {
+  it("offered for old multi-day matches with partial scoring (no date gate)", () => {
+    // The previous date-based gate wrongly hid pre-match for Level 3+ matches
+    // whose match.date is several days in the past while late squads haven't shot.
     expect(
-      isPreMatchEligible({ ...baseEligible, scoringPct: 30, daysSinceMatchEnd: 1 }),
+      isPreMatchEligible({ ...baseEligible, scoringPct: 60 }),
     ).toBe(true);
   });
 
@@ -136,15 +156,15 @@ describe("isPreMatchEligible", () => {
     ).toBe(false);
   });
 
-  it("hidden once scoring reaches 95%", () => {
+  it("hidden once match is marked completed", () => {
     expect(
-      isPreMatchEligible({ ...baseEligible, scoringPct: 95 }),
+      isPreMatchEligible({ ...baseEligible, matchStatus: "cp" }),
     ).toBe(false);
   });
 
-  it("hidden when match ended > 2 days ago", () => {
+  it("hidden once scoring reaches 95%", () => {
     expect(
-      isPreMatchEligible({ ...baseEligible, daysSinceMatchEnd: 3 }),
+      isPreMatchEligible({ ...baseEligible, scoringPct: 95 }),
     ).toBe(false);
   });
 });

@@ -223,13 +223,13 @@ export default function MatchPageClient() {
   const effectiveMode = modeOverride ?? autoMode;
 
   // Pre-match selectability — offered as a manual choice while the match
-  // isn't fully wrapped up.
+  // isn't fully wrapped up. Gated on scoring %, not on dates, so it stays
+  // available for multi-day matches where some squads still haven't shot.
   const preMatchEligible = matchQuery.data
     ? isPreMatchEligible({
         scoringPct: matchQuery.data.scoring_completed,
-        daysSinceMatchStart,
-        daysSinceMatchEnd,
         resultsStatus: matchQuery.data.results_status,
+        matchStatus: matchQuery.data.match_status,
       })
     : false;
 
