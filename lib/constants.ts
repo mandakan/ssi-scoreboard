@@ -24,5 +24,8 @@ export const MAX_COMPETITORS = 12;
  *  11 → added registration/squadding fields (ends, registration_starts, registration_closes,
  *       squadding_starts, squadding_closes, is_registration_possible, is_squadding_possible,
  *       max_competitors, registration) to MATCH_QUERY and EVENTS_QUERY
+ *  12 → no shape change; bump invalidates D1 entries written under the old
+ *       "results=all OR scoring>=95 + 1 day" permanent-cache rule, which
+ *       could pin a still-active match's snapshot to the durable store.
  */
-export const CACHE_SCHEMA_VERSION = 11;
+export const CACHE_SCHEMA_VERSION = 12;
