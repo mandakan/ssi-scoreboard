@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { computeMatchTtl, isMatchComplete } from "@/lib/match-ttl";
+import { computeMatchTtl, computeMatchFreshness, isMatchComplete } from "@/lib/match-ttl";
 
 const NOW = new Date("2025-06-15T12:00:00Z").getTime();
 
@@ -161,6 +161,58 @@ describe("computeMatchTtl", () => {
 
     const soon = isoHoursFromNow(24);
     expect(computeMatchTtl(0, -1, soon)).toBe(30 * 60);
+  });
+});
+
+describe("computeMatchFreshness", () => {
+  it("returns null for completed matches", () => {
+    expect(computeMatchFreshness(95, 1, isoHoursFromNow(-24))).toBeNull();
+    expect(computeMatchFreshness(0, 4, null)).toBeNull();
+  });
+
+  it("returns 30s for active scoring (raw, unclamped)", () => {
+    expect(computeMatchFreshness(1, 1, isoHoursFromNow(-24))).toBe(30);
+    expect(computeMatchFreshness(50, 0.5, isoHoursFromNow(-12))).toBe(30);
+    expect(computeMatchFreshness(94, 1, isoHoursFromNow(-24))).toBe(30);
+  });
+
+  it("returns 4h when start is > 7 days away", () => {
+    expect(computeMatchFreshness(0, -8, isoHoursFromNow(8 * 24))).toBe(4 * 60 * 60);
+  });
+
+  it("returns 1h when start is 2–7 days away", () => {
+    expect(computeMatchFreshness(0, -3, isoHoursFromNow(3 * 24))).toBe(60 * 60);
+  });
+
+  it("returns 30min when start is 0–2 days away", () => {
+    expect(computeMatchFreshness(0, -0.5, isoHoursFromNow(12))).toBe(30 * 60);
+  });
+
+  it("returns 5min when match just started (no scoring, < 12h past)", () => {
+    expect(computeMatchFreshness(0, 0.25, isoHoursFromNow(-6))).toBe(5 * 60);
+  });
+
+  it("returns 30s as the fallback (no date, no scoring)", () => {
+    expect(computeMatchFreshness(0, 0, null)).toBe(30);
+  });
+
+  it("is always <= computeMatchTtl (the floor never exceeds freshness)", () => {
+    // SWR invariant: TTL must be >= freshness so Redis outlives the freshness
+    // window, leaving room for a background refresh to land.
+    const cases: Array<[number, number, string | null]> = [
+      [50, 1, isoHoursFromNow(-24)],
+      [0, -3, isoHoursFromNow(3 * 24)],
+      [0, -0.5, isoHoursFromNow(12)],
+      [0, 0.25, isoHoursFromNow(-6)],
+      [0, 0, null],
+    ];
+    for (const [pct, days, date] of cases) {
+      const f = computeMatchFreshness(pct, days, date);
+      const t = computeMatchTtl(pct, days, date);
+      expect(f).not.toBeNull();
+      expect(t).not.toBeNull();
+      expect(t!).toBeGreaterThanOrEqual(f!);
+    }
   });
 });
 

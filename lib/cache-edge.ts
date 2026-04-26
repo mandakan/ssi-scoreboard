@@ -79,6 +79,11 @@ const adapter: CacheAdapter = {
     await getRedis().expire(pk(key), ttlSeconds);
   },
 
+  async setIfAbsent(key, value, ttlSeconds) {
+    const res = await getRedis().set(pk(key), value, { ex: ttlSeconds, nx: true });
+    return res === "OK";
+  },
+
   scanCachedMatchKeys,
 };
 

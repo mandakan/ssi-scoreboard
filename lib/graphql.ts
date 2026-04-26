@@ -305,6 +305,52 @@ interface CacheEntry<T> {
 }
 
 /**
+ * Single-flight background refresh of a cached GraphQL query. Acquires a
+ * short-lived NX lock so concurrent stale readers trigger at most one upstream
+ * fetch per cache key. Errors are swallowed — the cached value continues to be
+ * served to users while the next request will try the refresh again.
+ *
+ * Use from a caller that has just served a stale cache hit (typically
+ * cachedAt + freshness window exceeded). The caller decides the TTL because
+ * TTL often depends on the response payload (e.g. match scoring %).
+ */
+export async function refreshCachedQuery<T>(
+  cacheKey: string,
+  query: string,
+  variables: Record<string, unknown>,
+  ttlSeconds: number | null,
+  // Lock TTL must outlast the upstream GraphQL request so a slow fetch can't
+  // expire its own lock and let a second refresh sneak in. GRAPHQL_TIMEOUT_MS
+  // is 60s, so allow generous slack on top of that.
+  lockTtlSeconds = 90,
+): Promise<void> {
+  const lockKey = `inflight:${cacheKey}`;
+  let acquired = false;
+  try {
+    acquired = await cache.setIfAbsent(lockKey, "1", lockTtlSeconds);
+  } catch {
+    return; // Lock primitive failed — skip rather than hammer the API.
+  }
+  if (!acquired) return;
+
+  try {
+    const data = await executeQuery<T>(query, variables);
+    const entry: CacheEntry<T> = {
+      data,
+      cachedAt: new Date().toISOString(),
+      v: CACHE_SCHEMA_VERSION,
+    };
+    await cache.set(cacheKey, JSON.stringify(entry), ttlSeconds);
+  } catch (err) {
+    console.error("[cache] background refresh failed for key:", cacheKey, err);
+  } finally {
+    try {
+      await cache.del(lockKey);
+    } catch { /* lock will expire via TTL */ }
+  }
+}
+
+/**
  * Returns cached data + cachedAt timestamp, or fetches fresh and stores it.
  * ttlSeconds = null → no expiry (permanent cache).
  * Falls back to a direct fetch on Redis error.
@@ -312,6 +358,9 @@ interface CacheEntry<T> {
  * Return value:
  *   cachedAt — ISO string when the data was first stored (cache hit)
  *              null when the data was just fetched (cache miss — not yet stored)
+ *
+ * Callers that want stale-while-revalidate should compare `cachedAt` against
+ * a freshness window and schedule `refreshCachedQuery()` when exceeded.
  */
 export async function cachedExecuteQuery<T>(
   cacheKey: string,

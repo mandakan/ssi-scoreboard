@@ -40,28 +40,65 @@ export function isMatchComplete(
   return scoringPct >= 95 && daysSince >= 1;
 }
 
+/**
+ * Raw freshness window (seconds) for a match cache entry — the "data should
+ * be refreshed after this long" signal, before any minimum-TTL clamping.
+ *
+ * Returns null for permanent (completed) matches. This is the value used as
+ * `swrSeconds` by `cachedExecuteQuery` to schedule background refreshes.
+ *
+ * Distinct from `computeMatchTtl()`, which floors the value at MIN_CACHE_TTL_SECONDS
+ * so Redis entries outlive the freshness window — that's what makes
+ * stale-while-revalidate possible.
+ */
+export function computeMatchFreshness(
+  scoringPct: number,
+  daysSince: number,
+  dateStr: string | null,
+): number | null {
+  if (isMatchComplete(scoringPct, daysSince)) return null;
+
+  if (scoringPct > 0) return 30; // active scoring
+
+  if (dateStr) {
+    const hoursUntil = (new Date(dateStr).getTime() - Date.now()) / 3_600_000;
+    if (hoursUntil > 7 * 24) return 4 * 60 * 60;
+    if (hoursUntil > 2 * 24) return 60 * 60;
+    if (hoursUntil > 0) return 30 * 60;
+    if (hoursUntil > -12) return 5 * 60;
+    return 30; // fallback
+  }
+  return 30; // fallback (no date)
+}
+
 export function computeMatchTtl(
   scoringPct: number,
   daysSince: number, // negative = future match
   dateStr: string | null,
   minTtl = DEFAULT_MIN_TTL,
 ): number | null {
-  if (isMatchComplete(scoringPct, daysSince)) return null; // permanent
+  const freshness = computeMatchFreshness(scoringPct, daysSince, dateStr);
+  if (freshness === null) return null;
+  return Math.max(minTtl, freshness);
+}
 
-  let ttl: number;
+/**
+ * Redis TTL floor for match cache entries on SWR-aware code paths.
+ *
+ * SWR needs `Redis TTL > freshness window` so the entry survives past the
+ * freshness threshold and a background refresh can land before eviction.
+ * `computeMatchTtl()` returns 30s for active matches (same as freshness),
+ * which leaves no SWR room. The 90s floor here equals freshness (30s) plus
+ * the upstream GraphQL timeout (60s) — enough for the background refresh
+ * to complete before the original entry evicts, without keeping idle
+ * entries around longer than necessary.
+ */
+const SWR_TTL_FLOOR = 90;
 
-  if (scoringPct > 0) {
-    ttl = 30; // active scoring
-  } else if (dateStr) {
-    const hoursUntil = (new Date(dateStr).getTime() - Date.now()) / 3_600_000;
-    if (hoursUntil > 7 * 24) ttl = 4 * 60 * 60; // > 7 days
-    else if (hoursUntil > 2 * 24) ttl = 60 * 60; // 2–7 days
-    else if (hoursUntil > 0) ttl = 30 * 60; // 0–2 days
-    else if (hoursUntil > -12) ttl = 5 * 60; // just started
-    else ttl = 30; // fallback
-  } else {
-    ttl = 30; // fallback (no date)
-  }
-
-  return Math.max(minTtl, ttl);
+export function computeMatchSwrTtl(
+  scoringPct: number,
+  daysSince: number,
+  dateStr: string | null,
+): number | null {
+  return computeMatchTtl(scoringPct, daysSince, dateStr, SWR_TTL_FLOOR);
 }

@@ -12,7 +12,24 @@ export function useMatchQuery(ct: string, id: string) {
   return useQuery<MatchResponse, Error>({
     queryKey: matchQueryKey(ct, id),
     queryFn: () => fetchMatch(ct, id),
-    staleTime: 30_000, // 30 seconds
+    staleTime: 30_000, // 30 seconds — matches server freshness window for live matches
+    // Keep prior data in the client cache for 30 minutes so back-navigation
+    // and tab-return show data instantly while a background refetch resolves,
+    // instead of triggering a fresh skeleton load.
+    gcTime: 1_800_000,
+    // Poll while the match is active (scoring in progress and results not yet
+    // published). The server's stale-while-revalidate path makes these polls
+    // cheap — they almost always resolve from Redis without blocking on the
+    // upstream GraphQL API.
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data) return false;
+      const isComplete =
+        data.results_status === "all" ||
+        data.match_status === "cp" ||
+        data.scoring_completed >= 95;
+      return isComplete ? false : 30_000;
+    },
     enabled: Boolean(ct && id),
   });
 }
