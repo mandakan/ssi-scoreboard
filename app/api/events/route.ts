@@ -41,9 +41,21 @@ const ALLOWED_LEVELS: Record<string, Set<string> | null> = {
 
 // The SSI API applies an undocumented result cap per query when browsing
 // without a search term, silently dropping events further out in the date
-// window. Splitting into 1-month sub-windows keeps each request small enough
-// to fall within the cap, so all events in the full range are returned.
-// Each sub-window gets its own Next.js fetch-cache entry (revalidate: 3600).
+// window. We work around it by splitting the requested range into small
+// sub-windows so each request stays well under the cap.
+//
+// 7 days is chosen to stay safe even when no firearms filter is set: country
+// and minLevel are *post-fetch* filters in this route (the SSI GraphQL has no
+// params for them), so the cap bites on the unfiltered upstream count, not on
+// what the user sees. Bug seen in the wild: browsing a month with discipline
+// "All" + country=SWE + minLevel=L2+ used to show only the first ~9 days
+// because the single 1-month query was already truncated before SWE/L2+
+// filtering ran.
+//
+// Each sub-window gets its own Next.js fetch-cache entry (revalidate: 3600),
+// so the extra requests are cached independently.
+const SUB_WINDOW_DAYS = 7;
+
 function buildSubWindows(
   startsAfter: string,
   startsBefore: string,
@@ -54,7 +66,7 @@ function buildSubWindows(
   const end = new Date(startsBefore);
   while (cur < end) {
     const next = new Date(cur);
-    next.setMonth(next.getMonth() + 1);
+    next.setDate(next.getDate() + SUB_WINDOW_DAYS);
     if (next > end) next.setTime(end.getTime());
     windows.push({
       ...baseVars,
@@ -120,7 +132,7 @@ export async function GET(req: Request) {
       rawEvents = data.events;
     } else {
       // No search text: work around the API's per-request result cap by
-      // splitting the date range into 2-month sub-windows, fetching in
+      // splitting the date range into small sub-windows, fetching in
       // parallel, then deduplicating by event ID.
       const windows = buildSubWindows(startsAfter, startsBefore, firearms ? { firearms } : {});
       const results = await Promise.all(
