@@ -86,7 +86,10 @@ export async function GET(
   const daysSince = match.date
     ? (Date.now() - new Date(match.date).getTime()) / 86_400_000
     : 0;
-  const isComplete = isMatchComplete(match.scoringCompleted, daysSince);
+  const isComplete = isMatchComplete(match.scoringCompleted, daysSince, {
+    status: match.matchStatus,
+    resultsPublished: match.resultsStatus === "all",
+  });
 
   // Resolve which of the requested IDs actually exist in the match.
   const selectedCompetitors = rawCompetitorIds

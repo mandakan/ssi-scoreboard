@@ -19,6 +19,8 @@ export interface OgMatchData {
   stagesCount: number;
   competitorsCount: number;
   scoringCompleted: number;
+  matchStatus: string | null;
+  resultsStatus: string | null;
   minRounds: number | null;
   imageUrl: string | null;
   imageWidth: number | null;
@@ -116,6 +118,8 @@ async function fetchOgMatchDataImpl(
         ev.scoring_completed != null
           ? Math.round(parseFloat(String(ev.scoring_completed)))
           : 0,
+      matchStatus: ev.status ?? null,
+      resultsStatus: ev.results ?? null,
       competitors,
     };
   } catch (err) {

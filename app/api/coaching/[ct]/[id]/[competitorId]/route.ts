@@ -127,6 +127,8 @@ interface RawMatchData {
     name?: string | null;
     starts?: string | null;
     scoring_completed?: string | number | null;
+    status?: string | null;
+    results?: string | null;
     has_geopos?: boolean | null;
     lat?: number | string | null;
     lng?: number | string | null;
@@ -206,7 +208,11 @@ export async function GET(
   const daysSince = matchDate
     ? (Date.now() - matchDate.getTime()) / 86_400_000
     : 0;
-  const isComplete = isMatchComplete(scoringPct, daysSince);
+  const signals = {
+    status: matchData.event.status ?? null,
+    resultsPublished: matchData.event.results === "all",
+  };
+  const isComplete = isMatchComplete(scoringPct, daysSince, signals);
   const matchName = matchData.event.name ?? "Unknown Match";
 
   // 5. Fetch scorecards (reuses existing Redis cache)
@@ -214,6 +220,8 @@ export async function GET(
     scoringPct,
     daysSince,
     matchData.event.starts ?? null,
+    undefined,
+    signals,
   );
   const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
   let scorecardsData: RawScorecardsData;
@@ -272,6 +280,7 @@ export async function GET(
     daysSince,
     stages,
     competitorId,
+    signals,
   );
   if (eligibilityError) {
     return NextResponse.json({ error: eligibilityError }, { status: 422 });
