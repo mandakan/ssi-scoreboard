@@ -154,10 +154,25 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: message }, { status: 502 });
   }
 
+  // Post-fetch guard against SSI returning events whose `starts` is outside
+  // the requested window (observed: browsing May surfaced matches that started
+  // in April, presumably because SSI matches the date filter against
+  // ends/registration dates too). We only want events whose start date falls
+  // within [startsAfter, startsBefore]. Compare on YYYY-MM-DD prefix so the
+  // raw ISO timestamp's timezone doesn't shift events across the boundary.
+  const startsAfterDate = startsAfter; // already YYYY-MM-DD
+  const startsBeforeDate = startsBefore;
+
   const events: EventSummary[] = rawEvents
     // All IPSC disciplines (Handgun, Rifle, Shotgun, PCC, etc.) share ct=22.
     // Exclude series nodes (ct=43) — those are event series, not scoreable matches.
     .filter((e) => e.get_content_type_key === 22)
+    // Drop events whose start date falls outside the requested window.
+    .filter((e) => {
+      const startDay = (e.starts ?? "").slice(0, 10);
+      if (!startDay) return false;
+      return startDay >= startsAfterDate && startDay <= startsBeforeDate;
+    })
     // Filter by country/region if specified
     .filter((e) => !country || e.region.toUpperCase() === country.toUpperCase())
     // Filter by minimum level (e.g. l2plus keeps only Level II+).
