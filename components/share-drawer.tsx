@@ -98,35 +98,36 @@ export function ShareDrawer({
           </Button>
         )}
       </DrawerTrigger>
-      <DrawerContent className="max-h-[85vh]">
-        <DrawerHeader className="pb-2">
-          <DrawerTitle>{title}</DrawerTitle>
-          <DrawerDescription>{description}</DrawerDescription>
-        </DrawerHeader>
+      <DrawerContent className="max-h-[90vh]">
+        <div className="mx-auto flex w-full max-w-lg flex-col min-h-0 flex-1">
+          <DrawerHeader className="pb-2">
+            <DrawerTitle>{title}</DrawerTitle>
+            <DrawerDescription>{description}</DrawerDescription>
+          </DrawerHeader>
 
-        <div className="px-4 space-y-4">
-          {/* OG image preview — lazy-loaded */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={ogImageUrl}
-            alt={ogImageAlt}
-            width={1200}
-            height={630}
-            loading="lazy"
-            className="w-full h-auto rounded-lg border"
-          />
+          <div className="px-4 space-y-4 overflow-y-auto min-h-0 flex-1">
+            {/* OG image preview — lazy-loaded */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={ogImageUrl}
+              alt={ogImageAlt}
+              width={1200}
+              height={630}
+              loading="lazy"
+              className="w-full h-auto rounded-lg border"
+            />
 
-          {/* URL preview */}
-          <div
-            className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground font-mono truncate"
-            title={sharePath}
-          >
-            <Link2 className="w-4 h-4 shrink-0" aria-hidden="true" />
-            <span className="truncate">{sharePath}</span>
+            {/* URL preview */}
+            <div
+              className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground font-mono truncate"
+              title={sharePath}
+            >
+              <Link2 className="w-4 h-4 shrink-0" aria-hidden="true" />
+              <span className="truncate">{sharePath}</span>
+            </div>
           </div>
-        </div>
 
-        <DrawerFooter>
+          <DrawerFooter>
           <Button
             className="w-full"
             onClick={handleShare}
@@ -149,7 +150,8 @@ export function ShareDrawer({
               Cancel
             </Button>
           </DrawerClose>
-        </DrawerFooter>
+          </DrawerFooter>
+        </div>
       </DrawerContent>
     </Drawer>
   );
