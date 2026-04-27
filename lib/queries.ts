@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { fetchMatch, fetchCompare, fetchEvents, fetchPopularMatches, fetchCoachingAvailability, fetchCoachingTip, fetchShooterDashboard, fetchShooterSearch } from "@/lib/api";
-import type { CompareMode, MatchResponse, CompareResponse, EventSummary, PopularMatch, CoachingTipResponse, CoachingAvailability, ShooterDashboardResponse, ShooterSearchResult, MatchWeatherData } from "@/lib/types";
+import type { CompareMode, MatchResponse, CompareResponse, EventSummary, PopularMatch, CoachingTipResponse, CoachingAvailability, ShooterDashboardResponse, ShooterSearchResult, PreMatchWeatherResponse } from "@/lib/types";
 import { matchQueryKey, compareQueryKey, coachingAvailabilityKey, coachingTipQueryKey } from "@/lib/query-keys";
 
 // Re-export so existing imports from lib/queries keep working.
@@ -136,7 +136,7 @@ export function usePreMatchWeatherQuery(
   venue: string | null,
   region: string | null,
 ) {
-  return useQuery<MatchWeatherData, Error>({
+  return useQuery<PreMatchWeatherResponse, Error>({
     queryKey: ["pre-match-weather", lat?.toFixed(4), lng?.toFixed(4), date, venue, region],
     queryFn: async () => {
       const params = new URLSearchParams({ date: date!.slice(0, 10) });
@@ -146,7 +146,7 @@ export function usePreMatchWeatherQuery(
       if (region) params.set("region", region);
       const res = await fetch(`/api/pre-match/weather?${params}`);
       if (!res.ok) throw new Error("Weather unavailable");
-      return res.json() as Promise<MatchWeatherData>;
+      return res.json() as Promise<PreMatchWeatherResponse>;
     },
     // Fetch when we have either GPS coords or a venue name to geocode.
     enabled: date != null && (lat != null && lng != null || venue != null),

@@ -476,6 +476,25 @@ export interface MatchWeatherData {
   precipitationDayTotal: number | null;
 }
 
+/**
+ * Pre-match forecast response. Never a 5xx for date or geocoding issues —
+ * unavailability is encoded as a structured 200 so the client renders a clear
+ * empty-state instead of a generic error / retry loop.
+ *
+ * Open-Meteo's free forecast endpoint covers roughly today-90d through
+ * today+16d; anything outside that returns `out_of_range_*`.
+ */
+export type PreMatchWeatherResponse =
+  | { available: true; weather: MatchWeatherData }
+  | {
+      available: false;
+      reason: "out_of_range_future";
+      /** Days the user must wait before the forecast window opens for this date. */
+      daysUntilWindow: number;
+    }
+  | { available: false; reason: "out_of_range_past" }
+  | { available: false; reason: "no_coordinates" };
+
 /** Per-cell conditions overlay for the comparison table (coaching mode only). */
 export interface StageConditions {
   /** UTC hour (0–23) when this competitor shot this stage. */

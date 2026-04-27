@@ -16,7 +16,7 @@ import {
   Droplets,
 } from "lucide-react";
 import { regionToFlagEmoji } from "@/lib/ipsc-categories";
-import type { MatchResponse, CompetitorInfo, MatchWeatherData } from "@/lib/types";
+import type { MatchResponse, CompetitorInfo, PreMatchWeatherResponse } from "@/lib/types";
 import {
   Popover,
   PopoverContent,
@@ -106,7 +106,14 @@ function weatherIcon(code: number | null) {
   return <Cloud className="w-5 h-5" aria-hidden="true" />;
 }
 
-function WeatherCard({ weather, tooFarAhead }: { weather?: MatchWeatherData; tooFarAhead?: boolean }) {
+function WeatherCard({
+  response,
+  isLoading,
+}: {
+  response: PreMatchWeatherResponse | undefined;
+  isLoading: boolean;
+}) {
+  const weather = response?.available ? response.weather : undefined;
   const tempStr =
     weather?.tempRange != null
       ? `${Math.round(weather.tempRange[0])}–${Math.round(weather.tempRange[1])}°C`
@@ -161,10 +168,18 @@ function WeatherCard({ weather, tooFarAhead }: { weather?: MatchWeatherData; too
       </CardHeader>
 
       <CardContent className="p-0">
-        {tooFarAhead ? (
+        {isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-4 w-48" />
+          </div>
+        ) : response && !response.available ? (
           <p className="text-sm text-muted-foreground">
-            Forecast not yet available — Open-Meteo covers up to 16 days ahead.
-            Check back closer to the match.
+            {response.reason === "out_of_range_future"
+              ? `Forecast not yet available — Open-Meteo covers up to 16 days ahead. Check back in ${response.daysUntilWindow} day${response.daysUntilWindow === 1 ? "" : "s"}.`
+              : response.reason === "out_of_range_past"
+                ? "Match was too long ago for forecast data."
+                : "No coordinates for this venue, so we can't fetch a forecast."}
           </p>
         ) : weather ? (
           <div className="flex items-start gap-3">
@@ -718,14 +733,10 @@ export function PreMatchView({
 
   const useSelectControl = match.squads.length > 8;
 
-  // Weather forecast — fetched when coords or venue name available.
+  // Weather forecast — server returns a structured response (incl. "not yet
+  // available" for far-future dates) so the client just renders whatever it
+  // gets without duplicating window logic.
   const matchDate = match.date ? match.date.slice(0, 10) : null;
-  const [now] = useState(Date.now);
-  const daysUntilMatch = matchDate
-    ? Math.floor((new Date(matchDate).getTime() - now) / 86_400_000)
-    : null;
-  // Open-Meteo forecast covers up to 16 days ahead.
-  const weatherForecastAvailable = daysUntilMatch !== null && daysUntilMatch <= 16;
   const hasVenueInfo = match.lat != null || match.lng != null || match.venue != null;
   const weatherQuery = usePreMatchWeatherQuery(
     match.lat, match.lng, matchDate,
@@ -785,8 +796,8 @@ export function PreMatchView({
       {/* Weather forecast -------------------------------------------------- */}
       {hasVenueInfo && matchDate && (
         <WeatherCard
-          weather={weatherForecastAvailable ? weatherQuery.data : undefined}
-          tooFarAhead={!weatherForecastAvailable}
+          response={weatherQuery.data}
+          isLoading={weatherQuery.isLoading}
         />
       )}
 
