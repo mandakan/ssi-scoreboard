@@ -16,6 +16,7 @@ import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
 import { parseMatchUrl } from "@/lib/utils";
 import { extractDivision } from "@/lib/divisions";
 import db from "@/lib/db-impl";
+import cache from "@/lib/cache-impl";
 import type { RawMatchData } from "@/lib/match-data";
 
 interface RawScorecardsResponse {
@@ -116,7 +117,10 @@ export async function POST(
     division: extractDivision(c),
   }));
 
-  indexMatchShooters(ct, id, matchData.event.starts ?? null, competitors);
+  indexMatchShooters(ct, id, matchData.event.starts ?? null, competitors, undefined, { force: true });
+  // Drop the precomputed dashboard so the user sees their newly added match
+  // without waiting for the 5min TTL to expire.
+  await cache.del(`computed:shooter:${shooterId}:dashboard`).catch(() => {});
 
   // Verify the target shooter is in the competitor list
   const found = competitors.some((c) => c.shooterId === shooterId);
