@@ -9,7 +9,7 @@ import {
   type OpenMeteoResponse,
 } from "@/lib/weather";
 import { geocodeVenueName } from "@/lib/geocoding";
-import type { MatchWeatherData } from "@/lib/types";
+import type { PreMatchWeatherResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -29,7 +29,22 @@ const HOURLY_FIELDS = [
   "visibility",
 ].join(",");
 
-export async function GET(request: Request): Promise<NextResponse<MatchWeatherData | { error: string }>> {
+// Open-Meteo's free forecast endpoint serves roughly the past 90 days
+// (reanalysis-backed) through 16 days into the future. The exact window slides
+// with the current UTC day. Anything outside is a structured "not available"
+// response — never a 5xx.
+const FORECAST_PAST_DAYS = 90;
+const FORECAST_FUTURE_DAYS = 16;
+
+const MS_PER_DAY = 86_400_000;
+
+function startOfUtcDay(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+export async function GET(
+  request: Request,
+): Promise<NextResponse<PreMatchWeatherResponse | { error: string }>> {
   const { searchParams } = new URL(request.url);
   const latStr = searchParams.get("lat");
   const lngStr = searchParams.get("lng");
@@ -39,6 +54,26 @@ export async function GET(request: Request): Promise<NextResponse<MatchWeatherDa
 
   if (!date) {
     return NextResponse.json({ error: "Missing date" }, { status: 400 });
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return NextResponse.json({ error: "date must be YYYY-MM-DD" }, { status: 400 });
+  }
+
+  // Window check first: skip geocoding and the upstream call when we already
+  // know the forecast can't cover this date. Saves a round-trip per page load.
+  const today = startOfUtcDay(new Date());
+  const matchDay = startOfUtcDay(new Date(`${date}T00:00:00Z`));
+  const offsetDays = Math.round((matchDay.getTime() - today.getTime()) / MS_PER_DAY);
+
+  if (offsetDays > FORECAST_FUTURE_DAYS) {
+    return NextResponse.json({
+      available: false,
+      reason: "out_of_range_future",
+      daysUntilWindow: offsetDays - FORECAST_FUTURE_DAYS,
+    });
+  }
+  if (offsetDays < -FORECAST_PAST_DAYS) {
+    return NextResponse.json({ available: false, reason: "out_of_range_past" });
   }
 
   let lat = latStr ? parseFloat(latStr) : null;
@@ -61,11 +96,7 @@ export async function GET(request: Request): Promise<NextResponse<MatchWeatherDa
   }
 
   if (lat == null || lng == null) {
-    return NextResponse.json({ error: "No coordinates available for this venue" }, { status: 422 });
-  }
-
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return NextResponse.json({ error: "date must be YYYY-MM-DD" }, { status: 400 });
+    return NextResponse.json({ available: false, reason: "no_coordinates" });
   }
 
   const params = new URLSearchParams({
@@ -96,5 +127,5 @@ export async function GET(request: Request): Promise<NextResponse<MatchWeatherDa
   }
 
   const weather = processWeatherResponse(raw, null, null);
-  return NextResponse.json(weather);
+  return NextResponse.json({ available: true, weather });
 }
