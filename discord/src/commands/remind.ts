@@ -112,9 +112,7 @@ async function handleSet(
   let event: EventSearchResult | null = null;
   const ref = parseEventRef(query);
   if (ref) {
-    // Pre-resolved from autocomplete — search to get full event data
-    const events = await client.searchEvents("");
-    // searchEvents with empty query won't help, use getMatch instead
+    // Pre-resolved from autocomplete — fetch full match data
     try {
       const match = await client.getMatch(ref.ct, ref.id);
       event = {
@@ -153,7 +151,6 @@ async function handleSet(
   }
 
   // Check for duplicate
-  const matchRef = `${event.content_type}:${event.id}`;
   const alreadyTracked = config.matches.some(
     (m) => m.matchCt === event!.content_type && m.matchId === event!.id,
   );

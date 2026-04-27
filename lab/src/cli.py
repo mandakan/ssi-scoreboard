@@ -1276,7 +1276,7 @@ def _s3_client(endpoint: str) -> Any:
         # Without this, boto3 picks up the AWS region from ~/.aws/config which
         # R2 rejects as invalid.
         kwargs["region_name"] = "auto"
-    return boto3.client("s3", **kwargs)  # type: ignore[no-untyped-call]
+    return boto3.client("s3", **kwargs)
 
 
 def _read_db_stats(db_path: Path) -> dict[str, Any]:

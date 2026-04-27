@@ -39,6 +39,7 @@ import { pollRegistrationReminders } from "./notifications/registration-reminder
 import { landingPage, privacyPage, tosPage } from "./pages";
 import { pollSquadReminders } from "./notifications/squad-reminder";
 import { pollPersonalReminders } from "./notifications/personal-reminder";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- temporarily disabled in scheduled(), kept for re-enablement
 import { pollAchievements } from "./notifications/achievement-announce";
 
 const worker: ExportedHandler<Env> = {
