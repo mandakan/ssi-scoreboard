@@ -138,7 +138,8 @@ def test_load_prefers_local_over_s3(raw_dir: Path) -> None:
 
 
 def test_s3_not_found_returns_none(raw_dir: Path) -> None:
-    from botocore.exceptions import ClientError  # type: ignore[import-untyped]
+    botocore_exceptions = pytest.importorskip("botocore.exceptions")
+    ClientError = botocore_exceptions.ClientError
 
     error_response = {"Error": {"Code": "NoSuchKey", "Message": "Not found"}}
     mock_s3 = MagicMock()

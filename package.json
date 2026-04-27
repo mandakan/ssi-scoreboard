@@ -84,12 +84,18 @@
     ],
     "overrides": {
       "minimatch": "^10.2.2",
-      "hono": "^4.12.7",
-      "@hono/node-server": "^1.19.10",
+      "hono": "^4.12.15",
+      "@hono/node-server": "^1.19.14",
       "express-rate-limit": "^8.2.2",
-      "fast-xml-parser": "^5.5.7",
+      "fast-xml-parser": "^5.7.2",
       "undici": "^7.24.1",
-      "flatted": "^3.4.2"
+      "flatted": "^3.4.2",
+      "postcss": "^8.5.12",
+      "vite": "^7.3.2",
+      "path-to-regexp@>=8.0.0 <9": "^8.4.2",
+      "picomatch@>=2.0.0 <3": "^2.3.2",
+      "picomatch@>=4.0.0 <5": "^4.0.4",
+      "eslint-plugin-react-hooks": "7.0.1"
     }
   }
 }

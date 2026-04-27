@@ -360,7 +360,7 @@ class Store:
         synced_at: str,
         results: MatchResults,
     ) -> None:
-        import pyarrow as pa
+        import pyarrow as pa  # type: ignore[import-untyped]
 
         # Upsert match metadata (single row)
         self.db.execute(
@@ -771,7 +771,7 @@ class Store:
         """
         if not rows:
             return
-        import pyarrow as pa  # type: ignore[import-untyped]
+        import pyarrow as pa
 
         now = datetime.now(UTC).isoformat()
         tbl = pa.table({  # noqa: F841
