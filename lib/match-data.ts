@@ -256,8 +256,14 @@ export async function fetchMatchData(
     })
     .filter((s) => s.competitorIds.length > 0);
 
-  // Build cross-match shooter index. Registered with afterResponse() so the
-  // promise completes even after the HTTP response is sent (required on CF Workers).
+  // Build cross-match shooter index. `indexMatchShooters` self-throttles per
+  // match via a Redis lock so a popular match polled by many viewers only
+  // re-indexes at most once per throttle window. Without throttling, each
+  // match page view (or 30s active-match poll) replays ~2 D1 writes per
+  // competitor + 1 per match — a 200-competitor match is ~400 writes per view.
+  //
+  // Registered with afterResponse() so the promise completes even after the
+  // HTTP response is sent (required on CF Workers).
   afterResponse(indexMatchShooters(ct, id, ev.starts ?? null, competitors, {
     name: ev.name,
     venue: ev.venue ?? null,

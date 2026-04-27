@@ -6,6 +6,12 @@ import cache from "@/lib/cache-impl";
 import db from "@/lib/db-impl";
 import type { MatchRecord } from "@/lib/types";
 
+// Re-index a match at most once per this many seconds. Bounds D1 write volume:
+// without throttling, every match page view of a 200-competitor match issues
+// ~400 D1 writes (2 per competitor + 1 per match). At 30s active-match polling
+// from many concurrent viewers this dominates the write rate.
+const INDEX_THROTTLE_SECONDS = 300;
+
 /**
  * Decodes a Relay Global ID to extract the numeric ShooterNode primary key.
  *
@@ -100,7 +106,28 @@ export async function indexMatchShooters(
     license?: string | null;
   }>,
   matchMeta?: MatchMetadata,
+  options?: { force?: boolean },
 ): Promise<void> {
+  // Per-match throttle: skip if another caller indexed this match recently.
+  // The Redis SET NX semantics are atomic, so concurrent callers race the lock
+  // and only the winner proceeds. Failures (Redis down) fall through to index.
+  // `force: true` bypasses the throttle — used by user-triggered flows like
+  // POST /api/shooter/{id}/add-match where the user expects the match to be
+  // indexed regardless of recent activity.
+  if (!options?.force) {
+    let lockAcquired: boolean;
+    try {
+      lockAcquired = await cache.setIfAbsent(
+        `idx:m:${ct}:${matchId}`,
+        "1",
+        INDEX_THROTTLE_SECONDS,
+      );
+    } catch {
+      lockAcquired = true;
+    }
+    if (!lockAcquired) return;
+  }
+
   const matchRef = `${ct}:${matchId}`;
   const startTimestamp = matchStart
     ? Math.floor(new Date(matchStart).getTime() / 1000)
@@ -165,9 +192,6 @@ export async function indexMatchShooters(
     writes.push(
       db.indexShooterMatch(shooterId, matchRef, startTimestamp).catch(() => {}),
       db.setShooterProfile(shooterId, profile).catch(() => {}),
-      // Invalidate the pre-computed dashboard cache so the next visit picks up
-      // this newly indexed match immediately rather than serving stale data.
-      cache.del(`computed:shooter:${shooterId}:dashboard`).catch(() => {}),
     );
   }
   return Promise.allSettled(writes).then(() => {});
