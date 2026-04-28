@@ -70,40 +70,62 @@ describe("telemetry core", () => {
   });
 });
 
-describe("R2 sampler (signal mode)", () => {
-  const { shouldSampleSignal } = _internal;
+describe("per-domain sampling", () => {
+  const { getDomainRate, keepEvent, DEFAULT_RATES } = _internal;
+  const ORIG_ENV = { ...process.env };
 
-  function ev(fields: Partial<EnrichedEvent> & { domain: string; op: string }): EnrichedEvent {
-    return { ts: "2026-04-28T00:00:00.000Z", ...fields } as EnrichedEvent;
+  function ev(domain: string): EnrichedEvent {
+    return { ts: "2026-04-28T00:00:00.000Z", domain, op: "test" } as EnrichedEvent;
   }
 
-  it("keeps trulyDone ttl-decisions", () => {
-    expect(
-      shouldSampleSignal(ev({ domain: "cache", op: "match-ttl-decision", trulyDone: true })),
-    ).toBe(true);
+  afterEach(() => {
+    process.env = { ...ORIG_ENV };
   });
 
-  it("drops trulyDone=false ttl-decisions", () => {
-    expect(
-      shouldSampleSignal(ev({ domain: "cache", op: "match-ttl-decision", trulyDone: false })),
-    ).toBe(false);
+  it("uses DEFAULT_RATES when no env override is set", () => {
+    delete process.env.TELEMETRY_SAMPLE_CACHE;
+    expect(getDomainRate("cache")).toBe(DEFAULT_RATES.cache);
+    expect(getDomainRate("usage")).toBe(DEFAULT_RATES.usage);
   });
 
-  it("keeps schema-evict events unconditionally", () => {
-    expect(shouldSampleSignal(ev({ domain: "cache", op: "match-cache-schema-evict" }))).toBe(true);
+  it("env override wins over the default", () => {
+    process.env.TELEMETRY_SAMPLE_USAGE = "0.5";
+    expect(getDomainRate("usage")).toBe(0.5);
   });
 
-  it("keeps stale reads, drops fresh reads", () => {
-    expect(
-      shouldSampleSignal(ev({ domain: "cache", op: "match-cache-read", stale: true })),
-    ).toBe(true);
-    expect(
-      shouldSampleSignal(ev({ domain: "cache", op: "match-cache-read", stale: false })),
-    ).toBe(false);
+  it("clamps env override to [0, 1]", () => {
+    process.env.TELEMETRY_SAMPLE_CACHE = "5";
+    expect(getDomainRate("cache")).toBe(1);
+    process.env.TELEMETRY_SAMPLE_CACHE = "-1";
+    expect(getDomainRate("cache")).toBe(0);
   });
 
-  it("passes future non-cache domains through", () => {
-    expect(shouldSampleSignal(ev({ domain: "ai", op: "rate-limit" }))).toBe(true);
+  it("falls back to 1 for unknown domains with no env override", () => {
+    delete process.env.TELEMETRY_SAMPLE_FOOBAR;
+    expect(getDomainRate("foobar")).toBe(1);
+  });
+
+  it("rate=1 keeps every event", () => {
+    process.env.TELEMETRY_SAMPLE_CACHE = "1";
+    for (let i = 0; i < 50; i++) expect(keepEvent(ev("cache"))).toBe(true);
+  });
+
+  it("rate=0 drops every event", () => {
+    process.env.TELEMETRY_SAMPLE_USAGE = "0";
+    for (let i = 0; i < 50; i++) expect(keepEvent(ev("usage"))).toBe(false);
+  });
+
+  it("rate=0.5 lands between 30% and 70% over 1000 trials", () => {
+    process.env.TELEMETRY_SAMPLE_USAGE = "0.5";
+    let kept = 0;
+    for (let i = 0; i < 1000; i++) if (keepEvent(ev("usage"))) kept++;
+    expect(kept).toBeGreaterThan(300);
+    expect(kept).toBeLessThan(700);
+  });
+
+  it("invalid env value falls back to default", () => {
+    process.env.TELEMETRY_SAMPLE_CACHE = "not-a-number";
+    expect(getDomainRate("cache")).toBe(DEFAULT_RATES.cache);
   });
 });
 

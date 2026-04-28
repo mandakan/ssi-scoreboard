@@ -8,6 +8,7 @@ import { afterResponse } from "@/lib/background-impl";
 import { CACHE_SCHEMA_VERSION } from "@/lib/constants";
 import { parseMatchCacheKey, persistActiveMatchToD1 } from "@/lib/match-data-store";
 import { markUpstreamDegraded } from "@/lib/upstream-status";
+import { upstreamTelemetry, hashVariables, type UpstreamOutcome } from "@/lib/upstream-telemetry";
 
 /**
  * Check if the current request is an admin-authenticated request
@@ -51,6 +52,22 @@ export async function executeQuery<T>(
 
   // Extract the operation name for log context, e.g. "GetMatchScorecards"
   const operationName = query.match(/query\s+(\w+)/)?.[1] ?? "unknown";
+  const varsHash = hashVariables(variables);
+  const startedAt = Date.now();
+
+  const emit = (
+    outcome: UpstreamOutcome,
+    extra: { httpStatus?: number | null; bytes?: number | null; retryAfter?: string | null; errorClass?: string | null } = {},
+  ) => {
+    upstreamTelemetry({
+      op: "graphql-request",
+      operation: operationName,
+      ms: Date.now() - startedAt,
+      outcome,
+      varsHash,
+      ...extra,
+    });
+  };
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), GRAPHQL_TIMEOUT_MS);
@@ -71,9 +88,11 @@ export async function executeQuery<T>(
   } catch (err) {
     clearTimeout(timeout);
     if (err instanceof DOMException && err.name === "AbortError") {
+      emit("timeout", { errorClass: "AbortError" });
       console.error(`[ssi-api] ${operationName} timed out after ${GRAPHQL_TIMEOUT_MS}ms | vars=${JSON.stringify(variables ?? {})}`);
       throw new Error(`Upstream request timed out after ${GRAPHQL_TIMEOUT_MS / 1000}s`);
     }
+    emit("fetch-error", { errorClass: err instanceof Error ? err.name : "unknown" });
     throw err;
   }
   clearTimeout(timeout);
@@ -92,25 +111,37 @@ export async function executeQuery<T>(
     ].filter(Boolean);
     console.error(parts.join(" | "));
 
+    emit("http-error", { httpStatus: response.status, retryAfter });
+
     const clientMsg = retryAfter
       ? `Upstream HTTP ${response.status}: ${response.statusText} (Retry-After: ${retryAfter}s)`
       : `Upstream HTTP ${response.status}: ${response.statusText}`;
     throw new Error(clientMsg);
   }
 
-  const result: GraphQLResponse<T> = await response.json();
+  const bodyText = await response.text();
+  let result: GraphQLResponse<T>;
+  try {
+    result = JSON.parse(bodyText) as GraphQLResponse<T>;
+  } catch (err) {
+    emit("fetch-error", { errorClass: "JSONParseError", bytes: bodyText.length });
+    throw err;
+  }
 
   if (result.errors?.length) {
     const msg = result.errors.map((e) => e.message).join("; ");
     console.error(`[ssi-api] ${operationName} GraphQL error | vars=${JSON.stringify(variables ?? {})} | ${msg}`);
+    emit("graphql-error", { bytes: bodyText.length });
     throw new Error(msg);
   }
 
   if (!result.data) {
     console.error(`[ssi-api] ${operationName} empty response | vars=${JSON.stringify(variables ?? {})}`);
+    emit("empty", { bytes: bodyText.length });
     throw new Error("Empty response from upstream API");
   }
 
+  emit("ok", { httpStatus: response.status, bytes: bodyText.length });
   return result.data;
 }
 

@@ -231,7 +231,10 @@ the SQLite/D1 adapters via `CREATE TABLE IF NOT EXISTS`.
 ## Telemetry
 
 Structured-event logging for cache decisions and other server-side observability.
-Lives in `lib/telemetry.ts` (transport) + per-domain typed wrappers (`lib/cache-telemetry.ts`).
+Lives in `lib/telemetry.ts` (transport) + per-domain typed wrappers:
+
+- `lib/cache-telemetry.ts` — match TTL decisions, cache reads, schema evictions
+- `lib/upstream-telemetry.ts` — every SSI GraphQL fetch (latency, outcome, bytes)
 
 **Sinks (registered automatically per deploy target):**
 - `console.info` — always on. Picked up by Cloudflare Workers Logs and Docker stdout.
@@ -440,7 +443,7 @@ handles new achievements and tiers automatically.
 | `MATCH_COMPLETE_DAYS_SINCE` | `lib/match-ttl.ts` (server-only) | Both | Hard time gate (days) before a match can be permanently pinned to durable cache. Default `3`. Even SSI flag flips (`status=cp`, `results=all`) cannot pin earlier than this — protects against the Skepplanda-style premature pinning bug where a mid-match flag flip caused stale data to stick. Raise for events with very long scoring tails (e.g. World Shoots that run 5+ days). Never `NEXT_PUBLIC_`. |
 | `MATCH_COMPLETE_SCORING_PCT` | `lib/match-ttl.ts` (server-only) | Both | Scoring threshold (percent, 0-100) for the un-flagged completion heuristic. Default `98`. Used only when SSI never flips `status=cp`/`results=all` and the time gate has passed. Lower values pin more matches earlier (saves upstream calls) at the risk of catching matches still accruing scorecards. Never `NEXT_PUBLIC_`. |
 | `CACHE_TELEMETRY` | `lib/telemetry.ts` (server-only) | Both | Set to `off` to suppress all telemetry. Default on — emits one JSON line per event via `console.info` (picked up by Cloudflare Workers Logs / Docker stdout) and additionally writes to R2 on Cloudflare when the `TELEMETRY` binding is bound. Never `NEXT_PUBLIC_`. |
-| `TELEMETRY_SAMPLE` | `lib/telemetry-sinks-cf.ts` (Cloudflare only) | Cloudflare only | `all` (default) keeps every event; `signal` keeps only the high-signal ones — pinning decisions (`trulyDone=true`), schema evictions, and stale reads. Use `signal` if R2 PUT volume gets close to the 1M Class A free-tier cap. Never `NEXT_PUBLIC_`. |
+| `TELEMETRY_SAMPLE_<DOMAIN>` | `lib/telemetry-sinks-cf.ts` (Cloudflare only) | Cloudflare only | Per-domain sample rate, value in `[0, 1]`. `1` keeps every event, `0` drops everything, `0.1` keeps 10%. Defaults: diagnostic domains (`cache`, `upstream`, `error`, `ai`, `d1`, `background`) are kept whole; high-volume product domains (`usage`) default to `0.1`. Set e.g. `TELEMETRY_SAMPLE_USAGE=0.05` if R2 PUT volume approaches the 1M Class A free-tier cap. Never `NEXT_PUBLIC_`. |
 | `NEXT_PUBLIC_BUILD_ID` | `components/update-banner.tsx`, `app/api/version/route.ts` | Both | Git SHA baked into the client bundle at Docker build time; powers new-version detection. Auto-injected by `pnpm docker:build`. Unset in `pnpm dev` — version check is skipped. |
 | `REDIS_URL` | `lib/cache-node.ts` | Docker only | `redis://localhost:6379` locally, `rediss://...` for managed Redis. Not needed for CF builds. |
 | `APP_DB_PATH` | `lib/db-sqlite.ts` | Docker only | Path to SQLite database file. Defaults to `./data/shooter-index.db`. Not needed for CF builds. |
