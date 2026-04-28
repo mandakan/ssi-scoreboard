@@ -62,6 +62,7 @@ const DEFAULT_RATES: Record<string, number> = {
   d1: 1,
   background: 1,
   usage: 1,
+  mcp: 1,
 };
 
 // Catch-all for domains not listed above.

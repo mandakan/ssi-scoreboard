@@ -313,6 +313,9 @@ Lives in `lib/telemetry.ts` (transport) + per-domain typed wrappers:
 - `lib/upstream-telemetry.ts` — every SSI GraphQL fetch (latency, outcome, bytes)
 - `lib/error-telemetry.ts` — `reportError(site, err, extra)` for swallowed-catch sites; records error class + truncated message (no stack — avoids PII)
 - `lib/usage-telemetry.ts` — server-side product analytics (match views, comparisons, searches, OG renders, dashboard views)
+- `lib/mcp-telemetry.ts` — MCP-server-boundary events (JSON-RPC requests, tool calls, auth fails) emitted from `/api/mcp`.
+
+**`via:"mcp"` enrichment.** The MCP HTTP route opens an AsyncLocalStorage telemetry context (`lib/telemetry-context.ts`) so every event emitted while serving that request carries `via:"mcp"`. Stdio/Smithery MCP shims call REST endpoints directly with an `x-mcp-client` header; the six routes MCP tools hit (`/api/events`, `/api/match/[ct]/[id]`, `/api/compare`, `/api/popular-matches`, `/api/shooter/[shooterId]`, `/api/shooter/search`) call `maybeTagAsMcp(req)` at the top of the handler to open the same context. Result: any usage/cache/upstream/error/d1 event emitted under MCP traffic can be filtered with `select(.via == "mcp")` in jq/DuckDB. New REST routes that the MCP toolset reaches must add `maybeTagAsMcp(req)` to keep this property.
 
 **Privacy commitments — enforced by code review:**
 

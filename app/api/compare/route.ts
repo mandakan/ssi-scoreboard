@@ -17,6 +17,7 @@ import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
 import type { CompareMode, CompareResponse, CompetitorInfo, FieldFingerprintPoint, StageComparison, StageConditions } from "@/lib/types";
 import { fetchMatchWeatherRaw, getHourlySnapshot } from "@/lib/weather";
 import { geocodeVenueName } from "@/lib/geocoding";
+import { maybeTagAsMcp } from "@/lib/telemetry-context";
 
 interface RawCompetitor {
   id: string;
@@ -69,6 +70,7 @@ interface RawMatchData {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function GET(req: Request) {
+  maybeTagAsMcp(req);
   const rl = await checkRateLimit(req, { prefix: "compare", limit: 30, windowSeconds: 60 });
   if (!rl.allowed) {
     return NextResponse.json(

@@ -3,6 +3,7 @@ import { executeQuery, EVENTS_QUERY } from "@/lib/graphql";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { usageTelemetry, bucketCount } from "@/lib/usage-telemetry";
 import { markUpstreamDegraded } from "@/lib/upstream-status";
+import { maybeTagAsMcp } from "@/lib/telemetry-context";
 
 import type { EventSummary } from "@/lib/types";
 
@@ -94,6 +95,7 @@ function buildSubWindows(
 }
 
 export async function GET(req: Request) {
+  maybeTagAsMcp(req);
   const rl = await checkRateLimit(req, { prefix: "events", limit: 30, windowSeconds: 60 });
   if (!rl.allowed) {
     return NextResponse.json(

@@ -19,6 +19,7 @@
 //    default `lib/telemetry-sinks-impl.ts` (Docker/Node).
 
 import { extraSinks } from "@/lib/telemetry-sinks-impl";
+import { getTelemetryContext } from "@/lib/telemetry-context";
 
 export interface TelemetryEvent {
   /** Domain bucket — "cache", "ai", "ratelimit", etc. */
@@ -45,7 +46,12 @@ export function registerSink(sink: TelemetrySink): void {
 
 export function telemetry(ev: TelemetryEvent): void {
   if (!ENABLED) return;
-  const enriched: EnrichedEvent = { ts: new Date().toISOString(), ...ev };
+  const ctx = getTelemetryContext();
+  const enriched: EnrichedEvent = {
+    ts: new Date().toISOString(),
+    ...ev,
+    ...(ctx?.via ? { via: ctx.via } : {}),
+  };
   for (const s of sinks) {
     try {
       s(enriched);

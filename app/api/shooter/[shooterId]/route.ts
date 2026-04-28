@@ -11,6 +11,7 @@ import { parseRawScorecards } from "@/lib/scorecard-data";
 import { extractDivision } from "@/lib/divisions";
 import { computeAggregateStats } from "@/lib/shooter-stats";
 import { evaluateAchievements } from "@/lib/achievements/evaluate";
+import { maybeTagAsMcp } from "@/lib/telemetry-context";
 import type {
   ShooterDashboardResponse,
   ShooterMatchSummary,
@@ -297,9 +298,10 @@ function computeMatchStats(
 // ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ shooterId: string }> },
 ) {
+  maybeTagAsMcp(req);
   const { shooterId: shooterIdStr } = await params;
   const shooterId = parseInt(shooterIdStr, 10);
   if (isNaN(shooterId) || shooterId <= 0) {
