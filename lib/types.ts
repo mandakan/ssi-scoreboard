@@ -578,6 +578,10 @@ export interface EventSummary {
   is_squadding_possible: boolean;
   /** Maximum number of competitors allowed; null if not set. */
   max_competitors: number | null;
+  /** Match scoring percentage (0-100). 0 for upcoming/empty matches. Used to
+   *  surface "live now" matches whose scoring is in progress. Returned as a
+   *  decimal string by SSI; the events route parses it to a number. */
+  scoring_completed: number;
 }
 
 // ── Stage Simulator ──────────────────────────────────────────────────────────

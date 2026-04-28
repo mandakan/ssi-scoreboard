@@ -1,5 +1,6 @@
 import { RecentCompetitions } from "@/components/recent-competitions";
 import { PopularMatches } from "@/components/popular-matches";
+import { LiveMatches } from "@/components/live-matches";
 import { EventSearch } from "@/components/event-search";
 import { MyShootersButton } from "@/components/my-shooters-button";
 import { AppLogo } from "@/components/app-logo";
@@ -29,6 +30,7 @@ export default function HomePage() {
         <MyShootersButton />
       </div>
 
+      <LiveMatches />
       <RecentCompetitions />
       <PopularMatches />
     </main>
