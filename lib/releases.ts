@@ -11,11 +11,40 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-04-28";
+export const LATEST_RELEASE_ID = "2026-04-29";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "April 29, 2026",
+    title: "Easier on the eyes",
+    screenshotScenes: [
+      "comparison-table",
+      "hf-level-bars",
+      "degradation-chart",
+      "style-fingerprint",
+    ],
+    sections: [
+      {
+        heading: "Accessibility",
+        items: [
+          "Competitor colors switched to a colorblind-safe palette (Okabe-Ito). Charts no longer rely on color alone -- each competitor also has a distinct marker shape (circle, square, triangle, diamond, cross, star, wye) carried through every chart, table header, and legend.",
+          "HF level cell now shows the level digit (1-5) next to the bars, so you can read it at a glance without color cues.",
+        ],
+      },
+      {
+        heading: "Hit-zone bar redesigned",
+        items: [
+          "Taller bar with patterned fills (solid A, light diagonal C, dense diagonal D) so zone composition stays readable in grayscale and under common color-vision deficiencies.",
+          "Misses, no-shoots, and procedurals moved out of the bar and into shape-coded pips below it -- a square per miss, triangle per no-shoot, diamond per procedural. One pip per occurrence up to 3, then a count.",
+          "Per-stage \"-Xpts\" text removed -- the pips already show what happened. Hover or tap the bar for a full breakdown with point cost.",
+          "The total points lost to penalties is still shown on the bottom summary row for each competitor.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-04-28",
     date: "April 28, 2026",
     title: "Find live matches faster",
     // "Live now" is a homepage feature; existing screenshotScenes target the
