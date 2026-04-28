@@ -4,6 +4,7 @@
 
 import cache from "@/lib/cache-impl";
 import db from "@/lib/db-impl";
+import { reportError } from "@/lib/error-telemetry";
 import type { MatchRecord } from "@/lib/types";
 
 // Re-index a match at most once per this many seconds. Bounds D1 write volume:
@@ -136,7 +137,11 @@ export async function indexMatchShooters(
 
   // Load suppression list (single query, tiny table) to skip GDPR-suppressed shooters
   let suppressedIds = new Set<number>();
-  try { suppressedIds = await db.getAllSuppressedShooterIds(); } catch { /* ignore */ }
+  try {
+    suppressedIds = await db.getAllSuppressedShooterIds();
+  } catch (err) {
+    reportError("shooter-index.suppression-load", err, { ct, matchId });
+  }
 
   const writes: Promise<void>[] = [];
 

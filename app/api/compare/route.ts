@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { MAX_COMPETITORS } from "@/lib/constants";
+import { reportError } from "@/lib/error-telemetry";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY, MATCH_QUERY, refreshCachedQuery } from "@/lib/graphql";
 import cache from "@/lib/cache-impl";
@@ -149,7 +150,9 @@ export async function GET(req: Request) {
       // Cache miss: correct the initial 30s write TTL
       await cache.expire(matchKey, dataTtl);
     }
-  } catch { /* ignore */ }
+  } catch (err) {
+    reportError("compare.match-ttl-apply", err, { matchKey });
+  }
 
   // Stale-while-revalidate: schedule a background refresh of the match key
   // when the cached value is older than its freshness window. Single-flight
@@ -193,7 +196,9 @@ export async function GET(req: Request) {
     } else if (!scorecardsCachedAt) {
       await cache.expire(scorecardsKey, dataTtl);
     }
-  } catch { /* ignore */ }
+  } catch (err) {
+    reportError("compare.scorecards-ttl-apply", err, { matchKey: scorecardsKey });
+  }
 
   // SWR for scorecards (the slowest upstream call) — same single-flight pattern.
   if (scorecardsCachedAt && dataTtl != null && matchFreshness != null) {
@@ -468,7 +473,9 @@ export async function GET(req: Request) {
         if (parsed.v === 1 && Array.isArray(parsed.fieldFingerprintPoints)) {
           cachedPoints = parsed.fieldFingerprintPoints;
         }
-      } catch { /* ignore */ }
+      } catch (err) {
+        reportError("compare.matchglobal-parse", err, { matchKey: matchGlobalKey });
+      }
     }
 
     let ffp: FieldFingerprintPoint[];
@@ -487,7 +494,9 @@ export async function GET(req: Request) {
         if (dataTtl === null) {
           afterResponse(persistToMatchStore(matchGlobalKey, globalPayload));
         }
-      } catch { /* ignore */ }
+      } catch (err) {
+        reportError("compare.matchglobal-write", err, { matchKey: matchGlobalKey });
+      }
     }
 
     fingerprintCacheHit = cachedPoints !== undefined;

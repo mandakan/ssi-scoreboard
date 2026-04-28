@@ -4,6 +4,7 @@ import db from "@/lib/db-impl";
 import { gqlCacheKey, cachedExecuteQuery, UPCOMING_STATUS_QUERY } from "@/lib/graphql";
 import { getMatchDataWithFallback } from "@/lib/match-data-store";
 import { decodeShooterId } from "@/lib/shooter-index";
+import { reportError } from "@/lib/error-telemetry";
 import type { ShooterProfile } from "@/lib/shooter-index";
 import { parseRawScorecards } from "@/lib/scorecard-data";
 import { extractDivision } from "@/lib/divisions";
@@ -322,7 +323,9 @@ export async function GET(
       const parsed = JSON.parse(cached) as ShooterDashboardResponse;
       return NextResponse.json(parsed);
     }
-  } catch { /* ignore cache errors */ }
+  } catch (err) {
+    reportError("shooter.dashboard-cache-read", err, { shooterId });
+  }
 
   // ── 2. Load profile, match refs, and upcoming refs from ShooterStore ────
   let profile: ShooterProfile | null = null;
@@ -334,7 +337,9 @@ export async function GET(
       db.getShooterMatches(shooterId),
       db.getUpcomingMatches(shooterId),
     ]);
-  } catch { /* ignore store errors */ }
+  } catch (err) {
+    reportError("shooter.profile-load", err, { shooterId });
+  }
 
   if (!profile && matchRefs.length === 0) {
     return NextResponse.json({ error: "Shooter not found" }, { status: 404 });
@@ -540,7 +545,9 @@ export async function GET(
     let matchMetaMap = new Map<string, import("@/lib/types").MatchRecord>();
     try {
       matchMetaMap = await db.getMatchesByRefs(upcomingRefs);
-    } catch { /* ignore DB errors */ }
+    } catch (err) {
+      reportError("shooter.upcoming-matches-load", err, { shooterId });
+    }
 
     // Resolve registration + squad status for each upcoming match in parallel.
     // For each match: try cached GetMatch (free) → lightweight API query (cheap).
@@ -621,7 +628,9 @@ export async function GET(
   let storedAchievements: import("@/lib/achievements/types").StoredAchievement[] = [];
   try {
     storedAchievements = await db.getShooterAchievements(shooterId);
-  } catch { /* ignore DB errors */ }
+  } catch (err) {
+    reportError("shooter.achievements-load", err, { shooterId });
+  }
 
   const { achievements, newUnlocks } = evaluateAchievements(
     { matchCount: totalMatchCount, matches: matchSummaries, stats },
@@ -646,7 +655,9 @@ export async function GET(
   // ── 6. Cache the result ───────────────────────────────────────────────────
   try {
     await cache.set(dashboardKey, JSON.stringify(response), DASHBOARD_TTL);
-  } catch { /* ignore */ }
+  } catch (err) {
+    reportError("shooter.dashboard-cache-write", err, { shooterId });
+  }
 
   console.log(
     JSON.stringify({
@@ -683,7 +694,9 @@ export async function DELETE(
   // Invalidate cached dashboard
   try {
     await cache.del(`computed:shooter:${shooterId}:dashboard`);
-  } catch { /* ignore cache errors */ }
+  } catch (err) {
+    reportError("shooter.dashboard-cache-invalidate", err, { shooterId });
+  }
 
   console.log(JSON.stringify({ route: "shooter-suppress", shooterId }));
 

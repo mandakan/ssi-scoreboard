@@ -17,6 +17,7 @@ import cache from "@/lib/cache-impl";
 import db from "@/lib/db-impl";
 import { runBackfill } from "@/lib/backfill";
 import { getMatchDataWithFallback } from "@/lib/match-data-store";
+import { reportError } from "@/lib/error-telemetry";
 import type { BackfillDeps } from "@/lib/backfill";
 import type { BackfillProgress } from "@/lib/types";
 
@@ -41,7 +42,9 @@ export async function POST(
         { status: 410 },
       );
     }
-  } catch { /* ignore */ }
+  } catch (err) {
+    reportError("backfill.suppression-check", err, { shooterId });
+  }
 
   // Cooldown check
   const lockKey = `backfill:lock:${shooterId}`;
@@ -58,7 +61,9 @@ export async function POST(
       };
       return NextResponse.json(result);
     }
-  } catch { /* ignore cache errors */ }
+  } catch (err) {
+    reportError("backfill.cooldown-check", err, { shooterId });
+  }
 
   // Wire up dependencies to real cache adapter + D1 fallback
   const deps: BackfillDeps = {
@@ -102,7 +107,9 @@ export async function POST(
   // Set cooldown lock
   try {
     await cache.set(lockKey, "1", COOLDOWN_SECONDS);
-  } catch { /* ignore */ }
+  } catch (err) {
+    reportError("backfill.cooldown-write", err, { shooterId });
+  }
 
   console.log(
     JSON.stringify({
