@@ -17,6 +17,10 @@ on:
     # match cycle ramps up Wednesday onwards.
     - cron: '0 6 * * 1'
 
+# Minimal permissions: only need to clone the repo; no write access required.
+permissions:
+  contents: read
+
 jobs:
   check:
     runs-on: ubuntu-latest
