@@ -488,7 +488,15 @@ export default function MatchPageClient() {
               Refreshing...
             </span>
           )}
-          <CacheInfoBadge ct={ct} id={id} cachedAt={stalestCachedAt} />
+          <CacheInfoBadge
+            ct={ct}
+            id={id}
+            cachedAt={stalestCachedAt}
+            lastScorecardAt={compareQuery.data?.cacheInfo.lastScorecardAt ?? null}
+            matchOngoing={
+              match.match_status !== "cp" && match.match_status !== "cs"
+            }
+          />
           <ShareEventLink ct={ct} id={id} matchName={match.name} />
           <ShareButton title={match.name} competitorCount={selectedIds.length} />
         </div>

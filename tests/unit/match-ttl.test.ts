@@ -21,41 +21,132 @@ function rawTtl(
   scoringPct: number,
   daysSince: number,
   dateStr: string | null,
+  signals?: { status?: string | null; resultsPublished?: boolean },
 ) {
-  return computeMatchTtl(scoringPct, daysSince, dateStr, 0);
+  return computeMatchTtl(scoringPct, daysSince, dateStr, 0, signals);
 }
 
-describe("computeMatchTtl", () => {
-  // ── Completed matches ──────────────────────────────────────────────────────
-
-  it("returns null (permanent) when scoring is 100%", () => {
-    expect(computeMatchTtl(100, 0.5, isoHoursFromNow(-12))).toBeNull();
-    expect(computeMatchTtl(100, 1, isoHoursFromNow(-24))).toBeNull();
-    expect(computeMatchTtl(100, 30, null)).toBeNull();
+describe("isMatchComplete", () => {
+  // ── Cancellation ──────────────────────────────────────────────────────────
+  it("true immediately when status='cs' regardless of timing", () => {
+    expect(isMatchComplete(0, 0, { status: "cs" })).toBe(true);
+    expect(isMatchComplete(50, 0.5, { status: "cs" })).toBe(true);
+    expect(isMatchComplete(99, -1, { status: "cs" })).toBe(true);
   });
 
-  it("returns null (permanent) when daysSince > 7 regardless of scoring", () => {
+  // ── Historical fallback (>7 days) ────────────────────────────────────────
+  it("true when daysSince > 7 regardless of other signals", () => {
+    expect(isMatchComplete(0, 7.1)).toBe(true);
+    expect(isMatchComplete(50, 10)).toBe(true);
+    expect(isMatchComplete(98, 365)).toBe(true);
+  });
+
+  // ── Hard time gate: nothing pins inside the match window ─────────────────
+  // Critical regression guard: this is the Skepplanda Apr 2026 bug. Even
+  // if SSI prematurely flips status='cp' or results='all' on day 1 of a
+  // multi-day match, we MUST keep refreshing. Late RO scorecards arrive
+  // for hours after the last shot.
+  it("does NOT pin inside the time gate (daysSince <= MATCH_COMPLETE_DAYS_SINCE) even when SSI flagged complete", () => {
+    expect(isMatchComplete(100, 0, { status: "cp" })).toBe(false);
+    expect(isMatchComplete(100, 1, { status: "cp" })).toBe(false);
+    expect(isMatchComplete(100, 2, { status: "cp" })).toBe(false);
+    expect(isMatchComplete(100, 3, { status: "cp" })).toBe(false);
+
+    expect(isMatchComplete(100, 0, { resultsPublished: true })).toBe(false);
+    expect(isMatchComplete(100, 1.5, { resultsPublished: true })).toBe(false);
+    expect(isMatchComplete(100, 3, { resultsPublished: true })).toBe(false);
+  });
+
+  it("does NOT pin inside the time gate via the scoring threshold alone", () => {
+    expect(isMatchComplete(98, 0)).toBe(false);
+    expect(isMatchComplete(99, 1)).toBe(false);
+    expect(isMatchComplete(99.58, 2)).toBe(false); // Skepplanda's final scoring on day 2
+    expect(isMatchComplete(100, 3)).toBe(false);
+  });
+
+  // ── Past the time gate ───────────────────────────────────────────────────
+  it("true when past time gate AND status='cp'", () => {
+    expect(isMatchComplete(85.7, 3.1, { status: "cp" })).toBe(true);
+    expect(isMatchComplete(0, 4, { status: "cp" })).toBe(true);
+  });
+
+  it("true when past time gate AND results published", () => {
+    expect(isMatchComplete(87.8, 3.1, { resultsPublished: true })).toBe(true);
+    expect(isMatchComplete(0, 5, { resultsPublished: true })).toBe(true);
+  });
+
+  it("true when past time gate AND scoring >= MATCH_COMPLETE_SCORING_PCT (default 98)", () => {
+    expect(isMatchComplete(98, 3.1)).toBe(true);
+    expect(isMatchComplete(99.58, 4)).toBe(true);
+    expect(isMatchComplete(100, 3.5)).toBe(true);
+  });
+
+  it("false past time gate when scoring < threshold AND no SSI flag", () => {
+    expect(isMatchComplete(85, 4)).toBe(false);
+    expect(isMatchComplete(50, 6)).toBe(false);
+    expect(isMatchComplete(97.9, 5)).toBe(false);
+  });
+
+  // ── Future matches ───────────────────────────────────────────────────────
+  it("false for future matches", () => {
+    expect(isMatchComplete(0, -1)).toBe(false);
+    expect(isMatchComplete(0, -10)).toBe(false);
+  });
+});
+
+describe("computeMatchTtl", () => {
+  // ── Permanent (completed) ────────────────────────────────────────────────
+
+  it("returns null (permanent) when historical fallback applies", () => {
     expect(computeMatchTtl(0, 7.1, null)).toBeNull();
     expect(computeMatchTtl(50, 10, isoHoursFromNow(-240))).toBeNull();
     expect(computeMatchTtl(98, 365, null)).toBeNull();
   });
 
-  // Regression: during an active multi-day match the upstream scoring_completed
-  // can climb past 95% on day 1 while squads still have unscored stages on
-  // day 2. The previous "scoring >= 95% AND daysSince >= 1" rule pinned a
-  // mid-match snapshot to the durable store. Now we require either truly
-  // 100% scoring or > 7 days since start.
-  it("stays in active-scoring tier when scoring >= 95% but match is recent", () => {
+  it("returns null (permanent) when past time gate AND scoring threshold met", () => {
+    expect(computeMatchTtl(98, 3.5, isoHoursFromNow(-84))).toBeNull();
+    expect(computeMatchTtl(100, 4, isoHoursFromNow(-96))).toBeNull();
+  });
+
+  it("returns null (permanent) when past time gate AND SSI flagged", () => {
+    expect(
+      computeMatchTtl(50, 4, isoHoursFromNow(-96), undefined, { status: "cp" }),
+    ).toBeNull();
+    expect(
+      computeMatchTtl(0, 4, isoHoursFromNow(-96), undefined, { resultsPublished: true }),
+    ).toBeNull();
+  });
+
+  it("returns null (permanent) immediately for cancelled matches", () => {
+    expect(
+      computeMatchTtl(0, 0, isoHoursFromNow(-1), undefined, { status: "cs" }),
+    ).toBeNull();
+  });
+
+  // Critical regression: mid-match SSI flag flip must NOT cause permanent
+  // pinning. Skepplanda Apr 2026: organizer flipped results=all on day 2
+  // while squads still had unscored stages.
+  it("stays in active-scoring tier inside the time gate even when SSI flag fires", () => {
+    expect(
+      computeMatchTtl(95, 0.25, isoHoursFromNow(-6), undefined, { status: "cp" }),
+    ).not.toBeNull();
+    expect(
+      computeMatchTtl(98, 1, isoHoursFromNow(-24), undefined, { resultsPublished: true }),
+    ).not.toBeNull();
+    expect(
+      computeMatchTtl(99, 2, isoHoursFromNow(-48), undefined, { status: "cp", resultsPublished: true }),
+    ).not.toBeNull();
+    expect(
+      computeMatchTtl(99.58, 2.5, isoHoursFromNow(-60), undefined, { status: "cp" }),
+    ).not.toBeNull();
+  });
+
+  it("stays in active-scoring tier when scoring >= 95% but inside time gate", () => {
     expect(computeMatchTtl(95, 0.25, isoHoursFromNow(-6))).not.toBeNull();
     expect(computeMatchTtl(98, 0.5, isoHoursFromNow(-12))).not.toBeNull();
     expect(computeMatchTtl(95, 1, isoHoursFromNow(-24))).not.toBeNull();
     expect(computeMatchTtl(98, 3, isoHoursFromNow(-72))).not.toBeNull();
     expect(rawTtl(99, 0.9, isoHoursFromNow(-21))).toBe(30);
-  });
-
-  it("returns null at boundary: scoring exactly 100, any daysSince", () => {
-    expect(computeMatchTtl(100, 0, isoHoursFromNow(0))).toBeNull();
-    expect(computeMatchTtl(100, 0.1, isoHoursFromNow(-2))).toBeNull();
   });
 
   // ── Active scoring ─────────────────────────────────────────────────────────
@@ -67,7 +158,6 @@ describe("computeMatchTtl", () => {
   });
 
   it("active scoring uses the 30s tier under the default 30s floor", () => {
-    // raw = 30, minTtl default = 30 → result = 30 (kept near-real-time for live matches)
     expect(computeMatchTtl(1, 1, isoHoursFromNow(-24))).toBe(30);
     expect(computeMatchTtl(50, 1, isoHoursFromNow(-24))).toBe(30);
   });
@@ -80,7 +170,7 @@ describe("computeMatchTtl", () => {
   // ── Pre-match: start > 7 days away ────────────────────────────────────────
 
   it("returns 4h when start is > 7 days away", () => {
-    const dateStr = isoHoursFromNow(8 * 24); // 8 days from now
+    const dateStr = isoHoursFromNow(8 * 24);
     expect(computeMatchTtl(0, -8, dateStr)).toBe(4 * 60 * 60);
   });
 
@@ -92,7 +182,7 @@ describe("computeMatchTtl", () => {
   // ── Pre-match: start 2–7 days away ────────────────────────────────────────
 
   it("returns 1h when start is 2–7 days away", () => {
-    const dateStr = isoHoursFromNow(3 * 24); // 3 days from now
+    const dateStr = isoHoursFromNow(3 * 24);
     expect(computeMatchTtl(0, -3, dateStr)).toBe(60 * 60);
   });
 
@@ -104,7 +194,7 @@ describe("computeMatchTtl", () => {
   // ── Pre-match: start 0–2 days away ────────────────────────────────────────
 
   it("returns 30min when start is 0–2 days away", () => {
-    const dateStr = isoHoursFromNow(12); // 12 hours from now
+    const dateStr = isoHoursFromNow(12);
     expect(computeMatchTtl(0, -0.5, dateStr)).toBe(30 * 60);
   });
 
@@ -116,7 +206,7 @@ describe("computeMatchTtl", () => {
   // ── Match just started: no scoring yet, < 12h past ────────────────────────
 
   it("returns 5min when match started within last 12 hours (no scoring)", () => {
-    const dateStr = isoHoursFromNow(-6); // started 6 hours ago
+    const dateStr = isoHoursFromNow(-6);
     expect(computeMatchTtl(0, 0.25, dateStr)).toBe(5 * 60);
   });
 
@@ -140,8 +230,8 @@ describe("computeMatchTtl", () => {
   // ── Minimum TTL floor ──────────────────────────────────────────────────────
 
   it("minTtl=0 disables the floor and returns raw tier values", () => {
-    expect(rawTtl(1, 1, isoHoursFromNow(-24))).toBe(30); // active scoring
-    expect(rawTtl(0, 0, null)).toBe(30); // fallback
+    expect(rawTtl(1, 1, isoHoursFromNow(-24))).toBe(30);
+    expect(rawTtl(0, 0, null)).toBe(30);
   });
 
   it("minTtl clamps active scoring to the specified floor", () => {
@@ -150,7 +240,6 @@ describe("computeMatchTtl", () => {
 
   it("minTtl does not affect tiers already above the floor", () => {
     const soon = isoHoursFromNow(12);
-    // 30 min tier (1800s) >> default minTtl (300s) → unchanged
     expect(computeMatchTtl(0, -0.5, soon, 300)).toBe(30 * 60);
   });
 
@@ -169,15 +258,22 @@ describe("computeMatchTtl", () => {
 });
 
 describe("computeMatchFreshness", () => {
-  it("returns null for completed matches", () => {
-    expect(computeMatchFreshness(100, 0.5, isoHoursFromNow(-12))).toBeNull();
+  it("returns null for completed matches (historical or signal-driven)", () => {
     expect(computeMatchFreshness(0, 8, null)).toBeNull();
+    expect(computeMatchFreshness(98, 4, isoHoursFromNow(-96))).toBeNull();
+    expect(
+      computeMatchFreshness(0, 4, isoHoursFromNow(-96), { resultsPublished: true }),
+    ).toBeNull();
   });
 
-  it("returns 30s for active scoring (raw, unclamped)", () => {
+  it("returns 30s for active scoring (raw, unclamped) — including inside time gate with SSI flag", () => {
     expect(computeMatchFreshness(1, 1, isoHoursFromNow(-24))).toBe(30);
     expect(computeMatchFreshness(50, 0.5, isoHoursFromNow(-12))).toBe(30);
     expect(computeMatchFreshness(94, 1, isoHoursFromNow(-24))).toBe(30);
+    // Mid-match flag flip must not turn off freshness either.
+    expect(
+      computeMatchFreshness(98, 1, isoHoursFromNow(-24), { status: "cp" }),
+    ).toBe(30);
   });
 
   it("returns 4h when start is > 7 days away", () => {
@@ -201,8 +297,6 @@ describe("computeMatchFreshness", () => {
   });
 
   it("is always <= computeMatchTtl (the floor never exceeds freshness)", () => {
-    // SWR invariant: TTL must be >= freshness so Redis outlives the freshness
-    // window, leaving room for a background refresh to land.
     const cases: Array<[number, number, string | null]> = [
       [50, 1, isoHoursFromNow(-24)],
       [0, -3, isoHoursFromNow(3 * 24)],
@@ -217,40 +311,5 @@ describe("computeMatchFreshness", () => {
       expect(t).not.toBeNull();
       expect(t!).toBeGreaterThanOrEqual(f!);
     }
-  });
-});
-
-describe("isMatchComplete", () => {
-  it("true when daysSince > 7, regardless of scoring", () => {
-    expect(isMatchComplete(0, 7.1)).toBe(true);
-    expect(isMatchComplete(50, 10)).toBe(true);
-    expect(isMatchComplete(98, 365)).toBe(true);
-  });
-
-  it("true when scoring is 100%, regardless of daysSince", () => {
-    expect(isMatchComplete(100, 0)).toBe(true);
-    expect(isMatchComplete(100, 0.5)).toBe(true);
-    expect(isMatchComplete(100, 5)).toBe(true);
-  });
-
-  // Primary regression: high scoring % mid-match must not flip the cache to
-  // permanent. Multi-day matches with pre-match day can run 2-3 days while
-  // late scorecards trickle in — keep refreshing until 100% or > 7 days old.
-  it("false when scoring >= 95% but match is within 7 days", () => {
-    expect(isMatchComplete(95, 0)).toBe(false);
-    expect(isMatchComplete(98, 0.5)).toBe(false);
-    expect(isMatchComplete(99, 1)).toBe(false);
-    expect(isMatchComplete(98, 3)).toBe(false);
-    expect(isMatchComplete(95, 7)).toBe(false);
-  });
-
-  it("false when scoring low and match is recent", () => {
-    expect(isMatchComplete(50, 1)).toBe(false);
-    expect(isMatchComplete(0, 0)).toBe(false);
-  });
-
-  it("false for future matches", () => {
-    expect(isMatchComplete(0, -1)).toBe(false);
-    expect(isMatchComplete(0, -10)).toBe(false);
   });
 });

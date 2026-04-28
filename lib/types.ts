@@ -66,6 +66,11 @@ export interface CacheInfo {
   /** True when an upstream refresh failed within the last ~60s.
    *  Drives the "live updates paused" banner. Absent on fresh successful fetches. */
   upstreamDegraded?: boolean;
+  /** ISO timestamp of the most recent scorecard the upstream knows about
+   *  (max `scorecards.created` across the match). Used by the UI to surface
+   *  a "data is N minutes old" indicator on ongoing matches even when the
+   *  cache itself looks fresh. Absent when no scorecards have been recorded. */
+  lastScorecardAt?: string | null;
 }
 
 export interface MatchResponse {

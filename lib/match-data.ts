@@ -11,6 +11,7 @@ import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
 import { afterResponse } from "@/lib/background-impl";
 import { persistToMatchStore } from "@/lib/match-data-store";
 import { isUpstreamDegraded } from "@/lib/upstream-status";
+import { cacheTelemetry } from "@/lib/cache-telemetry";
 import type { MatchResponse, StageInfo, CompetitorInfo, SquadInfo } from "@/lib/types";
 
 // ── Raw GraphQL response shapes ─────────────────────────────────────────────
@@ -149,20 +150,30 @@ export async function fetchMatchData(
   const matchDate = ev.starts ? new Date(ev.starts) : null;
   const daysSince = matchDate ? (Date.now() - matchDate.getTime()) / 86_400_000 : 0;
   const resultsPublished = ev.results === "all";
-  const cancelled = ev.status === "cs";
-  // Cache permanently only when we're sure the match is truly done:
-  // cancelled, or `isMatchComplete()` returns true (scoring=100 or >7 days
-  // old). `results === "all"` alone is not enough — organizers sometimes
-  // flip it before every RO has submitted scorecards, which used to pin a
-  // mid-match snapshot to D1 with no way to refresh.
-  const trulyDone = cancelled || isMatchComplete(scoringPct, daysSince);
+  const signals = { status: ev.status ?? null, resultsPublished };
+  // Cache permanently only when truly done — see `isMatchComplete` for the
+  // full decision tree. The hard time gate inside `isMatchComplete` is what
+  // prevents the Skepplanda-style premature pinning bug: even if SSI flips
+  // status="cp" or results="all" mid-match, we keep refreshing for the full
+  // match window plus a margin so late RO scorecards still surface.
+  const trulyDone = isMatchComplete(scoringPct, daysSince, signals);
   const ttl = trulyDone
     ? null
-    : computeMatchSwrTtl(scoringPct, daysSince, ev.starts ?? null);
+    : computeMatchSwrTtl(scoringPct, daysSince, ev.starts ?? null, signals);
   // `isComplete` flag (returned to callers / used for UI badges) stays
   // lenient — once results are published or scoring is high we treat the
   // match as "done enough" to display, even if we keep refreshing.
   const isComplete = trulyDone || resultsPublished;
+  cacheTelemetry({
+    op: "match-ttl-decision",
+    matchKey,
+    scoringPct,
+    daysSince,
+    status: ev.status ?? null,
+    resultsPublished,
+    trulyDone,
+    ttl,
+  });
 
   try {
     if (ttl === null) {

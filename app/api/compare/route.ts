@@ -39,6 +39,8 @@ interface RawMatchData {
   event: {
     starts?: string | null;
     scoring_completed?: string | number | null;
+    status?: string | null;
+    results?: string | null;
     has_geopos?: boolean | null;
     lat?: number | string | null;
     lng?: number | string | null;
@@ -125,10 +127,14 @@ export async function GET(req: Request) {
   );
   const matchDate = matchData.event?.starts ? new Date(matchData.event.starts) : null;
   const daysSince = matchDate ? (Date.now() - matchDate.getTime()) / 86_400_000 : 0;
-  const isComplete = isMatchComplete(scoringPct, daysSince);
+  const signals = {
+    status: matchData.event?.status ?? null,
+    resultsPublished: matchData.event?.results === "all",
+  };
+  const isComplete = isMatchComplete(scoringPct, daysSince, signals);
   // SWR-aware TTL — keeps Redis entries alive past the 30s freshness window
   // for live matches so the background refresh below can land before eviction.
-  const dataTtl = computeMatchSwrTtl(scoringPct, daysSince, matchData.event?.starts ?? null);
+  const dataTtl = computeMatchSwrTtl(scoringPct, daysSince, matchData.event?.starts ?? null, signals);
 
   // Upgrade match cache entry TTL based on match state
   try {
@@ -148,7 +154,7 @@ export async function GET(req: Request) {
   // Stale-while-revalidate: schedule a background refresh of the match key
   // when the cached value is older than its freshness window. Single-flight
   // via SETNX so concurrent readers trigger at most one upstream fetch.
-  const matchFreshness = computeMatchFreshness(scoringPct, daysSince, matchData.event?.starts ?? null);
+  const matchFreshness = computeMatchFreshness(scoringPct, daysSince, matchData.event?.starts ?? null, signals);
   if (matchCachedAt && dataTtl != null && matchFreshness != null) {
     const age = (Date.now() - new Date(matchCachedAt).getTime()) / 1000;
     if (age > matchFreshness) {
@@ -270,6 +276,19 @@ export async function GET(req: Request) {
   // Flatten ALL stage scorecards — not filtered to requested competitors.
   // computeGroupRankings needs the full field to compute division and overall rankings.
   const rawScorecards = parseRawScorecards(scorecardsData);
+
+  // Surface max(scorecard_created) so the client can show how stale the
+  // upstream itself is, independent of our cache age. On an active match
+  // this answers "is RO submission falling behind?" — a question that
+  // cachedAt cannot answer (a 5s cache age tells you nothing about whether
+  // the latest score is from 1 minute or 6 hours ago).
+  let lastScorecardTs: string | null = null;
+  for (const sc of rawScorecards) {
+    if (sc.scorecard_created && (!lastScorecardTs || sc.scorecard_created > lastScorecardTs)) {
+      lastScorecardTs = sc.scorecard_created;
+    }
+  }
+  if (lastScorecardTs) cacheInfo.lastScorecardAt = lastScorecardTs;
 
   const tFlatten = performance.now();
 

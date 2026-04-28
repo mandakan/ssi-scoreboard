@@ -80,7 +80,10 @@ export async function POST(
       const scoringPct = Math.round(parseFloat(String(matchData.event.scoring_completed ?? 0)));
       const matchDate = matchData.event.starts ? new Date(matchData.event.starts) : null;
       const daysSince = matchDate ? (Date.now() - matchDate.getTime()) / 86_400_000 : 99;
-      const ttl = computeMatchTtl(scoringPct, daysSince, matchData.event.starts ?? null);
+      const ttl = computeMatchTtl(scoringPct, daysSince, matchData.event.starts ?? null, undefined, {
+        status: matchData.event.status ?? null,
+        resultsPublished: matchData.event.results === "all",
+      });
       // cachedExecuteQuery already wrote with null TTL; correct if needed
       if (ttl !== null) {
         const { default: cache } = await import("@/lib/cache-impl");

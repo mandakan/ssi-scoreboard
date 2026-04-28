@@ -23,26 +23,113 @@ const DEFAULT_MIN_TTL = parseInt(
 );
 
 /**
+ * Heuristic completion thresholds.
+ *
+ * `MATCH_COMPLETE_DAYS_SINCE` (default 3) — minimum days since match start
+ * before we will permanently pin the cache. This is a HARD time gate: even
+ * an SSI-flagged "cp" status or `results === "all"` cannot pin a match
+ * earlier than this. Reason: organizers sometimes flip those flags before
+ * every RO has submitted scorecards (this was the Skepplanda Apr 2026 bug),
+ * and Level V World Shoots run 5+ days. Three days covers any normal
+ * 1-3 day match plus a full day-after window for late scorecards. Raise
+ * the env var for events with longer scoring tails.
+ *
+ * `MATCH_COMPLETE_SCORING_PCT` (default 98) — scoring percentage required
+ * for the un-flagged heuristic path. Some matches finish at 99-100%, others
+ * legitimately end at 85-90% (the API survey shows L2 matches at 85.7%
+ * and 87.8% with `status="cp"` — squads that simply didn't submit). 98%
+ * means we never auto-pin matches still actively accruing scorecards
+ * without falling back to the historical 7-day cutoff.
+ *
+ * `HISTORICAL_FALLBACK_DAYS` (constant, 7) — at this age, anything is
+ * considered done. Hard-coded since it's a safety hatch, not a tuning knob.
+ */
+const HEURISTIC_DAYS_SINCE = parseFloat(
+  process.env.MATCH_COMPLETE_DAYS_SINCE ?? "3",
+);
+const HEURISTIC_SCORING_PCT = parseFloat(
+  process.env.MATCH_COMPLETE_SCORING_PCT ?? "98",
+);
+const HISTORICAL_FALLBACK_DAYS = 7;
+
+export interface MatchSsiSignals {
+  /** SSI `match_status` field. "cp" = completed, "cs" = cancelled, "on" = ongoing, etc. */
+  status?: string | null;
+  /** True when SSI `results_status === "all"` (organizer published official results). */
+  resultsPublished?: boolean;
+}
+
+/**
  * Is a match definitively "done" — safe to cache permanently and stop
  * hitting the upstream API?
  *
- * `scoring_completed` can cross 95% mid-match while squads still have
- * unscored stages, and `results === "all"` can flip true on the SSI side
- * before every RO has submitted scorecards. Neither is reliable on its
- * own. We require either:
- *   - 100% scoring (literally every stage scored for every approved
- *     competitor), or
- *   - more than 7 days since match start — covers 2-3 day matches plus
- *     extra margin for late scorecard submissions, and still pins
- *     historical matches that finished at 98%.
+ * Decision tree:
  *
- * Cancelled matches (`status === "cs"`) are handled separately by callers.
+ * 1. **Cancelled** (`status === "cs"`): immediately terminal — no
+ *    scoring will ever resume.
+ *
+ * 2. **Historical** (`daysSince > 7`): any match this old will not
+ *    change in practice; safe to pin.
+ *
+ * 3. **Time gate** (`daysSince <= MATCH_COMPLETE_DAYS_SINCE`, default 3):
+ *    nothing else qualifies. This applies *even when SSI flagged the match
+ *    as complete* — late RO scorecard submissions arrive for hours after
+ *    the last shot, and organizers occasionally flip the flag early. The
+ *    Skepplanda Apr 2026 bug was caused by trusting these flags during
+ *    the match window; the time gate prevents that recurrence.
+ *
+ * 4. **Past the time gate**: any of these signals qualifies as "done":
+ *    - SSI status is "cp" (completed)
+ *    - SSI results published (`results === "all"`)
+ *    - Scoring percentage >= MATCH_COMPLETE_SCORING_PCT (default 98)
+ *
+ *    Everything else continues to refresh actively.
  */
 export function isMatchComplete(
   scoringPct: number,
   daysSince: number,
+  signals: MatchSsiSignals = {},
 ): boolean {
-  if (daysSince > 7) return true;
+  // Cancelled — terminal regardless of timing.
+  if (signals.status === "cs") return true;
+
+  // Historical fallback for very old matches.
+  if (daysSince > HISTORICAL_FALLBACK_DAYS) return true;
+
+  // Hard time gate: nothing pins during the match window or just after,
+  // even an SSI-flagged cp/results=all match. Protects against premature
+  // flag flips by organizers.
+  if (daysSince <= HEURISTIC_DAYS_SINCE) return false;
+
+  // Past the time gate: any one of the completion signals qualifies.
+  if (signals.status === "cp") return true;
+  if (signals.resultsPublished === true) return true;
+  if (scoringPct >= HEURISTIC_SCORING_PCT) return true;
+  return false;
+}
+
+/**
+ * Is the match scoring "settled enough" for downstream consumers that need
+ * authoritative data — e.g. coaching tips, achievement evaluation? Distinct
+ * from `isMatchComplete()`, which gates *permanent cache pinning* and so
+ * has a hard time gate to protect against premature SSI flag flips. This
+ * function is purely a "do we trust the data right now?" check; it does
+ * NOT drive any cache durability decision, so the time gate is not needed.
+ *
+ * Returns true when:
+ *   - SSI says the match is cancelled, completed, or has published results
+ *   - OR scoring is at 100% (every approved competitor has every stage scored)
+ *   - OR more than 7 days have passed (historical fallback)
+ */
+export function isMatchScoringSettled(
+  scoringPct: number,
+  daysSince: number,
+  signals: MatchSsiSignals = {},
+): boolean {
+  if (signals.status === "cs") return true;
+  if (signals.status === "cp") return true;
+  if (signals.resultsPublished === true) return true;
+  if (daysSince > HISTORICAL_FALLBACK_DAYS) return true;
   return scoringPct >= 100;
 }
 
@@ -61,8 +148,9 @@ export function computeMatchFreshness(
   scoringPct: number,
   daysSince: number,
   dateStr: string | null,
+  signals: MatchSsiSignals = {},
 ): number | null {
-  if (isMatchComplete(scoringPct, daysSince)) return null;
+  if (isMatchComplete(scoringPct, daysSince, signals)) return null;
 
   if (scoringPct > 0) return 30; // active scoring
 
@@ -82,8 +170,9 @@ export function computeMatchTtl(
   daysSince: number, // negative = future match
   dateStr: string | null,
   minTtl = DEFAULT_MIN_TTL,
+  signals: MatchSsiSignals = {},
 ): number | null {
-  const freshness = computeMatchFreshness(scoringPct, daysSince, dateStr);
+  const freshness = computeMatchFreshness(scoringPct, daysSince, dateStr, signals);
   if (freshness === null) return null;
   return Math.max(minTtl, freshness);
 }
@@ -105,6 +194,7 @@ export function computeMatchSwrTtl(
   scoringPct: number,
   daysSince: number,
   dateStr: string | null,
+  signals: MatchSsiSignals = {},
 ): number | null {
-  return computeMatchTtl(scoringPct, daysSince, dateStr, SWR_TTL_FLOOR);
+  return computeMatchTtl(scoringPct, daysSince, dateStr, SWR_TTL_FLOOR, signals);
 }

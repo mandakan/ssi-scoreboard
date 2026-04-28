@@ -27,5 +27,9 @@ export const MAX_COMPETITORS = 12;
  *  12 → no shape change; bump invalidates D1 entries written under the old
  *       "results=all OR scoring>=95 + 1 day" permanent-cache rule, which
  *       could pin a still-active match's snapshot to the durable store.
+ *  13 → no shape change; bump enforces the new isMatchComplete time-gate
+ *       rule (daysSince > MATCH_COMPLETE_DAYS_SINCE before any pinning,
+ *       even on SSI flag flips). Invalidates any D1 entries pinned via
+ *       results=all or status=cp during a match's first 3 days.
  */
-export const CACHE_SCHEMA_VERSION = 12;
+export const CACHE_SCHEMA_VERSION = 13;
