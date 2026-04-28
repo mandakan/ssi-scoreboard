@@ -13,6 +13,7 @@ import {
 } from "@/app/api/compare/logic";
 import { PALETTE } from "@/lib/colors";
 import { isMatchComplete } from "@/lib/match-ttl";
+import { usageTelemetry } from "@/lib/usage-telemetry";
 import {
   C,
   OG_W,
@@ -75,7 +76,15 @@ export async function GET(
       : Promise.resolve(null),
   ]);
 
+  const ctNum = parseInt(ct, 10);
+
   if (!match) {
+    usageTelemetry({
+      op: "og-render",
+      ct: isNaN(ctNum) ? 0 : ctNum,
+      variant: "fallback",
+      nCompetitors: 0,
+    });
     return new ImageResponse(fallbackImage(), {
       width: 1200,
       height: 630,
@@ -112,12 +121,26 @@ export async function GET(
     cacheControl = "public, max-age=60, s-maxage=300";
   }
 
-  const element =
+  const variant: "overview" | "single" | "multi" =
     selectedCompetitors.length === 1
-      ? singleCompetitorImage(match, selectedCompetitors[0], statsMap)
+      ? "single"
       : selectedCompetitors.length > 1
+        ? "multi"
+        : "overview";
+
+  const element =
+    variant === "single"
+      ? singleCompetitorImage(match, selectedCompetitors[0], statsMap)
+      : variant === "multi"
         ? multiCompetitorImage(match, selectedCompetitors, statsMap)
         : matchOverviewImage(match);
+
+  usageTelemetry({
+    op: "og-render",
+    ct: isNaN(ctNum) ? 0 : ctNum,
+    variant,
+    nCompetitors: selectedCompetitors.length,
+  });
 
   try {
     return new ImageResponse(element, {

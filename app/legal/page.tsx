@@ -185,13 +185,36 @@ export default function LegalPage() {
             </div>
 
             <div className="space-y-1">
-              <h3 className="font-medium">6. Third-party services</h3>
+              <h3 className="font-medium">6. Operational telemetry &amp; server logs</h3>
               <p className="text-muted-foreground">
-                SSI Scoreboard may be hosted on infrastructure that collects
-                standard server logs (IP addresses, request paths, timestamps).
-                These logs are used solely for operational purposes and are not
-                shared with third parties beyond what is required by the hosting
-                provider.
+                SSI Scoreboard records server-side telemetry to diagnose bugs
+                and understand which features are being used. We have designed
+                this telemetry to be anonymous by construction:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+                <li>
+                  <strong>Never recorded:</strong> IP addresses, browser
+                  User-Agent strings, your shooter ID, individual competitor
+                  IDs, the text of any search query, or any other field that
+                  could identify a user.
+                </li>
+                <li>
+                  <strong>Recorded:</strong> request paths, latency in
+                  milliseconds, cache decisions (hit/miss/refresh), upstream
+                  API outcomes (success/error/timeout), error class names
+                  (without stack traces), and bucketed counts (e.g.
+                  &quot;1-9&quot;, &quot;10-99&quot;) — never raw values.
+                  Match IDs are recorded because matches are public events
+                  whose IDs are not personally identifying.
+                </li>
+              </ul>
+              <p className="text-muted-foreground">
+                Telemetry is stored in Cloudflare Workers Logs (3-day
+                retention) and a Cloudflare R2 bucket (30-day retention,
+                automatic deletion). It is not shared with third parties and
+                is used only for incident response and product decisions. The
+                hosting provider (Cloudflare) may also collect standard
+                operational logs subject to its own policies.
               </p>
             </div>
 
@@ -230,7 +253,7 @@ export default function LegalPage() {
         </section>
 
         <p className="text-xs text-muted-foreground pb-8">
-          Last updated: March 2026
+          Last updated: April 2026
         </p>
       </div>
     </main>

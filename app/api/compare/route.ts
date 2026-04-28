@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { MAX_COMPETITORS } from "@/lib/constants";
 import { reportError } from "@/lib/error-telemetry";
+import { usageTelemetry } from "@/lib/usage-telemetry";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY, MATCH_QUERY, refreshCachedQuery } from "@/lib/graphql";
 import cache from "@/lib/cache-impl";
@@ -582,6 +583,13 @@ export async function GET(req: Request) {
   }
   timingParts.push(`total;dur=${(tFingerprint - t0).toFixed(1)};desc="Total"`);
   const serverTiming = timingParts.join(", ");
+
+  usageTelemetry({
+    op: "comparison",
+    ct: ctNum,
+    mode,
+    nCompetitors: requestedCompetitors.length,
+  });
 
   return NextResponse.json(response, {
     headers: { "Server-Timing": serverTiming },
