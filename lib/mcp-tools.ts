@@ -4,6 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { EventSummary, MatchResponse, CompareResponse, PopularMatch, ShooterDashboardResponse, ShooterSearchResult } from "./types";
 import { buildStageTimesExport } from "./stage-times-export";
+import { usageTelemetry, bucketStageExportCompetitors } from "./usage-telemetry";
 
 // ---------------------------------------------------------------------------
 // Static resource content
@@ -456,6 +457,13 @@ export function registerMcpTools(server: McpServer, arg: string | DataProviders)
         competitors: match.competitors,
         squads: match.squads,
         selectedIds: competitor_ids,
+      });
+      const ctNum = parseInt(ct, 10);
+      usageTelemetry({
+        op: "stage-export",
+        surface: "mcp",
+        ct: Number.isFinite(ctNum) ? ctNum : 0,
+        nCompetitorsBucket: bucketStageExportCompetitors(competitor_ids.length),
       });
       return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
     },
