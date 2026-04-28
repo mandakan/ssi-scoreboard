@@ -41,9 +41,18 @@ interface GraphQLResponse<T> {
   errors?: GraphQLError[];
 }
 
-/** Timeout for upstream GraphQL requests (ms). The SSI API can be slow
- *  for large matches with many scorecards, so we allow a generous window. */
+/** Default timeout for upstream GraphQL requests (ms). The SSI API can be
+ *  slow for large matches with many scorecards, so we allow a generous window
+ *  by default. Callers that know their query is small (e.g. /api/events
+ *  sub-windows) should pass a tighter timeout via the `timeoutMs` option. */
 const GRAPHQL_TIMEOUT_MS = 60_000;
+
+export interface ExecuteQueryOptions {
+  /** Override the default 60s timeout for this call. Triggers AbortController
+   *  on the underlying fetch, so the upstream request is genuinely cancelled
+   *  rather than just abandoned. */
+  timeoutMs?: number;
+}
 
 /** Error messages we treat as a transient upstream condition worth one retry.
  *  "Must provide document." is graphql-core's message when SSI's parser sees
@@ -58,16 +67,17 @@ export async function executeQuery<T>(
   query: string,
   variables?: Record<string, unknown>,
   revalidate: number | false = false,
+  options: ExecuteQueryOptions = {},
 ): Promise<T> {
   try {
-    return await executeQueryOnce<T>(query, variables, revalidate);
+    return await executeQueryOnce<T>(query, variables, revalidate, options);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
     if (RETRY_GRAPHQL_MESSAGES.some((m) => msg.includes(m))) {
       // Single immediate retry. We don't back off — the failure mode is a
       // dropped body at SSI's gateway, not load shedding, so a retry helps
       // most when it goes out right behind the failed request.
-      return await executeQueryOnce<T>(query, variables, revalidate);
+      return await executeQueryOnce<T>(query, variables, revalidate, options);
     }
     throw err;
   }
@@ -77,6 +87,7 @@ async function executeQueryOnce<T>(
   query: string,
   variables: Record<string, unknown> | undefined,
   revalidate: number | false,
+  options: ExecuteQueryOptions,
 ): Promise<T> {
   const apiKey = process.env.SSI_API_KEY;
   if (!apiKey) throw new Error("SSI_API_KEY is not configured");
@@ -100,8 +111,9 @@ async function executeQueryOnce<T>(
     });
   };
 
+  const timeoutMs = options.timeoutMs ?? GRAPHQL_TIMEOUT_MS;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), GRAPHQL_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   let response: Response;
   try {
@@ -120,8 +132,8 @@ async function executeQueryOnce<T>(
     clearTimeout(timeout);
     if (err instanceof DOMException && err.name === "AbortError") {
       emit("timeout", { errorClass: "AbortError" });
-      console.error(`[ssi-api] ${operationName} timed out after ${GRAPHQL_TIMEOUT_MS}ms | vars=${JSON.stringify(variables ?? {})}`);
-      throw new Error(`Upstream request timed out after ${GRAPHQL_TIMEOUT_MS / 1000}s`);
+      console.error(`[ssi-api] ${operationName} timed out after ${timeoutMs}ms | vars=${JSON.stringify(variables ?? {})}`);
+      throw new Error(`Upstream request timed out after ${timeoutMs / 1000}s`);
     }
     emit("fetch-error", { errorClass: err instanceof Error ? err.name : "unknown" });
     throw err;

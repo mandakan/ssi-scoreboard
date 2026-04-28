@@ -159,10 +159,13 @@ export async function GET(req: Request) {
   try {
     if (q) {
       // Text search: the API's search backend returns good results in one call.
+      // 15s cap — search is interactive; no point making the user wait the
+      // full 60s default if SSI is having a slow moment.
       const data = await executeQuery<RawEventsData>(
         EVENTS_QUERY,
         { starts_after: startsAfter, starts_before: startsBefore, firearms, search: q },
         3600,
+        { timeoutMs: 15_000 },
       );
       rawEvents = data.events;
     } else {
@@ -176,9 +179,19 @@ export async function GET(req: Request) {
       // 7-day gap) is far better UX than a 502 over the entire date range.
       // executeQuery already retries that specific transient internally; we
       // only land here if the retry also failed.
+      //
+      // Per-window timeout: 8s. allSettled waits for the *slowest* window,
+      // so a single hung sub-window otherwise blocks TTFB up to the global
+      // 60s timeout. 8s is well above the typical sub-window latency
+      // (~400ms warm, ~2s cold) but tight enough that one slow window can't
+      // tank the whole homepage. Cancelled fetches won't populate Next's
+      // fetch cache for that window — we accept that trade so the user
+      // doesn't wait a full minute for one stuck call.
       const windows = buildSubWindows(startsAfter, startsBefore, firearms ? { firearms } : {});
       const settled = await Promise.allSettled(
-        windows.map((vars) => executeQuery<RawEventsData>(EVENTS_QUERY, vars, 3600)),
+        windows.map((vars) =>
+          executeQuery<RawEventsData>(EVENTS_QUERY, vars, 3600, { timeoutMs: 8_000 }),
+        ),
       );
       const failures: string[] = [];
       const seen = new Set<string>();
