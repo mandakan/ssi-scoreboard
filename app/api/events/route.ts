@@ -152,19 +152,47 @@ export async function GET(req: Request) {
       // No search text: work around the API's per-request result cap by
       // splitting the date range into small sub-windows, fetching in
       // parallel, then deduplicating by event ID.
+      //
+      // Use allSettled so one transient SSI hiccup doesn't blank the whole
+      // page. SSI occasionally drops POST bodies and surfaces "Must provide
+      // document." for a single window; degrading to a partial result (one
+      // 7-day gap) is far better UX than a 502 over the entire date range.
+      // executeQuery already retries that specific transient internally; we
+      // only land here if the retry also failed.
       const windows = buildSubWindows(startsAfter, startsBefore, firearms ? { firearms } : {});
-      const results = await Promise.all(
+      const settled = await Promise.allSettled(
         windows.map((vars) => executeQuery<RawEventsData>(EVENTS_QUERY, vars, 3600)),
       );
+      const failures: string[] = [];
       const seen = new Set<string>();
       rawEvents = [];
-      for (const result of results) {
-        for (const event of result.events) {
-          if (!seen.has(event.id)) {
-            seen.add(event.id);
-            rawEvents.push(event);
+      for (let i = 0; i < settled.length; i++) {
+        const r = settled[i];
+        if (r.status === "fulfilled") {
+          for (const event of r.value.events) {
+            if (!seen.has(event.id)) {
+              seen.add(event.id);
+              rawEvents.push(event);
+            }
           }
+        } else {
+          const w = windows[i];
+          failures.push(`${w.starts_after}..${w.starts_before}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`);
         }
+      }
+      // If every sub-window failed there's nothing useful to return — surface
+      // the original 502 so the client error path runs (existing behaviour).
+      if (failures.length > 0 && failures.length === windows.length) {
+        throw new Error(failures.join(" | "));
+      }
+      if (failures.length > 0) {
+        console.warn(JSON.stringify({
+          route: "events",
+          partial_failure: true,
+          failed_windows: failures.length,
+          total_windows: windows.length,
+          first_error: failures[0],
+        }));
       }
     }
   } catch (err) {
