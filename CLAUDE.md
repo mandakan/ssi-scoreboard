@@ -235,6 +235,7 @@ Lives in `lib/telemetry.ts` (transport) + per-domain typed wrappers:
 
 - `lib/cache-telemetry.ts` — match TTL decisions, cache reads, schema evictions
 - `lib/upstream-telemetry.ts` — every SSI GraphQL fetch (latency, outcome, bytes)
+- `lib/error-telemetry.ts` — `reportError(site, err, extra)` for swallowed-catch sites; records error class + truncated message (no stack — avoids PII)
 
 **Sinks (registered automatically per deploy target):**
 - `console.info` — always on. Picked up by Cloudflare Workers Logs and Docker stdout.

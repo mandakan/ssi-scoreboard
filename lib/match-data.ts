@@ -12,6 +12,7 @@ import { afterResponse } from "@/lib/background-impl";
 import { persistToMatchStore } from "@/lib/match-data-store";
 import { isUpstreamDegraded } from "@/lib/upstream-status";
 import { cacheTelemetry } from "@/lib/cache-telemetry";
+import { reportError } from "@/lib/error-telemetry";
 import type { MatchResponse, StageInfo, CompetitorInfo, SquadInfo } from "@/lib/types";
 
 // ── Raw GraphQL response shapes ─────────────────────────────────────────────
@@ -186,7 +187,9 @@ export async function fetchMatchData(
     } else if (!cachedAt) {
       await cacheAdapter.expire(matchKey, ttl);
     }
-  } catch { /* ignore */ }
+  } catch (err) {
+    reportError("match-data.ttl-apply", err, { matchKey });
+  }
 
   // Stale-while-revalidate: a cache hit older than the freshness window
   // triggers a single-flight background refresh. The current request returns

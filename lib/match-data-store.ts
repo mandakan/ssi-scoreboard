@@ -12,6 +12,7 @@
 import cache from "@/lib/cache-impl";
 import db from "@/lib/db-impl";
 import { CACHE_SCHEMA_VERSION } from "@/lib/constants";
+import { reportError } from "@/lib/error-telemetry";
 
 /** 24 hours — Redis drain TTL for completed matches written to D1. */
 const REDIS_DRAIN_TTL = 86_400;
@@ -35,14 +36,18 @@ export async function getMatchDataWithFallback(
   try {
     const raw = await cache.get(cacheKey);
     if (raw) return raw;
-  } catch { /* ignore Redis errors */ }
+  } catch (err) {
+    reportError("match-data-store.redis-read", err, { matchKey: cacheKey });
+  }
 
   // Fall back to D1/SQLite — return whatever is stored; callers are responsible
   // for deciding whether a given schema version is acceptable for their use case.
   try {
     const raw = await db.getMatchDataCache(cacheKey);
     if (raw) return raw;
-  } catch { /* ignore DB errors */ }
+  } catch (err) {
+    reportError("match-data-store.d1-read", err, { matchKey: cacheKey });
+  }
 
   return null;
 }
@@ -174,5 +179,7 @@ export async function persistToMatchStore(
   // Set Redis TTL to 24h so the key drains from Redis over time
   try {
     await cache.expire(cacheKey, REDIS_DRAIN_TTL);
-  } catch { /* ignore — Redis key may already be gone */ }
+  } catch (err) {
+    reportError("match-data-store.redis-drain-ttl", err, { matchKey: cacheKey });
+  }
 }

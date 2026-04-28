@@ -10,6 +10,7 @@
  * endpoint can reach any match on SSI, not just cached ones.
  */
 import { NextResponse } from "next/server";
+import { reportError } from "@/lib/error-telemetry";
 import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY, SCORECARDS_QUERY } from "@/lib/graphql";
 import { computeMatchTtl } from "@/lib/match-ttl";
 import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
@@ -41,7 +42,9 @@ export async function POST(
         { status: 410 },
       );
     }
-  } catch { /* ignore */ }
+  } catch (err) {
+    reportError("add-match.suppression-check", err, { shooterId });
+  }
 
   let body: { url?: string };
   try {
