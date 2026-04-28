@@ -14,6 +14,7 @@ interface RawEvent {
   ends: string | null;
   status: string;
   region: string;
+  scoring_completed: string | number | null;
   get_full_rule_display: string;
   get_full_level_display: string;
   registration_starts: string | null;
@@ -104,6 +105,10 @@ export async function GET(req: Request) {
 
   const country = searchParams.get("country");
   const minLevel = searchParams.get("minLevel") ?? "all";
+  // Live mode: surface matches that started recently and are still scoring.
+  // Overrides date window + minLevel + sort + limit. Used by the homepage
+  // "Live now" section to help users find matches they are attending.
+  const liveMode = searchParams.get("live") === "1";
 
   // When a text query is present the caller is searching for a specific event
   // and we should not silently clip results to a narrow date window — use a
@@ -115,10 +120,22 @@ export async function GET(req: Request) {
   const wideBefore = new Date(now);
   wideBefore.setFullYear(wideBefore.getFullYear() + 2);
 
-  const startsAfter = searchParams.get("starts_after") ??
-    (q ? wideAfter.toISOString().slice(0, 10) : defaultAfter.toISOString().slice(0, 10));
-  const startsBefore = searchParams.get("starts_before") ??
-    (q ? wideBefore.toISOString().slice(0, 10) : defaultBefore.toISOString().slice(0, 10));
+  // Live mode pins the date window to the past 36 hours so we catch matches
+  // that started yesterday and are still scoring today (covers most weekend
+  // 2-day club matches and the second day of L3+ events).
+  const liveAfter = new Date(now);
+  liveAfter.setHours(liveAfter.getHours() - 36);
+  const liveBefore = new Date(now);
+  liveBefore.setDate(liveBefore.getDate() + 1);
+
+  const startsAfter = liveMode
+    ? liveAfter.toISOString().slice(0, 10)
+    : (searchParams.get("starts_after") ??
+        (q ? wideAfter.toISOString().slice(0, 10) : defaultAfter.toISOString().slice(0, 10)));
+  const startsBefore = liveMode
+    ? liveBefore.toISOString().slice(0, 10)
+    : (searchParams.get("starts_before") ??
+        (q ? wideBefore.toISOString().slice(0, 10) : defaultBefore.toISOString().slice(0, 10)));
   const firearms = searchParams.get("firearms") ?? null;
 
   let rawEvents: RawEvent[];
@@ -179,7 +196,10 @@ export async function GET(req: Request) {
     // Filter by minimum level (e.g. l2plus keeps only Level II+).
     // "all" (null entry) passes everything; unknown minLevel falls back to l2plus.
     // Any unrecognised level string (e.g. "Unsanctioned") is excluded.
+    // Live mode bypasses the level filter — courtside users want to find
+    // their match regardless of sanction level (most weekend matches are L1).
     .filter((e) => {
+      if (liveMode) return true;
       const entry = ALLOWED_LEVELS[minLevel];
       const allowed = entry === undefined ? ALLOWED_LEVELS.l2plus : entry;
       return allowed === null || allowed.has(e.get_full_level_display);
@@ -205,15 +225,26 @@ export async function GET(req: Request) {
       squadding_closes: e.squadding_closes ?? null,
       is_squadding_possible: e.is_squadding_possible ?? false,
       max_competitors: e.max_competitors ?? null,
+      scoring_completed:
+        e.scoring_completed != null ? parseFloat(String(e.scoring_completed)) : 0,
     }));
+
+  // Live mode post-filter: only matches with status=on and active scoring,
+  // capped at 8 to keep the homepage section compact on mobile.
+  const finalEvents: EventSummary[] = liveMode
+    ? events
+        .filter((e) => e.status === "on" && e.scoring_completed > 0 && e.scoring_completed < 100)
+        .slice(0, 8)
+    : events;
 
   console.log(JSON.stringify({
     route: "events",
     has_query: q.length > 0,
+    live_mode: liveMode,
     country: country ?? null,
     min_level: minLevel,
     firearms,
-    result_count: events.length,
+    result_count: finalEvents.length,
     ms_total: Math.round(performance.now() - t0),
   }));
 
@@ -222,15 +253,15 @@ export async function GET(req: Request) {
       op: "search",
       kind: "events",
       queryLength: q.length,
-      resultBucket: bucketCount(events.length),
+      resultBucket: bucketCount(finalEvents.length),
     });
   } else {
     usageTelemetry({
       op: "browse",
       kind: "events",
-      resultBucket: bucketCount(events.length),
+      resultBucket: bucketCount(finalEvents.length),
     });
   }
 
-  return NextResponse.json(events);
+  return NextResponse.json(finalEvents);
 }

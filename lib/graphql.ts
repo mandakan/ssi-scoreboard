@@ -769,6 +769,7 @@ export const EVENTS_QUERY = `
       ends
       status
       region
+      scoring_completed
       get_full_rule_display
       get_full_level_display
       ... on IpscMatchNode {

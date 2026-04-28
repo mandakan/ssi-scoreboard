@@ -52,6 +52,15 @@ export async function fetchPopularMatches(): Promise<PopularMatch[]> {
   return res.json();
 }
 
+export async function fetchLiveMatches(): Promise<EventSummary[]> {
+  // Fail soft — the homepage section hides itself on empty/error rather than
+  // surfacing a banner. Liveness data is not critical-path for a user looking
+  // for a specific match.
+  const res = await fetch("/api/events?live=1");
+  if (!res.ok) return [];
+  return res.json();
+}
+
 export async function fetchCompare(
   ct: string,
   id: string,

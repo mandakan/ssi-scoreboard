@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { fetchMatch, fetchCompare, fetchEvents, fetchPopularMatches, fetchCoachingAvailability, fetchCoachingTip, fetchShooterDashboard, fetchShooterSearch } from "@/lib/api";
+import { fetchMatch, fetchCompare, fetchEvents, fetchPopularMatches, fetchLiveMatches, fetchCoachingAvailability, fetchCoachingTip, fetchShooterDashboard, fetchShooterSearch } from "@/lib/api";
 import type { CompareMode, MatchResponse, CompareResponse, EventSummary, PopularMatch, CoachingTipResponse, CoachingAvailability, ShooterDashboardResponse, ShooterSearchResult, PreMatchWeatherResponse } from "@/lib/types";
 import { matchQueryKey, compareQueryKey, coachingAvailabilityKey, coachingTipQueryKey } from "@/lib/query-keys";
 
@@ -61,6 +61,19 @@ export function usePopularMatchesQuery() {
     queryKey: ["popular-matches"],
     queryFn: fetchPopularMatches,
     staleTime: 300_000, // 5 minutes
+  });
+}
+
+export function useLiveMatchesQuery() {
+  // 60s refetch keeps the "Live now" section reasonably fresh — long enough
+  // not to thrash upstream/cache, short enough that a match starting or
+  // completing surfaces within a minute. Disabled when window is hidden.
+  return useQuery<EventSummary[], Error>({
+    queryKey: ["live-matches"],
+    queryFn: fetchLiveMatches,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 }
 
