@@ -209,6 +209,21 @@ const SCENES: Scene[] = [
     },
   },
   {
+    name: "stage-times-export",
+    description: "Stage times export download buttons inside the coaching analysis accordion",
+    suppressWhatsNew: true,
+    setup: async (page, matchPath) => {
+      await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
+      await page.waitForSelector("text=Stage results", { timeout: 10000 });
+      await openCoachingSection(page);
+      const heading = page.locator("h3", { hasText: "Export stage times" }).first();
+      await heading.waitFor({ timeout: 8000 }).catch(() => null);
+      await heading.evaluate(
+        (el) => el.scrollIntoView({ block: "start", behavior: "instant" })
+      ).catch(() => null);
+    },
+  },
+  {
     name: "shooter-dashboard",
     description: "Shooter dashboard with match history and performance trends",
     suppressWhatsNew: true,

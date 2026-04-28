@@ -46,7 +46,6 @@ import { useTrackedShooters } from "@/lib/hooks/use-tracked-shooters";
 import { MAX_COMPETITORS } from "@/lib/constants";
 import { PreMatchView } from "@/components/pre-match-view";
 import { StageTimesExport } from "@/components/stage-times-export";
-import { usePreviewFeature } from "@/hooks/use-preview-feature";
 
 // Stable empty array for useSyncExternalStore server snapshot — must be a
 // constant reference so React's referential equality check doesn't loop.
@@ -125,7 +124,6 @@ const DivisionDistributionChart = dynamic(
 );
 
 export default function MatchPageClient() {
-  const stageExportEnabled = usePreviewFeature("stage-export");
   const [showCoachingView, setShowCoachingView] = useState(false);
   const [showSimulator, setShowSimulator] = useState(false);
   const [showManage, setShowManage] = useState(false);
@@ -997,15 +995,13 @@ export default function MatchPageClient() {
                           <StageDegradationChart data={compareQuery.data} />
                         </div>
 
-                        {stageExportEnabled && (
-                          <StageTimesExport
-                            ct={ct}
-                            id={id}
-                            match={match}
-                            compareData={compareQuery.data}
-                            selectedIds={selectedIds}
-                          />
-                        )}
+                        <StageTimesExport
+                          ct={ct}
+                          id={id}
+                          match={match}
+                          compareData={compareQuery.data}
+                          selectedIds={selectedIds}
+                        />
                       </section>
                     </CollapsibleContent>
                   </Collapsible>

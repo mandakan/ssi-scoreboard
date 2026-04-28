@@ -3,7 +3,6 @@
 import { useCallback } from "react";
 import { Download, FileJson, FileSpreadsheet, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Popover,
   PopoverContent,
@@ -76,9 +75,6 @@ export function StageTimesExport({ ct, id, match, compareData, selectedIds }: Pr
     <div className="space-y-2">
       <div className="flex items-center gap-1.5 flex-wrap">
         <h3 className="text-sm font-semibold">Export stage times</h3>
-        <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
-          Preview
-        </Badge>
         <Popover>
           <PopoverTrigger asChild>
             <button

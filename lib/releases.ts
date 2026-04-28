@@ -11,12 +11,28 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-04-29";
+export const LATEST_RELEASE_ID = "2026-04-28-stage-export";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
-    date: "April 29, 2026",
+    date: "April 28, 2026",
+    title: "Stage times export",
+    screenshotScenes: ["stage-times-export"],
+    sections: [
+      {
+        heading: "New",
+        items: [
+          "Post-match coaching now includes a 'Export stage times' section with one-tap JSON and CSV downloads of the per-stage times for the competitors you've selected. Auto-cut a long match recording into per-stage clips, or import the CSV into Resolve / Premiere as markers.",
+          "Each row carries an ISO timestamp from the RO submission so editors can align a stage run to a recording timeline.",
+          "Same data is also available as the get_stage_times MCP tool for editors using Claude Desktop or Claude Code.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-04-29",
+    date: "April 28, 2026",
     title: "Easier on the eyes",
     screenshotScenes: [
       "comparison-table",
