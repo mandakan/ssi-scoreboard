@@ -265,16 +265,37 @@ wrangler r2 bucket lifecycle add ssi-scoreboard-telemetry-staging expire-30d "" 
 ```
 
 **Reading telemetry:**
-```bash
-# List a day's events
-wrangler r2 object list ssi-scoreboard-telemetry --prefix=cache-telemetry/2026-04-28/
 
-# Pipe one object to jq (NDJSON — one event per line)
-wrangler r2 object get ssi-scoreboard-telemetry/cache-telemetry/2026-04-28/132405-a1b2c3.ndjson | \
-  jq 'select(.op == "match-ttl-decision" and .trulyDone == true)'
+`wrangler` only ships `r2 object get|put|delete` — there is no `r2 object list`.
+Listing has to go through the Cloudflare REST API, using the OAuth token that
+`wrangler login` already cached at `~/Library/Preferences/.wrangler/config/default.toml`
+(macOS) or `~/.config/.wrangler/config/default.toml` (Linux).
+
+```bash
+# Account ID (one-time lookup)
+ACCOUNT_ID=$(wrangler whoami 2>&1 | awk -F'│' '/Account ID/{getline; getline; print $3}' | xargs)
+TOKEN=$(grep '^oauth_token' ~/Library/Preferences/.wrangler/config/default.toml | \
+  sed -E 's/oauth_token = "([^"]+)"/\1/')
+
+# List a day's events (REST API)
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/r2/buckets/ssi-scoreboard-telemetry/objects" \
+  | jq -r '.result[].key' | grep cache-telemetry/2026-04-28/
+
+# Fetch one object (REST — works as a stream, no wrangler needed)
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/r2/buckets/ssi-scoreboard-telemetry/objects/cache-telemetry/2026-04-28/132405-a1b2c3.ndjson" \
+  | jq 'select(.op == "match-ttl-decision" and .trulyDone == true)'
+
+# Same fetch via wrangler (handy when the path is already known)
+wrangler r2 object get ssi-scoreboard-telemetry/cache-telemetry/2026-04-28/132405-a1b2c3.ndjson \
+  --pipe | jq -r '.'
 
 # Bulk: download a whole day's prefix and feed into DuckDB / sqlite for analysis
 ```
+
+The OAuth token rotates every ~hour — re-run `wrangler login` if curl returns
+`{"success":false,"errors":[{"code":10000,"message":"Authentication error"}]}`.
 
 ## Shooter Index & Match Backfill
 
