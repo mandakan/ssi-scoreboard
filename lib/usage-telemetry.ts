@@ -36,6 +36,15 @@ export function bucketScoring(scoringPct: number): "pre" | "active" | "complete"
   return "active";
 }
 
+/** Bucket competitor count for stage-export usage events. Mirrors the
+ *  scale used by mcp-telemetry's bucketCompetitors so dashboards can join
+ *  on the same labels. */
+export function bucketStageExportCompetitors(n: number): "1" | "2-4" | "5-12" {
+  if (n <= 1) return "1";
+  if (n <= 4) return "2-4";
+  return "5-12";
+}
+
 export type UsageEvent =
   | {
       op: "match-view";
@@ -78,6 +87,16 @@ export type UsageEvent =
       ct: number;
       variant: "overview" | "single" | "multi" | "fallback";
       nCompetitors: number;
+    }
+  | {
+      // Stage-times export was generated. surface:"mcp" covers the
+      // get_stage_times MCP tool (both HTTP and stdio transports).
+      // surface:"ui" is reserved for a future client-side download
+      // tracker; not currently emitted.
+      op: "stage-export";
+      surface: "mcp" | "ui";
+      ct: number;
+      nCompetitorsBucket: "1" | "2-4" | "5-12";
     };
 
 export function usageTelemetry(ev: UsageEvent): void {
