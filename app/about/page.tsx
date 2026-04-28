@@ -76,10 +76,19 @@ export default function AboutPage() {
                   and see which matches are live right now
                 </li>
                 <li>
-                  Compare up to 12 competitors side-by-side across every stage
+                  Compare up to 12 competitors side-by-side across every stage,
+                  with favorites pinned to the top of the picker and one-tap
+                  Clear / Undo
                 </li>
                 <li>
-                  Add an entire IPSC squad in one tap with the squad picker
+                  Smart benchmark presets — once you set &quot;this is me&quot;
+                  in My Shooters, one tap selects the person above or below
+                  you in your division, the division podium, your percentile
+                  cohort (p25/p50/p75/p95), or peers from the same club
+                </li>
+                <li>
+                  Replace your selection with an entire IPSC squad in one tap,
+                  with a five-second undo if you change your mind
                 </li>
                 <li>
                   Live, Pre-match, and Coaching views — auto-selected to match
