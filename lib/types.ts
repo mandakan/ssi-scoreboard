@@ -190,6 +190,10 @@ export interface CompetitorSummary {
   // Points lost to penalties (miss + no_shoot + procedural × 10 each).
   // Always 0 for DNF; always ≥ 0 for fired stages.
   penaltyLossPoints: number;
+  // ISO timestamp of when the scorecard was recorded (RO submission time).
+  // Useful for editors aligning a stage run to a long video recording.
+  // Null when the scorecard has no timestamp or this competitor did not fire the stage.
+  scorecard_created?: string | null;
 }
 
 // Per-stage HF distribution for a single division.

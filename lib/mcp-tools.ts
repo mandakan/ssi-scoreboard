@@ -3,6 +3,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { EventSummary, MatchResponse, CompareResponse, PopularMatch, ShooterDashboardResponse, ShooterSearchResult } from "./types";
+import { buildStageTimesExport } from "./stage-times-export";
 
 // ---------------------------------------------------------------------------
 // Static resource content
@@ -76,6 +77,12 @@ compare_competitors
   • Returns: scores, hit factors, penalties, efficiency, consistency,
     what-if rank simulations, and style fingerprints.
   • competitor_ids are numeric — always resolve names via get_match first.
+
+get_stage_times
+  Export raw per-stage times and ISO timestamps for a list of competitors.
+  • Use when an editor needs to auto-cut a long match recording into per-stage clips.
+  • Returns competitors[].stages[] with stage_number, stage_name, time_seconds, scorecard_updated_at.
+  • Same competitor-resolution pattern as compare_competitors (numeric IDs from get_match).
 
 get_popular_matches
   Returns recently-viewed matches from the server cache.
@@ -421,6 +428,35 @@ export function registerMcpTools(server: McpServer, arg: string | DataProviders)
     { readOnlyHint: true, openWorldHint: true },
     async ({ ct, id, competitor_ids }) => {
       const data = await providers.compareCompetitors(ct, id, competitor_ids);
+      return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    "get_stage_times",
+    "Export raw stage times for a list of competitors at a match — built for video editors who want to auto-cut a long match recording into per-stage clips. " +
+    "Returns one object per competitor with a stages[] array; each entry has stage_number, stage_name, time_seconds (raw stage time), and scorecard_updated_at (ISO timestamp of when the run was recorded). " +
+    "Stages within each competitor are sorted by stage_number. Competitors are returned in the order of `competitor_ids`. " +
+    "competitor_ids are numeric IDs from get_match — resolve names with get_match first.",
+    {
+      ct: z.string().describe("content_type value from search_events / get_match"),
+      id: z.string().describe("match id value from search_events / get_match"),
+      competitor_ids: z.array(z.number().int().positive()).min(1).max(12)
+        .describe("Numeric competitor IDs from get_match. Up to 12."),
+    },
+    { readOnlyHint: true, openWorldHint: true },
+    async ({ ct, id, competitor_ids }) => {
+      const [match, compare] = await Promise.all([
+        providers.getMatch(ct, id),
+        providers.compareCompetitors(ct, id, competitor_ids),
+      ]);
+      const data = buildStageTimesExport({
+        match: { ct, id, name: match.name },
+        compareData: compare,
+        competitors: match.competitors,
+        squads: match.squads,
+        selectedIds: competitor_ids,
+      });
       return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
     },
   );

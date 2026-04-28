@@ -45,6 +45,7 @@ import { useMyIdentity } from "@/lib/hooks/use-my-identity";
 import { useTrackedShooters } from "@/lib/hooks/use-tracked-shooters";
 import { MAX_COMPETITORS } from "@/lib/constants";
 import { PreMatchView } from "@/components/pre-match-view";
+import { StageTimesExport } from "@/components/stage-times-export";
 
 // Stable empty array for useSyncExternalStore server snapshot — must be a
 // constant reference so React's referential equality check doesn't loop.
@@ -993,6 +994,14 @@ export default function MatchPageClient() {
                           </div>
                           <StageDegradationChart data={compareQuery.data} />
                         </div>
+
+                        <StageTimesExport
+                          ct={ct}
+                          id={id}
+                          match={match}
+                          compareData={compareQuery.data}
+                          selectedIds={selectedIds}
+                        />
                       </section>
                     </CollapsibleContent>
                   </Collapsible>
