@@ -1004,11 +1004,25 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
       : "";
   }, [stageSort, competitors]);
 
-  // Compute totals per competitor: total raw points, average %, zone/penalty sums, and clean match status
-  const totals = competitors.map((comp) => {
+  // Compute totals per competitor: total raw points, IPSC match %, zone/penalty sums, and clean match status.
+  //
+  // Match % follows the official IPSC points-weighted formula (matches shootnscoreit.com):
+  //   stage_points = (HF / mode_stage_winner_HF) × stage.max_points
+  //   match_points = sum across stages
+  //   matchPct     = match_points / mode_leader_match_points × 100
+  // The numerator uses each stage's `pct` from the response (already encodes the
+  // mode-relevant stage winner). The denominator depends on mode:
+  //   - group mode    → the highest match_points among the *selected* competitors
+  //                     (so the group leader always lands on 100%)
+  //   - division mode → divisionLeaderMatchPts[competitor.division] (full division)
+  //   - overall mode  → overallLeaderMatchPts (full field)
+  const totalsRaw = competitors.map((comp) => {
     let totalPts = 0;
+    let matchPts = 0;
     let pctSum = 0;
     let pctCount = 0;
+    let hasMaxPoints = true;
+    let rawDivision: string | null = null;
     let hasFired = false;
     let firedCount = 0;
     let aTotal = 0, cTotal = 0, dTotal = 0, mTotal = 0;
@@ -1037,10 +1051,16 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
       hasFired = true;
       firedCount++;
       totalPts += sc.points ?? 0;
+      if (rawDivision == null && sc.divisionKey) rawDivision = sc.divisionKey;
       const { pct } = modeValues(sc, mode);
       if (pct != null) {
         pctSum += pct;
         pctCount++;
+        if (stage.max_points > 0) {
+          matchPts += (pct / 100) * stage.max_points;
+        } else {
+          hasMaxPoints = false;
+        }
       }
       if (sc.a_hits !== null || sc.c_hits !== null || sc.d_hits !== null || sc.miss_count !== null) {
         hasZoneData = true;
@@ -1069,7 +1089,10 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
     return {
       id: comp.id,
       points: hasFired ? totalPts : null,
-      avgPct: pctCount > 0 ? pctSum / pctCount : null,
+      matchPts: pctCount > 0 ? matchPts : null,
+      avgPctFallback: pctCount > 0 ? pctSum / pctCount : null,
+      hasMaxPoints,
+      rawDivision,
       aHits: hasZoneData ? aTotal : null,
       cHits: hasZoneData ? cTotal : null,
       dHits: hasZoneData ? dTotal : null,
@@ -1085,6 +1108,27 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
       overpushCount,
       meltdownCount,
     };
+  });
+
+  // Resolve the mode-specific anchor (= 100% reference) for each competitor.
+  const groupAnchor = Math.max(0, ...totalsRaw.map((t) => t.matchPts ?? 0));
+  const totals = totalsRaw.map((t) => {
+    let matchPct: number | null = null;
+    if (t.matchPts != null && t.hasMaxPoints) {
+      let anchor: number | null = null;
+      if (mode === "group") anchor = groupAnchor;
+      else if (mode === "division" && t.rawDivision) {
+        anchor = data.divisionLeaderMatchPts?.[t.rawDivision] ?? null;
+      } else if (mode === "overall") {
+        anchor = data.overallLeaderMatchPts ?? null;
+      }
+      if (anchor != null && anchor > 0) {
+        matchPct = (t.matchPts / anchor) * 100;
+      }
+    }
+    // Fallback for older cache entries lacking stage.max_points.
+    if (matchPct == null) matchPct = t.avgPctFallback;
+    return { ...t, matchPct };
   });
 
   return (
@@ -1586,7 +1630,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                 ) : (
                   <>
                     <div>Total pts</div>
-                    <div>Avg {MODE_LABELS[mode]} %</div>
+                    <div>{MODE_LABELS[mode]} %</div>
                     <div>pts/shot</div>
                   </>
                 )}
@@ -1619,7 +1663,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                         )}
                       </span>
                       <span className="text-xs text-muted-foreground font-normal">
-                        {t.avgPct != null ? formatPct(t.avgPct) : "—"}
+                        {t.matchPct != null ? formatPct(t.matchPct) : "—"}
                       </span>
                       <HitZoneBar
                         aHits={t.aHits}

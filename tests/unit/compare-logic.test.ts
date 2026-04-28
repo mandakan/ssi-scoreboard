@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeGroupRankings, computePenaltyStats, assignDifficulty, assignSeparatorLevels, computePercentile, computePercentileRank, assignArchetype, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, computeQuartiles, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, computeStageDegradationData, tCritical95, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, computeMatchPointTotals, computePenaltyStats, assignDifficulty, assignSeparatorLevels, computePercentile, computePercentileRank, assignArchetype, computeCompetitorPPS, computeFieldPPSDistribution, classifyStageRun, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, computeQuartiles, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, computeStageDegradationData, tCritical95, STAGE_CLASS_THRESHOLDS, type RawScorecard } from "@/app/api/compare/logic";
 import type { CompetitorInfo, StageComparison } from "@/lib/types";
 
 const competitors: CompetitorInfo[] = [
@@ -3169,5 +3169,87 @@ describe("tCritical95", () => {
   it("returns Infinity for df <= 0", () => {
     expect(tCritical95(0)).toBe(Infinity);
     expect(tCritical95(-1)).toBe(Infinity);
+  });
+});
+
+describe("computeMatchPointTotals — IPSC points anchors", () => {
+  it("returns the highest match-points figure within each division", () => {
+    // Two divisions, two stages each. Stage points = (HF / div_winner_HF) × max_points.
+    //
+    //   hg1 stage 1: A=5 (winner), C=4   → max_points=50
+    //   hg1 stage 2: A=4, C=6 (winner)   → max_points=100
+    //     A: (5/5)×50 + (4/6)×100 = 50 + 66.67 = 116.67
+    //     C: (4/5)×50 + (6/6)×100 = 40 + 100   = 140    ← hg1 leader
+    //
+    //   hg3 stage 1: B=3                 → max_points=50
+    //   hg3 stage 2: B=2                 → max_points=100
+    //     B: (3/3)×50 + (2/2)×100 = 50 + 100  = 150     ← hg3 leader (only competitor)
+    const cards: RawScorecard[] = [
+      makeCard(1, 1, { hit_factor: 5, max_points: 50 }),
+      makeCard(1, 2, { hit_factor: 4, max_points: 100 }),
+      makeCard(2, 1, { hit_factor: 3, max_points: 50 }),
+      makeCard(2, 2, { hit_factor: 2, max_points: 100 }),
+      makeCard(3, 1, { hit_factor: 4, max_points: 50 }),
+      makeCard(3, 2, { hit_factor: 6, max_points: 100 }),
+    ];
+    const { divisionLeaderMatchPts, overallLeaderMatchPts } =
+      computeMatchPointTotals(cards);
+    expect(divisionLeaderMatchPts.hg1).toBeCloseTo(140, 4);
+    expect(divisionLeaderMatchPts.hg3).toBeCloseTo(150, 4);
+    // Overall (cross-division) leader: stage 1 winner=5, stage 2 winner=6
+    //   A: (5/5)×50 + (4/6)×100 = 116.67
+    //   B: (3/5)×50 + (2/6)×100 = 30 + 33.33 = 63.33
+    //   C: (4/5)×50 + (6/6)×100 = 140
+    // → overall leader = C with 140
+    expect(overallLeaderMatchPts).toBeCloseTo(140, 4);
+  });
+
+  it("excludes competitors with any DQ scorecard from the leader pool", () => {
+    const cards: RawScorecard[] = [
+      // Hot shooter who DQs on stage 2 — must NOT define the 100% anchor
+      makeCard(1, 1, { hit_factor: 10, max_points: 50 }),
+      makeCard(1, 2, { hit_factor: 0, max_points: 100, dq: true, points: 0 }),
+      // Clean shooter who is the actual division leader
+      makeCard(3, 1, { hit_factor: 4, max_points: 50 }),
+      makeCard(3, 2, { hit_factor: 5, max_points: 100 }),
+    ];
+    const { divisionLeaderMatchPts } = computeMatchPointTotals(cards);
+    // Without DQ exclusion: comp 1 = (10/10)×50 + 0 = 50
+    //                       comp 3 = (4/10)×50 + (5/5)×100 = 20 + 100 = 120 ← actual leader
+    // With DQ exclusion: comp 1 dropped → leader = comp 3 = 120
+    expect(divisionLeaderMatchPts.hg1).toBeCloseTo(120, 4);
+  });
+
+  it("treats DNF / zeroed stages as 0 stage-points", () => {
+    const cards: RawScorecard[] = [
+      makeCard(1, 1, { hit_factor: 5, max_points: 50 }),
+      makeCard(1, 2, { hit_factor: 0, max_points: 100, dnf: true }),
+      // Clean leader
+      makeCard(3, 1, { hit_factor: 5, max_points: 50 }),
+      makeCard(3, 2, { hit_factor: 5, max_points: 100 }),
+    ];
+    const { divisionLeaderMatchPts } = computeMatchPointTotals(cards);
+    expect(divisionLeaderMatchPts.hg1).toBeCloseTo(150, 4);
+  });
+
+  it("returns null overall leader when no scorecards have valid HF", () => {
+    const cards: RawScorecard[] = [
+      makeCard(1, 1, { hit_factor: 0, dq: true }),
+    ];
+    const { overallLeaderMatchPts, divisionLeaderMatchPts } =
+      computeMatchPointTotals(cards);
+    expect(overallLeaderMatchPts).toBeNull();
+    expect(Object.keys(divisionLeaderMatchPts)).toHaveLength(0);
+  });
+
+  it("ignores cards with missing max_points (older cache entries)", () => {
+    const cards: RawScorecard[] = [
+      makeCard(1, 1, { hit_factor: 5, max_points: 0 }),
+      makeCard(3, 1, { hit_factor: 4, max_points: 0 }),
+    ];
+    const { overallLeaderMatchPts, divisionLeaderMatchPts } =
+      computeMatchPointTotals(cards);
+    expect(overallLeaderMatchPts).toBeNull();
+    expect(Object.keys(divisionLeaderMatchPts)).toHaveLength(0);
   });
 });

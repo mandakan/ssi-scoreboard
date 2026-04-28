@@ -11,7 +11,7 @@ import { isUpstreamDegraded } from "@/lib/upstream-status";
 import { afterResponse } from "@/lib/background-impl";
 
 import { extractDivision } from "@/lib/divisions";
-import { computeGroupRankings, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, computeStageDegradationData } from "@/app/api/compare/logic";
+import { computeGroupRankings, computeMatchPointTotals, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, computeStageDegradationData } from "@/app/api/compare/logic";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
 import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
 import type { CompareMode, CompareResponse, CompetitorInfo, FieldFingerprintPoint, StageComparison, StageConditions } from "@/lib/types";
@@ -387,6 +387,9 @@ export async function GET(req: Request) {
 
   const tRankings = performance.now();
 
+  const { divisionLeaderMatchPts, overallLeaderMatchPts } =
+    computeMatchPointTotals(rawScorecards);
+
   const penaltyStats = Object.fromEntries(
     requestedCompetitors.map((c) => [c.id, computePenaltyStats(stages, c.id)])
   );
@@ -593,6 +596,8 @@ export async function GET(req: Request) {
     stageDegradationData,
     stageConditions,
     ...(scorecardsRestricted ? { scorecardsRestricted: true } : {}),
+    divisionLeaderMatchPts,
+    overallLeaderMatchPts,
     cacheInfo,
   };
 

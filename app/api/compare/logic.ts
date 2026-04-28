@@ -102,6 +102,104 @@ function pct(hf: number | null, leaderHF: number | null): number | null {
 }
 
 /**
+ * IPSC match-point totals across all stages for a match.
+ *
+ * For each (competitor, stage), `stage_points = (HF / division_stage_winner_HF) × stage.max_points`.
+ * Sum per competitor → match points. Returns the highest match-points figure
+ * within each division and across the full field — the anchors that define
+ * 100% in division and overall mode respectively.
+ *
+ * A competitor with any DQ scorecard (whole-match DQ in IPSC) is excluded
+ * from the leader pool. DNF / zeroed stages contribute 0 stage points.
+ */
+export function computeMatchPointTotals(allScorecards: RawScorecard[]): {
+  /** division string → leader's total IPSC match points (max across the division). */
+  divisionLeaderMatchPts: Record<string, number>;
+  /** Highest match-points figure across the full field (any division). Null when no valid data. */
+  overallLeaderMatchPts: number | null;
+} {
+  // Per-stage division winner HF (excludes DNF/DQ/zeroed and ≤0 HF cards).
+  // Keyed by `${division}::${stageId}`.
+  const divStageWinnerHF = new Map<string, number>();
+  for (const sc of allScorecards) {
+    if (sc.dnf || sc.dq || sc.zeroed) continue;
+    if (sc.hit_factor == null || sc.hit_factor <= 0) continue;
+    const div = sc.competitor_division;
+    if (!div) continue;
+    const key = `${div}::${sc.stage_id}`;
+    const cur = divStageWinnerHF.get(key) ?? 0;
+    if (sc.hit_factor > cur) divStageWinnerHF.set(key, sc.hit_factor);
+  }
+
+  // Overall stage winner HF (across all divisions).
+  const overallStageWinnerHF = new Map<number, number>();
+  for (const sc of allScorecards) {
+    if (sc.dnf || sc.dq || sc.zeroed) continue;
+    if (sc.hit_factor == null || sc.hit_factor <= 0) continue;
+    const cur = overallStageWinnerHF.get(sc.stage_id) ?? 0;
+    if (sc.hit_factor > cur) overallStageWinnerHF.set(sc.stage_id, sc.hit_factor);
+  }
+
+  // Sum match-points per competitor in two reference frames:
+  //   - division-relative: stage anchor = divStageWinnerHF
+  //   - overall-relative: stage anchor = overallStageWinnerHF
+  const divisionMatchPts = new Map<number, number>();
+  const overallMatchPts = new Map<number, number>();
+  const competitorDivision = new Map<number, string | null>();
+  const dqCompetitors = new Set<number>();
+
+  for (const sc of allScorecards) {
+    competitorDivision.set(sc.competitor_id, sc.competitor_division);
+    if (sc.dq) dqCompetitors.add(sc.competitor_id);
+    if (sc.dnf || sc.dq || sc.zeroed) continue;
+    if (sc.hit_factor == null || sc.hit_factor <= 0) continue;
+    if (sc.max_points == null || sc.max_points <= 0) continue;
+
+    const overallWinner = overallStageWinnerHF.get(sc.stage_id) ?? 0;
+    if (overallWinner > 0) {
+      const pts = (sc.hit_factor / overallWinner) * sc.max_points;
+      overallMatchPts.set(
+        sc.competitor_id,
+        (overallMatchPts.get(sc.competitor_id) ?? 0) + pts,
+      );
+    }
+
+    if (sc.competitor_division) {
+      const divWinner =
+        divStageWinnerHF.get(`${sc.competitor_division}::${sc.stage_id}`) ?? 0;
+      if (divWinner > 0) {
+        const pts = (sc.hit_factor / divWinner) * sc.max_points;
+        divisionMatchPts.set(
+          sc.competitor_id,
+          (divisionMatchPts.get(sc.competitor_id) ?? 0) + pts,
+        );
+      }
+    }
+  }
+
+  // Reduce to per-division leaders and the overall leader.
+  const divisionLeaderMatchPts: Record<string, number> = {};
+  for (const [compId, pts] of divisionMatchPts) {
+    if (dqCompetitors.has(compId)) continue;
+    const div = competitorDivision.get(compId);
+    if (!div) continue;
+    if (pts > (divisionLeaderMatchPts[div] ?? 0)) {
+      divisionLeaderMatchPts[div] = pts;
+    }
+  }
+
+  let overallLeaderMatchPts: number | null = null;
+  for (const [compId, pts] of overallMatchPts) {
+    if (dqCompetitors.has(compId)) continue;
+    if (overallLeaderMatchPts == null || pts > overallLeaderMatchPts) {
+      overallLeaderMatchPts = pts;
+    }
+  }
+
+  return { divisionLeaderMatchPts, overallLeaderMatchPts };
+}
+
+/**
  * Compute percentile placement for a competitor within a ranked field.
  *   percentile = 1 − (rank − 1) / (N − 1)
  * where rank is 1-indexed (1 = best) and N = total ranked (non-DNF) competitors.

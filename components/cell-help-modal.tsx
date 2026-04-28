@@ -321,8 +321,8 @@ function SummaryRowDiagram() {
             </span>
           }
           badge="B"
-          title="Average percentage"
-          description="Average of this competitor's stage percentages — an overall match quality number. The label above the table changes with Group / Division / Overall mode."
+          title="Match percentage"
+          description="Official IPSC match percentage: stage points are weighted by stage size (longer stages count more), then summed and divided by the leader's total. In Group mode the anchor is the highest-scoring selected competitor, so one of them always lands on 100%. In Division / Overall mode the anchor is the full-division or full-field leader."
         />
         <DiagramRow
           visual={

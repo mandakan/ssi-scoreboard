@@ -11,11 +11,26 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-04-28-competitor-selection";
+export const LATEST_RELEASE_ID = "2026-04-28-ipsc-match-percent";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "April 28, 2026",
+    title: "Match % now matches SSI",
+    screenshotScenes: ["comparison-table", "shooter-dashboard"],
+    sections: [
+      {
+        heading: "Improved",
+        items: [
+          "Match percentage now uses the official IPSC points-weighted formula — longer stages count more — so the number on your shooter dashboard match cards matches what shootnscoreit.com shows.",
+          "Comparison-table totals row also uses the same formula. In Group mode the highest-scoring selected competitor lands on 100%; in Division and Overall mode the anchor is the full-division or full-field leader.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-04-28-competitor-selection",
     date: "April 28, 2026",
     title: "Faster competitor selection",
     screenshotScenes: ["comparison-table", "tracked-shooters-sheet"],

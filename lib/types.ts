@@ -547,6 +547,17 @@ export interface CompareResponse {
    * The client should show a clear notice instead of an empty comparison.
    */
   scorecardsRestricted?: boolean;
+  /**
+   * IPSC match-point totals (anchors for division and overall match %):
+   *   stage_points = (HF / division_stage_winner_HF) × stage.max_points
+   *   match_points = sum across stages
+   * The map is keyed by division string; values are the leader's total match
+   * points within that division. `overallLeaderMatchPts` is the same figure
+   * across the full field. The comparison-table totals row uses these as
+   * denominators when computing each selected competitor's match %.
+   */
+  divisionLeaderMatchPts?: Record<string, number>;
+  overallLeaderMatchPts?: number | null;
   cacheInfo: CacheInfo;
 }
 
@@ -749,7 +760,15 @@ export interface ShooterMatchSummary {
   stageCount: number;
   /** Mean hit factor across valid stages. Null if no valid stages. */
   avgHF: number | null;
-  /** Mean division % across valid stages (0–100). Null if no scorecards cached. */
+  /**
+   * Official IPSC match percentage within the shooter's division (0–100):
+   * (my_match_points / division_leader_match_points) × 100, where
+   * stage_points = (HF / division_stage_winner_HF) × stage.max_points.
+   * Mirrors the percentage shown on shootnscoreit.com. Null when the shooter
+   * has no valid scorecards or division is unknown. Falls back to a simple
+   * average of per-stage division percentages when stage max_points is
+   * missing on older cached entries.
+   */
   matchPct: number | null;
   /** Raw hit-zone totals across all valid stages. */
   totalA: number;
