@@ -41,41 +41,46 @@ const ALLOWED_LEVELS: Record<string, Set<string> | null> = {
   l4plus: new Set(["Level IV", "Level V"]),
 };
 
+// ─── DO NOT WIDEN THIS WINDOW WITHOUT MEASURING ─────────────────────────────
+//
 // The SSI API applies an undocumented result cap per query when browsing
 // without a search term, silently dropping events further out in the date
-// window. We work around it by splitting the requested range into sub-windows
-// so each request stays well under the cap. Each sub-window gets its own
-// Next.js fetch-cache entry (revalidate: 3600), so they cache independently.
+// window. We work around it by splitting the requested range into 7-day
+// sub-windows so each request stays well under the cap. Each sub-window gets
+// its own Next.js fetch-cache entry (revalidate: 3600), so they cache
+// independently.
 //
-// Sub-window size is adaptive based on whether SSI is doing upstream
-// filtering for us:
+// History — every previous attempt to widen this has caused a user-visible
+// regression. Read these BEFORE changing the value:
 //
-//   No firearms filter ("All"): 7 days — country and minLevel are *post-fetch*
-//   filters here (the SSI GraphQL has no params for them), so the cap bites on
-//   the unfiltered worldwide IPSC count. Bug seen in the wild: browsing a
-//   month with discipline "All" + country=SWE + minLevel=L2+ used to show only
-//   the first ~9 days because the single 1-month query was already truncated
-//   before SWE/L2+ filtering ran. 7 days stays safely under that ceiling.
+//   #345 (5e9e63b, 2026-04-27) — shrunk from 30 days to 7 after browsing a
+//     month with discipline=All + country=SWE + minLevel=L2+ showed only
+//     the first ~9 days. SSI's cap bites on the unfiltered worldwide IPSC
+//     count, before our post-fetch country/minLevel filters run.
+//   #370 (cb57560, 2026-04-28) — widened back to 30 days when `firearms`
+//     was set, on the assumption SSI's upstream filter cut the count
+//     enough. It does not. Empirical check on staging: a 30-day worldwide
+//     query for firearms=hg returned 1 event; same range as 4× 7-day
+//     chunks returned 139. Reverted in #371.
 //
-//   Firearms filter set (Handgun / Rifle / Shotgun / PCC / etc.): 30 days —
-//   SSI filters upstream, the result count drops several-fold, and a 30-day
-//   window fits comfortably under the cap. This drops a typical filtered
-//   month browse from ~5 GraphQL calls to 1.
-const SUB_WINDOW_DAYS_FILTERED = 30;
-const SUB_WINDOW_DAYS_UNFILTERED = 7;
+// The cap bites on whatever SSI returns, regardless of whether we asked it
+// to filter upstream. The safe value is 7 days. If you want to widen it,
+// measure against the live API for every supported firearms value
+// (hg, rfl, shg, pcc, mr, prr, air) AND the unfiltered case, across a full
+// 30-day month, and confirm none of them get truncated. Don't guess.
+const SUB_WINDOW_DAYS = 7;
 
 function buildSubWindows(
   startsAfter: string,
   startsBefore: string,
   baseVars: Record<string, string>,
-  windowDays: number,
 ): Array<Record<string, string>> {
   const windows: Array<Record<string, string>> = [];
   let cur = new Date(startsAfter);
   const end = new Date(startsBefore);
   while (cur < end) {
     const next = new Date(cur);
-    next.setDate(next.getDate() + windowDays);
+    next.setDate(next.getDate() + SUB_WINDOW_DAYS);
     if (next > end) next.setTime(end.getTime());
     windows.push({
       ...baseVars,
@@ -170,11 +175,7 @@ export async function GET(req: Request) {
       // 7-day gap) is far better UX than a 502 over the entire date range.
       // executeQuery already retries that specific transient internally; we
       // only land here if the retry also failed.
-      // SSI filters by `firearms` upstream, so a filter cuts the unfiltered
-      // worldwide count enough that a single 30-day window fits under the cap.
-      // Without a filter we stay on 7-day chunks to dodge the cap entirely.
-      const windowDays = firearms ? SUB_WINDOW_DAYS_FILTERED : SUB_WINDOW_DAYS_UNFILTERED;
-      const windows = buildSubWindows(startsAfter, startsBefore, firearms ? { firearms } : {}, windowDays);
+      const windows = buildSubWindows(startsAfter, startsBefore, firearms ? { firearms } : {});
       const settled = await Promise.allSettled(
         windows.map((vars) => executeQuery<RawEventsData>(EVENTS_QUERY, vars, 3600)),
       );
