@@ -159,10 +159,17 @@ export async function GET(req: Request) {
   try {
     if (q) {
       // Text search: the API's search backend returns good results in one call.
+      // 15s cap — search is interactive; no point making the user wait the
+      // full 60s default if SSI is having a slow moment.
+      // includeScoring=false — search results don't display % progress, and
+      // requesting that field adds ~10s of upstream computation (see
+      // EVENTS_QUERY comment). Live mode below requests it because the live
+      // section actually needs the percentage.
       const data = await executeQuery<RawEventsData>(
         EVENTS_QUERY,
-        { starts_after: startsAfter, starts_before: startsBefore, firearms, search: q },
+        { starts_after: startsAfter, starts_before: startsBefore, firearms, search: q, includeScoring: false },
         3600,
+        { timeoutMs: 15_000 },
       );
       rawEvents = data.events;
     } else {
@@ -176,9 +183,22 @@ export async function GET(req: Request) {
       // 7-day gap) is far better UX than a 502 over the entire date range.
       // executeQuery already retries that specific transient internally; we
       // only land here if the retry also failed.
+      //
+      // Per-window timeout: 8s. allSettled waits for the *slowest* window,
+      // so a single hung sub-window otherwise blocks TTFB up to the global
+      // 60s timeout. 8s is well above the typical sub-window latency
+      // (~400ms warm, ~2s cold) but tight enough that one slow window can't
+      // tank the whole homepage. Cancelled fetches won't populate Next's
+      // fetch cache for that window — we accept that trade so the user
+      // doesn't wait a full minute for one stuck call.
       const windows = buildSubWindows(startsAfter, startsBefore, firearms ? { firearms } : {});
+      // Only live mode actually displays the % progress; browse skips the
+      // server-side scoring_completed aggregate (saves ~10s per sub-window).
+      const includeScoring = liveMode;
       const settled = await Promise.allSettled(
-        windows.map((vars) => executeQuery<RawEventsData>(EVENTS_QUERY, vars, 3600)),
+        windows.map((vars) =>
+          executeQuery<RawEventsData>(EVENTS_QUERY, { ...vars, includeScoring }, 3600, { timeoutMs: 8_000 }),
+        ),
       );
       const failures: string[] = [];
       const seen = new Set<string>();
@@ -203,10 +223,12 @@ export async function GET(req: Request) {
         throw new Error(failures.join(" | "));
       }
       if (failures.length > 0) {
-        // Partial outage — flag upstream as degraded so the homepage banner
-        // surfaces it. The 60s TTL on the flag means it self-clears once SSI
-        // recovers, without us having to write a "healthy again" signal.
-        await markUpstreamDegraded("events-route-partial");
+        // Partial failure — log for telemetry but do NOT mark the upstream as
+        // degraded. The whole point of allSettled here is to absorb a single
+        // transient SSI hiccup; surfacing a "scoreboard is degraded" banner
+        // when 4 of 5 sub-windows came back with valid data contradicts that
+        // soft-fallback. Reserve the banner for the unambiguous signal:
+        // every window failed, or the search call failed (the catch below).
         console.warn(JSON.stringify({
           route: "events",
           partial_failure: true,
