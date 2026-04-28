@@ -10,7 +10,8 @@ import {
 } from "@/components/ui/popover";
 import { Focus, HelpCircle, Layers, Timer } from "lucide-react";
 import { cn, formatPct } from "@/lib/utils";
-import { buildColorMap } from "@/lib/colors";
+import { buildColorMap, buildShapeMap } from "@/lib/colors";
+import { CompetitorLegendSwatch } from "@/components/competitor-marker";
 import type { CompareResponse, StageArchetype } from "@/lib/types";
 
 const ARCHETYPE_DISPLAY: Record<StageArchetype, { icon: typeof Timer; label: string; shortLabel: string; color: string }> = {
@@ -40,6 +41,7 @@ export function ArchetypePerformanceSummary({ data }: ArchetypePerformanceSummar
   if (allArchetypes.size < 2) return null;
 
   const colorMap = buildColorMap(competitors.map((c) => c.id));
+  const shapeMap = buildShapeMap(competitors.map((c) => c.id));
   const archetypeOrder: StageArchetype[] = ["speed", "precision", "mixed"];
   const visibleArchetypes = archetypeOrder.filter((a) => allArchetypes.has(a));
 
@@ -82,8 +84,15 @@ export function ArchetypePerformanceSummary({ data }: ArchetypePerformanceSummar
                   className="text-center text-xs font-medium pb-1 px-2 truncate max-w-24"
                   style={{ color: colorMap[comp.id] }}
                 >
-                  <span className="hidden sm:inline">{comp.name}</span>
-                  <span className="sm:hidden">{comp.name.split(" ")[0]}</span>
+                  <span className="inline-flex items-center gap-1 align-middle">
+                    <CompetitorLegendSwatch
+                      size={10}
+                      fill={colorMap[comp.id]}
+                      shape={shapeMap[comp.id]}
+                    />
+                    <span className="hidden sm:inline">{comp.name}</span>
+                    <span className="sm:hidden">{comp.name.split(" ")[0]}</span>
+                  </span>
                 </th>
               ))}
             </tr>

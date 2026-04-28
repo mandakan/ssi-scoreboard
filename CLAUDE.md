@@ -112,7 +112,12 @@ This app is used courtside during live IPSC competitions — on a phone, outdoor
 - All error states must use `role="alert"` so screen readers announce them immediately.
 - Focus ring is enforced globally via `:focus-visible` in `globals.css` — never suppress it
   with `outline-none` without providing an alternative visible focus indicator.
-- Color is never the sole means of conveying information — always pair with text, icons, or shape.
+- **WCAG 2.1 SC 1.4.1 (Use of Color)** — color is never the sole means of conveying information.
+  Always pair with text, icon, shape, or pattern. The competitor palette in `lib/colors.ts`
+  is the Okabe-Ito CVD-safe set and is paired with `SHAPE_PALETTE` (coprime cycle length, see
+  `buildShapeMap()`); chart series and legend swatches must render via `CompetitorMarker` /
+  `CompetitorLegendSwatch` so shape and color stay in lockstep. Status/hit-zone bars use
+  pattern fills (solid/diagonal/cross-hatch) plus shape-coded pips for the same reason.
 - Images and icons must have `alt` text or `aria-hidden="true"` if decorative.
 - Use semantic HTML elements (`<button>`, `<nav>`, `<main>`, `<table>`, `<th scope>`, etc.)
   rather than `<div>` with click handlers.

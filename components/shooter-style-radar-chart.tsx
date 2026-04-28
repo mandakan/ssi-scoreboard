@@ -10,7 +10,11 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { buildColorMap } from "@/lib/colors";
+import { buildColorMap, buildShapeMap } from "@/lib/colors";
+import {
+  CompetitorMarker,
+  CompetitorLegendSwatch,
+} from "@/components/competitor-marker";
 import type { CompareResponse, StyleFingerprintStats } from "@/lib/types";
 
 // --------------------------------------------------------------------------
@@ -105,6 +109,7 @@ interface ShooterStyleRadarChartProps {
 export function ShooterStyleRadarChart({ data }: ShooterStyleRadarChartProps) {
   const { competitors, styleFingerprintStats } = data;
   const colorMap = buildColorMap(competitors.map((c) => c.id));
+  const shapeMap = buildShapeMap(competitors.map((c) => c.id));
   const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
 
   if (!styleFingerprintStats) {
@@ -192,18 +197,41 @@ export function ShooterStyleRadarChart({ data }: ShooterStyleRadarChartProps) {
           {/* Selected competitors */}
           {competitors
             .filter((c) => !hiddenIds.has(c.id))
-            .map((comp) => (
-              <Radar
-                key={comp.id}
-                name={formatLabel(comp.id)}
-                dataKey={String(comp.id)}
-                stroke={colorMap[comp.id]}
-                strokeWidth={2}
-                fill={colorMap[comp.id]}
-                fillOpacity={0.15}
-                dot={{ fill: colorMap[comp.id], r: 3, stroke: "var(--background)", strokeWidth: 1 }}
-              />
-            ))}
+            .map((comp) => {
+              const color = colorMap[comp.id];
+              const shape = shapeMap[comp.id];
+              return (
+                <Radar
+                  key={comp.id}
+                  name={formatLabel(comp.id)}
+                  dataKey={String(comp.id)}
+                  stroke={color}
+                  strokeWidth={2}
+                  fill={color}
+                  fillOpacity={0.15}
+                  dot={(dotProps) => {
+                    const { cx, cy, key } = dotProps as {
+                      cx?: number;
+                      cy?: number;
+                      key?: string | number;
+                    };
+                    if (cx === undefined || cy === undefined) return <g key={key} />;
+                    return (
+                      <CompetitorMarker
+                        key={key}
+                        cx={cx}
+                        cy={cy}
+                        size={7}
+                        fill={color}
+                        shape={shape}
+                        stroke="var(--background)"
+                        strokeWidth={1}
+                      />
+                    );
+                  }}
+                />
+              );
+            })}
         </RadarChart>
       </ResponsiveContainer>
 
@@ -234,10 +262,10 @@ export function ShooterStyleRadarChart({ data }: ShooterStyleRadarChartProps) {
                 opacity: hidden ? 0.4 : undefined,
               }}
             >
-              <span
-                className="inline-block h-3 w-3 flex-none rounded-full"
-                style={{ backgroundColor: color }}
-                aria-hidden="true"
+              <CompetitorLegendSwatch
+                size={12}
+                fill={color}
+                shape={shapeMap[comp.id]}
               />
               <span className={hidden ? "line-through" : ""}>{label}</span>
             </button>
