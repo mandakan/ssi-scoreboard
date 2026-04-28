@@ -27,7 +27,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const SNAPSHOT_PATH = resolve(__dirname, "ssi-schema-snapshot.json");
 
 // Types we depend on. If you start consuming new types from SSI, add them here.
+//
+// `RootQuery` and `EventInterface` are tracked so the static query validator
+// (scripts/validate-ssi-queries.ts) can verify field selections at the top
+// level of `event(...)` and `events(...)` — that's where the #367 regression
+// hid (`scoring_completed` selected on EventInterface instead of IpscMatchNode).
 const TRACKED_TYPES = [
+  "RootQuery",
+  "EventInterface",
   "IpscMatchNode",
   "IpscStageNode",
   "IpscScoreCardNode",
@@ -48,21 +55,30 @@ interface FieldEntry {
 
 type Snapshot = Record<string, FieldEntry[]>;
 
-function typeRef(t: { name: string | null; kind: string; ofType?: { name: string | null; kind: string } | null }): string {
+interface RawType {
+  name: string | null;
+  kind: string;
+  ofType?: RawType | null;
+}
+
+function typeRef(t: RawType): string {
   if (t.kind === "NON_NULL" && t.ofType) return `${typeRef(t.ofType)}!`;
   if (t.kind === "LIST" && t.ofType) return `[${typeRef(t.ofType)}]`;
   return t.name ?? t.kind;
 }
 
 async function introspectType(typeName: string, endpoint: string, token: string): Promise<FieldEntry[]> {
-  const query = `{ __type(name: "${typeName}") { fields { name type { name kind ofType { name kind ofType { name kind } } } args { name type { name kind ofType { name kind } } } } } }`;
+  // Five levels of `ofType` lets us name types like `[ChronoCardNode!]!`
+  // (NON_NULL → LIST → NON_NULL → ChronoCardNode), which the previous
+  // three-level walk reduced to the placeholder `[NON_NULL]!`.
+  const query = `{ __type(name: "${typeName}") { fields { name type { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind } } } } } args { name type { name kind ofType { name kind ofType { name kind ofType { name kind } } } } } } } }`;
   const r = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Token ${token}` },
     body: JSON.stringify({ query }),
   });
   if (!r.ok) throw new Error(`SSI HTTP ${r.status}`);
-  const json = (await r.json()) as { data?: { __type?: { fields?: { name: string; type: { name: string | null; kind: string; ofType?: { name: string | null; kind: string; ofType?: { name: string | null; kind: string } | null } | null }; args: { name: string; type: { name: string | null; kind: string; ofType?: { name: string | null; kind: string } | null } }[] }[] | null } | null } };
+  const json = (await r.json()) as { data?: { __type?: { fields?: { name: string; type: RawType; args: { name: string; type: RawType }[] }[] | null } | null } };
   const fields = json.data?.__type?.fields ?? [];
   return fields
     .map((f): FieldEntry => ({

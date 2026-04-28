@@ -45,10 +45,38 @@ interface GraphQLResponse<T> {
  *  for large matches with many scorecards, so we allow a generous window. */
 const GRAPHQL_TIMEOUT_MS = 60_000;
 
+/** Error messages we treat as a transient upstream condition worth one retry.
+ *  "Must provide document." is graphql-core's message when SSI's parser sees
+ *  an empty query string — observed in production when SSI's gateway
+ *  occasionally drops the POST body on a busy isolate. A second attempt with
+ *  the same payload almost always succeeds. */
+const RETRY_GRAPHQL_MESSAGES = [
+  "Must provide document.",
+];
+
 export async function executeQuery<T>(
   query: string,
   variables?: Record<string, unknown>,
   revalidate: number | false = false,
+): Promise<T> {
+  try {
+    return await executeQueryOnce<T>(query, variables, revalidate);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "";
+    if (RETRY_GRAPHQL_MESSAGES.some((m) => msg.includes(m))) {
+      // Single immediate retry. We don't back off — the failure mode is a
+      // dropped body at SSI's gateway, not load shedding, so a retry helps
+      // most when it goes out right behind the failed request.
+      return await executeQueryOnce<T>(query, variables, revalidate);
+    }
+    throw err;
+  }
+}
+
+async function executeQueryOnce<T>(
+  query: string,
+  variables: Record<string, unknown> | undefined,
+  revalidate: number | false,
 ): Promise<T> {
   const apiKey = process.env.SSI_API_KEY;
   if (!apiKey) throw new Error("SSI_API_KEY is not configured");

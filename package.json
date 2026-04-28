@@ -30,7 +30,8 @@
     "warm-cache": "tsx scripts/warm-cache.ts",
     "release:post": "tsx scripts/generate-release-post.ts",
     "release:screenshots": "tsx scripts/screenshot-match.ts",
-    "check:ssi-schema": "tsx scripts/check-ssi-schema.ts"
+    "check:ssi-schema": "tsx scripts/check-ssi-schema.ts",
+    "validate:ssi-queries": "tsx scripts/validate-ssi-queries.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.27.1",
@@ -67,6 +68,7 @@
     "@vitejs/plugin-react": "5.1.4",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
+    "graphql": "16.13.2",
     "jsdom": "28.1.0",
     "shadcn": "^4.0.6",
     "tailwindcss": "^4.2.1",

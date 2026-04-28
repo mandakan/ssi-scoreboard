@@ -264,10 +264,23 @@ GraphQL query, the corresponding TypeScript type, and bump `CACHE_SCHEMA_VERSION
 pnpm check:ssi-schema           # report drift, exit 1 if any
 pnpm check:ssi-schema --update  # accept current schema as the new snapshot
 pnpm check:ssi-schema --json    # machine-readable output for CI
+
+pnpm validate:ssi-queries       # static check: every field/arg in every
+                                # outbound query exists on the parent type
+                                # in the snapshot. Zero network. Runs in CI.
 ```
 
-The script introspects `IpscMatchNode`, `IpscStageNode`, `IpscScoreCardNode`,
-`IpscCompetitorNode`, and `IpscSquadNode` from the live SSI GraphQL endpoint and compares against
+`validate:ssi-queries` parses each query in `lib/graphql.ts`, walks the AST
+against `scripts/ssi-schema-snapshot.json`, and fails on missing fields,
+undeclared arguments, or fields whose parent type doesn't declare them. It
+catches snapshot/query drift and typos. It **does not** catch resolver-level
+bugs where the schema advertises a field on an interface but the underlying
+Django model on a subtype throws `AttributeError` at runtime (the #367 class) —
+that gap needs a live dry-run smoke test, not static introspection.
+
+The script introspects `RootQuery`, `EventInterface`, `IpscMatchNode`,
+`IpscStageNode`, `IpscScoreCardNode`, `IpscCompetitorNode`, and `IpscSquadNode`
+from the live SSI GraphQL endpoint and compares against
 `scripts/ssi-schema-snapshot.json`. Run it weekly (manually or via cron) to catch silent
 upstream changes. If it reports drift:
 
