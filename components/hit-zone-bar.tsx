@@ -1,3 +1,4 @@
+import { useId } from "react";
 import {
   Tooltip,
   TooltipContent,
@@ -13,12 +14,19 @@ interface HitZoneBarProps {
   procedurals: number | null;
 }
 
+// Color + pattern pairing — pattern carries the same information as color so the
+// bar remains readable under deuteranopia/protanopia and in grayscale print.
+// "fill" values are tailwind palette hex; "patternKind" indexes into the SVG
+// <defs> generated below.
 const ZONE_SEGMENTS = [
-  { key: "a" as const, colorClass: "bg-green-500" },
-  { key: "c" as const, colorClass: "bg-yellow-400" },
-  { key: "d" as const, colorClass: "bg-orange-400" },
-  { key: "m" as const, colorClass: "bg-red-500" },
+  { key: "a" as const, fill: "#22c55e", patternKind: "solid" as const },
+  { key: "c" as const, fill: "#facc15", patternKind: "diag-light" as const },
+  { key: "d" as const, fill: "#fb923c", patternKind: "diag-dense" as const },
+  { key: "m" as const, fill: "#ef4444", patternKind: "cross-hatch" as const },
 ];
+
+const BAR_WIDTH = 80;
+const BAR_HEIGHT = 8;
 
 export function HitZoneBar({
   aHits,
@@ -28,6 +36,7 @@ export function HitZoneBar({
   noShoots,
   procedurals,
 }: HitZoneBarProps) {
+  const idPrefix = useId();
   const hasHitData =
     aHits !== null || cHits !== null || dHits !== null || misses !== null;
   const hasPenaltyData = noShoots !== null || procedurals !== null;
@@ -57,6 +66,21 @@ export function HitZoneBar({
     .filter(Boolean)
     .join(" · ");
 
+  // Pre-compute segment x/width so the render path is purely declarative
+  // (avoids the react-hooks/immutability "no reassignment after render" rule).
+  const segments = (() => {
+    const out: Array<{ key: "a" | "c" | "d" | "m"; x: number; width: number }> = [];
+    let offset = 0;
+    for (const { key } of ZONE_SEGMENTS) {
+      const count = counts[key];
+      if (count === 0) continue;
+      const width = (count / total) * BAR_WIDTH;
+      out.push({ key, x: offset, width });
+      offset += width;
+    }
+    return out;
+  })();
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -69,19 +93,108 @@ export function HitZoneBar({
             (total === 0 ? (
               <div className="w-20 h-2 rounded-sm bg-muted" />
             ) : (
-              <div className="flex w-20 h-2 rounded-sm overflow-hidden">
-                {ZONE_SEGMENTS.map(({ key, colorClass }) => {
-                  const count = counts[key];
-                  if (count === 0) return null;
-                  return (
-                    <div
-                      key={key}
-                      className={colorClass}
-                      style={{ width: `${(count / total) * 100}%` }}
-                    />
-                  );
-                })}
-              </div>
+              <svg
+                width={BAR_WIDTH}
+                height={BAR_HEIGHT}
+                viewBox={`0 0 ${BAR_WIDTH} ${BAR_HEIGHT}`}
+                className="rounded-sm overflow-hidden"
+                aria-hidden="true"
+              >
+                <defs>
+                  {ZONE_SEGMENTS.map(({ key, fill, patternKind }) => {
+                    const id = `${idPrefix}-${key}`;
+                    if (patternKind === "solid") {
+                      return (
+                        <pattern
+                          key={key}
+                          id={id}
+                          patternUnits="userSpaceOnUse"
+                          width={4}
+                          height={4}
+                        >
+                          <rect width={4} height={4} fill={fill} />
+                        </pattern>
+                      );
+                    }
+                    if (patternKind === "diag-light") {
+                      return (
+                        <pattern
+                          key={key}
+                          id={id}
+                          patternUnits="userSpaceOnUse"
+                          width={4}
+                          height={4}
+                          patternTransform="rotate(45)"
+                        >
+                          <rect width={4} height={4} fill={fill} />
+                          <line
+                            x1={0}
+                            y1={0}
+                            x2={0}
+                            y2={4}
+                            stroke="rgba(0,0,0,0.45)"
+                            strokeWidth={1}
+                          />
+                        </pattern>
+                      );
+                    }
+                    if (patternKind === "diag-dense") {
+                      return (
+                        <pattern
+                          key={key}
+                          id={id}
+                          patternUnits="userSpaceOnUse"
+                          width={2}
+                          height={2}
+                          patternTransform="rotate(45)"
+                        >
+                          <rect width={2} height={2} fill={fill} />
+                          <line
+                            x1={0}
+                            y1={0}
+                            x2={0}
+                            y2={2}
+                            stroke="rgba(0,0,0,0.55)"
+                            strokeWidth={0.8}
+                          />
+                        </pattern>
+                      );
+                    }
+                    // cross-hatch
+                    return (
+                      <pattern
+                        key={key}
+                        id={id}
+                        patternUnits="userSpaceOnUse"
+                        width={3}
+                        height={3}
+                      >
+                        <rect width={3} height={3} fill={fill} />
+                        <path
+                          d="M0,3 L3,0 M-1,1 L1,-1 M2,4 L4,2"
+                          stroke="rgba(0,0,0,0.7)"
+                          strokeWidth={0.8}
+                        />
+                        <path
+                          d="M0,0 L3,3 M-1,2 L1,4 M2,-1 L4,1"
+                          stroke="rgba(0,0,0,0.7)"
+                          strokeWidth={0.8}
+                        />
+                      </pattern>
+                    );
+                  })}
+                </defs>
+                {segments.map(({ key, x, width }) => (
+                  <rect
+                    key={key}
+                    x={x}
+                    y={0}
+                    width={width}
+                    height={BAR_HEIGHT}
+                    fill={`url(#${idPrefix}-${key})`}
+                  />
+                ))}
+              </svg>
             ))}
           {showPenalties && (
             <span className="text-xs leading-none font-mono text-rose-600 dark:text-rose-400">

@@ -70,17 +70,15 @@ describe("HitZoneBar — hit zones", () => {
 
   it("renders the correct number of coloured segments for a mixed result", () => {
     const { container } = renderBar({ aHits: 4, cHits: 2, dHits: 0, misses: 1 });
-    // a=4, c=2, m=1 → 3 segments (d=0 is omitted); nested inside the outer role=img div
-    const bar = container.querySelector('[role="img"] > .flex');
-    expect(bar).not.toBeNull();
-    expect(bar!.children.length).toBe(3);
+    // a=4, c=2, m=1 → 3 segments (d=0 is omitted); each segment is an SVG <rect>
+    const rects = container.querySelectorAll('[role="img"] > svg > rect');
+    expect(rects.length).toBe(3);
   });
 
   it("omits segments for zones with zero count", () => {
     const { container } = renderBar({ aHits: 10, cHits: 0, dHits: 0, misses: 0 });
-    const bar = container.querySelector('[role="img"] > .flex');
-    expect(bar).not.toBeNull();
-    expect(bar!.children.length).toBe(1);
+    const rects = container.querySelectorAll('[role="img"] > svg > rect');
+    expect(rects.length).toBe(1);
   });
 });
 

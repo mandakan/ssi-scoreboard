@@ -140,21 +140,26 @@ function StageHFLevelIcon({
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className={cn("inline-flex items-end gap-px cursor-help leading-none", color)}
+          className={cn("inline-flex items-end gap-1 cursor-help leading-none", color)}
           aria-label={`HF Level: ${label}`}
           role="img"
         >
-          {[1, 2, 3, 4, 5].map((bar) => (
-            <span
-              key={bar}
-              aria-hidden="true"
-              className={cn(
-                "inline-block w-1 rounded-sm bg-current",
-                bar <= level ? "opacity-100" : "opacity-20"
-              )}
-              style={{ height: `${bar * 3 + 3}px` }}
-            />
-          ))}
+          <span className="inline-flex items-end gap-px">
+            {[1, 2, 3, 4, 5].map((bar) => (
+              <span
+                key={bar}
+                aria-hidden="true"
+                className={cn(
+                  "inline-block w-1 rounded-sm bg-current",
+                  bar <= level ? "opacity-100" : "opacity-20"
+                )}
+                style={{ height: `${bar * 3 + 3}px` }}
+              />
+            ))}
+          </span>
+          <span aria-hidden="true" className="text-[10px] font-semibold tabular-nums">
+            {level}
+          </span>
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs">
