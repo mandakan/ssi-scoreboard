@@ -77,6 +77,33 @@ type CacheTelemetryEvent =
        *  `forced-refresh`. Lets us measure inter-bump intervals and detect
        *  long-flat windows that should have triggered changes. */
       prevUpstreamUpdatedIso?: string | null;
+    }
+  // Incremental scorecard delta path — emitted from refreshCachedMatchQuery
+  // when a `changed` probe outcome attempts a delta fetch instead of a full
+  // refetch. Only fires for `keyType=scorecards`.
+  //   delta-merge    — delta fetched and merged successfully; full refetch skipped
+  //   full-fallback  — merge failed (missing stage, malformed payload, cache miss);
+  //                    caller did a full refetch instead
+  //   reconcile      — cached entry's original `cachedAt` exceeded the reconcile
+  //                    ceiling; full refetch forced to self-heal from drift
+  //   error          — delta fetch itself failed (timeout / HTTP / GraphQL error)
+  //   disabled       — SCORECARDS_DELTA_ENABLED=off; delta path bypassed
+  | {
+      op: "scorecards-delta";
+      matchKey: string;
+      outcome: "delta-merge" | "full-fallback" | "reconcile" | "error" | "disabled";
+      /** Number of scorecards in the delta payload (0 on disabled / cache miss). */
+      deltaCount: number;
+      /** Number of cached scorecards replaced by the merge. */
+      updatedCount: number;
+      /** Number of scorecards added by the merge that did not exist before. */
+      addedCount: number;
+      /** Pure merge time (ms) — excludes upstream fetch + cache I/O. */
+      mergeMs: number;
+      /** Delta payload size (bytes) — used for "bytes saved" computation. */
+      deltaBytes: number | null;
+      /** Short reason string for full-fallback / error outcomes. */
+      reason: string | null;
     };
 
 export function cacheTelemetry(ev: CacheTelemetryEvent): void {

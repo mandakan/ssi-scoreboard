@@ -1,0 +1,3120 @@
+{
+  "IpscMatchNode": [
+    {
+      "name": "accreditation_status",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "accreditor",
+      "type": "DjangoModelType",
+      "args": []
+    },
+    {
+      "name": "air_divs",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "allow_team_self_management",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "allow_teams",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "allows_spotter_shooter_teams",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "available_standard_stages",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "banner",
+      "type": "SafeImageType",
+      "args": []
+    },
+    {
+      "name": "banner_url",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "can_be_deleted",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "cat_result_limit",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "categories",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "chrono_progress",
+      "type": "ChronoProgressNode!",
+      "args": []
+    },
+    {
+      "name": "chrono_progress_unsquadded",
+      "type": "ChronoProgressNode!",
+      "args": []
+    },
+    {
+      "name": "chronocards",
+      "type": "[NON_NULL]!",
+      "args": [
+        {
+          "name": "updated_after",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "chronocards_failed",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "comment",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "competitor_payment",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "competitors",
+      "type": "[NON_NULL]!",
+      "args": [
+        {
+          "name": "updated_after",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "competitors_approved_w_wo_results_not_dnf",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "competitors_approved_w_wo_results_wo_squad_not_dnf",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "competitors_count",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "competitors_did_not_finish",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "competitors_dq",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "competitors_indexed",
+      "type": "[NON_NULL]!",
+      "args": [
+        {
+          "name": "sqs",
+          "type": "String!"
+        },
+        {
+          "name": "shift_on",
+          "type": "Int!"
+        },
+        {
+          "name": "incl_dnf",
+          "type": "Boolean!"
+        },
+        {
+          "name": "incl_dqed",
+          "type": "Boolean!"
+        }
+      ]
+    },
+    {
+      "name": "competitors_unscored_list",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "competitors_w_warning",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "component_matches",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "created",
+      "type": "DateTime!",
+      "args": []
+    },
+    {
+      "name": "created_by",
+      "type": "ShooterNode!",
+      "args": []
+    },
+    {
+      "name": "currency",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "custom_data",
+      "type": "JSON!",
+      "args": []
+    },
+    {
+      "name": "description",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "deviating_competitors",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "deviating_scorecards",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "do_chrono",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "do_equipment_check",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "do_index_competitor_when_scoring",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "does_current_user_get_result",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "ends",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "f1",
+      "type": "DjangoFileType",
+      "args": []
+    },
+    {
+      "name": "f1_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "f2",
+      "type": "DjangoFileType",
+      "args": []
+    },
+    {
+      "name": "f2_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "f3",
+      "type": "DjangoFileType",
+      "args": []
+    },
+    {
+      "name": "f3_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "f4",
+      "type": "DjangoFileType",
+      "args": []
+    },
+    {
+      "name": "f4_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "f5",
+      "type": "DjangoFileType",
+      "args": []
+    },
+    {
+      "name": "f5_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "f6",
+      "type": "DjangoFileType",
+      "args": []
+    },
+    {
+      "name": "f6_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "firearms",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "gcal_uid",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_abstract_chronocard",
+      "type": "ChronoCardInterface!",
+      "args": []
+    },
+    {
+      "name": "get_abstract_competitor",
+      "type": "CompetitorInterface!",
+      "args": []
+    },
+    {
+      "name": "get_abstract_squad",
+      "type": "SquadInterface!",
+      "args": []
+    },
+    {
+      "name": "get_abstract_stage",
+      "type": "StageInterface!",
+      "args": []
+    },
+    {
+      "name": "get_abstract_team",
+      "type": "TeamInterface!",
+      "args": []
+    },
+    {
+      "name": "get_air_divs_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_air_divs_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_categories_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_categories_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_content_type_key",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "get_content_type_model",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_currency_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_currency_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_current_rbac_operations",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_disqualified",
+      "type": "[NON_NULL]!",
+      "args": [
+        {
+          "name": "division",
+          "type": "String"
+        },
+        {
+          "name": "category",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "get_divisions_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_firearms_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_firearms_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_full_absolute_url",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_full_level_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_full_rule_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_handgun_divs_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_handgun_divs_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_level_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_level_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_mini_rifle_divs_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_mini_rifle_divs_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_organizer_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_pcc_divs_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_pcc_divs_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_prec_rifle_divs_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_prec_rifle_divs_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_prematch_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_prematch_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_region_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_region_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_registration_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_registration_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_results",
+      "type": "[NON_NULL]!",
+      "args": [
+        {
+          "name": "division",
+          "type": "String"
+        },
+        {
+          "name": "category",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "get_results_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_results_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_rifle_divs_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_rifle_divs_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_rounds_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_shotgun_divs_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_shotgun_divs_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_standard_stage_selection",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_state_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_state_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_status_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_status_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_tournament_divisions_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_tournament_divisions_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_unique_select_result_choices",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_verify_using_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_verify_using_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_visibility_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_visibility_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "group",
+      "type": "DjangoModelType!",
+      "args": []
+    },
+    {
+      "name": "handgun_divs",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "has_accepted_event_data_ass_agreement",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "has_geopos",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "has_prematch",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "has_prematch_included",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "id",
+      "type": "ID!",
+      "args": []
+    },
+    {
+      "name": "image",
+      "type": "SafeImageType",
+      "args": []
+    },
+    {
+      "name": "include_pcc_in_combined",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "information",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "is_component_match",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_current_role_admin",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_current_role_assistant",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_current_role_staff",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_imported_event",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_live_scores_accessible",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_locked",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_match",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_nrof_scored_w_abc",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_nrof_scored_w_s123",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_pm_squadding_possible",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_premium_activated",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_premium_fully_valid",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_rated",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_registration_possible",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_series",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_squadding_possible",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_tournament_match",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "lat",
+      "type": "Decimal",
+      "args": []
+    },
+    {
+      "name": "level",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "lng",
+      "type": "Decimal",
+      "args": []
+    },
+    {
+      "name": "lock_changed",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "lock_changed_by",
+      "type": "ShooterNode",
+      "args": []
+    },
+    {
+      "name": "mainmatch_competitors",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "mainmatch_competitors_approved",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "mainmatch_competitors_approved_w_wo_results",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "mainmatch_competitors_approved_w_wo_results_wo_squad",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "mainmatch_competitors_approved_wo_results",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "mainmatch_competitors_declined",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "mainmatch_competitors_deleted",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "mainmatch_competitors_pending",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "mainmatch_competitors_registered",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "mainmatch_competitors_waiting",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "max_competitors",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "max_prematch_competitors",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "merchandize_orders",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "merchandizes",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "merchandizes_on_registration",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "merge_juniors",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "merge_seniors",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "mini_rifle_divs",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "minimum_rounds",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "multiple_reg_allowed",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "name",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "number_of_mainmatch_competitors_approved",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_mainmatch_competitors_approved_w_wo_results",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_mainmatch_competitors_pending",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_mainmatch_competitors_registered",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_mainmatch_competitors_waiting",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_prematch_competitors_approved",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_prematch_competitors_approved_w_wo_results",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_prematch_competitors_pending",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_prematch_competitors_registered",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_prematch_competitors_waiting",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_rounds_per_string",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_strings",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "number_of_team_members",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "obfuscated_kongsberg_api_key",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "order_payments",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "organization_enabled_event_premium",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "organizer",
+      "type": "OrganizationNode",
+      "args": []
+    },
+    {
+      "name": "payment_methods",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "pcc_divs",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "pm_registration_closes",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "pm_registration_starts",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "pm_squadding_starts",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "prec_rifle_divs",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "prematch",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "prematch_competitors",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "prematch_competitors_approved",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "prematch_competitors_approved_w_wo_results",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "prematch_competitors_approved_w_wo_results_wo_squad",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "prematch_competitors_approved_wo_results",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "prematch_competitors_declined",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "prematch_competitors_deleted",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "prematch_competitors_pending",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "prematch_competitors_registered",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "prematch_competitors_waiting",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "premium_currency",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "premium_payments",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "rated",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "region",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "registration",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "registration_closes",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "registration_starts",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "result_from_team_members",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "results",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "rifle_divs",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "role_names",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "rule",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "scorecards",
+      "type": "[NON_NULL]!",
+      "args": [
+        {
+          "name": "updated_after",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "scorecards_count",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "scorecards_dq",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "scorecards_w_warning",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "scoring_completed",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "serie_type",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "short_url",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "shotgun_divs",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "squadding_closes",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "squadding_starts",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "squads",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "squads_count",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "stages",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "stages_count",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "starts",
+      "type": "DateTime!",
+      "args": []
+    },
+    {
+      "name": "state",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "status",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "sub_rule",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "supports_bulk_scoring",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "supports_rating",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "supports_score_all_in_squad_at_stage",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "supports_score_string_for_squad",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "supports_shoot_off_strings",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "supports_standard_stages",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "teams",
+      "type": "[TeamInterface!]",
+      "args": []
+    },
+    {
+      "name": "teams_count",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "third_party_scoring_mode",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "third_party_scoring_url",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "total_fee",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "total_net",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "total_tax",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "tournament_divisions",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "transfer_mode",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "updated",
+      "type": "DateTime!",
+      "args": []
+    },
+    {
+      "name": "updated_by",
+      "type": "ShooterNode",
+      "args": []
+    },
+    {
+      "name": "url",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "url_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "uses_pin_verification",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "uses_shoot_off_stages",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "uses_signature_verification",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "uses_stages",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "uses_strings",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "venue",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "verify_using",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "visibility",
+      "type": "String!",
+      "args": []
+    }
+  ],
+  "IpscStageNode": [
+    {
+      "name": "all_steel",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "banner",
+      "type": "SafeImageType",
+      "args": []
+    },
+    {
+      "name": "banner_url",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "bonus",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "can_do_third_party_scoring_kongsberg",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "competitors_indexed",
+      "type": "[NON_NULL]!",
+      "args": [
+        {
+          "name": "sqs",
+          "type": "String!"
+        },
+        {
+          "name": "shift_on",
+          "type": "Int!"
+        },
+        {
+          "name": "incl_dnf",
+          "type": "Boolean!"
+        },
+        {
+          "name": "incl_dqed",
+          "type": "Boolean!"
+        }
+      ]
+    },
+    {
+      "name": "course",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "created",
+      "type": "DateTime!",
+      "args": []
+    },
+    {
+      "name": "created_by",
+      "type": "ShooterNode!",
+      "args": []
+    },
+    {
+      "name": "custom_data",
+      "type": "JSON!",
+      "args": []
+    },
+    {
+      "name": "event",
+      "type": "IpscMatchNode!",
+      "args": []
+    },
+    {
+      "name": "evt",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "firearm_condition",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "firearms",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "frangible",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "get_abstract_scorecard",
+      "type": "ScoreCardInterface!",
+      "args": []
+    },
+    {
+      "name": "get_content_type_key",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "get_content_type_model",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_course_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_course_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_disqualified",
+      "type": "[NON_NULL]!",
+      "args": [
+        {
+          "name": "division",
+          "type": "String"
+        },
+        {
+          "name": "category",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "get_firearm_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_firearms_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_full_absolute_url",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_next_stage",
+      "type": "StageInterface!",
+      "args": []
+    },
+    {
+      "name": "get_previous_stage",
+      "type": "StageInterface!",
+      "args": []
+    },
+    {
+      "name": "get_results",
+      "type": "[NON_NULL]!",
+      "args": [
+        {
+          "name": "division",
+          "type": "String"
+        },
+        {
+          "name": "category",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "get_rounds_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_scoring_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_scoring_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_shotgun_ammo_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_shotgun_ammo_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_sra_targets_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_sra_tasks_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "handgun_targets",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "has_helfigur_2020",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "has_paper_or_bonus",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "id",
+      "type": "ID!",
+      "args": []
+    },
+    {
+      "name": "image",
+      "type": "SafeImageType",
+      "args": []
+    },
+    {
+      "name": "included",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_locked",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_nrof_scored_w_abc",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_nrof_scored_w_s123",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_scoring_started",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_third_party_scoring_kongsberg",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "lock_changed",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "lock_changed_by",
+      "type": "ShooterNode",
+      "args": []
+    },
+    {
+      "name": "manual_maximum_rounds",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "manual_minimum_rounds",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "match_percent",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "max_manual_rifle_points",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "max_points",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "max_sivil_time",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "maximum_rounds",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "minimum_rounds",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "name",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "number",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "paper",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "paper_2",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "penalties_notes",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "penalty",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "plate",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "popper",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "procedure",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "reactive",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "rifle_targets",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "safety_angles",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "score_manual_rifle",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "scorecards",
+      "type": "[NON_NULL]!",
+      "args": [
+        {
+          "name": "updated_after",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "scorecards_count",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "scorecards_dq",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "scorecards_w_warning",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "scoring",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "scoring_completed",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "scoring_progress",
+      "type": "ScoringProgressNode!",
+      "args": []
+    },
+    {
+      "name": "setup_notes",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "shotgun_ammo",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "shotgun_targets",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "sort",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "squad_scoring_progress",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "sra_targets",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "sra_tasks",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "sra_total_targets",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "sra_total_tasks",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "standard",
+      "type": "DjangoModelType",
+      "args": []
+    },
+    {
+      "name": "start_on",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "start_pos",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "stop_on",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "third_party_scoring_mode",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "third_party_scoring_url",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "total_targets",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "updated",
+      "type": "DateTime!",
+      "args": []
+    },
+    {
+      "name": "updated_by",
+      "type": "ShooterNode",
+      "args": []
+    },
+    {
+      "name": "venue",
+      "type": "String!",
+      "args": []
+    }
+  ],
+  "IpscScoreCardNode": [
+    {
+      "name": "ascore",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "bscore",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "cat_percent",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "cat_place",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "cat_points",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "combined_percent",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "combined_place",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "combined_points",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "comment",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "competitor",
+      "type": "IpscCompetitorNode!",
+      "args": []
+    },
+    {
+      "name": "created",
+      "type": "DateTime!",
+      "args": []
+    },
+    {
+      "name": "created_by",
+      "type": "ShooterNode!",
+      "args": []
+    },
+    {
+      "name": "cscore",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "custom_data",
+      "type": "JSON!",
+      "args": []
+    },
+    {
+      "name": "deductions",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "disqualified",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "div_percent",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "div_place",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "div_points",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "dq_reason",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "dscore",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "evt",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "fte",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "get_content_type_key",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "get_content_type_model",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_dq_reason_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_dq_reason_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_full_absolute_url",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_scoring_analytics",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_scoring_history",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_scoring_history_as_list",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "hitfactor",
+      "type": "Decimal",
+      "args": []
+    },
+    {
+      "name": "hscore",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "id",
+      "type": "ID!",
+      "args": []
+    },
+    {
+      "name": "incomplete",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_locked",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_verified",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_verified_w_signature",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "lock_changed",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "lock_changed_by",
+      "type": "ShooterNode",
+      "args": []
+    },
+    {
+      "name": "miss",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "miss_aerial_clay",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "mot_0",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "mot_1",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "mot_2",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "overtime",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "penalty",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "pf_correction",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "points",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "procedural",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "procedural_1",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "procedural_2",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "score",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "signature",
+      "type": "SafeImageType",
+      "args": []
+    },
+    {
+      "name": "single_non_zero",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "spec_penalty",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "sra_targets",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "sra_targets_incremental_score",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "sra_tasks",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "sra_tasks_score",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "stage",
+      "type": "IpscStageNode!",
+      "args": []
+    },
+    {
+      "name": "stage_not_fired",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "supports_scoring_analytics",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "time",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "timeplus",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "tne",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "tnh",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "tnn",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "updated",
+      "type": "DateTime!",
+      "args": []
+    },
+    {
+      "name": "updated_by",
+      "type": "ShooterNode",
+      "args": []
+    },
+    {
+      "name": "verified",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "verified_by",
+      "type": "ShooterNode",
+      "args": []
+    },
+    {
+      "name": "warning",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "xscore",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "zeroed",
+      "type": "Boolean!",
+      "args": []
+    }
+  ],
+  "IpscCompetitorNode": [
+    {
+      "name": "accepted_in_team",
+      "type": "TeamInterface",
+      "args": []
+    },
+    {
+      "name": "air_div",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "can_current_update",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "cat_percent",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "cat_place",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "cat_points",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "category",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "category_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "classification",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "classification_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "club",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "club_member",
+      "type": "DjangoModelType",
+      "args": []
+    },
+    {
+      "name": "code",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "combined_percent",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "combined_place",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "combined_points",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "comment",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "created",
+      "type": "DateTime!",
+      "args": []
+    },
+    {
+      "name": "created_by",
+      "type": "ShooterNode!",
+      "args": []
+    },
+    {
+      "name": "custom_data",
+      "type": "JSON!",
+      "args": []
+    },
+    {
+      "name": "details",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "did_not_finish",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "div_percent",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "div_place",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "div_points",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "email",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "event",
+      "type": "IpscMatchNode!",
+      "args": []
+    },
+    {
+      "name": "first_name",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_abstract_chronocard",
+      "type": "ChronoCardInterface!",
+      "args": []
+    },
+    {
+      "name": "get_air_div_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_air_div_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_category_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_cc_calling_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_chronocard",
+      "type": "ChronoCardInterface",
+      "args": []
+    },
+    {
+      "name": "get_classification_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_classification_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_club_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_club_member_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_club_short_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_code_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_code_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_content_type_key",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "get_content_type_model",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_division_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_full_absolute_url",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_handgun_div_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_handgun_div_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_handgun_pf_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_handgun_pf_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_mini_rifle_div_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_mini_rifle_div_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_pcc_div_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_pcc_div_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_prec_rifle_div_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_prec_rifle_div_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_prec_rifle_pf_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_prec_rifle_pf_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_region_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_region_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_result_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_rifle_div_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_rifle_div_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_rifle_pf_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_rifle_pf_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_sex_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_sex_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_shotgun_div_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_shotgun_div_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_squad_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_sra_division_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_state_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_state_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_status_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_status_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_tournament_division_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "get_tournament_division_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "handgun_div",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "handgun_pf",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "has_accepted_event_data_policy",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "has_warning",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "ice_phone",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "ics_alias",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "id",
+      "type": "ID!",
+      "args": []
+    },
+    {
+      "name": "ipsc_region",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "is_alread_logged",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_chrono_approved",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_chrono_failed",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_chrono_pending",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_chronoed",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_disqualified",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_equipment_checked",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_locked",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_paid",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_scoring_started",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "last_name",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "license",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "lock_changed",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "lock_changed_by",
+      "type": "ShooterNode",
+      "args": []
+    },
+    {
+      "name": "mainmatch",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "merchandize_orders",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "mini_rifle_div",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "minimum_rounds",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "notify",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "nrof_id",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "number",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "payments",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "pcc_div",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "phone",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "pin",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "prec_rifle_div",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "prec_rifle_pf",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "prematch",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "region",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "rifle_div",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "rifle_pf",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "scorecards",
+      "type": "[NON_NULL]!",
+      "args": [
+        {
+          "name": "updated_after",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "scorecards_count",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "scoring_history",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "scoring_progress",
+      "type": "ScoringProgressNode!",
+      "args": []
+    },
+    {
+      "name": "sex",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "shooter",
+      "type": "ShooterNode!",
+      "args": []
+    },
+    {
+      "name": "shoots_handgun_major",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "shoots_manual_rifle",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "shoots_prec_rifle_major",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "shoots_rifle_major",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "shotgun_div",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "squad",
+      "type": "IpscSquadNode",
+      "args": []
+    },
+    {
+      "name": "sra_num",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "state",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "status",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "three_gun_id",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "tot_a",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "tot_b",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "tot_c",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "tot_d",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "tot_evt10",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "tot_miss",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "tot_penalty",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "tot_procedural",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "tot_raw_time",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "tournament_division",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "updated",
+      "type": "DateTime!",
+      "args": []
+    },
+    {
+      "name": "updated_by",
+      "type": "ShooterNode",
+      "args": []
+    },
+    {
+      "name": "uspsa_num",
+      "type": "String!",
+      "args": []
+    }
+  ],
+  "IpscSquadNode": [
+    {
+      "name": "chrono_progress",
+      "type": "ChronoProgressNode!",
+      "args": []
+    },
+    {
+      "name": "comment",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "competitors",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "competitors_count",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "competitors_indexed",
+      "type": "[NON_NULL]!",
+      "args": [
+        {
+          "name": "shift_on",
+          "type": "Int!"
+        },
+        {
+          "name": "incl_dnf",
+          "type": "Boolean!"
+        },
+        {
+          "name": "incl_dqed",
+          "type": "Boolean!"
+        }
+      ]
+    },
+    {
+      "name": "created",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "created_by",
+      "type": "ShooterNode",
+      "args": []
+    },
+    {
+      "name": "custom_data",
+      "type": "JSON!",
+      "args": []
+    },
+    {
+      "name": "event",
+      "type": "IpscMatchNode!",
+      "args": []
+    },
+    {
+      "name": "get_content_type_key",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "get_content_type_model",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_full_absolute_url",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_next_squad",
+      "type": "SquadInterface!",
+      "args": []
+    },
+    {
+      "name": "get_previous_squad",
+      "type": "SquadInterface!",
+      "args": []
+    },
+    {
+      "name": "get_squad_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_squad_registration_choices",
+      "type": "[NON_NULL]!",
+      "args": []
+    },
+    {
+      "name": "id",
+      "type": "ID!",
+      "args": []
+    },
+    {
+      "name": "is_locked",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "lock_changed",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "lock_changed_by",
+      "type": "ShooterNode!",
+      "args": []
+    },
+    {
+      "name": "mainmatch",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "max_competitors",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "prematch",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "registration",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "scoring_progress",
+      "type": "ScoringProgressNode!",
+      "args": []
+    },
+    {
+      "name": "scoring_progress_at_stage",
+      "type": "ScoringProgressNode!",
+      "args": [
+        {
+          "name": "stage_id",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "updated",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "updated_by",
+      "type": "ShooterNode",
+      "args": []
+    }
+  ]
+}

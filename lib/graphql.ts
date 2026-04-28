@@ -10,6 +10,8 @@ import { parseMatchCacheKey, persistActiveMatchToD1 } from "@/lib/match-data-sto
 import { markUpstreamDegraded } from "@/lib/upstream-status";
 import { upstreamTelemetry, hashVariables, type UpstreamOutcome } from "@/lib/upstream-telemetry";
 import { cacheTelemetry } from "@/lib/cache-telemetry";
+import { mergeScorecardDelta } from "@/lib/scorecard-merge";
+import type { RawScorecardsData } from "@/lib/scorecard-data";
 
 /**
  * Check if the current request is an admin-authenticated request
@@ -329,6 +331,189 @@ async function readCachedAt(cacheKey: string): Promise<string | null> {
   }
 }
 
+/** Kill switch for the incremental scorecard delta path. When off, the
+ *  `changed` probe outcome falls through to a full refetch — same as #361
+ *  alone. Use this if the delta path proves buggy in production. */
+function isScorecardsDeltaEnabled(): boolean {
+  return process.env.SCORECARDS_DELTA_ENABLED !== "off";
+}
+
+/** Reconcile interval (seconds): even when delta merges succeed, force a
+ *  periodic full refetch to self-heal from drift the delta cannot detect:
+ *    - scorecards deleted upstream (DQ reversals, admin deletes)
+ *    - new stages added to the match
+ *    - subtle merge bugs that don't trigger structural failures
+ *  Default 10 minutes — at the 30s active-match polling cadence that's one
+ *  reconcile per ~20 polls. The cached entry's *original* `cachedAt` is the
+ *  timer reference; delta merges intentionally do NOT bump it so the reconcile
+ *  timer keeps ticking on a steady delta stream. */
+function scorecardsDeltaMaxAgeSeconds(): number {
+  const raw = process.env.SCORECARDS_DELTA_MAX_AGE_SECONDS;
+  if (raw == null) return 600;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : 600;
+}
+
+/** Sentinel Redis key that any code path can set to force the next probe-aware
+ *  refresh to do a clean full refetch — bypassing probe, sidecar, and delta
+ *  paths entirely. Cleared after a successful full refresh.
+ *
+ *  Use cases:
+ *   - Admin endpoint exposing a "force-refresh" lever for instant recovery.
+ *   - Future detection code that observes suspicious cache shape and invalidates
+ *     it for the next user.
+ *   - Manual debugging via `redis-cli SET force-refresh:22:12345 1 EX 60`. */
+export function forceRefreshKey(ct: number, id: string): string {
+  return `force-refresh:${ct}:${id}`;
+}
+
+/** Read the force-refresh sentinel; failures default to false (best-effort). */
+async function isForceRefreshRequested(ct: number, id: string): Promise<boolean> {
+  try {
+    const raw = await cache.get(forceRefreshKey(ct, id));
+    return raw != null;
+  } catch {
+    return false;
+  }
+}
+
+/** Clear the force-refresh sentinel after a successful full refetch. */
+async function clearForceRefresh(ct: number, id: string): Promise<void> {
+  try {
+    await cache.del(forceRefreshKey(ct, id));
+  } catch { /* best-effort */ }
+}
+
+interface DeltaMergeAttempt {
+  outcome: "delta-merge" | "full-fallback" | "reconcile" | "error" | "disabled";
+  /** Number of scorecards in the delta payload. */
+  deltaCount: number;
+  /** Number of cached scorecards replaced by the merge. */
+  updatedCount: number;
+  /** Number of scorecards added by the merge. */
+  addedCount: number;
+  /** Pure-merge time (ms). Excludes upstream fetch + cache I/O. */
+  mergeMs: number;
+  /** Bytes returned by the delta query (vs. full refetch payload). */
+  deltaBytes: number | null;
+  /** Short reason string when outcome is `full-fallback` or `error`. */
+  reason: string | null;
+}
+
+/**
+ * Attempt a delta merge for a `GetMatchScorecards` cache entry. Returns the
+ * outcome details for telemetry; on `delta-merge` / `reconcile` the cache has
+ * been updated. On `full-fallback` / `error` / `disabled` the caller should
+ * run a full refresh.
+ */
+async function tryScorecardsDeltaMerge(
+  cacheKey: string,
+  variables: { ct: number; id: string },
+  since: string,
+  ttlSeconds: number | null,
+): Promise<DeltaMergeAttempt> {
+  if (!isScorecardsDeltaEnabled()) {
+    return { outcome: "disabled", deltaCount: 0, updatedCount: 0, addedCount: 0, mergeMs: 0, deltaBytes: null, reason: null };
+  }
+
+  let cachedEntry: CacheEntry<RawScorecardsData>;
+  let cachedAtIso: string;
+  try {
+    const raw = await cache.get(cacheKey);
+    if (!raw) {
+      return { outcome: "full-fallback", deltaCount: 0, updatedCount: 0, addedCount: 0, mergeMs: 0, deltaBytes: null, reason: "no-cached-entry" };
+    }
+    cachedEntry = JSON.parse(raw) as CacheEntry<RawScorecardsData>;
+    cachedAtIso = cachedEntry.cachedAt;
+    if (cachedEntry.v !== CACHE_SCHEMA_VERSION) {
+      return { outcome: "full-fallback", deltaCount: 0, updatedCount: 0, addedCount: 0, mergeMs: 0, deltaBytes: null, reason: "schema-version-mismatch" };
+    }
+  } catch {
+    return { outcome: "full-fallback", deltaCount: 0, updatedCount: 0, addedCount: 0, mergeMs: 0, deltaBytes: null, reason: "cache-read-error" };
+  }
+
+  // Reconcile gate: if the cached entry's *original* fetch is older than the
+  // ceiling, force a full refetch even though a delta would merge cleanly.
+  // Self-heals from upstream deletions and stage additions.
+  const cacheAgeSeconds = (Date.now() - new Date(cachedAtIso).getTime()) / 1000;
+  if (cacheAgeSeconds > scorecardsDeltaMaxAgeSeconds()) {
+    return { outcome: "reconcile", deltaCount: 0, updatedCount: 0, addedCount: 0, mergeMs: 0, deltaBytes: null, reason: null };
+  }
+
+  let deltaData: ScorecardDeltaData;
+  let deltaBytes: number | null = null;
+  try {
+    // We can't get bytes here (executeQuery does, but doesn't expose it);
+    // approximate with serialized JSON length post-fetch.
+    deltaData = await executeQuery<ScorecardDeltaData>(SCORECARDS_DELTA_QUERY, { ...variables, since });
+    try { deltaBytes = JSON.stringify(deltaData).length; } catch { /* ignore */ }
+  } catch (err) {
+    return {
+      outcome: "error",
+      deltaCount: 0,
+      updatedCount: 0,
+      addedCount: 0,
+      mergeMs: 0,
+      deltaBytes: null,
+      reason: err instanceof Error ? err.name : "fetch-error",
+    };
+  }
+
+  const delta = deltaData.event?.scorecards ?? [];
+  const t0 = Date.now();
+  const merge = mergeScorecardDelta(cachedEntry.data, delta);
+  const mergeMs = Date.now() - t0;
+
+  if (!merge.ok) {
+    return {
+      outcome: "full-fallback",
+      deltaCount: delta.length,
+      updatedCount: 0,
+      addedCount: 0,
+      mergeMs,
+      deltaBytes,
+      reason: merge.reason,
+    };
+  }
+
+  // Write the merged snapshot back. CRITICAL: keep the original `cachedAt`
+  // so the reconcile timer keeps ticking on a steady delta stream.
+  const newEntry: CacheEntry<RawScorecardsData> = {
+    data: merge.data,
+    cachedAt: cachedAtIso,
+    v: CACHE_SCHEMA_VERSION,
+  };
+  const payload = JSON.stringify(newEntry);
+  try {
+    await cache.set(cacheKey, payload, ttlSeconds);
+  } catch {
+    // Cache write failed — surface as full-fallback so caller does a full
+    // refetch and writes a coherent snapshot via the standard path.
+    return {
+      outcome: "full-fallback",
+      deltaCount: delta.length,
+      updatedCount: merge.updatedCount,
+      addedCount: merge.addedCount,
+      mergeMs,
+      deltaBytes,
+      reason: "cache-write-error",
+    };
+  }
+  if (parseMatchCacheKey(cacheKey)) {
+    afterResponse(persistActiveMatchToD1(cacheKey, payload));
+  }
+
+  return {
+    outcome: "delta-merge",
+    deltaCount: delta.length,
+    updatedCount: merge.updatedCount,
+    addedCount: merge.addedCount,
+    mergeMs,
+    deltaBytes,
+    reason: null,
+  };
+}
+
 /**
  * Probe-aware single-flight refresh of a cached match-level GraphQL query
  * (GetMatch or GetMatchScorecards). Sends a tiny `MatchUpdatedProbe` first;
@@ -351,6 +536,30 @@ export async function refreshCachedMatchQuery<T>(
   // (e.g. only bumps on match-level admin edits, not per-scorecard saves).
   if (!isMatchProbeEnabled()) {
     return refreshCachedQuery<T>(cacheKey, query, variables, ttlSeconds, lockTtlSeconds);
+  }
+
+  // Force-refresh sentinel: any code path (admin endpoint, recovery script)
+  // can request a clean full refetch by setting `force-refresh:{ct}:{id}` in
+  // Redis. We bypass probe, sidecar, and delta entirely. After a successful
+  // refresh the sentinel is cleared. Both probe (#361) and delta (#362)
+  // paths respect this for symmetry.
+  if (await isForceRefreshRequested(match.ct, match.id)) {
+    await refreshCachedQuery<T>(cacheKey, query, variables, ttlSeconds, lockTtlSeconds);
+    await clearForceRefresh(match.ct, match.id);
+    cacheTelemetry({
+      op: "match-probe",
+      matchKey: cacheKey,
+      keyType:
+        parseMatchCacheKey(cacheKey)?.keyType === "match" ? "match"
+          : parseMatchCacheKey(cacheKey)?.keyType === "scorecards" ? "scorecards"
+          : "other",
+      outcome: "forced-refresh",
+      probeMs: 0,
+      cachedAgeSeconds: null,
+      upstreamUpdatedIso: null,
+      prevUpstreamUpdatedIso: null,
+    });
+    return;
   }
 
   const lockKey = `inflight:${cacheKey}`;
@@ -447,11 +656,49 @@ export async function refreshCachedMatchQuery<T>(
 
     // First-seen or state changed — do the full refresh, then update sidecar.
     probeOutcome = prevState ? "changed" : "first-seen";
-    await fullRefresh<T>(cacheKey, query, variables, ttlSeconds);
+
+    // Delta path: on `changed` for a scorecards key, try fetching only the
+    // delta scorecards (`scorecards(updated_after: prev_match_updated)`) and
+    // merging into the cached snapshot. Falls through to the full refresh on
+    // any failure or when the periodic reconcile is due.
+    let deltaAttempt: DeltaMergeAttempt | null = null;
+    const canTryDelta =
+      keyType === "scorecards" &&
+      probeOutcome === "changed" &&
+      prevState?.updated != null;
+    if (canTryDelta && prevState?.updated) {
+      deltaAttempt = await tryScorecardsDeltaMerge(
+        cacheKey,
+        match,
+        prevState.updated,
+        ttlSeconds,
+      );
+    }
+
+    const skipFullRefresh =
+      deltaAttempt?.outcome === "delta-merge";
+
+    if (!skipFullRefresh) {
+      await fullRefresh<T>(cacheKey, query, variables, ttlSeconds);
+    }
     try {
       await cache.set(sidecarKey, JSON.stringify(currentState), ttlSeconds ?? null);
     } catch {
       // Sidecar write failure just costs us one extra full refetch next cycle.
+    }
+
+    if (deltaAttempt) {
+      cacheTelemetry({
+        op: "scorecards-delta",
+        matchKey: cacheKey,
+        outcome: deltaAttempt.outcome,
+        deltaCount: deltaAttempt.deltaCount,
+        updatedCount: deltaAttempt.updatedCount,
+        addedCount: deltaAttempt.addedCount,
+        mergeMs: deltaAttempt.mergeMs,
+        deltaBytes: deltaAttempt.deltaBytes,
+        reason: deltaAttempt.reason,
+      });
     }
   } finally {
     cacheTelemetry({
@@ -732,6 +979,59 @@ export async function cachedExecuteQuery<T>(
   return { data, cachedAt: null };
 }
 
+// ─── Shared scorecard field set ──────────────────────────────────────────────
+// CRITICAL: SCORECARDS_QUERY and SCORECARDS_DELTA_QUERY MUST request the same
+// scorecard fields. The delta merge (#362, lib/scorecard-merge.ts) writes
+// delta entries into the cached full snapshot — if the delta is missing fields
+// the full query has, the merge silently corrupts the cached entry.
+//
+// This shared constant is interpolated into both queries so they CANNOT drift.
+//
+// When adding a scorecard field, see CLAUDE.md → "Delta-merge contract" for
+// the full list of files that must be updated together. In short:
+//   1. Add to SCORECARD_NODE_FIELDS (here)
+//   2. Add to RawScCard (lib/scorecard-data.ts)
+//   3. Add to ScorecardDeltaEntry (this file)
+//   4. Copy in deltaToCacheCard() (lib/scorecard-merge.ts)
+//   5. Bump CACHE_SCHEMA_VERSION (lib/constants.ts)
+//   6. Run `pnpm check:ssi-schema --update` and commit the snapshot diff
+const SCORECARD_NODE_FIELDS = `
+  ... on IpscScoreCardNode {
+    created
+    points
+    hitfactor
+    time
+    disqualified
+    zeroed
+    stage_not_fired
+    incomplete
+    ascore
+    bscore
+    cscore
+    dscore
+    miss
+    penalty
+    procedural
+    competitor {
+      id
+      ... on IpscCompetitorNode {
+        first_name
+        last_name
+        number
+        club
+        get_division_display
+        handgun_div
+        get_handgun_div_display
+        region
+        get_region_display
+        category
+        ics_alias
+        license
+      }
+    }
+  }
+`;
+
 // ─── Query: all stage scorecards for a match ─────────────────────────────────
 // Returns raw scorecard data for every competitor on every stage.
 // `get_results` (official placement) is blocked during active matches — this
@@ -749,43 +1049,77 @@ export const SCORECARDS_QUERY = `
             max_points
           }
           scorecards {
-            ... on IpscScoreCardNode {
-              created
-              points
-              hitfactor
-              time
-              disqualified
-              zeroed
-              stage_not_fired
-              incomplete
-              ascore
-              bscore
-              cscore
-              dscore
-              miss
-              penalty
-              procedural
-              competitor {
-                id
-                ... on IpscCompetitorNode {
-                  first_name
-                  last_name
-                  number
-                  club
-                  get_division_display
-                  handgun_div
-                  get_handgun_div_display
-                  region
-                  get_region_display
-                  category
-                  ics_alias
-                  license
-                }
-              }
-            }
+            ${SCORECARD_NODE_FIELDS}
           }
         }
       }
     }
   }
 `;
+
+// ─── Query: incremental scorecard delta ──────────────────────────────────────
+// Fetches only scorecards whose `updated` timestamp is strictly after `since`.
+// Single match-level round-trip (not per-stage) — each scorecard returns its
+// `stage.id` so the merge step can re-bucket into the cached per-stage shape.
+//
+// Validated empirically: SSI accepts ISO 8601 with timezone (the format
+// `IpscMatchNode.updated` itself returns), so we just pass that value back
+// as the `since` parameter.
+//
+// The scorecard field set MUST stay in sync with SCORECARDS_QUERY — the merge
+// produces the same on-disk shape as a full fetch, so the cache schema version
+// covers both. Any field added to SCORECARDS_QUERY must be added here too.
+export const SCORECARDS_DELTA_QUERY = `
+  query GetMatchScorecardsDelta($ct: Int!, $id: String!, $since: String!) {
+    event(content_type: $ct, id: $id) {
+      ... on IpscMatchNode {
+        scorecards(updated_after: $since) {
+          ... on IpscScoreCardNode {
+            stage { id }
+          }
+          ${SCORECARD_NODE_FIELDS}
+        }
+      }
+    }
+  }
+`;
+
+export interface ScorecardDeltaEntry {
+  stage: { id: string };
+  created?: string | null;
+  points?: number | string | null;
+  hitfactor?: number | string | null;
+  time?: number | string | null;
+  disqualified?: boolean | null;
+  zeroed?: boolean | null;
+  stage_not_fired?: boolean | null;
+  incomplete?: boolean | null;
+  ascore?: number | string | null;
+  bscore?: number | string | null;
+  cscore?: number | string | null;
+  dscore?: number | string | null;
+  miss?: number | string | null;
+  penalty?: number | string | null;
+  procedural?: number | string | null;
+  competitor?: {
+    id: string;
+    first_name?: string;
+    last_name?: string;
+    number?: string;
+    club?: string | null;
+    get_division_display?: string | null;
+    handgun_div?: string | null;
+    get_handgun_div_display?: string | null;
+    region?: string | null;
+    get_region_display?: string | null;
+    category?: string | null;
+    ics_alias?: string | null;
+    license?: string | null;
+  } | null;
+}
+
+export interface ScorecardDeltaData {
+  event: {
+    scorecards?: ScorecardDeltaEntry[];
+  } | null;
+}

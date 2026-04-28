@@ -29,7 +29,8 @@
     "icons": "bash scripts/generate-icons.sh",
     "warm-cache": "tsx scripts/warm-cache.ts",
     "release:post": "tsx scripts/generate-release-post.ts",
-    "release:screenshots": "tsx scripts/screenshot-match.ts"
+    "release:screenshots": "tsx scripts/screenshot-match.ts",
+    "check:ssi-schema": "tsx scripts/check-ssi-schema.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.27.1",

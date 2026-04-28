@@ -228,6 +228,69 @@ or any other type that is serialised into the **match cache** (Redis/D1) via `ca
 This does **not** apply to AppDatabase schema changes — those are managed independently by
 the SQLite/D1 adapters via `CREATE TABLE IF NOT EXISTS`.
 
+## Delta-merge contract (CRITICAL)
+
+`refreshCachedMatchQuery` no longer just caches SSI responses opaquely — when the match-level
+probe (#361) reports `changed`, the helper attempts an incremental scorecard delta merge (#362)
+via `scorecards(updated_after:)`. We are now **mirroring SSI's data structure** and applying
+upstream changes incrementally, so any SSI schema drift can silently corrupt cached snapshots.
+
+**When changing scorecard fields, ALL of these must be updated together — in the SAME PR:**
+
+1. **`SCORECARD_NODE_FIELDS`** in `lib/graphql.ts` — the shared GraphQL fragment used by both
+   `SCORECARDS_QUERY` (full fetch) and `SCORECARDS_DELTA_QUERY` (delta fetch). Adding the field
+   here automatically threads it through both. Do NOT add a field to one query and not the other.
+2. **`RawScCard`** in `lib/scorecard-data.ts` — the TypeScript shape of a cached scorecard.
+3. **`ScorecardDeltaEntry`** in `lib/graphql.ts` — the delta-payload shape (subset of `RawScCard`
+   plus `stage.id`).
+4. **`deltaToCacheCard()`** in `lib/scorecard-merge.ts` — the field-by-field copy from delta entry
+   to cached scorecard. New fields must be copied here or they will be silently dropped on every
+   delta merge.
+5. **`parseRawScorecards()`** in `lib/scorecard-data.ts` — if the field is consumed downstream
+   (e.g. used in `computeGroupRankings`).
+6. **`CACHE_SCHEMA_VERSION`** in `lib/constants.ts` — bump by 1 with a one-line history comment.
+   Otherwise old delta-merged entries written before the change will linger.
+7. **`scripts/ssi-schema-snapshot.json`** — run `pnpm check:ssi-schema --update` to refresh the
+   snapshot. Commit the diff. Reviewers can see exactly which SSI fields changed.
+
+**For other tracked types** (`IpscMatchNode`, `IpscStageNode`, `IpscCompetitorNode`,
+`IpscSquadNode`): the same discipline applies, but the surface area is smaller — match metadata
+goes through the standard probe + full refetch path, no merge logic. Update the relevant
+GraphQL query, the corresponding TypeScript type, and bump `CACHE_SCHEMA_VERSION`.
+
+**Detecting SSI drift before users do:**
+
+```bash
+pnpm check:ssi-schema           # report drift, exit 1 if any
+pnpm check:ssi-schema --update  # accept current schema as the new snapshot
+pnpm check:ssi-schema --json    # machine-readable output for CI
+```
+
+The script introspects `IpscMatchNode`, `IpscStageNode`, `IpscScoreCardNode`,
+`IpscCompetitorNode`, and `IpscSquadNode` from the live SSI GraphQL endpoint and compares against
+`scripts/ssi-schema-snapshot.json`. Run it weekly (manually or via cron) to catch silent
+upstream changes. If it reports drift:
+
+- **Added fields** — usually safe to ignore unless we want to consume them. Update the snapshot
+  with `--update` once you've decided.
+- **Removed fields** — high-risk. The delta merge will write `null` for removed fields, so
+  cached entries gradually lose data. Plan a migration: stop reading the field, bump
+  `CACHE_SCHEMA_VERSION`, then update the snapshot.
+- **Type / argument changes** — read the diff carefully; may be a breaking change.
+
+**Recovery from a corrupted snapshot:**
+
+If a delta merge produces wrong data on a live match, the user-facing recovery lever is:
+
+```bash
+curl -X POST -H "Authorization: Bearer $CACHE_PURGE_SECRET" \
+  "https://scoreboard.urdr.dev/api/admin/cache/force-refresh?ct=22&id=<match-id>"
+```
+
+This sets a `force-refresh:{ct}:{id}` Redis sentinel that bypasses probe / delta paths and
+forces a clean full refetch on the next SWR cycle. The sentinel auto-clears after a successful
+refresh and auto-expires after 5 minutes.
+
 ## Telemetry
 
 Structured-event logging for cache decisions and other server-side observability.
@@ -454,6 +517,9 @@ handles new achievements and tiers automatically.
 | `MATCH_COMPLETE_SCORING_PCT` | `lib/match-ttl.ts` (server-only) | Both | Scoring threshold (percent, 0-100) for the un-flagged completion heuristic. Default `98`. Used only when SSI never flips `status=cp`/`results=all` and the time gate has passed. Lower values pin more matches earlier (saves upstream calls) at the risk of catching matches still accruing scorecards. Never `NEXT_PUBLIC_`. |
 | `MATCH_PROBE_ENABLED` | `lib/graphql.ts` (server-only) | Both | Kill switch for the match-level "if-modified-since" probe (`refreshCachedMatchQuery`). Default on. Set to `off` to disable the probe and fall back to always-refetch SWR behaviour. Use this if telemetry shows `IpscMatchNode.updated` doesn't track scorecard activity (e.g. only bumps on match-level admin edits, not per-scorecard saves). Never `NEXT_PUBLIC_`. |
 | `MATCH_PROBE_MAX_SKIP_AGE_SECONDS` | `lib/graphql.ts` (server-only) | Both | Belt-and-braces ceiling: even when the probe says "no change", never skip a refetch if the cached entry's *original* `cachedAt` is older than this many seconds. Default `300` (5 min). Caps worst-case staleness if `match.updated` lies — at most we'd serve N-seconds-stale data instead of indefinitely-stale. Lower for more conservative safety, raise once empirical telemetry validates the probe. Never `NEXT_PUBLIC_`. |
+| `SCORECARDS_DELTA_ENABLED` | `lib/graphql.ts` (server-only) | Both | Kill switch for the incremental scorecard delta path (`scorecards(updated_after:)`). Default on. Set to `off` to disable delta merges and fall back to full refetches on every `changed` probe outcome. Use this if delta merges produce subtly wrong scorecard data. Never `NEXT_PUBLIC_`. |
+| `SCORECARDS_DELTA_MAX_AGE_SECONDS` | `lib/graphql.ts` (server-only) | Both | Reconcile interval (seconds): even when delta merges succeed, force a periodic full refetch to self-heal from drift the delta cannot detect (upstream deletions, new stages, subtle merge bugs). Default `600` (10 min). Lower for more aggressive self-healing during high-stakes events. Never `NEXT_PUBLIC_`. |
+| (admin) `POST /api/admin/cache/force-refresh?ct=&id=` | `app/api/admin/cache/force-refresh/route.ts` | Both | Recovery lever: sets a `force-refresh:{ct}:{id}` Redis sentinel that bypasses probe / delta on the next SWR cycle. Requires `Authorization: Bearer <CACHE_PURGE_SECRET>`. Sentinel auto-clears after a successful full refresh; auto-expires after 5 min. |
 | `CACHE_TELEMETRY` | `lib/telemetry.ts` (server-only) | Both | Set to `off` to suppress all telemetry. Default on — emits one JSON line per event via `console.info` (picked up by Cloudflare Workers Logs / Docker stdout) and additionally writes to R2 on Cloudflare when the `TELEMETRY` binding is bound. Never `NEXT_PUBLIC_`. |
 | `TELEMETRY_SAMPLE_<DOMAIN>` | `lib/telemetry-sinks-cf.ts` (Cloudflare only) | Cloudflare only | Per-domain sample rate, value in `[0, 1]`. `1` keeps every event, `0` drops everything, `0.1` keeps 10%. All domains (`cache`, `upstream`, `error`, `ai`, `d1`, `background`, `usage`) default to `1` — at current ~3-6k requests/day even the highest-volume `usage` domain stays under 2% of the R2 free-tier cap. Set e.g. `TELEMETRY_SAMPLE_USAGE=0.1` if traffic grows ~10x. Never `NEXT_PUBLIC_`. |
 | `NEXT_PUBLIC_BUILD_ID` | `components/update-banner.tsx`, `app/api/version/route.ts` | Both | Git SHA baked into the client bundle at Docker build time; powers new-version detection. Auto-injected by `pnpm docker:build`. Unset in `pnpm dev` — version check is skipped. |
