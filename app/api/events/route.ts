@@ -203,10 +203,12 @@ export async function GET(req: Request) {
         throw new Error(failures.join(" | "));
       }
       if (failures.length > 0) {
-        // Partial outage — flag upstream as degraded so the homepage banner
-        // surfaces it. The 60s TTL on the flag means it self-clears once SSI
-        // recovers, without us having to write a "healthy again" signal.
-        await markUpstreamDegraded("events-route-partial");
+        // Partial failure — log for telemetry but do NOT mark the upstream as
+        // degraded. The whole point of allSettled here is to absorb a single
+        // transient SSI hiccup; surfacing a "scoreboard is degraded" banner
+        // when 4 of 5 sub-windows came back with valid data contradicts that
+        // soft-fallback. Reserve the banner for the unambiguous signal:
+        // every window failed, or the search call failed (the catch below).
         console.warn(JSON.stringify({
           route: "events",
           partial_failure: true,

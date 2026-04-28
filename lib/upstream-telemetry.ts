@@ -20,8 +20,10 @@
 //
 // degraded-marked fields:
 //   site        — call site that flagged the upstream as degraded
-//                 ("events-route-total" | "events-route-partial" |
-//                  "refresh-cached-query" | "refresh-cached-match-query")
+//                 ("events-route-total" | "refresh-cached-query" |
+//                  "refresh-cached-match-query"). Partial sub-window
+//                 failures intentionally do NOT mark degraded — that's
+//                 the case allSettled is built to absorb.
 //   errorClass  — short error class (e.g. "Error", "AbortError")
 //
 // status-checked fields:
@@ -40,7 +42,6 @@ export type UpstreamOutcome =
 
 export type DegradedSite =
   | "events-route-total"
-  | "events-route-partial"
   | "refresh-cached-query"
   | "refresh-cached-match-query";
 
