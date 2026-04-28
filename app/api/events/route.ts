@@ -43,32 +43,39 @@ const ALLOWED_LEVELS: Record<string, Set<string> | null> = {
 
 // The SSI API applies an undocumented result cap per query when browsing
 // without a search term, silently dropping events further out in the date
-// window. We work around it by splitting the requested range into small
-// sub-windows so each request stays well under the cap.
+// window. We work around it by splitting the requested range into sub-windows
+// so each request stays well under the cap. Each sub-window gets its own
+// Next.js fetch-cache entry (revalidate: 3600), so they cache independently.
 //
-// 7 days is chosen to stay safe even when no firearms filter is set: country
-// and minLevel are *post-fetch* filters in this route (the SSI GraphQL has no
-// params for them), so the cap bites on the unfiltered upstream count, not on
-// what the user sees. Bug seen in the wild: browsing a month with discipline
-// "All" + country=SWE + minLevel=L2+ used to show only the first ~9 days
-// because the single 1-month query was already truncated before SWE/L2+
-// filtering ran.
+// Sub-window size is adaptive based on whether SSI is doing upstream
+// filtering for us:
 //
-// Each sub-window gets its own Next.js fetch-cache entry (revalidate: 3600),
-// so the extra requests are cached independently.
-const SUB_WINDOW_DAYS = 7;
+//   No firearms filter ("All"): 7 days — country and minLevel are *post-fetch*
+//   filters here (the SSI GraphQL has no params for them), so the cap bites on
+//   the unfiltered worldwide IPSC count. Bug seen in the wild: browsing a
+//   month with discipline "All" + country=SWE + minLevel=L2+ used to show only
+//   the first ~9 days because the single 1-month query was already truncated
+//   before SWE/L2+ filtering ran. 7 days stays safely under that ceiling.
+//
+//   Firearms filter set (Handgun / Rifle / Shotgun / PCC / etc.): 30 days —
+//   SSI filters upstream, the result count drops several-fold, and a 30-day
+//   window fits comfortably under the cap. This drops a typical filtered
+//   month browse from ~5 GraphQL calls to 1.
+const SUB_WINDOW_DAYS_FILTERED = 30;
+const SUB_WINDOW_DAYS_UNFILTERED = 7;
 
 function buildSubWindows(
   startsAfter: string,
   startsBefore: string,
   baseVars: Record<string, string>,
+  windowDays: number,
 ): Array<Record<string, string>> {
   const windows: Array<Record<string, string>> = [];
   let cur = new Date(startsAfter);
   const end = new Date(startsBefore);
   while (cur < end) {
     const next = new Date(cur);
-    next.setDate(next.getDate() + SUB_WINDOW_DAYS);
+    next.setDate(next.getDate() + windowDays);
     if (next > end) next.setTime(end.getTime());
     windows.push({
       ...baseVars,
@@ -96,12 +103,16 @@ export async function GET(req: Request) {
   // Query params: q (search), starts_after, starts_before (ISO dates),
   // firearms (default "hg"), country (ISO 3166-1 alpha-3, e.g. "SWE"),
   // minLevel (default "all" — callers omit the param when they want everything).
-  // Caller may override the date window; fall back to ±3 months from today.
+  //
+  // The browse UI (components/event-search.tsx) always sends an explicit
+  // 1-month window, so the default below is a fallback only for off-path
+  // callers (admin curls, scripts, MCP tools). Kept tight at ±1 month so a
+  // bare `GET /api/events` doesn't pull half a year of data.
   const now = new Date();
   const defaultAfter = new Date(now);
-  defaultAfter.setMonth(defaultAfter.getMonth() - 3);
+  defaultAfter.setMonth(defaultAfter.getMonth() - 1);
   const defaultBefore = new Date(now);
-  defaultBefore.setMonth(defaultBefore.getMonth() + 3);
+  defaultBefore.setMonth(defaultBefore.getMonth() + 1);
 
   const country = searchParams.get("country");
   const minLevel = searchParams.get("minLevel") ?? "all";
@@ -113,7 +124,7 @@ export async function GET(req: Request) {
   // When a text query is present the caller is searching for a specific event
   // and we should not silently clip results to a narrow date window — use a
   // wide fallback (5 years back / 2 years forward) so past matches are found.
-  // The narrow ±3-month default applies only to browse mode (no q) where we
+  // The narrow ±1-month default applies only to browse mode (no q) where we
   // need the sub-window strategy to work around the SSI API result cap.
   const wideAfter = new Date(now);
   wideAfter.setFullYear(wideAfter.getFullYear() - 5);
@@ -159,7 +170,11 @@ export async function GET(req: Request) {
       // 7-day gap) is far better UX than a 502 over the entire date range.
       // executeQuery already retries that specific transient internally; we
       // only land here if the retry also failed.
-      const windows = buildSubWindows(startsAfter, startsBefore, firearms ? { firearms } : {});
+      // SSI filters by `firearms` upstream, so a filter cuts the unfiltered
+      // worldwide count enough that a single 30-day window fits under the cap.
+      // Without a filter we stay on 7-day chunks to dodge the cap entirely.
+      const windowDays = firearms ? SUB_WINDOW_DAYS_FILTERED : SUB_WINDOW_DAYS_UNFILTERED;
+      const windows = buildSubWindows(startsAfter, startsBefore, firearms ? { firearms } : {}, windowDays);
       const settled = await Promise.allSettled(
         windows.map((vars) => executeQuery<RawEventsData>(EVENTS_QUERY, vars, 3600)),
       );
