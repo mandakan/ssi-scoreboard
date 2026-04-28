@@ -323,8 +323,10 @@ export default function AboutPage() {
           </h2>
           <p className="text-sm leading-relaxed text-muted-foreground">
             Next.js 16, React, Tailwind CSS v4, shadcn/ui, TanStack Query v5,
-            Redis for hot caching, and SQLite or Cloudflare D1 for persistent
-            shooter and match data. Open source — contributions welcome.
+            Redis for hot caching, and SQLite or Cloudflare D1 for the public
+            match index and aggregated competition statistics. Your identity
+            and tracked-shooter selections live only in your browser — see the
+            Privacy Policy for details. Open source — contributions welcome.
           </p>
         </section>
       </div>
