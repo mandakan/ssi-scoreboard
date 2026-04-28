@@ -102,21 +102,37 @@ function pct(hf: number | null, leaderHF: number | null): number | null {
 }
 
 /**
+ * Match rank within some reference field. `total` is the size of the field
+ * (excluding DQ'd competitors). Ties share the same rank; the next rank skips
+ * accordingly (1, 1, 3, 4 …).
+ */
+export interface MatchRank {
+  rank: number;
+  total: number;
+}
+
+/**
  * IPSC match-point totals across all stages for a match.
  *
  * For each (competitor, stage), `stage_points = (HF / division_stage_winner_HF) × stage.max_points`.
  * Sum per competitor → match points. Returns the highest match-points figure
  * within each division and across the full field — the anchors that define
- * 100% in division and overall mode respectively.
+ * 100% in division and overall mode respectively — plus per-competitor match
+ * ranks within division and across the full field.
  *
  * A competitor with any DQ scorecard (whole-match DQ in IPSC) is excluded
- * from the leader pool. DNF / zeroed stages contribute 0 stage points.
+ * from the leader pool and the rank maps. DNF / zeroed stages contribute 0
+ * stage points.
  */
 export function computeMatchPointTotals(allScorecards: RawScorecard[]): {
   /** division string → leader's total IPSC match points (max across the division). */
   divisionLeaderMatchPts: Record<string, number>;
   /** Highest match-points figure across the full field (any division). Null when no valid data. */
   overallLeaderMatchPts: number | null;
+  /** competitor_id → rank within their own division (1 = leader). DQ'd competitors are absent. */
+  divisionMatchRanks: Record<number, MatchRank>;
+  /** competitor_id → rank across the full field (1 = leader). DQ'd competitors are absent. */
+  overallMatchRanks: Record<number, MatchRank>;
 } {
   // Per-stage division winner HF (excludes DNF/DQ/zeroed and ≤0 HF cards).
   // Keyed by `${division}::${stageId}`.
@@ -177,26 +193,75 @@ export function computeMatchPointTotals(allScorecards: RawScorecard[]): {
     }
   }
 
-  // Reduce to per-division leaders and the overall leader.
+  // Reduce to per-division leaders and the overall leader, and rank every
+  // non-DQ competitor by match points within division and across the field.
   const divisionLeaderMatchPts: Record<string, number> = {};
+  const overallLeaderMatchPts = rankAndCollect(
+    overallMatchPts,
+    dqCompetitors,
+    null,
+  );
+  const overallMatchRanks = buildMatchRanks(overallMatchPts, dqCompetitors);
+
+  // Build per-division rank maps: bucket competitors by their division, then rank.
+  const byDivision = new Map<string, Map<number, number>>();
   for (const [compId, pts] of divisionMatchPts) {
-    if (dqCompetitors.has(compId)) continue;
     const div = competitorDivision.get(compId);
     if (!div) continue;
-    if (pts > (divisionLeaderMatchPts[div] ?? 0)) {
-      divisionLeaderMatchPts[div] = pts;
+    if (!byDivision.has(div)) byDivision.set(div, new Map());
+    byDivision.get(div)!.set(compId, pts);
+  }
+  const divisionMatchRanks: Record<number, MatchRank> = {};
+  for (const [div, divPts] of byDivision) {
+    const leader = rankAndCollect(divPts, dqCompetitors, null);
+    if (leader != null) divisionLeaderMatchPts[div] = leader;
+    const ranks = buildMatchRanks(divPts, dqCompetitors);
+    for (const [compId, mr] of Object.entries(ranks)) {
+      divisionMatchRanks[Number(compId)] = mr;
     }
   }
 
-  let overallLeaderMatchPts: number | null = null;
-  for (const [compId, pts] of overallMatchPts) {
-    if (dqCompetitors.has(compId)) continue;
-    if (overallLeaderMatchPts == null || pts > overallLeaderMatchPts) {
-      overallLeaderMatchPts = pts;
-    }
-  }
+  return {
+    divisionLeaderMatchPts,
+    overallLeaderMatchPts,
+    divisionMatchRanks,
+    overallMatchRanks,
+  };
+}
 
-  return { divisionLeaderMatchPts, overallLeaderMatchPts };
+/** Find the highest match-points value, ignoring DQ'd competitors. */
+function rankAndCollect(
+  pointsMap: Map<number, number>,
+  dq: Set<number>,
+  init: number | null,
+): number | null {
+  let best = init;
+  for (const [compId, pts] of pointsMap) {
+    if (dq.has(compId)) continue;
+    if (best == null || pts > best) best = pts;
+  }
+  return best;
+}
+
+/**
+ * Rank competitors by match points descending. Ties share a rank, the next
+ * rank skips accordingly (1, 1, 3, 4 …). DQ'd competitors are excluded from
+ * both the rank assignment and the `total` count.
+ */
+function buildMatchRanks(
+  pointsMap: Map<number, number>,
+  dq: Set<number>,
+): Record<number, MatchRank> {
+  const entries = [...pointsMap.entries()].filter(([id]) => !dq.has(id));
+  entries.sort((a, b) => b[1] - a[1]);
+  const total = entries.length;
+  const out: Record<number, MatchRank> = {};
+  let currentRank = 1;
+  for (let i = 0; i < entries.length; i++) {
+    if (i > 0 && entries[i][1] < entries[i - 1][1]) currentRank = i + 1;
+    out[entries[i][0]] = { rank: currentRank, total };
+  }
+  return out;
 }
 
 /**

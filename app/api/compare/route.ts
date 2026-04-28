@@ -387,8 +387,12 @@ export async function GET(req: Request) {
 
   const tRankings = performance.now();
 
-  const { divisionLeaderMatchPts, overallLeaderMatchPts } =
-    computeMatchPointTotals(rawScorecards);
+  const {
+    divisionLeaderMatchPts,
+    overallLeaderMatchPts,
+    divisionMatchRanks,
+    overallMatchRanks,
+  } = computeMatchPointTotals(rawScorecards);
 
   const penaltyStats = Object.fromEntries(
     requestedCompetitors.map((c) => [c.id, computePenaltyStats(stages, c.id)])
@@ -598,6 +602,8 @@ export async function GET(req: Request) {
     ...(scorecardsRestricted ? { scorecardsRestricted: true } : {}),
     divisionLeaderMatchPts,
     overallLeaderMatchPts,
+    divisionMatchRanks,
+    overallMatchRanks,
     cacheInfo,
   };
 

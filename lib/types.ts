@@ -558,6 +558,15 @@ export interface CompareResponse {
    */
   divisionLeaderMatchPts?: Record<string, number>;
   overallLeaderMatchPts?: number | null;
+  /**
+   * Per-competitor match ranks (1 = leader). Keys are competitor IDs; values
+   * carry the rank and the size of the reference field (excluding DQs) so the
+   * UI can show "5 of 87". DQ'd competitors are absent. Used by the
+   * comparison-table totals row to render a medal/rank badge alongside the
+   * match %.
+   */
+  divisionMatchRanks?: Record<number, { rank: number; total: number }>;
+  overallMatchRanks?: Record<number, { rank: number; total: number }>;
   cacheInfo: CacheInfo;
 }
 

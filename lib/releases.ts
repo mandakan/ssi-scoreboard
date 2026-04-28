@@ -17,7 +17,7 @@ export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
     date: "April 28, 2026",
-    title: "Match % now matches SSI",
+    title: "Match % and rank now match SSI",
     screenshotScenes: ["comparison-table", "shooter-dashboard"],
     sections: [
       {
@@ -25,6 +25,12 @@ export const RELEASES: Release[] = [
         items: [
           "Match percentage now uses the official IPSC points-weighted formula — longer stages count more — so the number on your shooter dashboard match cards matches what shootnscoreit.com shows.",
           "Comparison-table totals row also uses the same formula. In Group mode the highest-scoring selected competitor lands on 100%; in Division and Overall mode the anchor is the full-division or full-field leader.",
+        ],
+      },
+      {
+        heading: "New",
+        items: [
+          "Match rank badge in the comparison-table totals row — the same gold/silver/bronze medal style as the per-stage rank, but for the overall match standing in the current view (Group / Division / Overall).",
         ],
       },
     ],

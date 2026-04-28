@@ -3252,4 +3252,62 @@ describe("computeMatchPointTotals — IPSC points anchors", () => {
     expect(overallLeaderMatchPts).toBeNull();
     expect(Object.keys(divisionLeaderMatchPts)).toHaveLength(0);
   });
+
+  it("ranks competitors within their own division (1 = leader)", () => {
+    const cards: RawScorecard[] = [
+      // hg1 — comp 3 wins, comp 1 second
+      makeCard(1, 1, { hit_factor: 4, max_points: 50 }),
+      makeCard(1, 2, { hit_factor: 4, max_points: 100 }),
+      makeCard(3, 1, { hit_factor: 5, max_points: 50 }),
+      makeCard(3, 2, { hit_factor: 5, max_points: 100 }),
+      // hg3 — comp 2 alone
+      makeCard(2, 1, { hit_factor: 3, max_points: 50 }),
+      makeCard(2, 2, { hit_factor: 3, max_points: 100 }),
+    ];
+    const { divisionMatchRanks } = computeMatchPointTotals(cards);
+    expect(divisionMatchRanks[3]).toEqual({ rank: 1, total: 2 });
+    expect(divisionMatchRanks[1]).toEqual({ rank: 2, total: 2 });
+    expect(divisionMatchRanks[2]).toEqual({ rank: 1, total: 1 });
+  });
+
+  it("ranks competitors across the full field for overall mode", () => {
+    const cards: RawScorecard[] = [
+      makeCard(1, 1, { hit_factor: 4, max_points: 50 }),
+      makeCard(2, 1, { hit_factor: 5, max_points: 50 }),
+      makeCard(3, 1, { hit_factor: 3, max_points: 50 }),
+    ];
+    const { overallMatchRanks } = computeMatchPointTotals(cards);
+    // Overall stage winner = comp 2 (HF=5)
+    //   comp 2: 5/5×50 = 50  → rank 1
+    //   comp 1: 4/5×50 = 40  → rank 2
+    //   comp 3: 3/5×50 = 30  → rank 3
+    expect(overallMatchRanks[2]).toEqual({ rank: 1, total: 3 });
+    expect(overallMatchRanks[1]).toEqual({ rank: 2, total: 3 });
+    expect(overallMatchRanks[3]).toEqual({ rank: 3, total: 3 });
+  });
+
+  it("excludes DQ'd competitors from rank maps and total counts", () => {
+    const cards: RawScorecard[] = [
+      makeCard(1, 1, { hit_factor: 4, max_points: 50 }),
+      makeCard(2, 1, { hit_factor: 5, max_points: 50 }),
+      makeCard(3, 1, { hit_factor: 6, max_points: 50, dq: true }),
+    ];
+    const { overallMatchRanks } = computeMatchPointTotals(cards);
+    expect(overallMatchRanks[3]).toBeUndefined();
+    expect(overallMatchRanks[2]).toEqual({ rank: 1, total: 2 });
+    expect(overallMatchRanks[1]).toEqual({ rank: 2, total: 2 });
+  });
+
+  it("assigns shared rank for ties and skips the next rank", () => {
+    const cards: RawScorecard[] = [
+      // Comps 1 and 2 tie at the top; comp 3 trails
+      makeCard(1, 1, { hit_factor: 5, max_points: 50 }),
+      makeCard(2, 1, { hit_factor: 5, max_points: 50 }),
+      makeCard(3, 1, { hit_factor: 4, max_points: 50 }),
+    ];
+    const { overallMatchRanks } = computeMatchPointTotals(cards);
+    expect(overallMatchRanks[1].rank).toBe(1);
+    expect(overallMatchRanks[2].rank).toBe(1);
+    expect(overallMatchRanks[3].rank).toBe(3);
+  });
 });

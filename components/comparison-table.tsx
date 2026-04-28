@@ -1110,8 +1110,30 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
     };
   });
 
-  // Resolve the mode-specific anchor (= 100% reference) for each competitor.
+  // Resolve the mode-specific anchor (= 100% reference) for each competitor,
+  // and the mode-specific match rank.
+  //
+  //   group   → highest match_pts among the selected competitors;
+  //             one of them always lands on rank 1 / 100%
+  //   division→ divisionLeaderMatchPts[<comp.division>], with rank/total from
+  //             the server-computed divisionMatchRanks (full division field)
+  //   overall → overallLeaderMatchPts, with rank/total from overallMatchRanks
+  //             (full match field, all divisions)
   const groupAnchor = Math.max(0, ...totalsRaw.map((t) => t.matchPts ?? 0));
+  // Pre-compute group ranks (1 = highest matchPts within the selection; ties share a rank).
+  const groupRankMap = new Map<number, { rank: number; total: number }>();
+  {
+    const ranked = [...totalsRaw]
+      .filter((t) => t.matchPts != null)
+      .sort((a, b) => (b.matchPts ?? 0) - (a.matchPts ?? 0));
+    let currentRank = 1;
+    for (let i = 0; i < ranked.length; i++) {
+      if (i > 0 && (ranked[i].matchPts ?? 0) < (ranked[i - 1].matchPts ?? 0)) {
+        currentRank = i + 1;
+      }
+      groupRankMap.set(ranked[i].id, { rank: currentRank, total: ranked.length });
+    }
+  }
   const totals = totalsRaw.map((t) => {
     let matchPct: number | null = null;
     if (t.matchPts != null && t.hasMaxPoints) {
@@ -1128,7 +1150,18 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
     }
     // Fallback for older cache entries lacking stage.max_points.
     if (matchPct == null) matchPct = t.avgPctFallback;
-    return { ...t, matchPct };
+
+    // Match rank (mode-aware).
+    let matchRank: { rank: number; total: number } | null = null;
+    if (mode === "group") {
+      matchRank = groupRankMap.get(t.id) ?? null;
+    } else if (mode === "division") {
+      matchRank = data.divisionMatchRanks?.[t.id] ?? null;
+    } else if (mode === "overall") {
+      matchRank = data.overallMatchRanks?.[t.id] ?? null;
+    }
+
+    return { ...t, matchPct, matchRank };
   });
 
   return (
@@ -1662,9 +1695,21 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                           <span className="text-muted-foreground font-normal">—</span>
                         )}
                       </span>
-                      <span className="text-xs text-muted-foreground font-normal">
-                        {t.matchPct != null ? formatPct(t.matchPct) : "—"}
-                      </span>
+                      <div className="flex items-center gap-1">
+                        {t.matchRank != null && (
+                          <RankBadge
+                            rank={t.matchRank.rank}
+                            tooltip={matchRankTooltip(
+                              t.matchRank,
+                              mode,
+                              competitors.find((c) => c.id === t.id)?.division ?? null,
+                            )}
+                          />
+                        )}
+                        <span className="text-xs text-muted-foreground font-normal">
+                          {t.matchPct != null ? formatPct(t.matchPct) : "—"}
+                        </span>
+                      </div>
                       <HitZoneBar
                         aHits={t.aHits}
                         cHits={t.cHits}
@@ -2057,6 +2102,23 @@ function rankTooltip(
         : `Rank ${rank} in division (full field)`;
     case "overall":
       return `Rank ${rank} overall (all divisions)`;
+  }
+}
+
+function matchRankTooltip(
+  mr: { rank: number; total: number },
+  mode: PctMode,
+  divisionName: string | null,
+): string {
+  switch (mode) {
+    case "group":
+      return `Match rank ${mr.rank} of ${mr.total} in your group`;
+    case "division":
+      return divisionName
+        ? `Match rank ${mr.rank} of ${mr.total} in ${divisionName}`
+        : `Match rank ${mr.rank} of ${mr.total} in division`;
+    case "overall":
+      return `Match rank ${mr.rank} of ${mr.total} overall`;
   }
 }
 
