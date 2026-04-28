@@ -251,17 +251,17 @@ Lives in `lib/telemetry.ts` (transport) + per-domain typed wrappers (`lib/cache-
 3. For CF-only sinks: append to `extraSinks` in `lib/telemetry-sinks-cf.ts`.
 4. For Docker-only sinks: append to `lib/telemetry-sinks-impl.ts`.
 
-**One-time R2 setup (Cloudflare):**
+**One-time R2 setup (Cloudflare) — already applied; documented for reproducibility:**
 ```bash
 # Production
 wrangler r2 bucket create ssi-scoreboard-telemetry
-wrangler r2 bucket lifecycle set ssi-scoreboard-telemetry --rule \
-  '{"id":"expire-30d","enabled":true,"conditions":{"prefix":""},"action":{"type":"Expire","conditions":{"age":2592000}}}'
+wrangler r2 bucket lifecycle add ssi-scoreboard-telemetry expire-30d "" \
+  --expire-days 30 --force
 
 # Staging
 wrangler r2 bucket create ssi-scoreboard-telemetry-staging
-wrangler r2 bucket lifecycle set ssi-scoreboard-telemetry-staging --rule \
-  '{"id":"expire-30d","enabled":true,"conditions":{"prefix":""},"action":{"type":"Expire","conditions":{"age":2592000}}}'
+wrangler r2 bucket lifecycle add ssi-scoreboard-telemetry-staging expire-30d "" \
+  --expire-days 30 --force
 ```
 
 **Reading telemetry:**

@@ -70,8 +70,8 @@ migrations_dir = "migrations"
 # R2 bucket for long-retention telemetry (cache decisions, etc.) — see
 # lib/telemetry-sinks-cf.ts. Free-tier friendly. One-time setup:
 #   wrangler r2 bucket create ssi-scoreboard-telemetry
-#   wrangler r2 bucket lifecycle set ssi-scoreboard-telemetry \
-#     --rule '{"id":"expire-30d","enabled":true,"conditions":{"prefix":""},"action":{"type":"Expire","conditions":{"age":2592000}}}'
+#   wrangler r2 bucket lifecycle add ssi-scoreboard-telemetry expire-30d "" \
+#     --expire-days 30 --force
 [[r2_buckets]]
 binding = "TELEMETRY"
 bucket_name = "ssi-scoreboard-telemetry"
