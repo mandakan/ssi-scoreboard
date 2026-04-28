@@ -310,8 +310,15 @@ export interface DataProviders {
   searchShooterProfiles: (params: { query: string; limit?: number }) => Promise<ShooterSearchResult[]>;
 }
 
+// Header sent on every REST call from the MCP stdio/Smithery shims so the
+// REST handlers can tag downstream telemetry with via:"mcp" (see
+// lib/telemetry-context.ts and the route handlers' isMcpRequest() check).
+const MCP_CLIENT_HEADER = "x-mcp-client";
+
 async function apiFetch<T>(baseUrl: string, path: string): Promise<T> {
-  const res = await fetch(`${baseUrl}${path}`);
+  const res = await fetch(`${baseUrl}${path}`, {
+    headers: { [MCP_CLIENT_HEADER]: "stdio" },
+  });
   if (!res.ok) throw new Error(`HTTP ${res.status} from ${baseUrl}${path}`);
   return res.json() as Promise<T>;
 }

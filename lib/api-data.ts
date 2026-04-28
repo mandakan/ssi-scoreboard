@@ -76,7 +76,7 @@ export async function compareCompetitors(
 }
 
 export async function getPopularMatches(): Promise<PopularMatch[]> {
-  const res = await popularGET();
+  const res = await popularGET(new Request("http://localhost/api/popular-matches"));
   return extractJson<PopularMatch[]>(res);
 }
 

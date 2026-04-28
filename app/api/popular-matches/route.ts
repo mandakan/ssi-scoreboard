@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db-impl";
 import { getMatchDataWithFallback } from "@/lib/match-data-store";
+import { maybeTagAsMcp } from "@/lib/telemetry-context";
 import type { PopularMatch } from "@/lib/types";
 
 /** Maximum age (seconds) a match access must be within to qualify. */
@@ -35,7 +36,8 @@ interface MatchCacheEntry {
  * Works on both the ioredis (Docker/Node) and @upstash/redis (Cloudflare)
  * cache adapters. Returns [] on any cache error.
  */
-export async function GET() {
+export async function GET(req: Request) {
+  maybeTagAsMcp(req);
   try {
     const popular = await db.getPopularKeys(MAX_AGE_SECONDS, MAX_RESULTS);
 

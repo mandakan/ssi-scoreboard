@@ -4,6 +4,8 @@ import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import { NextResponse } from "next/server";
 import { registerMcpTools, SERVER_INSTRUCTIONS } from "@/lib/mcp-tools";
 import * as directProviders from "@/lib/api-data";
+import { mcpTelemetry, bucketCompetitors } from "@/lib/mcp-telemetry";
+import { runWithTelemetryContext } from "@/lib/telemetry-context";
 
 /**
  * Promise-based single-request/response transport for Next.js App Router.
@@ -122,6 +124,7 @@ export async function POST(request: Request) {
   // unauthenticated clients receive 401 with WWW-Authenticate, complete the
   // OAuth dance, then retry with the token (per RFC 9728 / MCP OAuth spec).
   if (!auth?.startsWith("Bearer ")) {
+    mcpTelemetry({ op: "auth-fail", transport: "http", reason: "no-bearer" });
     return new Response("Unauthorized", {
       status: 401,
       headers: {
@@ -134,6 +137,7 @@ export async function POST(request: Request) {
   // If MCP_SECRET is configured, enforce it.  Otherwise accept any Bearer token
   // (public API — the token is a formality to satisfy the OAuth handshake).
   if (secret && auth !== `Bearer ${secret}`) {
+    mcpTelemetry({ op: "auth-fail", transport: "http", reason: "wrong-secret" });
     return new Response("Unauthorized", {
       status: 401,
       headers: {
@@ -150,32 +154,90 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400, headers: CORS });
   }
 
-  const transport = new SingleShotTransport();
-  const server = new McpServer({ name: "ssi-scoreboard", version: "0.1.0" }, { instructions: SERVER_INSTRUCTIONS });
-  // Pass direct data-provider functions instead of a baseUrl.  On Cloudflare,
-  // a Worker cannot subrequest its own custom-domain Pages deployment (returns
-  // 522).  Calling the route handlers in-process bypasses HTTP entirely.
-  registerMcpTools(server, directProviders);
-  await server.connect(transport);
+  // Wrap the rest of the request in a telemetry context so downstream
+  // events (usage/cache/upstream) carry via:"mcp".
+  return runWithTelemetryContext({ via: "mcp" }, async () => {
+    const transport = new SingleShotTransport();
+    const server = new McpServer({ name: "ssi-scoreboard", version: "0.1.0" }, { instructions: SERVER_INSTRUCTIONS });
+    // Pass direct data-provider functions instead of a baseUrl.  On Cloudflare,
+    // a Worker cannot subrequest its own custom-domain Pages deployment (returns
+    // 522).  Calling the route handlers in-process bypasses HTTP entirely.
+    registerMcpTools(server, directProviders);
+    await server.connect(transport);
 
-  // JSON-RPC notifications have no `id` field (e.g. notifications/initialized).
-  // They don't expect a response — acknowledge with 202 so clients don't treat
-  // the missing body as an error.
-  if (!("id" in body)) {
+    // JSON-RPC notifications have no `id` field (e.g. notifications/initialized).
+    // They don't expect a response — acknowledge with 202 so clients don't treat
+    // the missing body as an error.
+    if (!("id" in body)) {
+      transport.deliver(body);
+      return new Response(null, { status: 202, headers: CORS });
+    }
+
+    const startedAt = Date.now();
+    const method = typeof (body as { method?: unknown }).method === "string"
+      ? (body as { method: string }).method
+      : "unknown";
+    const params = (body as { params?: Record<string, unknown> }).params;
+
+    // Deliver the request and wait for the server's async response. Using a
+    // proper Promise (resolved when send() fires) rather than setTimeout(0) so
+    // that tool handlers which call fetch() have time to complete.
     transport.deliver(body);
-    return new Response(null, { status: 202, headers: CORS });
-  }
+    const response = await transport.waitForResponse(30_000);
+    const latencyMs = Date.now() - startedAt;
 
-  // Deliver the request and wait for the server's async response. Using a
-  // proper Promise (resolved when send() fires) rather than setTimeout(0) so
-  // that tool handlers which call fetch() have time to complete.
-  transport.deliver(body);
-  const response = await transport.waitForResponse(30_000);
-  if (response === null) {
-    return NextResponse.json(
-      { error: "No response from server" },
-      { status: 500, headers: CORS },
-    );
-  }
-  return NextResponse.json(response, { headers: CORS });
+    if (response === null) {
+      emitMcpEvents(method, params, false, latencyMs, null);
+      return NextResponse.json(
+        { error: "No response from server" },
+        { status: 500, headers: CORS },
+      );
+    }
+
+    const errorCode =
+      typeof (response as { error?: { code?: number } }).error?.code === "number"
+        ? ((response as { error: { code: number } }).error.code)
+        : null;
+    emitMcpEvents(method, params, errorCode === null, latencyMs, errorCode);
+    return NextResponse.json(response, { headers: CORS });
+  });
+}
+
+// Emit one mcp.request event for every JSON-RPC call, plus an mcp.tool-call
+// event with the tool name + bucketed args when method === "tools/call".
+function emitMcpEvents(
+  method: string,
+  params: Record<string, unknown> | undefined,
+  ok: boolean,
+  latencyMs: number,
+  errorCode: number | null,
+): void {
+  mcpTelemetry({ op: "request", transport: "http", method, ok, latencyMs, errorCode });
+
+  if (method !== "tools/call" || !params) return;
+  const toolName = typeof params.name === "string" ? params.name : "unknown";
+  const args = (params.arguments as Record<string, unknown> | undefined) ?? {};
+
+  const ct = parseInt(String(args.ct ?? ""), 10);
+  const ctValue = Number.isFinite(ct) ? ct : null;
+
+  const competitorIds = Array.isArray(args.competitor_ids) ? args.competitor_ids : null;
+  const nCompetitorsBucket = competitorIds ? bucketCompetitors(competitorIds.length) : null;
+
+  const queryLength =
+    typeof args.query === "string" ? args.query.length : null;
+  const minLevel = typeof args.min_level === "string" ? args.min_level : null;
+
+  mcpTelemetry({
+    op: "tool-call",
+    transport: "http",
+    tool: toolName,
+    ok,
+    latencyMs,
+    errorCode,
+    ct: ctValue,
+    nCompetitorsBucket,
+    queryLength,
+    minLevel,
+  });
 }

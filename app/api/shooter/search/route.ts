@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import db from "@/lib/db-impl";
 import { reportError } from "@/lib/error-telemetry";
 import { usageTelemetry, bucketCount } from "@/lib/usage-telemetry";
+import { maybeTagAsMcp } from "@/lib/telemetry-context";
 
 export async function GET(req: Request) {
+  maybeTagAsMcp(req);
   const url = new URL(req.url);
   const q = (url.searchParams.get("q") ?? "").trim().slice(0, 100);
   const limitRaw = url.searchParams.get("limit");

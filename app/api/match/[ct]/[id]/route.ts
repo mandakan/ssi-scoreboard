@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { fetchMatchData } from "@/lib/match-data";
+import { maybeTagAsMcp } from "@/lib/telemetry-context";
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ ct: string; id: string }> }
 ) {
+  maybeTagAsMcp(req);
   const t0 = performance.now();
   const { ct, id } = await params;
 
