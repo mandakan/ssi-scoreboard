@@ -10,7 +10,11 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { buildColorMap } from "@/lib/colors";
+import { buildColorMap, buildShapeMap } from "@/lib/colors";
+import {
+  CompetitorMarker,
+  CompetitorLegendSwatch,
+} from "@/components/competitor-marker";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { CompareResponse, PctMode } from "@/lib/types";
 
@@ -33,6 +37,7 @@ function getPct(sc: { group_percent: number | null; overall_percent: number | nu
 export function StageBalanceChart({ data }: StageBalanceChartProps) {
   const { stages, competitors } = data;
   const colorMap = buildColorMap(competitors.map((c) => c.id));
+  const shapeMap = buildShapeMap(competitors.map((c) => c.id));
   const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
   const [pctMode, setPctMode] = useState<PctMode>(
     competitors.length < 2 ? "overall" : "group"
@@ -152,17 +157,40 @@ export function StageBalanceChart({ data }: StageBalanceChartProps) {
           />
           {competitors
             .filter((c) => !hiddenIds.has(c.id))
-            .map((comp) => (
-              <Radar
-                key={comp.id}
-                dataKey={String(comp.id)}
-                stroke={colorMap[comp.id]}
-                strokeWidth={2}
-                fill="none"
-                dot={{ fill: colorMap[comp.id], r: 4, stroke: "var(--background)", strokeWidth: 1.5 }}
-                name={String(comp.id)}
-              />
-            ))}
+            .map((comp) => {
+              const color = colorMap[comp.id];
+              const shape = shapeMap[comp.id];
+              return (
+                <Radar
+                  key={comp.id}
+                  dataKey={String(comp.id)}
+                  stroke={color}
+                  strokeWidth={2}
+                  fill="none"
+                  dot={(dotProps) => {
+                    const { cx, cy, key } = dotProps as {
+                      cx?: number;
+                      cy?: number;
+                      key?: string | number;
+                    };
+                    if (cx === undefined || cy === undefined) return <g key={key} />;
+                    return (
+                      <CompetitorMarker
+                        key={key}
+                        cx={cx}
+                        cy={cy}
+                        size={9}
+                        fill={color}
+                        shape={shape}
+                        stroke="var(--background)"
+                        strokeWidth={1.5}
+                      />
+                    );
+                  }}
+                  name={String(comp.id)}
+                />
+              );
+            })}
         </RadarChart>
       </ResponsiveContainer>
 
@@ -194,10 +222,10 @@ export function StageBalanceChart({ data }: StageBalanceChartProps) {
                 opacity: hidden ? 0.4 : undefined,
               }}
             >
-              <span
-                className="inline-block h-3 w-3 flex-none rounded-full"
-                style={{ backgroundColor: color }}
-                aria-hidden="true"
+              <CompetitorLegendSwatch
+                size={12}
+                fill={color}
+                shape={shapeMap[comp.id]}
               />
               <span className={hidden ? "line-through" : ""}>{label}</span>
             </button>

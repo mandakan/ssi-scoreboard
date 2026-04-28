@@ -12,7 +12,11 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import { buildColorMap } from "@/lib/colors";
+import { buildColorMap, buildShapeMap } from "@/lib/colors";
+import {
+  CompetitorMarker,
+  CompetitorLegendSwatch,
+} from "@/components/competitor-marker";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { CompareResponse, DivisionHFDistribution, StageComparison } from "@/lib/types";
 
@@ -53,6 +57,7 @@ export function DivisionDistributionChart({ data, stages: stagesProp }: Division
   const stages = stagesProp ?? data.stages;
   const { competitors } = data;
   const colorMap = buildColorMap(competitors.map((c) => c.id));
+  const shapeMap = buildShapeMap(competitors.map((c) => c.id));
 
   const divisionKeys = collectDivisionKeys(data);
   const [activeDivision, setActiveDivision] = useState<string>(divisionKeys[0] ?? "");
@@ -289,19 +294,59 @@ export function DivisionDistributionChart({ data, stages: stagesProp }: Division
           />
 
           {/* Competitor div_percent lines */}
-          {divisionCompetitors.map((comp) => (
-            <Line
-              key={comp.id}
-              type="monotone"
-              dataKey={`comp_${comp.id}`}
-              stroke={colorMap[comp.id]}
-              strokeWidth={2}
-              dot={{ r: 4, fill: colorMap[comp.id], strokeWidth: 0 }}
-              activeDot={{ r: 6 }}
-              name={`comp_${comp.id}`}
-              connectNulls={false}
-            />
-          ))}
+          {divisionCompetitors.map((comp) => {
+            const color = colorMap[comp.id];
+            const shape = shapeMap[comp.id];
+            return (
+              <Line
+                key={comp.id}
+                type="monotone"
+                dataKey={`comp_${comp.id}`}
+                stroke={color}
+                strokeWidth={2}
+                dot={(dotProps) => {
+                  const { cx, cy, key } = dotProps as {
+                    cx?: number;
+                    cy?: number;
+                    key?: string | number;
+                  };
+                  if (cx === undefined || cy === undefined) return <g key={key} />;
+                  return (
+                    <CompetitorMarker
+                      key={key}
+                      cx={cx}
+                      cy={cy}
+                      size={8}
+                      fill={color}
+                      shape={shape}
+                    />
+                  );
+                }}
+                activeDot={(dotProps) => {
+                  const { cx, cy, key } = dotProps as {
+                    cx?: number;
+                    cy?: number;
+                    key?: string | number;
+                  };
+                  if (cx === undefined || cy === undefined) return <g key={key} />;
+                  return (
+                    <CompetitorMarker
+                      key={key}
+                      cx={cx}
+                      cy={cy}
+                      size={12}
+                      fill={color}
+                      shape={shape}
+                      stroke="var(--background)"
+                      strokeWidth={1.5}
+                    />
+                  );
+                }}
+                name={`comp_${comp.id}`}
+                connectNulls={false}
+              />
+            );
+          })}
         </ComposedChart>
       </ResponsiveContainer>
 
@@ -368,10 +413,10 @@ export function DivisionDistributionChart({ data, stages: stagesProp }: Division
                 className="flex items-center gap-2 rounded-full border px-3 text-sm"
                 style={{ borderColor: color + "55", backgroundColor: color + "18" }}
               >
-                <span
-                  className="inline-block h-3 w-3 flex-none rounded-full"
-                  style={{ backgroundColor: color }}
-                  aria-hidden="true"
+                <CompetitorLegendSwatch
+                  size={12}
+                  fill={color}
+                  shape={shapeMap[comp.id]}
                 />
                 {label}
               </span>

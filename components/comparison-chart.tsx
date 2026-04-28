@@ -11,7 +11,8 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { buildColorMap } from "@/lib/colors";
+import { buildColorMap, buildShapeMap } from "@/lib/colors";
+import { CompetitorLegendSwatch } from "@/components/competitor-marker";
 import type { CompareResponse, StageComparison } from "@/lib/types";
 
 interface ComparisonChartProps {
@@ -24,6 +25,7 @@ export function ComparisonChart({ data, stages: stagesProp, showBenchmark = fals
   const stages = stagesProp ?? data.stages;
   const { competitors } = data;
   const colorMap = buildColorMap(competitors.map((c) => c.id));
+  const shapeMap = buildShapeMap(competitors.map((c) => c.id));
   const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
   const [benchmarkVisible, setBenchmarkVisible] = useState(showBenchmark);
   const [medianVisible, setMedianVisible] = useState(false);
@@ -220,10 +222,10 @@ export function ComparisonChart({ data, stages: stagesProp, showBenchmark = fals
                 opacity: hidden ? 0.4 : undefined,
               }}
             >
-              <span
-                className="inline-block h-3 w-3 flex-none rounded-full"
-                style={{ backgroundColor: color }}
-                aria-hidden="true"
+              <CompetitorLegendSwatch
+                size={12}
+                fill={color}
+                shape={shapeMap[comp.id]}
               />
               <span className={hidden ? "line-through" : ""}>{label}</span>
             </button>

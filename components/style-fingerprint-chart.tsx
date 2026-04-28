@@ -13,7 +13,11 @@ import {
   useXAxisDomain,
   useYAxisDomain,
 } from "recharts";
-import { buildColorMap } from "@/lib/colors";
+import { buildColorMap, buildShapeMap, type CompetitorShape } from "@/lib/colors";
+import {
+  CompetitorMarker,
+  CompetitorLegendSwatch,
+} from "@/components/competitor-marker";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type {
   CompareResponse,
@@ -225,15 +229,25 @@ interface DotProps {
   cy?: number;
   fill?: string;
   payload?: FingerprintPoint;
+  shape: CompetitorShape;
 }
 
-function PenaltyDot({ cx, cy, fill, payload }: DotProps) {
-  if (cx === undefined || cy === undefined || !payload) return null;
+function PenaltyDot({ cx, cy, fill, payload, shape }: DotProps) {
+  if (cx === undefined || cy === undefined || !payload || !fill) return null;
   const r = payload.dotRadius;
   return (
     <g>
       <circle cx={cx} cy={cy} r={Math.max(r, 22)} fill="transparent" />
-      <circle cx={cx} cy={cy} r={r} fill={fill} style={{ stroke: "var(--background)" }} strokeWidth={1.5} opacity={0.88} />
+      <CompetitorMarker
+        cx={cx}
+        cy={cy}
+        size={r * 2}
+        fill={fill}
+        shape={shape}
+        opacity={0.88}
+        stroke="var(--background)"
+        strokeWidth={1.5}
+      />
     </g>
   );
 }
@@ -329,14 +343,14 @@ function FieldDot({ cx, cy }: FieldDotProps) {
 // Competitor legend
 // --------------------------------------------------------------------------
 
-interface LegendItem { id: number; label: string; color: string; archetype: string | null; fieldSize: number }
+interface LegendItem { id: number; label: string; color: string; shape: CompetitorShape; archetype: string | null; fieldSize: number }
 
 function ToggleLegend({
   items, hiddenIds, onToggle,
 }: { items: LegendItem[]; hiddenIds: Set<number>; onToggle: (id: number) => void }) {
   return (
     <div role="group" aria-label="Toggle competitors" className="flex flex-wrap justify-center gap-2 pt-2">
-      {items.map(({ id, label, color, archetype, fieldSize }) => {
+      {items.map(({ id, label, color, shape, archetype, fieldSize }) => {
         const hidden = hiddenIds.has(id);
         const smallField = fieldSize < 25;
         const archetypeLabel = archetype
@@ -357,7 +371,7 @@ function ToggleLegend({
               opacity: hidden ? 0.4 : undefined,
             }}
           >
-            <span className="inline-block h-3 w-3 flex-none rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
+            <CompetitorLegendSwatch size={12} fill={color} shape={shape} />
             <span className={hidden ? "line-through" : ""}>{label}</span>
             {archetypeLabel && !hidden && (
               <span
@@ -428,6 +442,7 @@ interface StyleFingerprintChartProps {
 export function StyleFingerprintChart({ data }: StyleFingerprintChartProps) {
   const { competitors, styleFingerprintStats, fieldFingerprintPoints } = data;
   const colorMap = buildColorMap(competitors.map((c) => c.id));
+  const shapeMap = buildShapeMap(competitors.map((c) => c.id));
   const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
   const [cohortMode, setCohortMode] = useState<CohortMode>("all");
 
@@ -476,6 +491,7 @@ export function StyleFingerprintChart({ data }: StyleFingerprintChartProps) {
     id: comp.id,
     label: formatLabel(comp),
     color: colorMap[comp.id],
+    shape: shapeMap[comp.id],
     archetype: styleFingerprintStats?.[comp.id]?.archetype ?? null,
     fieldSize,
   }));
@@ -553,14 +569,22 @@ export function StyleFingerprintChart({ data }: StyleFingerprintChartProps) {
                   name={formatLabel(comp)}
                   data={pts}
                   fill={colorMap[comp.id]}
-                  shape={(props) => (
-                    <PenaltyDot
-                      cx={(props as DotProps).cx}
-                      cy={(props as DotProps).cy}
-                      fill={colorMap[comp.id]}
-                      payload={(props as DotProps).payload}
-                    />
-                  )}
+                  shape={(props) => {
+                    const { cx, cy, payload } = props as {
+                      cx?: number;
+                      cy?: number;
+                      payload?: FingerprintPoint;
+                    };
+                    return (
+                      <PenaltyDot
+                        cx={cx}
+                        cy={cy}
+                        fill={colorMap[comp.id]}
+                        payload={payload}
+                        shape={shapeMap[comp.id]}
+                      />
+                    );
+                  }}
                 />
               );
             })}

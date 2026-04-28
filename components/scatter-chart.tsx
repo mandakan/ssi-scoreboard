@@ -13,7 +13,8 @@ import {
   useXAxisDomain,
   useYAxisDomain,
 } from "recharts";
-import { buildColorMap } from "@/lib/colors";
+import { buildColorMap, buildShapeMap, type CompetitorShape } from "@/lib/colors";
+import { CompetitorLegendSwatch } from "@/components/competitor-marker";
 import { computeIsoHfLines, buildScatterData } from "@/lib/scatter-utils";
 import type { ScatterPoint } from "@/lib/scatter-utils";
 import type { CompareResponse, CompetitorInfo } from "@/lib/types";
@@ -199,6 +200,7 @@ interface LegendItem {
   id: number;
   label: string;
   color: string;
+  shape: CompetitorShape;
 }
 
 function ToggleLegend({
@@ -216,7 +218,7 @@ function ToggleLegend({
       aria-label="Toggle competitors"
       className="flex flex-wrap justify-center gap-2 pt-2"
     >
-      {items.map(({ id, label, color }) => {
+      {items.map(({ id, label, color, shape }) => {
         const hidden = hiddenIds.has(id);
         return (
           <button
@@ -231,11 +233,7 @@ function ToggleLegend({
               opacity: hidden ? 0.4 : undefined,
             }}
           >
-            <span
-              className="inline-block h-3 w-3 flex-none rounded-full"
-              style={{ backgroundColor: color }}
-              aria-hidden="true"
-            />
+            <CompetitorLegendSwatch size={12} fill={color} shape={shape} />
             <span className={hidden ? "line-through" : ""}>{label}</span>
           </button>
         );
@@ -255,6 +253,7 @@ interface SpeedAccuracyChartProps {
 export function SpeedAccuracyChart({ data }: SpeedAccuracyChartProps) {
   const { stages, competitors } = data;
   const colorMap = buildColorMap(competitors.map((c) => c.id));
+  const shapeMap = buildShapeMap(competitors.map((c) => c.id));
   const dataByCompetitor = buildScatterData(stages, competitors);
   const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
 
@@ -286,6 +285,7 @@ export function SpeedAccuracyChart({ data }: SpeedAccuracyChartProps) {
     id: comp.id,
     label: formatLabel(comp),
     color: colorMap[comp.id],
+    shape: shapeMap[comp.id],
   }));
 
   return (
