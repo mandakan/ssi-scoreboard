@@ -11,11 +11,28 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-04-27";
+export const LATEST_RELEASE_ID = "2026-04-28";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "April 28, 2026",
+    title: "Anonymous usage telemetry",
+    // No new charts/UI to screenshot — this is a transparency disclosure.
+    sections: [
+      {
+        heading: "Privacy",
+        items: [
+          "We now record anonymous server-side telemetry — page views, feature usage, cache decisions, and upstream timings — to help diagnose bugs and decide which features to invest in.",
+          "Never recorded: IP addresses, your shooter ID, individual competitor IDs, or the text of any search you type.",
+          "Recorded as buckets and counts only (e.g. \"1-9 results\" rather than the actual number). Stored on Cloudflare R2 with 30-day automatic deletion.",
+          "Full details and the complete \"never recorded\" list: see the Privacy Policy at /legal — section 6.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-04-27",
     date: "April 27, 2026",
     title: "Heads-up When SSI Is Down",
     sections: [
