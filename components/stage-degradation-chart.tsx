@@ -13,7 +13,11 @@ import {
   useXAxisDomain,
   useYAxisDomain,
 } from "recharts";
-import { buildColorMap } from "@/lib/colors";
+import { buildColorMap, buildShapeMap, type CompetitorShape } from "@/lib/colors";
+import {
+  CompetitorMarker,
+  CompetitorLegendSwatch,
+} from "@/components/competitor-marker";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { CompareResponse, CompetitorInfo, StageDegradationPoint } from "@/lib/types";
 
@@ -126,22 +130,24 @@ interface SelectedDotProps {
   cx?: number;
   cy?: number;
   fill?: string;
+  shape: CompetitorShape;
 }
 
-function SelectedDot({ cx, cy, fill }: SelectedDotProps) {
-  if (cx === undefined || cy === undefined) return null;
+function SelectedDot({ cx, cy, fill, shape }: SelectedDotProps) {
+  if (cx === undefined || cy === undefined || !fill) return null;
   return (
     <g>
       {/* Enlarged touch target */}
       <circle cx={cx} cy={cy} r={18} fill="transparent" />
-      <circle
+      <CompetitorMarker
         cx={cx}
         cy={cy}
-        r={7}
+        size={13}
         fill={fill}
-        style={{ stroke: "var(--background)" }}
-        strokeWidth={1.5}
+        shape={shape}
         opacity={0.9}
+        stroke="var(--background)"
+        strokeWidth={1.5}
       />
     </g>
   );
@@ -212,6 +218,7 @@ interface StageDegradationChartProps {
 export function StageDegradationChart({ data }: StageDegradationChartProps) {
   const { competitors, stageDegradationData } = data;
   const colorMap = buildColorMap(competitors.map((c) => c.id));
+  const shapeMap = buildShapeMap(competitors.map((c) => c.id));
   const selectedIds = useMemo(
     () => new Set(competitors.map((c) => c.id)),
     [competitors]
@@ -395,13 +402,17 @@ export function StageDegradationChart({ data }: StageDegradationChartProps) {
                 name={formatLabel(comp)}
                 data={toTooltipPoints(comp.id, pts)}
                 fill={colorMap[comp.id]}
-                shape={(props) => (
-                  <SelectedDot
-                    cx={(props as SelectedDotProps).cx}
-                    cy={(props as SelectedDotProps).cy}
-                    fill={colorMap[comp.id]}
-                  />
-                )}
+                shape={(props) => {
+                  const { cx, cy } = props as { cx?: number; cy?: number };
+                  return (
+                    <SelectedDot
+                      cx={cx}
+                      cy={cy}
+                      fill={colorMap[comp.id]}
+                      shape={shapeMap[comp.id]}
+                    />
+                  );
+                }}
               />
             );
           })}
@@ -414,10 +425,10 @@ export function StageDegradationChart({ data }: StageDegradationChartProps) {
           const pt = allPoints.find((p) => p.competitorId === comp.id);
           return (
             <div key={comp.id} className="flex items-center gap-1.5 text-xs">
-              <span
-                className="inline-block h-2.5 w-2.5 rounded-full flex-none"
-                style={{ backgroundColor: colorMap[comp.id] }}
-                aria-hidden="true"
+              <CompetitorLegendSwatch
+                size={11}
+                fill={colorMap[comp.id]}
+                shape={shapeMap[comp.id]}
               />
               <span>{formatLabel(comp)}</span>
               {pt && (

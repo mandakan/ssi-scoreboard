@@ -58,7 +58,24 @@ describe("buildShapeMap", () => {
     expect(map[SHAPE_PALETTE.length + 1]).toBe(SHAPE_PALETTE[0]);
   });
 
-  it("has the same length as PALETTE so color and shape cycle in lockstep", () => {
-    expect(SHAPE_PALETTE).toHaveLength(PALETTE.length);
+  it("has a length coprime with PALETTE so (color, shape) tuples are unique past one cycle", () => {
+    // gcd(8, 7) === 1: any two indices i, j with i ≠ j and i, j < 56
+    // produce different (color, shape) pairs.
+    function gcd(a: number, b: number): number {
+      return b === 0 ? a : gcd(b, a % b);
+    }
+    expect(gcd(PALETTE.length, SHAPE_PALETTE.length)).toBe(1);
+  });
+
+  it("produces unique (color, shape) tuples for the first 12 competitor indices", () => {
+    const seen = new Set<string>();
+    const ids = Array.from({ length: 12 }, (_, i) => i + 1);
+    const colorMap = buildColorMap(ids);
+    const shapeMap = buildShapeMap(ids);
+    for (const id of ids) {
+      const tuple = `${colorMap[id]}|${shapeMap[id]}`;
+      expect(seen.has(tuple)).toBe(false);
+      seen.add(tuple);
+    }
   });
 });

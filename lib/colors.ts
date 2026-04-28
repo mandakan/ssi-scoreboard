@@ -19,8 +19,10 @@ const PALETTE = [
   "#525252", // dark neutral (Okabe-Ito black, lightened for dark-mode legibility)
 ];
 
-// Recharts marker shapes — pair with PALETTE so series with cycled colors (indices 9-12)
-// remain distinguishable by marker shape. Keep this length aligned with PALETTE.
+// Marker shapes — paired with PALETTE so series remain distinguishable when color
+// cycles. Length is intentionally coprime with PALETTE (7 vs 8) so the (color, shape)
+// tuple is unique for the first 56 indices — well beyond MAX_COMPETITORS = 12.
+// Without coprimality, indices 1 and 9 would share both color AND shape.
 const SHAPE_PALETTE = [
   "circle",
   "square",
@@ -29,7 +31,6 @@ const SHAPE_PALETTE = [
   "cross",
   "star",
   "wye",
-  "circle", // last index falls back to circle; rarely reached at 8 distinct colors
 ] as const;
 
 export type CompetitorShape = (typeof SHAPE_PALETTE)[number];

@@ -12,7 +12,11 @@ import {
   ReferenceArea,
   ResponsiveContainer,
 } from "recharts";
-import { buildColorMap } from "@/lib/colors";
+import { buildColorMap, buildShapeMap } from "@/lib/colors";
+import {
+  CompetitorMarker,
+  CompetitorLegendSwatch,
+} from "@/components/competitor-marker";
 import type { CompareResponse, StageComparison } from "@/lib/types";
 import { computeHfPct, type RefMode } from "@/lib/hf-percent-utils";
 
@@ -25,6 +29,7 @@ export function HfPercentChart({ data, stages: stagesProp }: HfPercentChartProps
   const stages = stagesProp ?? data.stages;
   const { competitors } = data;
   const colorMap = buildColorMap(competitors.map((c) => c.id));
+  const shapeMap = buildShapeMap(competitors.map((c) => c.id));
   const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
   const [refMode, setRefMode] = useState<RefMode>("stage_winner");
 
@@ -88,10 +93,10 @@ export function HfPercentChart({ data, stages: stagesProp }: HfPercentChartProps
                 opacity: active ? undefined : 0.5,
               }}
             >
-              <span
-                className="inline-block h-2.5 w-2.5 flex-none rounded-full"
-                style={{ backgroundColor: color }}
-                aria-hidden="true"
+              <CompetitorLegendSwatch
+                size={12}
+                fill={color}
+                shape={shapeMap[comp.id]}
               />
               {formatLabel(comp.id)}
             </button>
@@ -161,15 +166,57 @@ export function HfPercentChart({ data, stages: stagesProp }: HfPercentChartProps
           />
           {competitors.map((comp) => {
             if (hiddenIds.has(comp.id)) return null;
+            const color = colorMap[comp.id];
+            const shape = shapeMap[comp.id];
             return (
               <Line
                 key={comp.id}
                 type="monotone"
                 dataKey={`hfpct_${comp.id}`}
-                stroke={colorMap[comp.id]}
+                stroke={color}
                 strokeWidth={2}
-                dot={{ r: 3, fill: colorMap[comp.id] }}
-                activeDot={{ r: 5 }}
+                dot={(dotProps) => {
+                  // Recharts passes cx/cy/key on the dot props
+                  const { cx, cy, key } = dotProps as {
+                    cx?: number;
+                    cy?: number;
+                    key?: string | number;
+                  };
+                  if (cx === undefined || cy === undefined) {
+                    // Recharts requires every render path to return an SVG element
+                    return <g key={key} />;
+                  }
+                  return (
+                    <CompetitorMarker
+                      key={key}
+                      cx={cx}
+                      cy={cy}
+                      size={7}
+                      fill={color}
+                      shape={shape}
+                    />
+                  );
+                }}
+                activeDot={(dotProps) => {
+                  const { cx, cy, key } = dotProps as {
+                    cx?: number;
+                    cy?: number;
+                    key?: string | number;
+                  };
+                  if (cx === undefined || cy === undefined) return <g key={key} />;
+                  return (
+                    <CompetitorMarker
+                      key={key}
+                      cx={cx}
+                      cy={cy}
+                      size={11}
+                      fill={color}
+                      shape={shape}
+                      stroke="var(--background)"
+                      strokeWidth={1.5}
+                    />
+                  );
+                }}
                 name={`hfpct_${comp.id}`}
                 connectNulls={false}
               />
@@ -217,10 +264,10 @@ export function HfPercentChart({ data, stages: stagesProp }: HfPercentChartProps
                 opacity: hidden ? 0.4 : undefined,
               }}
             >
-              <span
-                className="inline-block h-3 w-3 flex-none rounded-full"
-                style={{ backgroundColor: color }}
-                aria-hidden="true"
+              <CompetitorLegendSwatch
+                size={12}
+                fill={color}
+                shape={shapeMap[comp.id]}
               />
               <span className={hidden ? "line-through" : ""}>{label}</span>
             </button>
