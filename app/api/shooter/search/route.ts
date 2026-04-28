@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db-impl";
+import { reportError } from "@/lib/error-telemetry";
+import { usageTelemetry, bucketCount } from "@/lib/usage-telemetry";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -11,10 +13,20 @@ export async function GET(req: Request) {
   }
   const limit = Math.min(Math.max(1, limitParsed), 100);
 
+  let results: Awaited<ReturnType<typeof db.searchShooterProfiles>> = [];
   try {
-    const results = await db.searchShooterProfiles(q, { limit });
-    return NextResponse.json(results);
-  } catch {
-    return NextResponse.json([]);
+    results = await db.searchShooterProfiles(q, { limit });
+  } catch (err) {
+    reportError("shooter-search.db", err);
+    results = [];
   }
+
+  usageTelemetry({
+    op: "search",
+    kind: "shooter",
+    queryLength: q.length,
+    resultBucket: bucketCount(results.length),
+  });
+
+  return NextResponse.json(results);
 }

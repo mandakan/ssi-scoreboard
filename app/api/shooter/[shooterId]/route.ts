@@ -5,6 +5,7 @@ import { gqlCacheKey, cachedExecuteQuery, UPCOMING_STATUS_QUERY } from "@/lib/gr
 import { getMatchDataWithFallback } from "@/lib/match-data-store";
 import { decodeShooterId } from "@/lib/shooter-index";
 import { reportError } from "@/lib/error-telemetry";
+import { usageTelemetry, bucketCount } from "@/lib/usage-telemetry";
 import type { ShooterProfile } from "@/lib/shooter-index";
 import { parseRawScorecards } from "@/lib/scorecard-data";
 import { extractDivision } from "@/lib/divisions";
@@ -321,6 +322,11 @@ export async function GET(
     const cached = await cache.get(dashboardKey);
     if (cached) {
       const parsed = JSON.parse(cached) as ShooterDashboardResponse;
+      usageTelemetry({
+        op: "shooter-dashboard-view",
+        matchCountBucket: bucketCount(parsed.matchCount),
+        cacheHit: true,
+      });
       return NextResponse.json(parsed);
     }
   } catch (err) {
@@ -667,6 +673,12 @@ export async function GET(
       matchesProcessed: matchSummaries.length,
     }),
   );
+
+  usageTelemetry({
+    op: "shooter-dashboard-view",
+    matchCountBucket: bucketCount(totalMatchCount),
+    cacheHit: false,
+  });
 
   return NextResponse.json(response);
 }

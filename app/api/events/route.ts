@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { executeQuery, EVENTS_QUERY } from "@/lib/graphql";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { usageTelemetry, bucketCount } from "@/lib/usage-telemetry";
 
 import type { EventSummary } from "@/lib/types";
 
@@ -215,5 +216,13 @@ export async function GET(req: Request) {
     result_count: events.length,
     ms_total: Math.round(performance.now() - t0),
   }));
+
+  usageTelemetry({
+    op: "search",
+    kind: "events",
+    queryLength: q.length,
+    resultBucket: bucketCount(events.length),
+  });
+
   return NextResponse.json(events);
 }

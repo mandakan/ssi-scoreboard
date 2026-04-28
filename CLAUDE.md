@@ -236,6 +236,15 @@ Lives in `lib/telemetry.ts` (transport) + per-domain typed wrappers:
 - `lib/cache-telemetry.ts` — match TTL decisions, cache reads, schema evictions
 - `lib/upstream-telemetry.ts` — every SSI GraphQL fetch (latency, outcome, bytes)
 - `lib/error-telemetry.ts` — `reportError(site, err, extra)` for swallowed-catch sites; records error class + truncated message (no stack — avoids PII)
+- `lib/usage-telemetry.ts` — server-side product analytics (match views, comparisons, searches, OG renders, dashboard views)
+
+**Privacy commitments — enforced by code review:**
+
+- **Never** record IP addresses, User-Agent strings, shooter IDs, or specific competitor IDs.
+- **Never** record raw search query text — only `queryLength` and a bucketed `resultBucket`.
+- Match IDs *are* recorded — matches are public events whose IDs are not personally identifying.
+- New `usage` events must use bucketed counts (`bucketCount`, `bucketScoring`) instead of raw numbers when the underlying value could correlate to a person.
+- The user-facing privacy policy at `/legal` describes this contract (Section 6). Update it whenever telemetry collection changes.
 
 **Sinks (registered automatically per deploy target):**
 - `console.info` — always on. Picked up by Cloudflare Workers Logs and Docker stdout.

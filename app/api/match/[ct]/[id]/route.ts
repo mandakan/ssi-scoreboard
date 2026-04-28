@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchMatchData } from "@/lib/match-data";
+import { usageTelemetry, bucketScoring } from "@/lib/usage-telemetry";
 
 export async function GET(
   _req: Request,
@@ -34,6 +35,15 @@ export async function GET(
     ms_graphql: Math.round(result.msFetch),
     ms_total: Math.round(tDone - t0),
   }));
+
+  usageTelemetry({
+    op: "match-view",
+    ct: ctNum,
+    level: response.level ?? null,
+    region: response.region ?? null,
+    scoringBucket: bucketScoring(response.scoring_completed ?? 0),
+    cacheHit: cachedAt !== null,
+  });
 
   return NextResponse.json(response, {
     headers: {
