@@ -23,6 +23,9 @@ const nextConfig: NextConfig = {
           // Replace the no-op background scheduler with the CF waitUntil
           // implementation so D1 writes complete after the response is sent.
           "@/lib/background-impl": "@/lib/background-cf",
+          // Register the R2 NDJSON telemetry sink on CF; Docker has no
+          // extra sinks beyond the always-on console sink.
+          "@/lib/telemetry-sinks-impl": "@/lib/telemetry-sinks-cf",
         },
       }
     : {},
@@ -60,12 +63,14 @@ const nextConfig: NextConfig = {
       const edgeImpl = path.resolve(process.cwd(), "lib/cache-edge");
       const d1Impl = path.resolve(process.cwd(), "lib/db-d1");
       const bgCf = path.resolve(process.cwd(), "lib/background-cf");
+      const telemetryCf = path.resolve(process.cwd(), "lib/telemetry-sinks-cf");
       config.resolve = {
         ...config.resolve,
         alias: {
           "@/lib/cache-impl": edgeImpl,
           "@/lib/db-impl": d1Impl,
           "@/lib/background-impl": bgCf,
+          "@/lib/telemetry-sinks-impl": telemetryCf,
           ...(config.resolve?.alias as Record<string, string> | undefined ?? {}),
         },
       };

@@ -67,6 +67,15 @@ database_name = "ssi-scoreboard-app-db-eu"
 database_id = "4a3d6cf5-31ce-4775-84f5-f9abee4206e2"  # patched by scripts/setup-d1.ts
 migrations_dir = "migrations"
 
+# R2 bucket for long-retention telemetry (cache decisions, etc.) — see
+# lib/telemetry-sinks-cf.ts. Free-tier friendly. One-time setup:
+#   wrangler r2 bucket create ssi-scoreboard-telemetry
+#   wrangler r2 bucket lifecycle set ssi-scoreboard-telemetry \
+#     --rule '{"id":"expire-30d","enabled":true,"conditions":{"prefix":""},"action":{"type":"Expire","conditions":{"age":2592000}}}'
+[[r2_buckets]]
+binding = "TELEMETRY"
+bucket_name = "ssi-scoreboard-telemetry"
+
 [assets]
 directory = ".open-next/assets"
 
@@ -90,3 +99,9 @@ binding = "APP_DB"
 database_name = "ssi-scoreboard-app-db-staging-eu"
 database_id = "1b1c7faf-c206-41f6-9557-adbdf1c0ba18"  # patched by scripts/setup-d1.ts
 migrations_dir = "migrations"
+
+# Staging R2 bucket — same setup commands as prod, with --env staging:
+#   wrangler r2 bucket create ssi-scoreboard-telemetry-staging
+[[env.staging.r2_buckets]]
+binding = "TELEMETRY"
+bucket_name = "ssi-scoreboard-telemetry-staging"

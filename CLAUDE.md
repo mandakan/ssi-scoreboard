@@ -228,6 +228,54 @@ or any other type that is serialised into the **match cache** (Redis/D1) via `ca
 This does **not** apply to AppDatabase schema changes — those are managed independently by
 the SQLite/D1 adapters via `CREATE TABLE IF NOT EXISTS`.
 
+## Telemetry
+
+Structured-event logging for cache decisions and other server-side observability.
+Lives in `lib/telemetry.ts` (transport) + per-domain typed wrappers (`lib/cache-telemetry.ts`).
+
+**Sinks (registered automatically per deploy target):**
+- `console.info` — always on. Picked up by Cloudflare Workers Logs and Docker stdout.
+- R2 NDJSON — Cloudflare only, when the `TELEMETRY` binding is present (see `lib/telemetry-sinks-cf.ts`).
+  Per-isolate batching, flushed via `ctx.waitUntil()` to one object per request burst at
+  `cache-telemetry/YYYY-MM-DD/HHmmss-NNNN.ndjson`. Lifecycle rule on the bucket auto-deletes
+  after 30 days. Sampling controlled by `TELEMETRY_SAMPLE`.
+
+**Adding a new domain:**
+1. Create `lib/<domain>-telemetry.ts` with a typed discriminated union over `op`.
+2. Export a thin wrapper: `export function fooTelemetry(ev: FooEvent) { telemetry({ domain: "foo", ...ev }); }`.
+   No transport changes needed — the existing sinks handle it automatically.
+
+**Adding a new sink:**
+1. Implement `TelemetrySink` (a function over `EnrichedEvent`).
+2. For deploy-target-agnostic sinks: call `registerSink()` at module load.
+3. For CF-only sinks: append to `extraSinks` in `lib/telemetry-sinks-cf.ts`.
+4. For Docker-only sinks: append to `lib/telemetry-sinks-impl.ts`.
+
+**One-time R2 setup (Cloudflare):**
+```bash
+# Production
+wrangler r2 bucket create ssi-scoreboard-telemetry
+wrangler r2 bucket lifecycle set ssi-scoreboard-telemetry --rule \
+  '{"id":"expire-30d","enabled":true,"conditions":{"prefix":""},"action":{"type":"Expire","conditions":{"age":2592000}}}'
+
+# Staging
+wrangler r2 bucket create ssi-scoreboard-telemetry-staging
+wrangler r2 bucket lifecycle set ssi-scoreboard-telemetry-staging --rule \
+  '{"id":"expire-30d","enabled":true,"conditions":{"prefix":""},"action":{"type":"Expire","conditions":{"age":2592000}}}'
+```
+
+**Reading telemetry:**
+```bash
+# List a day's events
+wrangler r2 object list ssi-scoreboard-telemetry --prefix=cache-telemetry/2026-04-28/
+
+# Pipe one object to jq (NDJSON — one event per line)
+wrangler r2 object get ssi-scoreboard-telemetry/cache-telemetry/2026-04-28/132405-a1b2c3.ndjson | \
+  jq 'select(.op == "match-ttl-decision" and .trulyDone == true)'
+
+# Bulk: download a whole day's prefix and feed into DuckDB / sqlite for analysis
+```
+
 ## Shooter Index & Match Backfill
 
 The shooter dashboard (`/shooter/{id}`) shows cross-competition stats. It relies on
@@ -370,7 +418,8 @@ handles new achievements and tiers automatically.
 | `MIN_CACHE_TTL_SECONDS` | `lib/match-ttl.ts` (server-only) | Both | Minimum TTL floor for all non-permanent cache entries. Default `30` (s) — keeps active matches near-real-time so courtside polling picks up fresh scorecards within seconds. Raise it to reduce upstream load on shared deployments. Set to `0` to disable. Never `NEXT_PUBLIC_`. |
 | `MATCH_COMPLETE_DAYS_SINCE` | `lib/match-ttl.ts` (server-only) | Both | Hard time gate (days) before a match can be permanently pinned to durable cache. Default `3`. Even SSI flag flips (`status=cp`, `results=all`) cannot pin earlier than this — protects against the Skepplanda-style premature pinning bug where a mid-match flag flip caused stale data to stick. Raise for events with very long scoring tails (e.g. World Shoots that run 5+ days). Never `NEXT_PUBLIC_`. |
 | `MATCH_COMPLETE_SCORING_PCT` | `lib/match-ttl.ts` (server-only) | Both | Scoring threshold (percent, 0-100) for the un-flagged completion heuristic. Default `98`. Used only when SSI never flips `status=cp`/`results=all` and the time gate has passed. Lower values pin more matches earlier (saves upstream calls) at the risk of catching matches still accruing scorecards. Never `NEXT_PUBLIC_`. |
-| `CACHE_TELEMETRY` | `lib/cache-telemetry.ts` (server-only) | Both | Set to `off` to suppress structured cache/freshness telemetry logs. Default on — emits one JSON line per TTL decision and read-path observation, picked up by Cloudflare Workers logs / Docker stdout. Useful for diagnosing future "data stuck" reports. Never `NEXT_PUBLIC_`. |
+| `CACHE_TELEMETRY` | `lib/telemetry.ts` (server-only) | Both | Set to `off` to suppress all telemetry. Default on — emits one JSON line per event via `console.info` (picked up by Cloudflare Workers Logs / Docker stdout) and additionally writes to R2 on Cloudflare when the `TELEMETRY` binding is bound. Never `NEXT_PUBLIC_`. |
+| `TELEMETRY_SAMPLE` | `lib/telemetry-sinks-cf.ts` (Cloudflare only) | Cloudflare only | `all` (default) keeps every event; `signal` keeps only the high-signal ones — pinning decisions (`trulyDone=true`), schema evictions, and stale reads. Use `signal` if R2 PUT volume gets close to the 1M Class A free-tier cap. Never `NEXT_PUBLIC_`. |
 | `NEXT_PUBLIC_BUILD_ID` | `components/update-banner.tsx`, `app/api/version/route.ts` | Both | Git SHA baked into the client bundle at Docker build time; powers new-version detection. Auto-injected by `pnpm docker:build`. Unset in `pnpm dev` — version check is skipped. |
 | `REDIS_URL` | `lib/cache-node.ts` | Docker only | `redis://localhost:6379` locally, `rediss://...` for managed Redis. Not needed for CF builds. |
 | `APP_DB_PATH` | `lib/db-sqlite.ts` | Docker only | Path to SQLite database file. Defaults to `./data/shooter-index.db`. Not needed for CF builds. |
