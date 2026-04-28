@@ -91,6 +91,10 @@ export default function AboutPage() {
                   with a five-second undo if you change your mind
                 </li>
                 <li>
+                  Reorder competitors right inside the comparison table — the
+                  column color follows, so you can pin yourself to column one
+                </li>
+                <li>
                   Live, Pre-match, and Coaching views — auto-selected to match
                   the phase of the event, with a manual override
                 </li>

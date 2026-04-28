@@ -427,6 +427,16 @@ export default function MatchPageClient() {
     clearPendingUndo();
   }
 
+  function moveCompetitor(id: number, direction: "left" | "right") {
+    const idx = selectedIds.indexOf(id);
+    if (idx === -1) return;
+    const swapWith = direction === "left" ? idx - 1 : idx + 1;
+    if (swapWith < 0 || swapWith >= selectedIds.length) return;
+    const next = [...selectedIds];
+    [next[idx], next[swapWith]] = [next[swapWith], next[idx]];
+    handleSelectionChange(next);
+  }
+
   if (matchQuery.isLoading) {
     return (
       <>
@@ -656,6 +666,7 @@ export default function MatchPageClient() {
                 <p><strong>Star</strong> — favorite a competitor. Stars live in the picker, in the comparison table header, and on the shooter dashboard.</p>
                 <p><strong>Squad</strong> — replaces your selection with everyone in a squad. One tap to undo.</p>
                 <p><strong>Benchmark</strong> — once you set &ldquo;this is me&rdquo; in My Shooters, you unlock one-tap presets: one-above, one-below, division podium, percentile cohort, and same-club peers.</p>
+                <p><strong>Reorder</strong> — use the chevrons in each comparison-table column header to move a competitor left or right. Their column color follows the new position.</p>
                 <p><strong>Clear</strong> — wipes the selection. Undo lasts 5 seconds.</p>
               </div>
             </PopoverContent>
@@ -855,6 +866,7 @@ export default function MatchPageClient() {
                   sortedStages={sortedStages}
                   trackedShooterIds={trackedIds}
                   onToggleTracked={handleToggleTracked}
+                  onMove={moveCompetitor}
                 />
               </div>
 

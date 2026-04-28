@@ -24,6 +24,7 @@ export const RELEASES: Release[] = [
         heading: "New",
         items: [
           "Smart benchmark presets — once you set 'this is me' in My Shooters, the Benchmark button gives one-tap shortcuts: One above me, One below me, My division podium, My percentile cohort (p25/p50/p75/p95), and Same club. Each preset replaces your current selection and you can undo right away.",
+          "Reorder competitors directly in the comparison table — each column header has chevron buttons to move a competitor left or right. Column colors follow the new order, so you can put yourself in column 1 and keep the same color across matches.",
           "Tap the star next to a competitor's name in the comparison table header to favorite or unfavorite them without leaving the page. The same star is now also on the shooter dashboard.",
           "Squad picker now replaces your current selection (with a one-tap undo) instead of mixing the squad into what was already there.",
           "Clear button next to the picker wipes your selection in one tap, with a 5-second undo.",
