@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { fetchMatch, fetchCompare, fetchEvents, fetchPopularMatches, fetchLiveMatches, fetchCoachingAvailability, fetchCoachingTip, fetchShooterDashboard, fetchShooterSearch } from "@/lib/api";
+import { fetchMatch, fetchCompare, fetchEvents, fetchPopularMatches, fetchLiveMatches, fetchCoachingAvailability, fetchCoachingTip, fetchShooterDashboard, fetchShooterSearch, fetchUpstreamStatus, type UpstreamStatus } from "@/lib/api";
 import type { CompareMode, MatchResponse, CompareResponse, EventSummary, PopularMatch, CoachingTipResponse, CoachingAvailability, ShooterDashboardResponse, ShooterSearchResult, PreMatchWeatherResponse } from "@/lib/types";
 import { matchQueryKey, compareQueryKey, coachingAvailabilityKey, coachingTipQueryKey } from "@/lib/query-keys";
 
@@ -61,6 +61,19 @@ export function usePopularMatchesQuery() {
     queryKey: ["popular-matches"],
     queryFn: fetchPopularMatches,
     staleTime: 300_000, // 5 minutes
+  });
+}
+
+export function useUpstreamStatusQuery() {
+  // Polled lightly while the user is on the page. The server flag has a 60s
+  // TTL, so a 30s refetch surfaces recovery within at most ~90s while still
+  // being cheap (one Redis GET per request). Paused in background tabs.
+  return useQuery<UpstreamStatus, Error>({
+    queryKey: ["upstream-status"],
+    queryFn: fetchUpstreamStatus,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 }
 

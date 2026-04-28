@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { executeQuery, EVENTS_QUERY } from "@/lib/graphql";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { usageTelemetry, bucketCount } from "@/lib/usage-telemetry";
+import { markUpstreamDegraded } from "@/lib/upstream-status";
 
 import type { EventSummary } from "@/lib/types";
 
@@ -202,6 +203,10 @@ export async function GET(req: Request) {
         throw new Error(failures.join(" | "));
       }
       if (failures.length > 0) {
+        // Partial outage — flag upstream as degraded so the homepage banner
+        // surfaces it. The 60s TTL on the flag means it self-clears once SSI
+        // recovers, without us having to write a "healthy again" signal.
+        await markUpstreamDegraded();
         console.warn(JSON.stringify({
           route: "events",
           partial_failure: true,
@@ -212,6 +217,10 @@ export async function GET(req: Request) {
       }
     }
   } catch (err) {
+    // Total failure — every sub-window failed, or the search call failed.
+    // Mark degraded so the homepage banner surfaces it instead of users
+    // assuming the scoreboard itself is broken.
+    await markUpstreamDegraded();
     const message = err instanceof Error ? err.message : "Upstream error";
     return NextResponse.json({ error: message }, { status: 502 });
   }
