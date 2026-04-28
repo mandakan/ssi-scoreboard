@@ -1,0 +1,36 @@
+name: Check SSI Schema Drift
+
+# Detects drift between the live SSI GraphQL schema and our snapshot
+# (`scripts/ssi-schema-snapshot.json`). The delta merge in #362 mirrors SSI's
+# scorecard structure, so silent upstream changes can corrupt cached data.
+#
+# Runs weekly + on demand. Failure opens a notification via the workflow's
+# job status (visible in the Actions tab); pair with branch protection or a
+# manual review cadence.
+#
+# Setup: requires `SSI_API_KEY` as a repo secret.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Mondays 06:00 UTC — early enough that drift surfaces before the weekend
+    # match cycle ramps up Wednesday onwards.
+    - cron: '0 6 * * 1'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Compare snapshot vs live SSI schema
+        env:
+          SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
+        run: pnpm check:ssi-schema
