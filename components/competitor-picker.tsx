@@ -17,7 +17,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
-import { Users, Check, Star, User, Settings2 } from "lucide-react";
+import { Users, Check, Plus, Star, User, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CompetitorInfo } from "@/lib/types";
 import { MAX_COMPETITORS } from "@/lib/constants";
@@ -94,6 +94,26 @@ export function CompetitorPicker({
   }, [competitors, trackedShooterIds, myShooterId]);
 
   const hasFavorites = favorites.length > 0;
+
+  // Favorites that are not yet selected — drives the "Add all" pill.
+  const addableFavorites = useMemo(
+    () => favorites.filter((c) => !selectedSet.has(c.id)),
+    // selectedSet is derived from selectedIds; depend on the array itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [favorites, selectedIds],
+  );
+  const remainingSlots = MAX_COMPETITORS - selectedIds.length;
+  const addAllCount = Math.min(addableFavorites.length, Math.max(remainingSlots, 0));
+  const showAddAllPill = addableFavorites.length >= 2;
+  const addAllDisabled = remainingSlots <= 0 || addableFavorites.length === 0;
+
+  function handleAddAllFavorites(e: React.MouseEvent | React.KeyboardEvent) {
+    e.stopPropagation();
+    if (addAllDisabled) return;
+    const idsToAdd = addableFavorites.slice(0, remainingSlots).map((c) => c.id);
+    if (idsToAdd.length === 0) return;
+    onSelectionChange([...selectedIds, ...idsToAdd]);
+  }
 
   function renderRow(c: CompetitorInfo) {
     const isSelected = selectedSet.has(c.id);
@@ -221,7 +241,38 @@ export function CompetitorPicker({
               <CommandEmpty>No competitors found.</CommandEmpty>
               {hasFavorites && (
                 <>
-                  <CommandGroup heading="Favorites">
+                  <div className="flex items-center justify-between gap-2 px-2 pt-2 pb-1">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Favorites
+                    </span>
+                    {showAddAllPill && (
+                      <button
+                        type="button"
+                        onClick={handleAddAllFavorites}
+                        disabled={addAllDisabled}
+                        aria-label={
+                          addAllDisabled
+                            ? "Cannot add favorites — selection limit reached"
+                            : `Add ${addAllCount} favorite${addAllCount === 1 ? "" : "s"} to selection`
+                        }
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors",
+                          "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+                          addAllDisabled
+                            ? "border-muted text-muted-foreground/50 cursor-not-allowed"
+                            : "border-amber-500/40 text-amber-600 hover:bg-amber-500/10 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300",
+                        )}
+                      >
+                        <Plus className="w-3 h-3" aria-hidden="true" />
+                        {addAllDisabled
+                          ? "Limit reached"
+                          : addAllCount < addableFavorites.length
+                            ? `Add ${addAllCount} of ${addableFavorites.length}`
+                            : `Add all (${addAllCount})`}
+                      </button>
+                    )}
+                  </div>
+                  <CommandGroup>
                     {favorites.map((c) => renderRow(c))}
                   </CommandGroup>
                   <CommandSeparator />

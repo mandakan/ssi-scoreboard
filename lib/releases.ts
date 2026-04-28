@@ -34,6 +34,7 @@ export const RELEASES: Release[] = [
         heading: "Improved",
         items: [
           "The competitor dropdown now groups your favorites at the top — with you pinned first when 'this is me' is set — and the rest below.",
+          "Favorites section has an 'Add all' pill that pulls every favorite entered in the match into the comparison in a single tap.",
         ],
       },
     ],

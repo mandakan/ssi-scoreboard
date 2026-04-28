@@ -663,7 +663,7 @@ export default function MatchPageClient() {
                 </PopoverDescription>
               </PopoverHeader>
               <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                <p><strong>Star</strong> — favorite a competitor. Stars live in the picker, in the comparison table header, and on the shooter dashboard.</p>
+                <p><strong>Star</strong> — favorite a competitor. Stars live in the picker, in the comparison table header, and on the shooter dashboard. The picker also has an &ldquo;Add all favorites&rdquo; pill so you can pull in everyone you track in one tap.</p>
                 <p><strong>Squad</strong> — replaces your selection with everyone in a squad. One tap to undo.</p>
                 <p><strong>Benchmark</strong> — once you set &ldquo;this is me&rdquo; in My Shooters, you unlock one-tap presets: one-above, one-below, division podium, percentile cohort, and same-club peers.</p>
                 <p><strong>Reorder</strong> — use the chevrons in each comparison-table column header to move a competitor left or right. Their column color follows the new position.</p>
