@@ -478,24 +478,19 @@ export default function MatchPageClient() {
           All matches
         </Link>
         <div className="flex items-center gap-3">
-          {matchQuery.isFetching && (
-            <span
-              className="flex items-center gap-1 text-xs text-muted-foreground"
-              role="status"
-              aria-live="polite"
-            >
-              <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
-              Refreshing...
-            </span>
-          )}
           <CacheInfoBadge
             ct={ct}
             id={id}
             cachedAt={stalestCachedAt}
             lastScorecardAt={compareQuery.data?.cacheInfo.lastScorecardAt ?? null}
-            matchOngoing={
-              match.match_status !== "cp" && match.match_status !== "cs"
+            phase={
+              effectiveMode === "prematch"
+                ? "prematch"
+                : effectiveMode === "coaching"
+                  ? "finished"
+                  : "live"
             }
+            isRefreshing={matchQuery.isFetching || compareQuery.isFetching}
           />
           <ShareEventLink ct={ct} id={id} matchName={match.name} />
           <ShareButton title={match.name} competitorCount={selectedIds.length} />
