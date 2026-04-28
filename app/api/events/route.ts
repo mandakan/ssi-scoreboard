@@ -161,9 +161,13 @@ export async function GET(req: Request) {
       // Text search: the API's search backend returns good results in one call.
       // 15s cap — search is interactive; no point making the user wait the
       // full 60s default if SSI is having a slow moment.
+      // includeScoring=false — search results don't display % progress, and
+      // requesting that field adds ~10s of upstream computation (see
+      // EVENTS_QUERY comment). Live mode below requests it because the live
+      // section actually needs the percentage.
       const data = await executeQuery<RawEventsData>(
         EVENTS_QUERY,
-        { starts_after: startsAfter, starts_before: startsBefore, firearms, search: q },
+        { starts_after: startsAfter, starts_before: startsBefore, firearms, search: q, includeScoring: false },
         3600,
         { timeoutMs: 15_000 },
       );
@@ -188,9 +192,12 @@ export async function GET(req: Request) {
       // fetch cache for that window — we accept that trade so the user
       // doesn't wait a full minute for one stuck call.
       const windows = buildSubWindows(startsAfter, startsBefore, firearms ? { firearms } : {});
+      // Only live mode actually displays the % progress; browse skips the
+      // server-side scoring_completed aggregate (saves ~10s per sub-window).
+      const includeScoring = liveMode;
       const settled = await Promise.allSettled(
         windows.map((vars) =>
-          executeQuery<RawEventsData>(EVENTS_QUERY, vars, 3600, { timeoutMs: 8_000 }),
+          executeQuery<RawEventsData>(EVENTS_QUERY, { ...vars, includeScoring }, 3600, { timeoutMs: 8_000 }),
         ),
       );
       const failures: string[] = [];

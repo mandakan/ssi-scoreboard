@@ -801,8 +801,16 @@ async function fullRefresh<T>(
 // `region` is an ISO 3166-1 alpha-3 country code (e.g. "SWE", "NOR", "DNK",
 // "FIN"). Country filtering is done server-side in the route handler after
 // the GraphQL response is received — the SSI API has no region filter param.
+//
+// `scoring_completed` is gated behind a $includeScoring variable + @include
+// directive — it is a server-computed aggregate (scans every scorecard for
+// every match in the result set) that adds 10+ seconds to the worldwide
+// browse query. Live mode passes `includeScoring: true` because it needs the
+// progress percentage to filter active matches; browse and search pass false
+// because they only display name/date/venue/level. Empirically: same query,
+// same window, against SSI: 0.25s without scoring_completed, 11-13s with it.
 export const EVENTS_QUERY = `
-  query GetEvents($search: String, $starts_after: String, $starts_before: String, $firearms: String) {
+  query GetEvents($search: String, $starts_after: String, $starts_before: String, $firearms: String, $includeScoring: Boolean!) {
     events(rule: "ip", firearms: $firearms, search: $search, starts_after: $starts_after, starts_before: $starts_before) {
       id
       get_content_type_key
@@ -815,7 +823,7 @@ export const EVENTS_QUERY = `
       get_full_rule_display
       get_full_level_display
       ... on IpscMatchNode {
-        scoring_completed
+        scoring_completed @include(if: $includeScoring)
         registration_starts
         registration_closes
         squadding_starts
