@@ -206,7 +206,7 @@ export async function GET(req: Request) {
         // Partial outage — flag upstream as degraded so the homepage banner
         // surfaces it. The 60s TTL on the flag means it self-clears once SSI
         // recovers, without us having to write a "healthy again" signal.
-        await markUpstreamDegraded();
+        await markUpstreamDegraded("events-route-partial");
         console.warn(JSON.stringify({
           route: "events",
           partial_failure: true,
@@ -220,7 +220,10 @@ export async function GET(req: Request) {
     // Total failure — every sub-window failed, or the search call failed.
     // Mark degraded so the homepage banner surfaces it instead of users
     // assuming the scoreboard itself is broken.
-    await markUpstreamDegraded();
+    await markUpstreamDegraded(
+      "events-route-total",
+      err instanceof Error ? err.name : null,
+    );
     const message = err instanceof Error ? err.message : "Upstream error";
     return NextResponse.json({ error: message }, { status: 502 });
   }

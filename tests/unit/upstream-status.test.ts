@@ -6,6 +6,9 @@ const cacheMock = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/cache-impl", () => ({ default: cacheMock }));
+vi.mock("@/lib/upstream-telemetry", () => ({
+  upstreamTelemetry: vi.fn(),
+}));
 
 describe("upstream-status", () => {
   beforeEach(() => {
@@ -19,7 +22,7 @@ describe("upstream-status", () => {
       "@/lib/upstream-status"
     );
 
-    await markUpstreamDegraded();
+    await markUpstreamDegraded("events-route-total");
 
     expect(cacheMock.set).toHaveBeenCalledTimes(1);
     const [key, value, ttl] = cacheMock.set.mock.calls[0];
@@ -32,7 +35,21 @@ describe("upstream-status", () => {
     cacheMock.set.mockRejectedValue(new Error("cache down"));
     const { markUpstreamDegraded } = await import("@/lib/upstream-status");
 
-    await expect(markUpstreamDegraded()).resolves.toBeUndefined();
+    await expect(markUpstreamDegraded("events-route-total")).resolves.toBeUndefined();
+  });
+
+  it("markUpstreamDegraded emits a degraded-marked telemetry event with site + errorClass", async () => {
+    cacheMock.set.mockResolvedValue(undefined);
+    const { upstreamTelemetry } = await import("@/lib/upstream-telemetry");
+    const { markUpstreamDegraded } = await import("@/lib/upstream-status");
+
+    await markUpstreamDegraded("refresh-cached-match-query", "TimeoutError");
+
+    expect(upstreamTelemetry).toHaveBeenCalledWith({
+      op: "degraded-marked",
+      site: "refresh-cached-match-query",
+      errorClass: "TimeoutError",
+    });
   });
 
   it("isUpstreamDegraded returns true when the key exists", async () => {

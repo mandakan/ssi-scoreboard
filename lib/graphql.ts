@@ -769,7 +769,10 @@ async function fullRefresh<T>(
     }
   } catch (err) {
     console.error("[cache] background refresh failed for key:", cacheKey, err);
-    await markUpstreamDegraded();
+    await markUpstreamDegraded(
+      "refresh-cached-match-query",
+      err instanceof Error ? err.name : null,
+    );
     if (ttlSeconds !== null) {
       try {
         await cache.expire(cacheKey, ttlSeconds);
@@ -910,7 +913,10 @@ export async function refreshCachedQuery<T>(
     console.error("[cache] background refresh failed for key:", cacheKey, err);
     // Mark the upstream as degraded so handlers can surface a banner to users.
     // Best-effort — failure to write the flag is silently swallowed.
-    await markUpstreamDegraded();
+    await markUpstreamDegraded(
+      "refresh-cached-query",
+      err instanceof Error ? err.name : null,
+    );
     // Stale-on-error: extend the existing entry's TTL so users keep seeing
     // last-known-good data through transient upstream outages. Without this,
     // the entry would tick toward eviction while every refresh attempt fails,

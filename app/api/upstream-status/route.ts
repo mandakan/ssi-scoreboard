@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import cache from "@/lib/cache-impl";
 import { UPSTREAM_DEGRADED_KEY } from "@/lib/upstream-status";
+import { upstreamTelemetry } from "@/lib/upstream-telemetry";
 
 // Always dynamic — must reflect the live degraded flag, not a build-time
 // snapshot. Short response so polling at 60s is cheap.
@@ -29,7 +30,11 @@ export async function GET() {
     since = null;
   }
 
-  const body: UpstreamStatus = { degraded: since != null, since };
+  const degraded = since != null;
+  const sinceAgeMs = since != null ? Date.now() - new Date(since).getTime() : null;
+  upstreamTelemetry({ op: "status-checked", degraded, sinceAgeMs });
+
+  const body: UpstreamStatus = { degraded, since };
   return NextResponse.json(body, {
     // Don't CDN-cache: responses must reflect the live flag so a degraded
     // signal clears within ~60s of SSI recovering. Per-client polling
