@@ -19,7 +19,7 @@ import { buildColorMap } from "@/lib/colors";
 import { abbreviateDivision } from "@/lib/divisions";
 import { rollCallName } from "@/lib/competitor-name";
 import { HitZoneBar } from "@/components/hit-zone-bar";
-import { RankBadge, PenaltyBadge, ShootingOrderBadge, StageClassificationBadge, ConditionsBadge, ordinal } from "@/components/stage-cell-parts";
+import { RankBadge, ShootingOrderBadge, StageClassificationBadge, ConditionsBadge, ordinal } from "@/components/stage-cell-parts";
 import { CellHelpModal } from "@/components/cell-help-modal";
 import { CoachingTip } from "@/components/coaching-tip";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -140,21 +140,26 @@ function StageHFLevelIcon({
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className={cn("inline-flex items-end gap-px cursor-help leading-none", color)}
+          className={cn("inline-flex items-end gap-1 cursor-help leading-none", color)}
           aria-label={`HF Level: ${label}`}
           role="img"
         >
-          {[1, 2, 3, 4, 5].map((bar) => (
-            <span
-              key={bar}
-              aria-hidden="true"
-              className={cn(
-                "inline-block w-1 rounded-sm bg-current",
-                bar <= level ? "opacity-100" : "opacity-20"
-              )}
-              style={{ height: `${bar * 3 + 3}px` }}
-            />
-          ))}
+          <span className="inline-flex items-end gap-px">
+            {[1, 2, 3, 4, 5].map((bar) => (
+              <span
+                key={bar}
+                aria-hidden="true"
+                className={cn(
+                  "inline-block w-1 rounded-sm bg-current",
+                  bar <= level ? "opacity-100" : "opacity-20"
+                )}
+                style={{ height: `${bar * 3 + 3}px` }}
+              />
+            ))}
+          </span>
+          <span aria-hidden="true" className="text-[10px] font-semibold tabular-nums">
+            {level}
+          </span>
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs">
@@ -2136,18 +2141,14 @@ function StageCell({
           </TooltipContent>
         </Tooltip>
       )}
-      {/* Hit zone distribution bar */}
+      {/* Hit zone distribution bar — penalty pips below carry M/NS/P;
+          per-stage points-lost text is omitted (penalty totals shown in
+          the bottom summary row instead). Hover/tap the bar for details. */}
       <HitZoneBar
         aHits={sc.a_hits}
         cHits={sc.c_hits}
         dHits={sc.d_hits}
         misses={sc.miss_count}
-        noShoots={sc.no_shoots}
-        procedurals={sc.procedurals}
-      />
-      {/* Penalty badge */}
-      <PenaltyBadge
-        miss={sc.miss_count}
         noShoots={sc.no_shoots}
         procedurals={sc.procedurals}
       />

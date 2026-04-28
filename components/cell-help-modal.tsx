@@ -13,7 +13,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { HitZoneBar } from "@/components/hit-zone-bar";
 import {
   RankBadge,
-  PenaltyBadge,
   ShootingOrderBadge,
   StageClassificationBadge,
 } from "@/components/stage-cell-parts";
@@ -259,25 +258,13 @@ function StageCellDiagram() {
               cHits={MOCK_C}
               dHits={MOCK_D}
               misses={MOCK_M}
-              noShoots={null}
-              procedurals={null}
-            />
-          }
-          badge="6"
-          title="Hit zone bar"
-          description="Proportional breakdown of A (green) / C (yellow) / D (orange) / M (red) hits. Wider = more hits in that zone. A-zone = full points; C = 3/4; D = 1/2; M = 0. Tap to see exact counts."
-        />
-        <DiagramRow
-          visual={
-            <PenaltyBadge
-              miss={MOCK_M}
               noShoots={MOCK_NS}
               procedurals={MOCK_P}
             />
           }
-          badge="7"
-          title="Penalties"
-          description="Total points lost to misses, no-shoots, and procedurals (−10 pts each). Tap for breakdown."
+          badge="6"
+          title="Hit zone bar + penalty pips"
+          description="Bar shows A-zone (solid green), C (light diagonal yellow), and D (dense diagonal orange) proportions. Below the bar: a square per miss, triangle per no-shoot, diamond per procedural — each pip costs 10 pts. Hover or tap for exact counts and total points lost."
         />
         <DiagramRow
           last
@@ -291,7 +278,7 @@ function StageCellDiagram() {
               procedurals={MOCK_P}
             />
           }
-          badge="8"
+          badge="7"
           title="Run classification"
           description={<>
             <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="w-3 h-3" aria-hidden="true" /> Solid</span>

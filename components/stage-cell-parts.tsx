@@ -76,45 +76,6 @@ export function RankBadge({
   );
 }
 
-export function PenaltyBadge({
-  miss,
-  noShoots,
-  procedurals,
-}: {
-  miss: number | null;
-  noShoots: number | null;
-  procedurals: number | null;
-}) {
-  const m = miss ?? 0;
-  const ns = noShoots ?? 0;
-  const p = procedurals ?? 0;
-  const total = (m + ns + p) * 10;
-
-  if (total === 0) return null;
-
-  const parts: string[] = [];
-  if (m > 0) parts.push(`${m} miss (\u2212${m * 10})`);
-  if (ns > 0) parts.push(`${ns} no-shoot (\u2212${ns * 10})`);
-  if (p > 0) parts.push(`${p} procedural (\u2212${p * 10})`);
-  const tooltipText = `${parts.join(" + ")} = \u2212${total} pts`;
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          className="text-xs font-medium text-red-600 dark:text-red-400 tabular-nums cursor-help"
-          aria-label={`Penalties: ${tooltipText}`}
-        >
-          {`\u2212${total}pts`}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
-        {tooltipText}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
 export function ShootingOrderBadge({ order }: { order: number }) {
   return (
     <Tooltip>
