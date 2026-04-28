@@ -123,7 +123,11 @@ export function HitZoneBar({
   const barTotal = counts.a + counts.c + counts.d;
   const hitText = `${counts.a}A ${counts.c}C ${counts.d}D ${counts.m}M`;
   const penaltyText = hasPenaltyData ? ` · ${ns}NS ${p}P` : "";
-  const tooltipText = hitText + penaltyText;
+  // aria-label / single-line label retained for screen-reader continuity
+  const ariaLabelText = hitText + penaltyText;
+
+  const totalPenaltyCount = counts.m + ns + p;
+  const totalPenaltyPts = totalPenaltyCount * 10;
 
   const penaltyCounts: Record<PenaltyKind, number> = {
     m: counts.m,
@@ -155,7 +159,7 @@ export function HitZoneBar({
       <TooltipTrigger asChild>
         <div
           role="img"
-          aria-label={`Hit zones: ${tooltipText}`}
+          aria-label={`Hit zones: ${ariaLabelText}`}
           className="flex flex-col items-center gap-1 cursor-help"
         >
           {hasHitData &&
@@ -277,8 +281,35 @@ export function HitZoneBar({
           )}
         </div>
       </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs font-mono">
-        {tooltipText}
+      <TooltipContent side="top" className="text-xs space-y-1 max-w-56">
+        <div className="font-mono">
+          {`${counts.a}A · ${counts.c}C · ${counts.d}D`}
+        </div>
+        {totalPenaltyCount > 0 && (
+          <div className="space-y-0.5 border-t border-border/40 pt-1">
+            {counts.m > 0 && (
+              <div className="flex items-center gap-1.5 font-mono">
+                <PenaltyShape shape="square" />
+                <span>{`${counts.m} miss${counts.m > 1 ? "es" : ""} · −${counts.m * 10} pts`}</span>
+              </div>
+            )}
+            {ns > 0 && (
+              <div className="flex items-center gap-1.5 font-mono">
+                <PenaltyShape shape="triangle" />
+                <span>{`${ns} no-shoot${ns > 1 ? "s" : ""} · −${ns * 10} pts`}</span>
+              </div>
+            )}
+            {p > 0 && (
+              <div className="flex items-center gap-1.5 font-mono">
+                <PenaltyShape shape="diamond" />
+                <span>{`${p} procedural${p > 1 ? "s" : ""} · −${p * 10} pts`}</span>
+              </div>
+            )}
+            <div className="font-mono font-semibold pt-0.5">
+              {`Total: −${totalPenaltyPts} pts`}
+            </div>
+          </div>
+        )}
       </TooltipContent>
     </Tooltip>
   );
