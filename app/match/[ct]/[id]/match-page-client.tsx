@@ -677,7 +677,37 @@ export default function MatchPageClient() {
             </div>
           )}
 
-          {compareQuery.data && (
+          {compareQuery.data?.scorecardsRestricted && (
+            <div
+              role="status"
+              className="rounded-lg border bg-muted/40 p-4 space-y-2"
+            >
+              <h2 className="font-semibold">Detailed scores aren&apos;t available for this match</h2>
+              <p className="text-sm text-muted-foreground">
+                ShootnScoreIt shows that scoring is in progress
+                {match.scoring_completed > 0
+                  ? ` (${Math.round(match.scoring_completed)}% complete)`
+                  : ""}
+                , but they don&apos;t share the per-stage scorecards publicly for
+                club matches (Level I). You&apos;ll be able to see the official
+                results on shootnscoreit.com once the organiser publishes them.
+              </p>
+              {match.ssi_url && (
+                <p className="text-sm">
+                  <a
+                    href={match.ssi_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary underline underline-offset-2 hover:opacity-80"
+                  >
+                    Open on shootnscoreit.com
+                  </a>
+                </p>
+              )}
+            </div>
+          )}
+
+          {compareQuery.data && !compareQuery.data.scorecardsRestricted && (
             <>
               <div className="rounded-lg border p-4 space-y-3">
                 <div className="flex items-center justify-between">
