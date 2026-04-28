@@ -90,6 +90,23 @@ export async function fetchCoachingAvailability(): Promise<CoachingAvailability>
   return res.json();
 }
 
+export interface UpstreamStatus {
+  degraded: boolean;
+  since: string | null;
+}
+
+export async function fetchUpstreamStatus(): Promise<UpstreamStatus> {
+  // Fail soft: a status-endpoint outage shouldn't itself trigger a
+  // user-facing "upstream degraded" banner.
+  try {
+    const res = await fetch("/api/upstream-status", { cache: "no-store" });
+    if (!res.ok) return { degraded: false, since: null };
+    return res.json();
+  } catch {
+    return { degraded: false, since: null };
+  }
+}
+
 export async function fetchShooterDashboard(
   shooterId: number,
 ): Promise<ShooterDashboardResponse> {

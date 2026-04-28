@@ -1,12 +1,14 @@
 // Server-only — never import from client components.
 //
 // Typed helper for the "upstream" telemetry domain. Records every SSI
-// GraphQL call (executeQuery in lib/graphql.ts). Useful for:
+// GraphQL call (executeQuery in lib/graphql.ts), plus the upstream-degraded
+// signal that gates the homepage banner. Useful for:
 //   - tracing slow / failing queries to a specific operation + variables
 //   - measuring upstream latency p95 over time
 //   - correlating user-visible errors with upstream HTTP status codes
+//   - alerting on prolonged "degraded" stretches (degraded-marked spikes)
 //
-// Field guide:
+// graphql-request fields:
 //   operation   — GraphQL operation name (GetMatch, GetMatchScorecards, ...)
 //   ms          — wall-clock duration of the fetch
 //   outcome     — "ok" | "http-error" | "graphql-error" | "timeout" | "empty" | "fetch-error"
@@ -15,6 +17,16 @@
 //   varsHash    — short hash of the variables JSON, lets you correlate
 //                 repeated calls without logging raw IDs
 //   retryAfter  — Retry-After header echoed back by the upstream
+//
+// degraded-marked fields:
+//   site        — call site that flagged the upstream as degraded
+//                 ("events-route-total" | "events-route-partial" |
+//                  "refresh-cached-query" | "refresh-cached-match-query")
+//   errorClass  — short error class (e.g. "Error", "AbortError")
+//
+// status-checked fields:
+//   degraded    — value returned to the client this poll
+//   sinceAgeMs  — age of the underlying flag (ms) when read; null if healthy
 
 import { telemetry } from "@/lib/telemetry";
 
@@ -26,18 +38,35 @@ export type UpstreamOutcome =
   | "empty"
   | "fetch-error";
 
-export interface UpstreamEvent {
-  op: "graphql-request";
-  operation: string;
-  ms: number;
-  outcome: UpstreamOutcome;
-  httpStatus?: number | null;
-  bytes?: number | null;
-  varsHash?: string | null;
-  retryAfter?: string | null;
-  /** Short error class — never the full message (avoids leaking PII). */
-  errorClass?: string | null;
-}
+export type DegradedSite =
+  | "events-route-total"
+  | "events-route-partial"
+  | "refresh-cached-query"
+  | "refresh-cached-match-query";
+
+export type UpstreamEvent =
+  | {
+      op: "graphql-request";
+      operation: string;
+      ms: number;
+      outcome: UpstreamOutcome;
+      httpStatus?: number | null;
+      bytes?: number | null;
+      varsHash?: string | null;
+      retryAfter?: string | null;
+      /** Short error class — never the full message (avoids leaking PII). */
+      errorClass?: string | null;
+    }
+  | {
+      op: "degraded-marked";
+      site: DegradedSite;
+      errorClass?: string | null;
+    }
+  | {
+      op: "status-checked";
+      degraded: boolean;
+      sinceAgeMs: number | null;
+    };
 
 export function upstreamTelemetry(ev: UpstreamEvent): void {
   telemetry({ domain: "upstream", ...ev });

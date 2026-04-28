@@ -4,6 +4,7 @@ import { LiveMatches } from "@/components/live-matches";
 import { EventSearch } from "@/components/event-search";
 import { MyShootersButton } from "@/components/my-shooters-button";
 import { AppLogo } from "@/components/app-logo";
+import { UpstreamStatusBanner } from "@/components/upstream-status-banner";
 
 export default function HomePage() {
   return (
@@ -26,6 +27,7 @@ export default function HomePage() {
       </div>
 
       <div className="w-full max-w-2xl flex flex-col gap-2">
+        <UpstreamStatusBanner />
         <EventSearch />
         <MyShootersButton />
       </div>
