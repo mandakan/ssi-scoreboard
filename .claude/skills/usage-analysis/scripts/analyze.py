@@ -255,13 +255,20 @@ def cmd_report(args: argparse.Namespace) -> None:
             GROUP BY mode, nCompetitors
             ORDER BY mode, nCompetitors;
         """),
-        ("Search effectiveness", f"""
+        ("Search effectiveness (intent-driven, queryLength > 0)", f"""
             SELECT kind, resultBucket, count(*) AS searches,
                    round(avg(queryLength), 1) AS avg_query_len
             FROM usage_events
             {since_clause} AND op = 'search'
             GROUP BY kind, resultBucket
             ORDER BY kind, searches DESC;
+        """),
+        ("Browse activity (no query — passive list view)", f"""
+            SELECT kind, resultBucket, count(*) AS browses
+            FROM usage_events
+            {since_clause} AND op = 'browse'
+            GROUP BY kind, resultBucket
+            ORDER BY kind, browses DESC;
         """),
         ("OG image variants", f"""
             SELECT variant, count(*) AS renders

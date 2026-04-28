@@ -217,12 +217,20 @@ export async function GET(req: Request) {
     ms_total: Math.round(performance.now() - t0),
   }));
 
-  usageTelemetry({
-    op: "search",
-    kind: "events",
-    queryLength: q.length,
-    resultBucket: bucketCount(events.length),
-  });
+  if (q.length > 0) {
+    usageTelemetry({
+      op: "search",
+      kind: "events",
+      queryLength: q.length,
+      resultBucket: bucketCount(events.length),
+    });
+  } else {
+    usageTelemetry({
+      op: "browse",
+      kind: "events",
+      resultBucket: bucketCount(events.length),
+    });
+  }
 
   return NextResponse.json(events);
 }

@@ -70,9 +70,10 @@ describe("usageTelemetry", () => {
     usageTelemetry({ op: "match-view", ct: 22, level: null, region: null, scoringBucket: "pre", cacheHit: false });
     usageTelemetry({ op: "comparison", ct: 22, mode: "coaching", nCompetitors: 3 });
     usageTelemetry({ op: "search", kind: "shooter", queryLength: 5, resultBucket: "1-9" });
+    usageTelemetry({ op: "browse", kind: "events", resultBucket: "10-99" });
     usageTelemetry({ op: "shooter-dashboard-view", matchCountBucket: "10-99", cacheHit: true });
     usageTelemetry({ op: "og-render", ct: 22, variant: "multi", nCompetitors: 4 });
-    expect(infoSpy).toHaveBeenCalledTimes(5);
+    expect(infoSpy).toHaveBeenCalledTimes(6);
   });
 
   it("never logs query strings — only lengths", () => {

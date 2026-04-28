@@ -21,12 +21,20 @@ export async function GET(req: Request) {
     results = [];
   }
 
-  usageTelemetry({
-    op: "search",
-    kind: "shooter",
-    queryLength: q.length,
-    resultBucket: bucketCount(results.length),
-  });
+  if (q.length > 0) {
+    usageTelemetry({
+      op: "search",
+      kind: "shooter",
+      queryLength: q.length,
+      resultBucket: bucketCount(results.length),
+    });
+  } else {
+    usageTelemetry({
+      op: "browse",
+      kind: "shooter",
+      resultBucket: bucketCount(results.length),
+    });
+  }
 
   return NextResponse.json(results);
 }
