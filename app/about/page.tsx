@@ -65,30 +65,145 @@ export default function AboutPage() {
           >
             Features
           </h2>
-          <ul className="text-sm leading-relaxed text-muted-foreground space-y-2 list-disc list-inside">
-            <li>Search competitions by name, country, or date range</li>
-            <li>Compare up to 12 competitors side-by-side across all stages</li>
-            <li>
-              Add an entire IPSC squad in one tap with the squad picker — no
-              need to select members one by one
-            </li>
-            <li>Stage-by-stage scoring breakdown with hit factor and points</li>
-            <li>
-              What-if analysis — see how rankings would change by group, division,
-              or overall
-            </li>
-            <li>Great for post-match review, squad comparisons, and coaching</li>
-            <li>
-              Share your comparison in one tap — the link encodes your competitor
-              selection so the recipient sees the same view immediately
-            </li>
-            <li>
-              Sync between devices — transfer your identity, tracked shooters,
-              and recent matches to another phone or computer with a one-time
-              code or QR scan. No account needed.
-            </li>
-            <li>No login required — paste a match URL and go</li>
-          </ul>
+          <div className="text-sm leading-relaxed text-muted-foreground space-y-4">
+            <div>
+              <h3 className="font-medium text-foreground mb-2">
+                Find and compare
+              </h3>
+              <ul className="space-y-2 list-disc list-inside">
+                <li>
+                  Search competitions by name, country, level, or date range,
+                  and see which matches are live right now
+                </li>
+                <li>
+                  Compare up to 12 competitors side-by-side across every stage
+                </li>
+                <li>
+                  Add an entire IPSC squad in one tap with the squad picker
+                </li>
+                <li>
+                  Live, Pre-match, and Coaching views — auto-selected to match
+                  the phase of the event, with a manual override
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="font-medium text-foreground mb-2">
+                Before the match
+              </h3>
+              <ul className="space-y-2 list-disc list-inside">
+                <li>
+                  Pre-match view with the IPSC stage rotation for your squad,
+                  course details, and constraint badges (strong hand, weak
+                  hand, moving target, unloaded start)
+                </li>
+                <li>
+                  Match-day weather forecast when the venue has coordinates
+                </li>
+                <li>
+                  Registered field grouped by division, with your tracked
+                  shooters highlighted
+                </li>
+                <li>
+                  Personalised AI prep brief based on your historical
+                  performance and the stage breakdown
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="font-medium text-foreground mb-2">
+                After the match
+              </h3>
+              <ul className="space-y-2 list-disc list-inside">
+                <li>
+                  HF Level, stage archetype (Speed / Precision / Mixed), and
+                  course-length / constraint breakdowns
+                </li>
+                <li>
+                  Stage degradation analysis — see whether shooting early or
+                  late on a stage correlated with performance
+                </li>
+                <li>
+                  Conditions overlay — per-cell weather, time-of-day, and wind
+                  for stages your squad shot at different times
+                </li>
+                <li>
+                  Style fingerprint and division position chart for spotting
+                  strengths and weaknesses
+                </li>
+                <li>
+                  Stage simulator — tweak times and hits to see how your
+                  ranking would have changed, with full-field rank
+                </li>
+                <li>
+                  AI coaching tips, plus a Roast mode for a humorous take
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="font-medium text-foreground mb-2">
+                Your career
+              </h3>
+              <ul className="space-y-2 list-disc list-inside">
+                <li>
+                  Shooter dashboard with cross-match performance trends, A-zone
+                  rate, consistency, and division-aware filters
+                </li>
+                <li>
+                  Achievement ladders covering experience, accuracy, and
+                  variety milestones
+                </li>
+                <li>
+                  Claim &quot;this is me&quot; and the app auto-selects you in
+                  every match you&apos;ve competed in
+                </li>
+                <li>
+                  Track other shooters with one tap — they&apos;re auto-selected
+                  too, so you never have to search again
+                </li>
+                <li>
+                  Find any shooter by name and jump straight to their dashboard
+                </li>
+                <li>
+                  Upcoming-match action cards: register, pick your squad, or
+                  just show up — with countdown badges and direct SSI links
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="font-medium text-foreground mb-2">
+                Share, sync, install
+              </h3>
+              <ul className="space-y-2 list-disc list-inside">
+                <li>
+                  Share a comparison in one tap — the link encodes your
+                  competitor selection so the recipient sees the same view
+                </li>
+                <li>
+                  Sync identity, tracked shooters, and recent matches to
+                  another device with a 6-character code or QR scan. No
+                  account needed.
+                </li>
+                <li>
+                  Install as a Progressive Web App for fullscreen, native-app
+                  feel courtside
+                </li>
+                <li>
+                  Discord bot with <code>/remind upcoming</code> for a personal
+                  action checklist on registration deadlines and squad picks
+                </li>
+                <li>
+                  Colorblind-safe palette, shape-coded chart markers, and
+                  WCAG 2.1 AA accessibility throughout
+                </li>
+                <li>No login required — paste a match URL and go</li>
+              </ul>
+            </div>
+          </div>
         </section>
 
         <section aria-labelledby="about-ai-heading" className="space-y-4">
@@ -117,10 +232,12 @@ export default function AboutPage() {
             </p>
             <p>
               Point your AI client at the HTTP endpoint and it will have access
-              to four tools: <strong>search_events</strong>,{" "}
+              to six tools: <strong>search_events</strong>,{" "}
               <strong>get_match</strong>,{" "}
-              <strong>compare_competitors</strong>, and{" "}
-              <strong>get_popular_matches</strong>.
+              <strong>compare_competitors</strong>,{" "}
+              <strong>get_popular_matches</strong>,{" "}
+              <strong>find_shooter</strong>, and{" "}
+              <strong>get_shooter_dashboard</strong>.
             </p>
           </div>
           <McpEndpoint />
@@ -205,8 +322,9 @@ export default function AboutPage() {
             Built with
           </h2>
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Next.js 15, React, Tailwind CSS v4, shadcn/ui, TanStack Query v5,
-            and Redis for caching. Open source — contributions welcome.
+            Next.js 16, React, Tailwind CSS v4, shadcn/ui, TanStack Query v5,
+            Redis for hot caching, and SQLite or Cloudflare D1 for persistent
+            shooter and match data. Open source — contributions welcome.
           </p>
         </section>
       </div>
