@@ -48,16 +48,20 @@ interface CFEnvWithTelemetry {
 
 // Default sample rates per domain. 1 = keep all; 0 = drop all; 0.1 = 10%.
 // Override per domain via TELEMETRY_SAMPLE_<DOMAIN>=<number>.
+//
+// As of Apr 2026: production sees ~3-6k requests/day. Even at 100% sampling
+// the usage domain produces ~600 R2 PUTs/day with per-isolate batching —
+// well under 2% of the 1M Class A free-tier monthly cap. With this user
+// base it pays to keep everything; tighten the usage rate later only if
+// traffic grows ~10x or the volume mix shifts.
 const DEFAULT_RATES: Record<string, number> = {
-  // Diagnostic domains — kept whole. Low volume, high signal.
   cache: 1,
   upstream: 1,
   error: 1,
   ai: 1,
   d1: 1,
   background: 1,
-  // Product analytics — high volume, sample heavily by default.
-  usage: 0.1,
+  usage: 1,
 };
 
 // Catch-all for domains not listed above.

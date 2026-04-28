@@ -14,8 +14,10 @@
 // If a future event needs to log something user-identifying, add it to
 // a different domain (e.g. "audit") with stricter sampling — not here.
 //
-// Sampling: this domain defaults to rate=0.1 (10%) since the volume is
-// dominated by match views. Override with TELEMETRY_SAMPLE_USAGE=N.
+// Sampling: this domain defaults to rate=1 (keep all) given the small
+// user base (~3-6k requests/day in Apr 2026 — see telemetry-sinks-cf.ts
+// for the math). Tighten with TELEMETRY_SAMPLE_USAGE=0.1 if traffic
+// grows ~10x or R2 PUT volume nears the free-tier cap.
 
 import { telemetry } from "@/lib/telemetry";
 
