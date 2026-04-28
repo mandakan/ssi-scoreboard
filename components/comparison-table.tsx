@@ -12,7 +12,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, CheckCircle2, ChevronDown, ChevronUp, CloudSun, Crosshair, ExternalLink, Flame, Focus, Gauge, Hand, HandMetal, HelpCircle, Info, Layers, Shield, Target, Timer, TrendingUp, X, Zap } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CloudSun, Crosshair, ExternalLink, Flame, Focus, Gauge, Hand, HandMetal, HelpCircle, Info, Layers, Shield, Star, Target, Timer, TrendingUp, X, Zap } from "lucide-react";
 import Link from "next/link";
 import { cn, formatHF, formatTime, formatPct, computePointsDelta, formatDelta } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
@@ -36,6 +36,12 @@ interface ComparisonTableProps {
   stageSort?: "stage" | number;
   onSortChange?: (sort: "stage" | number) => void;
   sortedStages?: StageComparison[];
+  /** ShooterIds the user has favorited; drives the star toggle in the header. */
+  trackedShooterIds?: Set<number>;
+  /** Toggle favorite state for a competitor; opens the star toggle in the header. */
+  onToggleTracked?: (c: CompetitorInfo) => void;
+  /** Move a competitor one column left or right. The parent owns selectedIds order. */
+  onMove?: (id: number, direction: "left" | "right") => void;
 }
 
 /**
@@ -915,7 +921,7 @@ function StageScorecardRow({
   );
 }
 
-export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable, isComplete, ct, matchId, stageSort = "stage", onSortChange = () => {}, sortedStages: sortedStagesProp }: ComparisonTableProps) {
+export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable, isComplete, ct, matchId, stageSort = "stage", onSortChange = () => {}, sortedStages: sortedStagesProp, trackedShooterIds, onToggleTracked, onMove }: ComparisonTableProps) {
   const { stages, competitors, penaltyStats, efficiencyStats, consistencyStats, lossBreakdownStats } = data;
   // When sortedStages is not provided by the parent, fall back to natural stage order.
   const sortedStages = sortedStagesProp ?? stages;
@@ -1210,7 +1216,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                   </TooltipContent>
                 </Tooltip>
               </th>
-              {competitors.map((comp) => {
+              {competitors.map((comp, compIndex) => {
                 const t = totals.find((x) => x.id === comp.id);
                 const hasClassifications = t &&
                   (t.solidCount + t.conservativeCount + t.overpushCount + t.meltdownCount) > 0;
@@ -1222,6 +1228,8 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                 ].filter(Boolean).join(" · ") : "";
                 const canSortByComp = competitorHasShootingOrder.has(comp.id);
                 const isSortedByComp = stageSort === comp.id;
+                const canMoveLeft = onMove !== undefined && compIndex > 0;
+                const canMoveRight = onMove !== undefined && compIndex < competitors.length - 1;
                 return (
                   <th
                     key={comp.id}
@@ -1229,14 +1237,74 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                     style={{ borderBottom: `3px solid ${colorMap[comp.id]}` }}
                     aria-sort={isSortedByComp ? "ascending" : "none"}
                   >
-                    {onRemove && (
-                      <button
-                        onClick={() => onRemove(comp.id)}
-                        className="absolute top-0 right-0 p-2 rounded-bl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                        aria-label={`Remove ${comp.name}`}
+                    {onToggleTracked && comp.shooterId !== null && (() => {
+                      const isTracked = trackedShooterIds?.has(comp.shooterId!) ?? false;
+                      return (
+                        <button
+                          onClick={() => onToggleTracked(comp)}
+                          className={cn(
+                            "absolute top-0 left-0 p-2 rounded-br transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+                            isTracked
+                              ? "text-amber-500 hover:text-amber-600 hover:bg-amber-500/10"
+                              : "text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10",
+                          )}
+                          aria-label={isTracked ? `Untrack ${comp.name}` : `Track ${comp.name}`}
+                          aria-pressed={isTracked}
+                        >
+                          <Star
+                            className="w-3 h-3"
+                            aria-hidden="true"
+                            fill={isTracked ? "currentColor" : "none"}
+                          />
+                        </button>
+                      );
+                    })()}
+                    {(onMove || onRemove) && (
+                      <span
+                        className="absolute top-0 right-0 inline-flex items-center"
+                        role="group"
+                        aria-label={`Column actions for ${comp.name}`}
                       >
-                        <X className="w-3 h-3" aria-hidden="true" />
-                      </button>
+                        {onMove && (
+                          <button
+                            onClick={() => canMoveLeft && onMove(comp.id, "left")}
+                            disabled={!canMoveLeft}
+                            className={cn(
+                              "p-1.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+                              canMoveLeft
+                                ? "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                : "text-muted-foreground/30 cursor-not-allowed",
+                            )}
+                            aria-label={`Move ${comp.name} left`}
+                          >
+                            <ChevronLeft className="w-3 h-3" aria-hidden="true" />
+                          </button>
+                        )}
+                        {onMove && (
+                          <button
+                            onClick={() => canMoveRight && onMove(comp.id, "right")}
+                            disabled={!canMoveRight}
+                            className={cn(
+                              "p-1.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+                              canMoveRight
+                                ? "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                : "text-muted-foreground/30 cursor-not-allowed",
+                            )}
+                            aria-label={`Move ${comp.name} right`}
+                          >
+                            <ChevronRight className="w-3 h-3" aria-hidden="true" />
+                          </button>
+                        )}
+                        {onRemove && (
+                          <button
+                            onClick={() => onRemove(comp.id)}
+                            className="p-2 rounded-bl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                            aria-label={`Remove ${comp.name}`}
+                          >
+                            <X className="w-3 h-3" aria-hidden="true" />
+                          </button>
+                        )}
+                      </span>
                     )}
                     <div className="flex flex-col items-center gap-0.5">
                       <span className="font-mono text-xs text-muted-foreground">

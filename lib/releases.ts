@@ -11,11 +11,36 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-04-28-stage-export";
+export const LATEST_RELEASE_ID = "2026-04-28-competitor-selection";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "April 28, 2026",
+    title: "Faster competitor selection",
+    screenshotScenes: ["comparison-table", "tracked-shooters-sheet"],
+    sections: [
+      {
+        heading: "New",
+        items: [
+          "Smart benchmark presets — once you set 'this is me' in My Shooters, the Benchmark button gives one-tap shortcuts: One above me, One below me, My division podium, My percentile cohort (p25/p50/p75/p95), and Same club. Each preset replaces your current selection and you can undo right away.",
+          "Reorder competitors directly in the comparison table — each column header has chevron buttons to move a competitor left or right. Column colors follow the new order, so you can put yourself in column 1 and keep the same color across matches.",
+          "Tap the star next to a competitor's name in the comparison table header to favorite or unfavorite them without leaving the page. The same star is now also on the shooter dashboard.",
+          "Squad picker now replaces your current selection (with a one-tap undo) instead of mixing the squad into what was already there.",
+          "Clear button next to the picker wipes your selection in one tap, with a 5-second undo.",
+        ],
+      },
+      {
+        heading: "Improved",
+        items: [
+          "The competitor dropdown now groups your favorites at the top — with you pinned first when 'this is me' is set — and the rest below.",
+          "Favorites section has an 'Add all' pill that pulls every favorite entered in the match into the comparison in a single tap.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-04-28-stage-export",
     date: "April 28, 2026",
     title: "Stage times export",
     screenshotScenes: ["stage-times-export"],

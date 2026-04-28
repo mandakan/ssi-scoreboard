@@ -21,7 +21,7 @@ import { UpstreamDegradedBanner } from "@/components/upstream-degraded-banner";
 import { LoadingBar } from "@/components/loading-bar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, AlertCircle, ArrowLeft, RefreshCw, ChevronDown, ChevronUp, HelpCircle, ExternalLink, Info, ArrowUpDown } from "lucide-react";
+import { Loader2, AlertCircle, ArrowLeft, RefreshCw, ChevronDown, ChevronUp, HelpCircle, ExternalLink, Info, ArrowUpDown, Undo2, XCircle } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import {
   Popover,
@@ -369,11 +369,72 @@ export default function MatchPageClient() {
     }
   }
 
+  // Undo banner state — populated when a bulk action (clear, squad replace,
+  // smart benchmark preset) overwrites the user's selection. Auto-clears
+  // after UNDO_TIMEOUT_MS or on the next plain selection change.
+  const UNDO_TIMEOUT_MS = 5000;
+  const [pendingUndo, setPendingUndo] = useState<{
+    prevIds: number[];
+    message: string;
+    expiresAt: number;
+  } | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearPendingUndo = useCallback(() => {
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+    }
+    setPendingUndo(null);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    };
+  }, []);
+
+  const writeSelection = useCallback(
+    (ids: number[]) => {
+      saveCompetitorSelection(ct, id, ids);
+      const qs = ids.length > 0 ? `?competitors=${ids.join(",")}` : "";
+      router.replace(`${window.location.pathname}${qs}`, { scroll: false });
+    },
+    [ct, id, router],
+  );
+
   function handleSelectionChange(ids: number[]) {
-    saveCompetitorSelection(ct, id, ids);
-    // Sync selection to URL so it can be bookmarked or shared.
-    const qs = ids.length > 0 ? `?competitors=${ids.join(",")}` : "";
-    router.replace(`${window.location.pathname}${qs}`, { scroll: false });
+    // Any plain selection change invalidates a pending undo.
+    if (pendingUndo) clearPendingUndo();
+    writeSelection(ids);
+  }
+
+  function replaceSelectionWithUndo(newIds: number[], message: string) {
+    // Capture the snapshot via the live store, not closure, to avoid stale prev.
+    const prev = getCompetitorSelectionSnapshot(ct, id);
+    writeSelection(newIds);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setPendingUndo({ prevIds: prev, message, expiresAt: Date.now() + UNDO_TIMEOUT_MS });
+    undoTimerRef.current = setTimeout(() => {
+      setPendingUndo(null);
+      undoTimerRef.current = null;
+    }, UNDO_TIMEOUT_MS);
+  }
+
+  function applyUndo() {
+    if (!pendingUndo) return;
+    writeSelection(pendingUndo.prevIds);
+    clearPendingUndo();
+  }
+
+  function moveCompetitor(id: number, direction: "left" | "right") {
+    const idx = selectedIds.indexOf(id);
+    if (idx === -1) return;
+    const swapWith = direction === "left" ? idx - 1 : idx + 1;
+    if (swapWith < 0 || swapWith >= selectedIds.length) return;
+    const next = [...selectedIds];
+    [next[idx], next[swapWith]] = [next[swapWith], next[idx]];
+    handleSelectionChange(next);
   }
 
   if (matchQuery.isLoading) {
@@ -583,10 +644,35 @@ export default function MatchPageClient() {
 
       {/* Competitor picker */}
       <div className="space-y-1">
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <p className="text-sm font-medium">Compare competitors</p>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                aria-label="How competitor selection works"
+              >
+                <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80" side="bottom" align="start">
+              <PopoverHeader>
+                <PopoverTitle>Picking who to compare</PopoverTitle>
+                <PopoverDescription>
+                  Mix and match up to {MAX_COMPETITORS} competitors. Your favorites and &ldquo;you&rdquo; appear at the top of the picker.
+                </PopoverDescription>
+              </PopoverHeader>
+              <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
+                <p><strong>Star</strong> — favorite a competitor. Stars live in the picker, in the comparison table header, and on the shooter dashboard. The picker also has an &ldquo;Add all favorites&rdquo; pill so you can pull in everyone you track in one tap.</p>
+                <p><strong>Squad</strong> — replaces your selection with everyone in a squad. One tap to undo.</p>
+                <p><strong>Benchmark</strong> — once you set &ldquo;this is me&rdquo; in My Shooters, you unlock one-tap presets: one-above, one-below, division podium, percentile cohort, and same-club peers.</p>
+                <p><strong>Reorder</strong> — use the chevrons in each comparison-table column header to move a competitor left or right. Their column color follows the new position.</p>
+                <p><strong>Clear</strong> — wipes the selection. Undo lasts 5 seconds.</p>
+              </div>
+            </PopoverContent>
+          </Popover>
           {trackedInMatch && trackedInMatch.total > 0 && (
-            <span className="text-xs text-muted-foreground">
+            <span className="ml-1.5 text-xs text-muted-foreground">
               {trackedInMatch.present} of {trackedInMatch.total} tracked in this match
             </span>
           )}
@@ -606,7 +692,12 @@ export default function MatchPageClient() {
             <SquadPicker
               squads={match.squads}
               selectedIds={selectedIds}
-              onSelectionChange={handleSelectionChange}
+              onReplaceSelection={(ids, squadName) =>
+                replaceSelectionWithUndo(
+                  ids,
+                  `Replaced selection with ${squadName}`,
+                )
+              }
             />
           )}
           {selectedIds.length > 0 && (
@@ -617,10 +708,53 @@ export default function MatchPageClient() {
               competitors={match.competitors}
               selectedIds={selectedIds}
               onSelectionChange={handleSelectionChange}
+              myShooterId={identity?.shooterId ?? null}
+              onReplaceSelection={(ids, message) =>
+                replaceSelectionWithUndo(ids, message)
+              }
               disabled={!compareQuery.data}
             />
           )}
+          {selectedIds.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                if (selectedIds.length === 0) return;
+                replaceSelectionWithUndo(
+                  [],
+                  `Cleared ${selectedIds.length} selected`,
+                );
+              }}
+              aria-label="Clear all selected competitors"
+            >
+              <XCircle className="w-4 h-4" aria-hidden="true" />
+              Clear
+            </Button>
+          )}
         </div>
+        {pendingUndo && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mt-2 flex items-center justify-between gap-3 rounded-md border bg-muted/50 px-3 py-2 text-sm animate-fade-in"
+          >
+            <span className="text-muted-foreground truncate">
+              {pendingUndo.message}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 shrink-0"
+              onClick={applyUndo}
+              aria-label="Undo last selection change"
+            >
+              <Undo2 className="w-3.5 h-3.5" aria-hidden="true" />
+              Undo
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Pre-match view — replaces comparison when no scores yet */}
@@ -730,6 +864,9 @@ export default function MatchPageClient() {
                   stageSort={stageSort}
                   onSortChange={setStageSort}
                   sortedStages={sortedStages}
+                  trackedShooterIds={trackedIds}
+                  onToggleTracked={handleToggleTracked}
+                  onMove={moveCompetitor}
                 />
               </div>
 

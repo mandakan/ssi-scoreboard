@@ -45,6 +45,7 @@ import {
   ExternalLink,
   CircleAlert,
   CircleCheck,
+  Star,
   type LucideIcon,
 } from "lucide-react";
 
@@ -71,6 +72,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ShareDrawer } from "@/components/share-drawer";
+import { useTrackedShooters } from "@/lib/hooks/use-tracked-shooters";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useShooterDashboardQuery } from "@/lib/queries";
 import { triggerBackfill, addMatchToShooter } from "@/lib/api";
@@ -1606,6 +1608,7 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
   const { data, isLoading, isError, error } = useShooterDashboardQuery(
     shooterId,
   );
+  const { trackedIds, add: addTracked, remove: removeTracked } = useTrackedShooters();
   const [historyOpen, setHistoryOpen] = useState(true);
   const [upcomingOpen, setUpcomingOpen] = useState(true);
   const [trendsOpen, setTrendsOpen] = useState(false);
@@ -1701,14 +1704,51 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
           <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
           {from ? "Back to match" : "All matches"}
         </Link>
-        <ShareDrawer
-          title="Share shooter profile"
-          description="Share this shooter's dashboard — the link includes a rich preview image for social media."
-          sharePath={`/shooter/${String(shooterId)}`}
-          ogImageUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/api/og/shooter/${String(shooterId)}`}
-          ogImageAlt={`Preview of ${displayName}'s profile on SSI Scoreboard`}
-          shareTitle={`${displayName} — SSI Scoreboard`}
-        />
+        <div className="flex items-center gap-1">
+          {shooterId !== null && (() => {
+            const isTracked = trackedIds.has(shooterId);
+            return (
+              <button
+                type="button"
+                onClick={() => {
+                  if (isTracked) {
+                    removeTracked(shooterId);
+                  } else {
+                    addTracked({
+                      shooterId,
+                      name: displayName,
+                      club: profile?.club ?? null,
+                      division: profile?.division ?? null,
+                    });
+                  }
+                }}
+                aria-pressed={isTracked}
+                aria-label={isTracked ? `Untrack ${displayName}` : `Track ${displayName}`}
+                className={cn(
+                  "rounded p-2 transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  isTracked
+                    ? "text-amber-500 hover:text-amber-600 hover:bg-amber-500/10"
+                    : "text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10",
+                )}
+              >
+                <Star
+                  className="w-4 h-4"
+                  aria-hidden="true"
+                  fill={isTracked ? "currentColor" : "none"}
+                />
+              </button>
+            );
+          })()}
+          <ShareDrawer
+            title="Share shooter profile"
+            description="Share this shooter's dashboard — the link includes a rich preview image for social media."
+            sharePath={`/shooter/${String(shooterId)}`}
+            ogImageUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/api/og/shooter/${String(shooterId)}`}
+            ogImageAlt={`Preview of ${displayName}'s profile on SSI Scoreboard`}
+            shareTitle={`${displayName} — SSI Scoreboard`}
+          />
+        </div>
       </div>
       {/* ── Identity card ─────────────────────────────────────────────── */}
       <section
