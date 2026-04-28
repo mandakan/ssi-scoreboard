@@ -322,7 +322,7 @@ test.describe("Scoreboard E2E", () => {
     await expect(page.getByRole("table").getByText("#116")).not.toBeVisible();
   });
 
-  test("squad picker adds all squad members", async ({ page }) => {
+  test("squad picker replaces selection with all squad members", async ({ page }) => {
     await page.route("/api/match/22/99999999", (route) =>
       route.fulfill({ json: MOCK_MATCH })
     );
@@ -333,12 +333,18 @@ test.describe("Scoreboard E2E", () => {
     await page.goto("/match/22/99999999");
     await expect(page.getByText("Test IPSC Match")).toBeVisible();
 
-    // Open the squad picker popover
-    await page.getByRole("button", { name: /add squad/i }).click();
-    await expect(page.getByRole("button", { name: /add squad 1/i })).toBeVisible();
+    // Open the squad picker popover (trigger label: "Replace selection with a squad")
+    await page
+      .getByRole("button", { name: /replace selection with a squad/i })
+      .click();
+    await expect(
+      page.getByRole("button", { name: /replace selection with squad 1/i }),
+    ).toBeVisible();
 
-    // Add Squad 1 (Alice + Bob)
-    await page.getByRole("button", { name: /add squad 1/i }).click();
+    // Pick Squad 1 (Alice + Bob)
+    await page
+      .getByRole("button", { name: /replace selection with squad 1/i })
+      .click();
 
     // Both competitor badges should now be visible
     await expect(page.getByRole("button", { name: /remove alice/i })).toBeVisible();
