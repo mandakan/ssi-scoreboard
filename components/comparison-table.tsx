@@ -1004,11 +1004,25 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
       : "";
   }, [stageSort, competitors]);
 
-  // Compute totals per competitor: total raw points, average %, zone/penalty sums, and clean match status
-  const totals = competitors.map((comp) => {
+  // Compute totals per competitor: total raw points, IPSC match %, zone/penalty sums, and clean match status.
+  //
+  // Match % follows the official IPSC points-weighted formula (matches shootnscoreit.com):
+  //   stage_points = (HF / mode_stage_winner_HF) × stage.max_points
+  //   match_points = sum across stages
+  //   matchPct     = match_points / mode_leader_match_points × 100
+  // The numerator uses each stage's `pct` from the response (already encodes the
+  // mode-relevant stage winner). The denominator depends on mode:
+  //   - group mode    → the highest match_points among the *selected* competitors
+  //                     (so the group leader always lands on 100%)
+  //   - division mode → divisionLeaderMatchPts[competitor.division] (full division)
+  //   - overall mode  → overallLeaderMatchPts (full field)
+  const totalsRaw = competitors.map((comp) => {
     let totalPts = 0;
+    let matchPts = 0;
     let pctSum = 0;
     let pctCount = 0;
+    let hasMaxPoints = true;
+    let rawDivision: string | null = null;
     let hasFired = false;
     let firedCount = 0;
     let aTotal = 0, cTotal = 0, dTotal = 0, mTotal = 0;
@@ -1037,10 +1051,16 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
       hasFired = true;
       firedCount++;
       totalPts += sc.points ?? 0;
+      if (rawDivision == null && sc.divisionKey) rawDivision = sc.divisionKey;
       const { pct } = modeValues(sc, mode);
       if (pct != null) {
         pctSum += pct;
         pctCount++;
+        if (stage.max_points > 0) {
+          matchPts += (pct / 100) * stage.max_points;
+        } else {
+          hasMaxPoints = false;
+        }
       }
       if (sc.a_hits !== null || sc.c_hits !== null || sc.d_hits !== null || sc.miss_count !== null) {
         hasZoneData = true;
@@ -1069,7 +1089,10 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
     return {
       id: comp.id,
       points: hasFired ? totalPts : null,
-      avgPct: pctCount > 0 ? pctSum / pctCount : null,
+      matchPts: pctCount > 0 ? matchPts : null,
+      avgPctFallback: pctCount > 0 ? pctSum / pctCount : null,
+      hasMaxPoints,
+      rawDivision,
       aHits: hasZoneData ? aTotal : null,
       cHits: hasZoneData ? cTotal : null,
       dHits: hasZoneData ? dTotal : null,
@@ -1085,6 +1108,60 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
       overpushCount,
       meltdownCount,
     };
+  });
+
+  // Resolve the mode-specific anchor (= 100% reference) for each competitor,
+  // and the mode-specific match rank.
+  //
+  //   group   → highest match_pts among the selected competitors;
+  //             one of them always lands on rank 1 / 100%
+  //   division→ divisionLeaderMatchPts[<comp.division>], with rank/total from
+  //             the server-computed divisionMatchRanks (full division field)
+  //   overall → overallLeaderMatchPts, with rank/total from overallMatchRanks
+  //             (full match field, all divisions)
+  const groupAnchor = Math.max(0, ...totalsRaw.map((t) => t.matchPts ?? 0));
+  // Pre-compute group ranks (1 = highest matchPts within the selection; ties share a rank).
+  const groupRankMap = new Map<number, { rank: number; total: number }>();
+  {
+    const ranked = [...totalsRaw]
+      .filter((t) => t.matchPts != null)
+      .sort((a, b) => (b.matchPts ?? 0) - (a.matchPts ?? 0));
+    let currentRank = 1;
+    for (let i = 0; i < ranked.length; i++) {
+      if (i > 0 && (ranked[i].matchPts ?? 0) < (ranked[i - 1].matchPts ?? 0)) {
+        currentRank = i + 1;
+      }
+      groupRankMap.set(ranked[i].id, { rank: currentRank, total: ranked.length });
+    }
+  }
+  const totals = totalsRaw.map((t) => {
+    let matchPct: number | null = null;
+    if (t.matchPts != null && t.hasMaxPoints) {
+      let anchor: number | null = null;
+      if (mode === "group") anchor = groupAnchor;
+      else if (mode === "division" && t.rawDivision) {
+        anchor = data.divisionLeaderMatchPts?.[t.rawDivision] ?? null;
+      } else if (mode === "overall") {
+        anchor = data.overallLeaderMatchPts ?? null;
+      }
+      if (anchor != null && anchor > 0) {
+        matchPct = (t.matchPts / anchor) * 100;
+      }
+    }
+    // Fallback for older cache entries lacking stage.max_points.
+    if (matchPct == null) matchPct = t.avgPctFallback;
+
+    // Match rank (mode-aware).
+    let matchRank: { rank: number; total: number } | null = null;
+    if (mode === "group") {
+      matchRank = groupRankMap.get(t.id) ?? null;
+    } else if (mode === "division") {
+      matchRank = data.divisionMatchRanks?.[t.id] ?? null;
+    } else if (mode === "overall") {
+      matchRank = data.overallMatchRanks?.[t.id] ?? null;
+    }
+
+    return { ...t, matchPct, matchRank };
   });
 
   return (
@@ -1586,7 +1663,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                 ) : (
                   <>
                     <div>Total pts</div>
-                    <div>Avg {MODE_LABELS[mode]} %</div>
+                    <div>{MODE_LABELS[mode]} %</div>
                     <div>pts/shot</div>
                   </>
                 )}
@@ -1618,9 +1695,21 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                           <span className="text-muted-foreground font-normal">—</span>
                         )}
                       </span>
-                      <span className="text-xs text-muted-foreground font-normal">
-                        {t.avgPct != null ? formatPct(t.avgPct) : "—"}
-                      </span>
+                      <div className="flex items-center gap-1">
+                        {t.matchRank != null && (
+                          <RankBadge
+                            rank={t.matchRank.rank}
+                            tooltip={matchRankTooltip(
+                              t.matchRank,
+                              mode,
+                              competitors.find((c) => c.id === t.id)?.division ?? null,
+                            )}
+                          />
+                        )}
+                        <span className="text-xs text-muted-foreground font-normal">
+                          {t.matchPct != null ? formatPct(t.matchPct) : "—"}
+                        </span>
+                      </div>
                       <HitZoneBar
                         aHits={t.aHits}
                         cHits={t.cHits}
@@ -2013,6 +2102,23 @@ function rankTooltip(
         : `Rank ${rank} in division (full field)`;
     case "overall":
       return `Rank ${rank} overall (all divisions)`;
+  }
+}
+
+function matchRankTooltip(
+  mr: { rank: number; total: number },
+  mode: PctMode,
+  divisionName: string | null,
+): string {
+  switch (mode) {
+    case "group":
+      return `Match rank ${mr.rank} of ${mr.total} in your group`;
+    case "division":
+      return divisionName
+        ? `Match rank ${mr.rank} of ${mr.total} in ${divisionName}`
+        : `Match rank ${mr.rank} of ${mr.total} in division`;
+    case "overall":
+      return `Match rank ${mr.rank} of ${mr.total} overall`;
   }
 }
 

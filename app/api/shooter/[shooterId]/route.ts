@@ -10,6 +10,7 @@ import type { ShooterProfile } from "@/lib/shooter-index";
 import { parseRawScorecards } from "@/lib/scorecard-data";
 import { extractDivision } from "@/lib/divisions";
 import { computeAggregateStats } from "@/lib/shooter-stats";
+import { computeMatchStats } from "@/lib/match-stats";
 import { evaluateAchievements } from "@/lib/achievements/evaluate";
 import { maybeTagAsMcp } from "@/lib/telemetry-context";
 import type {
@@ -18,7 +19,6 @@ import type {
   UpcomingMatch,
 } from "@/lib/types";
 import type { RawScorecardsData } from "@/lib/scorecard-data";
-import type { RawScorecard } from "@/app/api/compare/logic";
 
 /** Dashboard result TTL — 5 minutes. */
 const DASHBOARD_TTL = 300;
@@ -158,141 +158,6 @@ function resolveShooterStatus(
     (s) => s.competitors?.some((sc) => sc.id === competitor.id) ?? false,
   );
   return { ...base, competitorId, isRegistered: true, isSquadded };
-}
-
-// ─── Computation helpers ──────────────────────────────────────────────────────
-
-/**
- * Compute per-match summary for one shooter from raw scorecard data.
- * Returns avgHF, matchPct, and hit-zone totals.
- */
-function computeMatchStats(
-  competitorId: number,
-  division: string | null,
-  rawScorecards: RawScorecard[],
-): {
-  stageCount: number;
-  avgHF: number | null;
-  matchPct: number | null;
-  totalA: number;
-  totalC: number;
-  totalD: number;
-  totalMiss: number;
-  totalNoShoots: number;
-  totalProcedurals: number;
-  dq: boolean;
-  perfectStages: number;
-  consistencyIndex: number | null;
-} {
-  const myCards = rawScorecards.filter(
-    (sc) =>
-      sc.competitor_id === competitorId &&
-      !sc.dnf &&
-      !sc.dq &&
-      !sc.zeroed &&
-      sc.hit_factor != null &&
-      sc.hit_factor >= 0,
-  );
-
-  const stageCount = myCards.length;
-  if (stageCount === 0) {
-    return {
-      stageCount: 0,
-      avgHF: null,
-      matchPct: null,
-      totalA: 0,
-      totalC: 0,
-      totalD: 0,
-      totalMiss: 0,
-      totalNoShoots: 0,
-      totalProcedurals: 0,
-      dq: false,
-      perfectStages: 0,
-      consistencyIndex: null,
-    };
-  }
-
-  const hfSum = myCards.reduce((s, sc) => s + (sc.hit_factor ?? 0), 0);
-  const avgHF = hfSum / stageCount;
-
-  // Consistency index: (1 - CV) * 100 where CV = stddev(stageHFs) / mean(stageHFs)
-  let consistencyIndex: number | null = null;
-  const hfs = myCards
-    .map((sc) => sc.hit_factor ?? 0)
-    .filter((hf) => hf > 0);
-  if (hfs.length >= 2) {
-    const mean = hfs.reduce((s, v) => s + v, 0) / hfs.length;
-    if (mean > 0) {
-      const variance =
-        hfs.reduce((s, v) => s + (v - mean) ** 2, 0) / hfs.length;
-      consistencyIndex = (1 - Math.sqrt(variance) / mean) * 100;
-    }
-  }
-
-  // Compute division-based match %
-  const stagePcts: number[] = [];
-  if (division) {
-    for (const card of myCards) {
-      // Find division leader HF for this stage
-      const divCards = rawScorecards.filter(
-        (sc) =>
-          sc.stage_id === card.stage_id &&
-          !sc.dnf &&
-          !sc.dq &&
-          !sc.zeroed &&
-          sc.hit_factor != null &&
-          sc.competitor_division === card.competitor_division,
-      );
-      const leaderHF = divCards.reduce(
-        (max, sc) => Math.max(max, sc.hit_factor ?? 0),
-        0,
-      );
-      if (leaderHF > 0 && card.hit_factor != null) {
-        stagePcts.push((card.hit_factor / leaderHF) * 100);
-      }
-    }
-  }
-  const matchPct =
-    stagePcts.length > 0
-      ? stagePcts.reduce((a, b) => a + b, 0) / stagePcts.length
-      : null;
-
-  // Hit-zone totals
-  const totalA = myCards.reduce((s, sc) => s + (sc.a_hits ?? 0), 0);
-  const totalC = myCards.reduce((s, sc) => s + (sc.c_hits ?? 0), 0);
-  const totalD = myCards.reduce((s, sc) => s + (sc.d_hits ?? 0), 0);
-  const totalMiss = myCards.reduce((s, sc) => s + (sc.miss_count ?? 0), 0);
-  const totalNoShoots = myCards.reduce((s, sc) => s + (sc.no_shoots ?? 0), 0);
-  const totalProcedurals = myCards.reduce((s, sc) => s + (sc.procedurals ?? 0), 0);
-  const dq = rawScorecards.some(
-    (sc) => sc.competitor_id === competitorId && sc.dq,
-  );
-
-  // Perfect stages: all A-hits, no C/D/miss/no-shoot/procedural, and at least one A-hit
-  const perfectStages = myCards.filter(
-    (sc) =>
-      (sc.a_hits ?? 0) > 0 &&
-      (sc.c_hits ?? 0) === 0 &&
-      (sc.d_hits ?? 0) === 0 &&
-      (sc.miss_count ?? 0) === 0 &&
-      (sc.no_shoots ?? 0) === 0 &&
-      (sc.procedurals ?? 0) === 0,
-  ).length;
-
-  return {
-    stageCount,
-    avgHF,
-    matchPct,
-    totalA,
-    totalC,
-    totalD,
-    totalMiss,
-    totalNoShoots,
-    totalProcedurals,
-    dq,
-    perfectStages,
-    consistencyIndex,
-  };
 }
 
 // ─── Route handler ────────────────────────────────────────────────────────────
