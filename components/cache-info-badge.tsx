@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RefreshCw, Clock, AlertTriangle } from "lucide-react";
+import { RefreshCw, Clock, AlertTriangle, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import {
@@ -23,10 +23,14 @@ interface CacheInfoBadgeProps {
    *  When this is much older than `cachedAt`, the cache is fresh but upstream itself
    *  is stale — useful signal that RO submissions may be backed up. */
   lastScorecardAt?: string | null;
-  /** True if the SSI match is still in scoring (status not "cp"/"cs"). Drives
-   *  the prominent stale-data warning — a 5-minute-old cache on a finished
-   *  match is fine, but on an ongoing match it deserves attention. */
-  matchOngoing?: boolean;
+  /** Coarse match phase. Drives the prominent stale-data warning — a 5-minute-old
+   *  cache is fine on a future or finished match, but on a *live* one it deserves
+   *  attention. Anything other than "live" suppresses the amber/red escalation. */
+  phase?: "prematch" | "live" | "finished";
+  /** True while a background refetch is in flight. When set, the badge swaps its
+   *  clock icon for a spinner so the row doesn't reflow when a sibling status
+   *  pill enters and leaves. */
+  isRefreshing?: boolean;
 }
 
 /** When the match is ongoing, escalate the badge styling once the cache age
@@ -61,7 +65,8 @@ export function CacheInfoBadge({
   id,
   cachedAt,
   lastScorecardAt,
-  matchOngoing,
+  phase,
+  isRefreshing,
 }: CacheInfoBadgeProps) {
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState("");
@@ -101,9 +106,10 @@ export function CacheInfoBadge({
   const cacheAgeSeconds = cachedAt
     ? Math.max(0, Math.floor((now - new Date(cachedAt).getTime()) / 1000))
     : 0;
-  const isAlert = matchOngoing && cachedAt && cacheAgeSeconds > STALE_ALERT_SECONDS;
+  const isLive = phase === "live";
+  const isAlert = isLive && cachedAt && cacheAgeSeconds > STALE_ALERT_SECONDS;
   const isWarning =
-    !isAlert && matchOngoing && cachedAt && cacheAgeSeconds > STALE_WARNING_SECONDS;
+    !isAlert && isLive && cachedAt && cacheAgeSeconds > STALE_WARNING_SECONDS;
 
   const label = cachedAt ? `Updated ${formatTimeAgo(cachedAt)}` : "Live";
   const buttonClass = cn(
@@ -129,12 +135,14 @@ export function CacheInfoBadge({
         className={buttonClass}
         aria-label={ariaLabel}
       >
-        {isAlert || isWarning ? (
+        {isRefreshing ? (
+          <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+        ) : isAlert || isWarning ? (
           <AlertTriangle className="w-3 h-3" aria-hidden="true" />
         ) : (
           <Clock className="w-3 h-3" aria-hidden="true" />
         )}
-        <span>{label}</span>
+        <span>{isRefreshing ? "Refreshing..." : label}</span>
         <RefreshCw className="w-3 h-3" aria-hidden="true" />
       </button>
 
