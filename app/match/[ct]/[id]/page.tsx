@@ -6,6 +6,30 @@ import { fetchMatchData } from "@/lib/match-data";
 import { matchQueryKey } from "@/lib/query-keys";
 import { usageTelemetry, bucketScoring } from "@/lib/usage-telemetry";
 
+/**
+ * Detect whether this server render is a soft navigation within the same
+ * match (e.g. the client appended ?competitors=... to the URL). Without
+ * this guard a single user-facing page open would fire match-view 2-3
+ * times because Next.js re-runs the page server component on every URL
+ * change. We compare the Referer header against the current ct/id —
+ * external arrivals never have it set to the same match, real soft
+ * navigations within a match always do.
+ *
+ * Fails open (returns false) when Referer is missing — accept the
+ * occasional over-count rather than miss legitimate first-page-loads.
+ */
+async function isSameMatchSoftNav(ct: string, id: string): Promise<boolean> {
+  try {
+    const h = await headers();
+    const referer = h.get("referer") ?? "";
+    if (!referer) return false;
+    const path = new URL(referer).pathname;
+    return path === `/match/${ct}/${id}`;
+  } catch {
+    return false;
+  }
+}
+
 interface PageProps {
   params: Promise<{ ct: string; id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -63,13 +87,12 @@ export default async function MatchPage({ params }: PageProps) {
         ms_fetch: result ? Math.round(result.msFetch) : null,
       }));
       if (!result) throw new Error("Match not found");
-      // Fire match-view telemetry from the SSR prefetch — this is the call
-      // that always runs when a user opens a match page. The /api/match
-      // route also fires it (for client-side polls when staleTime expires);
-      // SSR + API together give us page-views + refresh activity, with
-      // client-side polls visible in the upstream telemetry domain.
+      // Fire match-view telemetry once per real page open. Skipped on
+      // same-match soft navigations (see isSameMatchSoftNav above) so the
+      // counter doesn't triple-fire when the client appends ?competitors=
+      // or other URL state.
       const ctNum = parseInt(ct, 10);
-      if (!isNaN(ctNum)) {
+      if (!isNaN(ctNum) && !(await isSameMatchSoftNav(ct, id))) {
         usageTelemetry({
           op: "match-view",
           ct: ctNum,
