@@ -30,7 +30,7 @@ export const RELEASES: Release[] = [
       {
         heading: "Improved",
         items: [
-          "Live match pages refresh more efficiently. When nothing has changed upstream the app skips the heavy refetch entirely; when scores do change, only the new ones are pulled instead of the full set. Result: faster updates courtside and a lighter footprint on the ShootNScoreIt servers during big matches.",
+          "Live match pages feel snappier, especially during busy weekend events.",
         ],
       },
       {
