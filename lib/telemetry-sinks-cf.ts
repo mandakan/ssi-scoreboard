@@ -27,11 +27,13 @@
 // requests in the same isolate share a single PUT.
 //
 // ── Sampling ─────────────────────────────────────────────────────────
-// Controlled by TELEMETRY_SAMPLE env var:
-//   - "all"    (default): keep every event
-//   - "signal":            keep only the events most useful for incident
-//                          response (see shouldSampleSignal below)
-// The sampler is a pure function — easy to extend with new rules.
+// Per-domain sample rate, controlled by env vars TELEMETRY_SAMPLE_<DOMAIN>
+// (a number between 0 and 1, e.g. 0.1 = keep 10%). Defaults below favour
+// "keep all" for low-volume diagnostic domains and tighter sampling for
+// high-volume product domains.
+//
+// Adding a new domain: pick a sensible default in DEFAULT_RATES below.
+// Tightening one in production: set TELEMETRY_SAMPLE_<DOMAIN>=0.1 (or 0).
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { afterResponse } from "@/lib/background-impl";
@@ -44,7 +46,32 @@ interface CFEnvWithTelemetry {
   TELEMETRY?: R2Bucket;
 }
 
-const SAMPLE_MODE = (process.env.TELEMETRY_SAMPLE ?? "all").toLowerCase();
+// Default sample rates per domain. 1 = keep all; 0 = drop all; 0.1 = 10%.
+// Override per domain via TELEMETRY_SAMPLE_<DOMAIN>=<number>.
+const DEFAULT_RATES: Record<string, number> = {
+  // Diagnostic domains — kept whole. Low volume, high signal.
+  cache: 1,
+  upstream: 1,
+  error: 1,
+  ai: 1,
+  d1: 1,
+  background: 1,
+  // Product analytics — high volume, sample heavily by default.
+  usage: 0.1,
+};
+
+// Catch-all for domains not listed above.
+const FALLBACK_RATE = 1;
+
+function getDomainRate(domain: string): number {
+  const envKey = `TELEMETRY_SAMPLE_${domain.toUpperCase()}`;
+  const raw = process.env[envKey];
+  if (raw != null) {
+    const n = parseFloat(raw);
+    if (!isNaN(n)) return Math.max(0, Math.min(1, n));
+  }
+  return DEFAULT_RATES[domain] ?? FALLBACK_RATE;
+}
 
 const buffer: EnrichedEvent[] = [];
 let flushScheduled = false;
@@ -94,22 +121,13 @@ function makeObjectKey(now: Date): string {
 }
 
 function keepEvent(ev: EnrichedEvent): boolean {
-  if (SAMPLE_MODE === "all") return true;
-  if (SAMPLE_MODE === "signal") return shouldSampleSignal(ev);
-  return true;
-}
-
-// High-signal events — the ones that pay off when reading historical logs
-// to diagnose a sync incident. Other events get dropped under SAMPLE=signal.
-function shouldSampleSignal(ev: EnrichedEvent): boolean {
-  if (ev.domain !== "cache") return true; // future domains pass through
-  if (ev.op === "match-ttl-decision" && ev.trulyDone === true) return true;
-  if (ev.op === "match-cache-schema-evict") return true;
-  if (ev.op === "match-cache-read" && ev.stale === true) return true;
-  return false;
+  const rate = getDomainRate(ev.domain);
+  if (rate >= 1) return true;
+  if (rate <= 0) return false;
+  return Math.random() < rate;
 }
 
 export const extraSinks: TelemetrySink[] = [r2Sink];
 
 // Test-only — exported for unit tests of the sampler.
-export const _internal = { keepEvent, shouldSampleSignal, makeObjectKey };
+export const _internal = { keepEvent, getDomainRate, makeObjectKey, DEFAULT_RATES };
