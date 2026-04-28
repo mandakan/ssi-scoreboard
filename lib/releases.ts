@@ -17,16 +17,29 @@ export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
     date: "April 28, 2026",
-    title: "Anonymous usage telemetry",
-    // No new charts/UI to screenshot — this is a transparency disclosure.
+    title: "Find live matches faster",
+    // "Live now" is a homepage feature; existing screenshotScenes target the
+    // match page only, so no scene is listed here.
     sections: [
+      {
+        heading: "New",
+        items: [
+          "Homepage now shows a 'Live now' section listing matches whose scoring is in progress -- one tap to whichever match you're attending or following. The section hides itself when nothing is live.",
+        ],
+      },
+      {
+        heading: "Improved",
+        items: [
+          "Live match pages refresh more efficiently. When nothing has changed upstream the app skips the heavy refetch entirely; when scores do change, only the new ones are pulled instead of the full set. Result: faster updates courtside and a lighter footprint on the ShootNScoreIt servers during big matches.",
+        ],
+      },
       {
         heading: "Privacy",
         items: [
-          "We now record anonymous server-side telemetry — page views, feature usage, cache decisions, and upstream timings — to help diagnose bugs and decide which features to invest in.",
+          "We now record anonymous server-side telemetry -- page views, feature usage, cache decisions, and upstream timings -- to help diagnose bugs and decide which features to invest in.",
           "Never recorded: IP addresses, your shooter ID, individual competitor IDs, or the text of any search you type.",
           "Recorded as buckets and counts only (e.g. \"1-9 results\" rather than the actual number). Stored on Cloudflare R2 with 30-day automatic deletion.",
-          "Full details and the complete \"never recorded\" list: see the Privacy Policy at /legal — section 6.",
+          "Full details and the complete \"never recorded\" list: see the Privacy Policy at /legal -- section 6.",
         ],
       },
     ],
