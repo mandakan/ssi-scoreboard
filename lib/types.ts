@@ -536,6 +536,13 @@ export interface CompareResponse {
   stageDegradationData: StageDegradationData[] | null; // null in live mode
   /** Per-stage per-competitor conditions (weather + time), coaching mode only. Keyed stageId → competitorId. */
   stageConditions: Record<number, Record<number, StageConditions>> | null;
+  /**
+   * Set when SSI reports scoring progress for the match but returns an empty
+   * `scorecards` array. SSI gates per-shot detail on Level I (club) matches:
+   * `scorecards_count` is exposed but the actual scorecard records are not.
+   * The client should show a clear notice instead of an empty comparison.
+   */
+  scorecardsRestricted?: boolean;
   cacheInfo: CacheInfo;
 }
 

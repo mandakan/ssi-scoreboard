@@ -297,6 +297,15 @@ export async function GET(req: Request) {
   // computeGroupRankings needs the full field to compute division and overall rankings.
   const rawScorecards = parseRawScorecards(scorecardsData);
 
+  // SSI hides per-shot scorecard detail on Level I (club) matches: it returns
+  // a non-zero `scoring_completed` but an empty `scorecards` array. Surface
+  // that as an explicit flag so the client can render a clear notice instead
+  // of a blank comparison table.
+  const scorecardsRestricted =
+    scoringPct > 0 &&
+    rawScorecards.length === 0 &&
+    (matchData.event.stages?.length ?? 0) > 0;
+
   // Surface max(scorecard_created) so the client can show how stale the
   // upstream itself is, independent of our cache age. On an active match
   // this answers "is RO submission falling behind?" — a question that
@@ -583,6 +592,7 @@ export async function GET(req: Request) {
     constraintPerformance,
     stageDegradationData,
     stageConditions,
+    ...(scorecardsRestricted ? { scorecardsRestricted: true } : {}),
     cacheInfo,
   };
 
