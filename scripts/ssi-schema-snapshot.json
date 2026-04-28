@@ -1,4 +1,1927 @@
 {
+  "RootQuery": [
+    {
+      "name": "ammunition",
+      "type": "AmmunitionNode!",
+      "args": [
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "ammunitions",
+      "type": "[AmmunitionNode!]!",
+      "args": [
+        {
+          "name": "search",
+          "type": "String"
+        },
+        {
+          "name": "caliber",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "competitor",
+      "type": "CompetitorInterface!",
+      "args": [
+        {
+          "name": "content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "event",
+      "type": "EventInterface!",
+      "args": [
+        {
+          "name": "content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "event_scoring_progress_for_string",
+      "type": "ScoringProgressNode!",
+      "args": [
+        {
+          "name": "content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "id",
+          "type": "String!"
+        },
+        {
+          "name": "index",
+          "type": "Int!"
+        }
+      ]
+    },
+    {
+      "name": "events",
+      "type": "[EventInterface!]!",
+      "args": [
+        {
+          "name": "search",
+          "type": "String"
+        },
+        {
+          "name": "starts_after",
+          "type": "String"
+        },
+        {
+          "name": "starts_before",
+          "type": "String"
+        },
+        {
+          "name": "status",
+          "type": "String"
+        },
+        {
+          "name": "region",
+          "type": "String"
+        },
+        {
+          "name": "state",
+          "type": "String"
+        },
+        {
+          "name": "rule",
+          "type": "String"
+        },
+        {
+          "name": "sub_rule",
+          "type": "String"
+        },
+        {
+          "name": "firearms",
+          "type": "String"
+        },
+        {
+          "name": "level",
+          "type": "String"
+        },
+        {
+          "name": "levels",
+          "type": "String"
+        },
+        {
+          "name": "has_role",
+          "type": "Boolean"
+        }
+      ]
+    },
+    {
+      "name": "firearm",
+      "type": "FirearmNode!",
+      "args": [
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "firearms",
+      "type": "[FirearmNode!]!",
+      "args": [
+        {
+          "name": "search",
+          "type": "String"
+        },
+        {
+          "name": "caliber",
+          "type": "String"
+        },
+        {
+          "name": "make",
+          "type": "String"
+        },
+        {
+          "name": "weapon_generic",
+          "type": "String"
+        },
+        {
+          "name": "weapon_type",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "friend",
+      "type": "FriendNode!",
+      "args": [
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "get_abstract_ammunition",
+      "type": "AmmunitionNode!",
+      "args": []
+    },
+    {
+      "name": "get_abstract_event",
+      "type": "EventInterface!",
+      "args": [
+        {
+          "name": "rule",
+          "type": "String!"
+        },
+        {
+          "name": "sub_rule",
+          "type": "String!"
+        },
+        {
+          "name": "serie_type",
+          "type": "String"
+        },
+        {
+          "name": "firearms",
+          "type": "String"
+        },
+        {
+          "name": "classifier",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "get_abstract_firearm",
+      "type": "FirearmNode!",
+      "args": []
+    },
+    {
+      "name": "get_abstract_handload_recipe",
+      "type": "HandloadRecipeNode!",
+      "args": []
+    },
+    {
+      "name": "get_abstract_logentry",
+      "type": "LogEntryNode!",
+      "args": []
+    },
+    {
+      "name": "get_abstract_merchandize",
+      "type": "MerchandizeNode!",
+      "args": []
+    },
+    {
+      "name": "get_abstract_organization",
+      "type": "OrganizationNode!",
+      "args": []
+    },
+    {
+      "name": "get_abstract_sight",
+      "type": "SightNode!",
+      "args": []
+    },
+    {
+      "name": "get_abstract_suppressor",
+      "type": "SuppressorNode!",
+      "args": []
+    },
+    {
+      "name": "get_abstract_user",
+      "type": "ShooterNode!",
+      "args": []
+    },
+    {
+      "name": "get_active_roles",
+      "type": "[String!]!",
+      "args": [
+        {
+          "name": "su_ct",
+          "type": "Int!"
+        },
+        {
+          "name": "su_id",
+          "type": "Int!"
+        },
+        {
+          "name": "tg_ct",
+          "type": "Int!"
+        },
+        {
+          "name": "tg_id",
+          "type": "Int!"
+        }
+      ]
+    },
+    {
+      "name": "get_current_active_roles",
+      "type": "[String!]!",
+      "args": [
+        {
+          "name": "tg_ct",
+          "type": "Int!"
+        },
+        {
+          "name": "tg_id",
+          "type": "Int!"
+        }
+      ]
+    },
+    {
+      "name": "group",
+      "type": "GroupNode!",
+      "args": [
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "group_member",
+      "type": "GroupMemberNode!",
+      "args": [
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "handload_recipe",
+      "type": "HandloadRecipeNode!",
+      "args": [
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "handload_recipes",
+      "type": "[HandloadRecipeNode!]!",
+      "args": [
+        {
+          "name": "search",
+          "type": "String"
+        },
+        {
+          "name": "caliber",
+          "type": "String"
+        },
+        {
+          "name": "bullet_weight_gram",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "has_current_extended_permission",
+      "type": "Boolean!",
+      "args": [
+        {
+          "name": "ob_ct",
+          "type": "Int!"
+        },
+        {
+          "name": "ob_id",
+          "type": "Int!"
+        },
+        {
+          "name": "operation",
+          "type": "String!"
+        },
+        {
+          "name": "tg_ct",
+          "type": "Int!"
+        },
+        {
+          "name": "tg_id",
+          "type": "Int!"
+        }
+      ]
+    },
+    {
+      "name": "has_current_permission_wrt_group",
+      "type": "Boolean!",
+      "args": [
+        {
+          "name": "ob_ct",
+          "type": "Int!"
+        },
+        {
+          "name": "ob_id",
+          "type": "Int!"
+        },
+        {
+          "name": "operation",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "has_permission",
+      "type": "Boolean!",
+      "args": [
+        {
+          "name": "ob_ct",
+          "type": "Int!"
+        },
+        {
+          "name": "ob_id",
+          "type": "Int!"
+        },
+        {
+          "name": "operation",
+          "type": "String!"
+        },
+        {
+          "name": "su_ct",
+          "type": "Int!"
+        },
+        {
+          "name": "su_id",
+          "type": "Int!"
+        },
+        {
+          "name": "tg_ct",
+          "type": "Int!"
+        },
+        {
+          "name": "tg_id",
+          "type": "Int!"
+        }
+      ]
+    },
+    {
+      "name": "logentry",
+      "type": "LogEntryNode!",
+      "args": [
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "me",
+      "type": "ShooterNode",
+      "args": []
+    },
+    {
+      "name": "merchandize",
+      "type": "MerchandizeNode!",
+      "args": [
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "merchandize_order",
+      "type": "MerchandizeOrderNode!",
+      "args": [
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "organization",
+      "type": "OrganizationNode!",
+      "args": [
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "organization_member",
+      "type": "OrganizationMemberNode!",
+      "args": [
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "organizations",
+      "type": "[OrganizationNode!]!",
+      "args": [
+        {
+          "name": "search",
+          "type": "String!"
+        },
+        {
+          "name": "region",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "payment",
+      "type": "PaymentInterface!",
+      "args": [
+        {
+          "name": "content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "scorecard",
+      "type": "ScoreCardInterface!",
+      "args": [
+        {
+          "name": "content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "shooter",
+      "type": "ShooterNode!",
+      "args": [
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "shooters",
+      "type": "[ShooterNode!]!",
+      "args": [
+        {
+          "name": "first_name",
+          "type": "String"
+        },
+        {
+          "name": "last_name",
+          "type": "String"
+        },
+        {
+          "name": "email",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "sight",
+      "type": "SightNode!",
+      "args": [
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "sights",
+      "type": "[SightNode!]!",
+      "args": [
+        {
+          "name": "search",
+          "type": "String"
+        },
+        {
+          "name": "make",
+          "type": "String"
+        },
+        {
+          "name": "model",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "squad",
+      "type": "SquadInterface!",
+      "args": [
+        {
+          "name": "content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "squad_competitors_indexed_w_wo_scorecards",
+      "type": "[CompetitorScoringNode!]!",
+      "args": [
+        {
+          "name": "content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "sq_id",
+          "type": "String!"
+        },
+        {
+          "name": "st_content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "st_id",
+          "type": "String!"
+        },
+        {
+          "name": "shift_on",
+          "type": "Int!"
+        },
+        {
+          "name": "incl_dnf",
+          "type": "Boolean!"
+        },
+        {
+          "name": "incl_dqed",
+          "type": "Boolean!"
+        }
+      ]
+    },
+    {
+      "name": "squad_competitors_w_wo_scorecards",
+      "type": "[CompetitorScoringNode!]!",
+      "args": [
+        {
+          "name": "content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "sq_id",
+          "type": "String!"
+        },
+        {
+          "name": "st_content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "st_id",
+          "type": "String!"
+        },
+        {
+          "name": "incl_dnf",
+          "type": "Boolean!"
+        },
+        {
+          "name": "incl_dqed",
+          "type": "Boolean!"
+        }
+      ]
+    },
+    {
+      "name": "squad_scoring_progress_at_stage",
+      "type": "ScoringProgressNode!",
+      "args": [
+        {
+          "name": "content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "sq_id",
+          "type": "String!"
+        },
+        {
+          "name": "st_content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "st_id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "squad_scoring_progress_for_string",
+      "type": "ScoringProgressNode!",
+      "args": [
+        {
+          "name": "content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "id",
+          "type": "Int!"
+        },
+        {
+          "name": "index",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "stage",
+      "type": "StageInterface!",
+      "args": [
+        {
+          "name": "content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "stage_competitors_indexed_w_wo_scorecards",
+      "type": "[CompetitorScoringNode!]!",
+      "args": [
+        {
+          "name": "content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "st_id",
+          "type": "String!"
+        },
+        {
+          "name": "sq_content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "sq_id",
+          "type": "String!"
+        },
+        {
+          "name": "shift_on",
+          "type": "Int!"
+        },
+        {
+          "name": "incl_dnf",
+          "type": "Boolean!"
+        },
+        {
+          "name": "incl_dqed",
+          "type": "Boolean!"
+        }
+      ]
+    },
+    {
+      "name": "stage_competitors_w_wo_scorecards",
+      "type": "[CompetitorScoringNode!]!",
+      "args": [
+        {
+          "name": "content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "st_id",
+          "type": "String!"
+        },
+        {
+          "name": "sq_content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "sq_id",
+          "type": "String!"
+        },
+        {
+          "name": "incl_dnf",
+          "type": "Boolean!"
+        },
+        {
+          "name": "incl_dqed",
+          "type": "Boolean!"
+        }
+      ]
+    },
+    {
+      "name": "suppressor",
+      "type": "SuppressorNode!",
+      "args": [
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "suppressors",
+      "type": "[SuppressorNode!]!",
+      "args": [
+        {
+          "name": "search",
+          "type": "String"
+        },
+        {
+          "name": "make",
+          "type": "String"
+        },
+        {
+          "name": "model",
+          "type": "String"
+        },
+        {
+          "name": "caliber",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "team",
+      "type": "TeamInterface!",
+      "args": [
+        {
+          "name": "content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "teammember",
+      "type": "TeamMemberInterface!",
+      "args": [
+        {
+          "name": "content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    }
+  ],
+  "EventInterface": [
+    {
+      "name": "accreditation_status",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "accreditor",
+      "type": "DjangoModelType",
+      "args": []
+    },
+    {
+      "name": "allow_team_self_management",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "allow_teams",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "allows_spotter_shooter_teams",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "available_standard_stages",
+      "type": "[StandardStageInterface!]!",
+      "args": []
+    },
+    {
+      "name": "banner",
+      "type": "SafeImageType",
+      "args": []
+    },
+    {
+      "name": "banner_url",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "can_be_deleted",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "chrono_progress",
+      "type": "ChronoProgressNode!",
+      "args": []
+    },
+    {
+      "name": "chrono_progress_unsquadded",
+      "type": "ChronoProgressNode!",
+      "args": []
+    },
+    {
+      "name": "chronocards",
+      "type": "[ChronoCardInterface!]!",
+      "args": [
+        {
+          "name": "updated_after",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "chronocards_failed",
+      "type": "[ChronoCardInterface!]!",
+      "args": []
+    },
+    {
+      "name": "comment",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "competitor_payment",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "competitors",
+      "type": "[CompetitorInterface!]!",
+      "args": [
+        {
+          "name": "updated_after",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "competitors_approved_w_wo_results_not_dnf",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "competitors_approved_w_wo_results_wo_squad_not_dnf",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "competitors_count",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "competitors_did_not_finish",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "competitors_dq",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "competitors_indexed",
+      "type": "[CompetitorInterface!]!",
+      "args": [
+        {
+          "name": "sqs",
+          "type": "String!"
+        },
+        {
+          "name": "shift_on",
+          "type": "Int!"
+        },
+        {
+          "name": "incl_dnf",
+          "type": "Boolean!"
+        },
+        {
+          "name": "incl_dqed",
+          "type": "Boolean!"
+        }
+      ]
+    },
+    {
+      "name": "competitors_unscored_list",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "competitors_w_warning",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "component_matches",
+      "type": "[ComponentMatchInterface!]!",
+      "args": []
+    },
+    {
+      "name": "created",
+      "type": "DateTime!",
+      "args": []
+    },
+    {
+      "name": "created_by",
+      "type": "ShooterNode!",
+      "args": []
+    },
+    {
+      "name": "currency",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "custom_data",
+      "type": "JSON!",
+      "args": []
+    },
+    {
+      "name": "description",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "deviating_competitors",
+      "type": "[DeviatingCompetitorNode!]!",
+      "args": []
+    },
+    {
+      "name": "deviating_scorecards",
+      "type": "[DeviatingScoreCardNode!]!",
+      "args": []
+    },
+    {
+      "name": "do_chrono",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "do_equipment_check",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "do_index_competitor_when_scoring",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "does_current_user_get_result",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "ends",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "f1",
+      "type": "DjangoFileType",
+      "args": []
+    },
+    {
+      "name": "f1_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "f2",
+      "type": "DjangoFileType",
+      "args": []
+    },
+    {
+      "name": "f2_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "f3",
+      "type": "DjangoFileType",
+      "args": []
+    },
+    {
+      "name": "f3_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "f4",
+      "type": "DjangoFileType",
+      "args": []
+    },
+    {
+      "name": "f4_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "f5",
+      "type": "DjangoFileType",
+      "args": []
+    },
+    {
+      "name": "f5_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "f6",
+      "type": "DjangoFileType",
+      "args": []
+    },
+    {
+      "name": "f6_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "firearms",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "gcal_uid",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_abstract_chronocard",
+      "type": "ChronoCardInterface!",
+      "args": []
+    },
+    {
+      "name": "get_abstract_competitor",
+      "type": "CompetitorInterface!",
+      "args": []
+    },
+    {
+      "name": "get_abstract_squad",
+      "type": "SquadInterface!",
+      "args": []
+    },
+    {
+      "name": "get_abstract_stage",
+      "type": "StageInterface!",
+      "args": []
+    },
+    {
+      "name": "get_abstract_team",
+      "type": "TeamInterface!",
+      "args": []
+    },
+    {
+      "name": "get_content_type_key",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "get_content_type_model",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_currency_choices",
+      "type": "[ChoiceNode!]!",
+      "args": []
+    },
+    {
+      "name": "get_currency_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_current_rbac_operations",
+      "type": "[String!]!",
+      "args": []
+    },
+    {
+      "name": "get_full_absolute_url",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_full_level_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_full_rule_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_organizer_choices",
+      "type": "[ChoiceNode!]!",
+      "args": []
+    },
+    {
+      "name": "get_prematch_choices",
+      "type": "[ChoiceNode!]!",
+      "args": []
+    },
+    {
+      "name": "get_prematch_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_region_choices",
+      "type": "[ChoiceNode!]!",
+      "args": []
+    },
+    {
+      "name": "get_region_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_registration_choices",
+      "type": "[ChoiceNode!]!",
+      "args": []
+    },
+    {
+      "name": "get_registration_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_results_choices",
+      "type": "[ChoiceNode!]!",
+      "args": []
+    },
+    {
+      "name": "get_results_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_standard_stage_selection",
+      "type": "[StandardStageInterface!]!",
+      "args": []
+    },
+    {
+      "name": "get_state_choices",
+      "type": "[ChoiceNode!]!",
+      "args": []
+    },
+    {
+      "name": "get_state_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_status_choices",
+      "type": "[ChoiceNode!]!",
+      "args": []
+    },
+    {
+      "name": "get_status_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_unique_select_result_choices",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_verify_using_choices",
+      "type": "[ChoiceNode!]!",
+      "args": []
+    },
+    {
+      "name": "get_verify_using_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "get_visibility_choices",
+      "type": "[ChoiceNode!]!",
+      "args": []
+    },
+    {
+      "name": "get_visibility_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "group",
+      "type": "DjangoModelType!",
+      "args": []
+    },
+    {
+      "name": "has_accepted_event_data_ass_agreement",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "has_geopos",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "has_prematch",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "has_prematch_included",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "id",
+      "type": "ID!",
+      "args": []
+    },
+    {
+      "name": "image",
+      "type": "SafeImageType",
+      "args": []
+    },
+    {
+      "name": "information",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "is_component_match",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_current_role_admin",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_current_role_assistant",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_current_role_staff",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_imported_event",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_live_scores_accessible",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_locked",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_match",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_pm_squadding_possible",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_premium_activated",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_premium_fully_valid",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_rated",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_registration_possible",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_series",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_squadding_possible",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "is_tournament_match",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "lat",
+      "type": "Decimal",
+      "args": []
+    },
+    {
+      "name": "lng",
+      "type": "Decimal",
+      "args": []
+    },
+    {
+      "name": "lock_changed",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "lock_changed_by",
+      "type": "ShooterNode",
+      "args": []
+    },
+    {
+      "name": "mainmatch_competitors",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "mainmatch_competitors_approved",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "mainmatch_competitors_approved_w_wo_results",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "mainmatch_competitors_approved_w_wo_results_wo_squad",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "mainmatch_competitors_approved_wo_results",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "mainmatch_competitors_declined",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "mainmatch_competitors_deleted",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "mainmatch_competitors_pending",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "mainmatch_competitors_registered",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "mainmatch_competitors_waiting",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "max_competitors",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "max_prematch_competitors",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "merchandize_orders",
+      "type": "[MerchandizeOrderNode!]!",
+      "args": []
+    },
+    {
+      "name": "merchandizes",
+      "type": "[MerchandizeNode!]!",
+      "args": []
+    },
+    {
+      "name": "merchandizes_on_registration",
+      "type": "[MerchandizeNode!]!",
+      "args": []
+    },
+    {
+      "name": "minimum_rounds",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "multiple_reg_allowed",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "name",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "number_of_mainmatch_competitors_approved",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_mainmatch_competitors_approved_w_wo_results",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_mainmatch_competitors_pending",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_mainmatch_competitors_registered",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_mainmatch_competitors_waiting",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_prematch_competitors_approved",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_prematch_competitors_approved_w_wo_results",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_prematch_competitors_pending",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_prematch_competitors_registered",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_prematch_competitors_waiting",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_rounds_per_string",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "number_of_strings",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "number_of_team_members",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "obfuscated_kongsberg_api_key",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "order_payments",
+      "type": "[PaymentInterface!]!",
+      "args": []
+    },
+    {
+      "name": "organization_enabled_event_premium",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "organizer",
+      "type": "OrganizationNode",
+      "args": []
+    },
+    {
+      "name": "payment_methods",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "pm_registration_closes",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "pm_registration_starts",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "pm_squadding_starts",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "prematch",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "prematch_competitors",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "prematch_competitors_approved",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "prematch_competitors_approved_w_wo_results",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "prematch_competitors_approved_w_wo_results_wo_squad",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "prematch_competitors_approved_wo_results",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "prematch_competitors_declined",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "prematch_competitors_deleted",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "prematch_competitors_pending",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "prematch_competitors_registered",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "prematch_competitors_waiting",
+      "type": "[CompetitorInterface!]!",
+      "args": []
+    },
+    {
+      "name": "premium_currency",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "premium_payments",
+      "type": "[PaymentInterface!]!",
+      "args": []
+    },
+    {
+      "name": "rated",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "region",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "registration",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "registration_closes",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "registration_starts",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "result_from_team_members",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "results",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "role_names",
+      "type": "[String!]!",
+      "args": []
+    },
+    {
+      "name": "rule",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "scorecards",
+      "type": "[ScoreCardInterface!]!",
+      "args": [
+        {
+          "name": "updated_after",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "scorecards_count",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "scorecards_dq",
+      "type": "[ScoreCardInterface!]!",
+      "args": []
+    },
+    {
+      "name": "scorecards_w_warning",
+      "type": "[ScoreCardInterface!]!",
+      "args": []
+    },
+    {
+      "name": "scoring_completed",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "serie_type",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "short_url",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "squadding_closes",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "squadding_starts",
+      "type": "DateTime",
+      "args": []
+    },
+    {
+      "name": "squads",
+      "type": "[SquadInterface!]!",
+      "args": []
+    },
+    {
+      "name": "squads_count",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "stages",
+      "type": "[StageInterface!]!",
+      "args": []
+    },
+    {
+      "name": "stages_count",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "starts",
+      "type": "DateTime!",
+      "args": []
+    },
+    {
+      "name": "state",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "status",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "sub_rule",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "supports_bulk_scoring",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "supports_rating",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "supports_score_all_in_squad_at_stage",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "supports_score_string_for_squad",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "supports_shoot_off_strings",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "supports_standard_stages",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "teams",
+      "type": "[TeamInterface!]",
+      "args": []
+    },
+    {
+      "name": "teams_count",
+      "type": "Int!",
+      "args": []
+    },
+    {
+      "name": "third_party_scoring_mode",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "third_party_scoring_url",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "total_fee",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "total_net",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "total_tax",
+      "type": "Decimal!",
+      "args": []
+    },
+    {
+      "name": "transfer_mode",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "updated",
+      "type": "DateTime!",
+      "args": []
+    },
+    {
+      "name": "updated_by",
+      "type": "ShooterNode",
+      "args": []
+    },
+    {
+      "name": "url",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "url_display",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "uses_pin_verification",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "uses_shoot_off_stages",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "uses_signature_verification",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "uses_stages",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "uses_strings",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "venue",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "verify_using",
+      "type": "String!",
+      "args": []
+    },
+    {
+      "name": "visibility",
+      "type": "String!",
+      "args": []
+    }
+  ],
   "IpscMatchNode": [
     {
       "name": "accreditation_status",
@@ -32,7 +1955,7 @@
     },
     {
       "name": "available_standard_stages",
-      "type": "[NON_NULL]!",
+      "type": "[StandardStageInterface!]!",
       "args": []
     },
     {
@@ -72,7 +1995,7 @@
     },
     {
       "name": "chronocards",
-      "type": "[NON_NULL]!",
+      "type": "[ChronoCardInterface!]!",
       "args": [
         {
           "name": "updated_after",
@@ -82,7 +2005,7 @@
     },
     {
       "name": "chronocards_failed",
-      "type": "[NON_NULL]!",
+      "type": "[ChronoCardInterface!]!",
       "args": []
     },
     {
@@ -97,7 +2020,7 @@
     },
     {
       "name": "competitors",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": [
         {
           "name": "updated_after",
@@ -107,12 +2030,12 @@
     },
     {
       "name": "competitors_approved_w_wo_results_not_dnf",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "competitors_approved_w_wo_results_wo_squad_not_dnf",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
@@ -122,17 +2045,17 @@
     },
     {
       "name": "competitors_did_not_finish",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "competitors_dq",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "competitors_indexed",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": [
         {
           "name": "sqs",
@@ -154,17 +2077,17 @@
     },
     {
       "name": "competitors_unscored_list",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "competitors_w_warning",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "component_matches",
-      "type": "[NON_NULL]!",
+      "type": "[ComponentMatchInterface!]!",
       "args": []
     },
     {
@@ -194,12 +2117,12 @@
     },
     {
       "name": "deviating_competitors",
-      "type": "[NON_NULL]!",
+      "type": "[DeviatingCompetitorNode!]!",
       "args": []
     },
     {
       "name": "deviating_scorecards",
-      "type": "[NON_NULL]!",
+      "type": "[DeviatingScoreCardNode!]!",
       "args": []
     },
     {
@@ -324,7 +2247,7 @@
     },
     {
       "name": "get_air_divs_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -334,7 +2257,7 @@
     },
     {
       "name": "get_categories_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -354,7 +2277,7 @@
     },
     {
       "name": "get_currency_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -364,12 +2287,12 @@
     },
     {
       "name": "get_current_rbac_operations",
-      "type": "[NON_NULL]!",
+      "type": "[String!]!",
       "args": []
     },
     {
       "name": "get_disqualified",
-      "type": "[NON_NULL]!",
+      "type": "[IpscScoreCardNode!]!",
       "args": [
         {
           "name": "division",
@@ -388,7 +2311,7 @@
     },
     {
       "name": "get_firearms_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -413,7 +2336,7 @@
     },
     {
       "name": "get_handgun_divs_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -423,7 +2346,7 @@
     },
     {
       "name": "get_level_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -433,7 +2356,7 @@
     },
     {
       "name": "get_mini_rifle_divs_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -443,12 +2366,12 @@
     },
     {
       "name": "get_organizer_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
       "name": "get_pcc_divs_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -458,7 +2381,7 @@
     },
     {
       "name": "get_prec_rifle_divs_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -468,7 +2391,7 @@
     },
     {
       "name": "get_prematch_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -478,7 +2401,7 @@
     },
     {
       "name": "get_region_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -488,7 +2411,7 @@
     },
     {
       "name": "get_registration_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -498,7 +2421,7 @@
     },
     {
       "name": "get_results",
-      "type": "[NON_NULL]!",
+      "type": "[IpscMatchResultNode!]!",
       "args": [
         {
           "name": "division",
@@ -512,7 +2435,7 @@
     },
     {
       "name": "get_results_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -522,7 +2445,7 @@
     },
     {
       "name": "get_rifle_divs_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -537,7 +2460,7 @@
     },
     {
       "name": "get_shotgun_divs_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -547,12 +2470,12 @@
     },
     {
       "name": "get_standard_stage_selection",
-      "type": "[NON_NULL]!",
+      "type": "[StandardStageInterface!]!",
       "args": []
     },
     {
       "name": "get_state_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -562,7 +2485,7 @@
     },
     {
       "name": "get_status_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -572,7 +2495,7 @@
     },
     {
       "name": "get_tournament_divisions_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -587,7 +2510,7 @@
     },
     {
       "name": "get_verify_using_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -597,7 +2520,7 @@
     },
     {
       "name": "get_visibility_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -772,52 +2695,52 @@
     },
     {
       "name": "mainmatch_competitors",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "mainmatch_competitors_approved",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "mainmatch_competitors_approved_w_wo_results",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "mainmatch_competitors_approved_w_wo_results_wo_squad",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "mainmatch_competitors_approved_wo_results",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "mainmatch_competitors_declined",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "mainmatch_competitors_deleted",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "mainmatch_competitors_pending",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "mainmatch_competitors_registered",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "mainmatch_competitors_waiting",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
@@ -832,17 +2755,17 @@
     },
     {
       "name": "merchandize_orders",
-      "type": "[NON_NULL]!",
+      "type": "[MerchandizeOrderNode!]!",
       "args": []
     },
     {
       "name": "merchandizes",
-      "type": "[NON_NULL]!",
+      "type": "[MerchandizeNode!]!",
       "args": []
     },
     {
       "name": "merchandizes_on_registration",
-      "type": "[NON_NULL]!",
+      "type": "[MerchandizeNode!]!",
       "args": []
     },
     {
@@ -947,7 +2870,7 @@
     },
     {
       "name": "order_payments",
-      "type": "[NON_NULL]!",
+      "type": "[PaymentInterface!]!",
       "args": []
     },
     {
@@ -997,52 +2920,52 @@
     },
     {
       "name": "prematch_competitors",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "prematch_competitors_approved",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "prematch_competitors_approved_w_wo_results",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "prematch_competitors_approved_w_wo_results_wo_squad",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "prematch_competitors_approved_wo_results",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "prematch_competitors_declined",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "prematch_competitors_deleted",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "prematch_competitors_pending",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "prematch_competitors_registered",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
       "name": "prematch_competitors_waiting",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": []
     },
     {
@@ -1052,7 +2975,7 @@
     },
     {
       "name": "premium_payments",
-      "type": "[NON_NULL]!",
+      "type": "[PaymentInterface!]!",
       "args": []
     },
     {
@@ -1097,7 +3020,7 @@
     },
     {
       "name": "role_names",
-      "type": "[NON_NULL]!",
+      "type": "[String!]!",
       "args": []
     },
     {
@@ -1107,7 +3030,7 @@
     },
     {
       "name": "scorecards",
-      "type": "[NON_NULL]!",
+      "type": "[ScoreCardInterface!]!",
       "args": [
         {
           "name": "updated_after",
@@ -1122,12 +3045,12 @@
     },
     {
       "name": "scorecards_dq",
-      "type": "[NON_NULL]!",
+      "type": "[ScoreCardInterface!]!",
       "args": []
     },
     {
       "name": "scorecards_w_warning",
-      "type": "[NON_NULL]!",
+      "type": "[ScoreCardInterface!]!",
       "args": []
     },
     {
@@ -1162,7 +3085,7 @@
     },
     {
       "name": "squads",
-      "type": "[NON_NULL]!",
+      "type": "[SquadInterface!]!",
       "args": []
     },
     {
@@ -1172,7 +3095,7 @@
     },
     {
       "name": "stages",
-      "type": "[NON_NULL]!",
+      "type": "[StageInterface!]!",
       "args": []
     },
     {
@@ -1364,7 +3287,7 @@
     },
     {
       "name": "competitors_indexed",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": [
         {
           "name": "sqs",
@@ -1446,7 +3369,7 @@
     },
     {
       "name": "get_course_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -1456,7 +3379,7 @@
     },
     {
       "name": "get_disqualified",
-      "type": "[NON_NULL]!",
+      "type": "[IpscScoreCardNode!]!",
       "args": [
         {
           "name": "division",
@@ -1470,7 +3393,7 @@
     },
     {
       "name": "get_firearm_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -1495,7 +3418,7 @@
     },
     {
       "name": "get_results",
-      "type": "[NON_NULL]!",
+      "type": "[IpscStageResultNode!]!",
       "args": [
         {
           "name": "division",
@@ -1514,7 +3437,7 @@
     },
     {
       "name": "get_scoring_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -1524,7 +3447,7 @@
     },
     {
       "name": "get_shotgun_ammo_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -1714,7 +3637,7 @@
     },
     {
       "name": "scorecards",
-      "type": "[NON_NULL]!",
+      "type": "[ScoreCardInterface!]!",
       "args": [
         {
           "name": "updated_after",
@@ -1729,12 +3652,12 @@
     },
     {
       "name": "scorecards_dq",
-      "type": "[NON_NULL]!",
+      "type": "[ScoreCardInterface!]!",
       "args": []
     },
     {
       "name": "scorecards_w_warning",
-      "type": "[NON_NULL]!",
+      "type": "[ScoreCardInterface!]!",
       "args": []
     },
     {
@@ -1774,7 +3697,7 @@
     },
     {
       "name": "squad_scoring_progress",
-      "type": "[NON_NULL]!",
+      "type": "[SquadScoringProgressNode!]!",
       "args": []
     },
     {
@@ -1976,7 +3899,7 @@
     },
     {
       "name": "get_dq_reason_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -1991,17 +3914,17 @@
     },
     {
       "name": "get_scoring_analytics",
-      "type": "[NON_NULL]!",
+      "type": "[String!]!",
       "args": []
     },
     {
       "name": "get_scoring_history",
-      "type": "[NON_NULL]!",
+      "type": "[VersionNode!]!",
       "args": []
     },
     {
       "name": "get_scoring_history_as_list",
-      "type": "[NON_NULL]!",
+      "type": "[String!]!",
       "args": []
     },
     {
@@ -2263,7 +4186,7 @@
     },
     {
       "name": "category_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2273,7 +4196,7 @@
     },
     {
       "name": "classification_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2373,7 +4296,7 @@
     },
     {
       "name": "get_air_div_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2383,12 +4306,12 @@
     },
     {
       "name": "get_category_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
       "name": "get_cc_calling_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2398,7 +4321,7 @@
     },
     {
       "name": "get_classification_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2413,7 +4336,7 @@
     },
     {
       "name": "get_club_member_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2423,7 +4346,7 @@
     },
     {
       "name": "get_code_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2453,7 +4376,7 @@
     },
     {
       "name": "get_handgun_div_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2463,7 +4386,7 @@
     },
     {
       "name": "get_handgun_pf_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2473,7 +4396,7 @@
     },
     {
       "name": "get_mini_rifle_div_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2483,7 +4406,7 @@
     },
     {
       "name": "get_pcc_div_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2493,7 +4416,7 @@
     },
     {
       "name": "get_prec_rifle_div_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2503,7 +4426,7 @@
     },
     {
       "name": "get_prec_rifle_pf_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2513,7 +4436,7 @@
     },
     {
       "name": "get_region_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2528,7 +4451,7 @@
     },
     {
       "name": "get_rifle_div_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2538,7 +4461,7 @@
     },
     {
       "name": "get_rifle_pf_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2548,7 +4471,7 @@
     },
     {
       "name": "get_sex_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2558,7 +4481,7 @@
     },
     {
       "name": "get_shotgun_div_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2568,7 +4491,7 @@
     },
     {
       "name": "get_squad_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2578,7 +4501,7 @@
     },
     {
       "name": "get_state_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2588,7 +4511,7 @@
     },
     {
       "name": "get_status_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2598,7 +4521,7 @@
     },
     {
       "name": "get_tournament_division_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {
@@ -2723,7 +4646,7 @@
     },
     {
       "name": "merchandize_orders",
-      "type": "[NON_NULL]!",
+      "type": "[MerchandizeOrderNode!]!",
       "args": []
     },
     {
@@ -2753,7 +4676,7 @@
     },
     {
       "name": "payments",
-      "type": "[NON_NULL]!",
+      "type": "[PaymentInterface!]!",
       "args": []
     },
     {
@@ -2803,7 +4726,7 @@
     },
     {
       "name": "scorecards",
-      "type": "[NON_NULL]!",
+      "type": "[ScoreCardInterface!]!",
       "args": [
         {
           "name": "updated_after",
@@ -2818,7 +4741,7 @@
     },
     {
       "name": "scoring_history",
-      "type": "[NON_NULL]!",
+      "type": "[VersionNode!]!",
       "args": []
     },
     {
@@ -2965,7 +4888,7 @@
     },
     {
       "name": "competitors",
-      "type": "[NON_NULL]!",
+      "type": "[IpscCompetitorNode!]!",
       "args": []
     },
     {
@@ -2975,7 +4898,7 @@
     },
     {
       "name": "competitors_indexed",
-      "type": "[NON_NULL]!",
+      "type": "[CompetitorInterface!]!",
       "args": [
         {
           "name": "shift_on",
@@ -3043,7 +4966,7 @@
     },
     {
       "name": "get_squad_registration_choices",
-      "type": "[NON_NULL]!",
+      "type": "[ChoiceNode!]!",
       "args": []
     },
     {

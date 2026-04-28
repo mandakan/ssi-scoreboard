@@ -88,6 +88,8 @@ jobs:
 
       - run: pnpm typecheck   # tsc --noEmit
 
+      - run: pnpm validate:ssi-queries   # static check vs scripts/ssi-schema-snapshot.json
+
       - run: pnpm test
 
       - run: pnpm build

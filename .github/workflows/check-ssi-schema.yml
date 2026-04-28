@@ -38,3 +38,9 @@ jobs:
         env:
           SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
         run: pnpm check:ssi-schema
+
+      # Belt-and-braces: even when drift detection passes, re-run the static
+      # query validator. Catches the case where someone updated the snapshot
+      # via `--update` without re-checking that our outbound queries still
+      # line up with what's now in the snapshot.
+      - run: pnpm validate:ssi-queries
