@@ -1,16 +1,14 @@
 // Server-only — never import from client components.
 //
-// Lightweight structured-logging shim for cache and freshness decisions.
-// The aim is to make incidents like the Skepplanda Apr 2026 sync bug
-// diagnosable from logs after the fact: we want to be able to grep for
-// "ttl=null" decisions on a given match key and see which signal pinned
-// it (SSI flag flip, scoring threshold, or historical fallback).
+// Typed helper for the "cache" telemetry domain. Owns the event shape;
+// the actual transport (console / R2 / future sinks) lives in
+// `lib/telemetry.ts`.
 //
-// Default behavior: log JSON-shaped lines via console.info (picked up by
-// Cloudflare Workers logs, Docker stdout, etc., with zero infra dependency).
-// Disable globally with `CACHE_TELEMETRY=off`.
+// To add a new cache event, extend the union below. To add a new
+// *domain*, create a sibling file (e.g. `lib/ai-telemetry.ts`) with its
+// own discriminated union and a wrapper that calls `telemetry()`.
 
-const ENABLED = (process.env.CACHE_TELEMETRY ?? "on").toLowerCase() !== "off";
+import { telemetry } from "@/lib/telemetry";
 
 type CacheTelemetryEvent =
   // Decision points
@@ -50,13 +48,5 @@ type CacheTelemetryEvent =
     };
 
 export function cacheTelemetry(ev: CacheTelemetryEvent): void {
-  if (!ENABLED) return;
-  // One JSON line per event — easy to grep, easy to ship to a log aggregator.
-  // Avoid console.log so it doesn't get swallowed by stdout-to-stderr fallback
-  // on some hosts; .info is INFO-level and visible by default everywhere.
-  try {
-    console.info(JSON.stringify({ ts: new Date().toISOString(), ...ev }));
-  } catch {
-    /* ignore — telemetry must never throw into the request path */
-  }
+  telemetry({ domain: "cache", ...ev });
 }
