@@ -4,6 +4,7 @@ import { QueryClient, dehydrate, HydrationBoundary } from "@tanstack/react-query
 import MatchPageClient from "./match-page-client";
 import { fetchMatchData } from "@/lib/match-data";
 import { matchQueryKey } from "@/lib/query-keys";
+import { usageTelemetry, bucketScoring } from "@/lib/usage-telemetry";
 
 interface PageProps {
   params: Promise<{ ct: string; id: string }>;
@@ -62,6 +63,22 @@ export default async function MatchPage({ params }: PageProps) {
         ms_fetch: result ? Math.round(result.msFetch) : null,
       }));
       if (!result) throw new Error("Match not found");
+      // Fire match-view telemetry from the SSR prefetch — this is the call
+      // that always runs when a user opens a match page. The /api/match
+      // route also fires it (for client-side polls when staleTime expires);
+      // SSR + API together give us page-views + refresh activity, with
+      // client-side polls visible in the upstream telemetry domain.
+      const ctNum = parseInt(ct, 10);
+      if (!isNaN(ctNum)) {
+        usageTelemetry({
+          op: "match-view",
+          ct: ctNum,
+          level: result.data.level ?? null,
+          region: result.data.region ?? null,
+          scoringBucket: bucketScoring(result.data.scoring_completed ?? 0),
+          cacheHit: result.cachedAt !== null,
+        });
+      }
       return result.data;
     },
   });

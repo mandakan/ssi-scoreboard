@@ -52,9 +52,20 @@ export type UsageEvent =
       nCompetitors: number;
     }
   | {
+      // User typed a query (queryLength > 0). For empty/no-text fetches
+      // (initial event browse, default shooter list) use op="browse".
       op: "search";
       kind: "events" | "shooter";
       queryLength: number;
+      resultBucket: "0" | "1-9" | "10-99" | "100+";
+    }
+  | {
+      // User loaded the events/shooter list without typing — a passive
+      // browse rather than an intent-driven search. Helps separate
+      // "people are looking at upcoming matches" from "people are
+      // hunting for a specific thing".
+      op: "browse";
+      kind: "events" | "shooter";
       resultBucket: "0" | "1-9" | "10-99" | "100+";
     }
   | {
