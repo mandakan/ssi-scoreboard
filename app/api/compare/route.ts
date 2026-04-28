@@ -3,7 +3,7 @@ import { MAX_COMPETITORS } from "@/lib/constants";
 import { reportError } from "@/lib/error-telemetry";
 import { usageTelemetry } from "@/lib/usage-telemetry";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY, MATCH_QUERY, refreshCachedQuery } from "@/lib/graphql";
+import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY, MATCH_QUERY, refreshCachedMatchQuery } from "@/lib/graphql";
 import cache from "@/lib/cache-impl";
 import { computeMatchFreshness, computeMatchSwrTtl, isMatchComplete } from "@/lib/match-ttl";
 import { persistToMatchStore } from "@/lib/match-data-store";
@@ -163,7 +163,13 @@ export async function GET(req: Request) {
     const age = (Date.now() - new Date(matchCachedAt).getTime()) / 1000;
     if (age > matchFreshness) {
       afterResponse(
-        refreshCachedQuery<RawMatchData>(matchKey, MATCH_QUERY, { ct: ctNum, id }, dataTtl),
+        refreshCachedMatchQuery<RawMatchData>(
+          matchKey,
+          MATCH_QUERY,
+          { ct: ctNum, id },
+          dataTtl,
+          { ct: ctNum, id },
+        ),
       );
     }
   }
@@ -206,7 +212,13 @@ export async function GET(req: Request) {
     const age = (Date.now() - new Date(scorecardsCachedAt).getTime()) / 1000;
     if (age > matchFreshness) {
       afterResponse(
-        refreshCachedQuery<RawScorecardsData>(scorecardsKey, SCORECARDS_QUERY, { ct: ctNum, id }, dataTtl),
+        refreshCachedMatchQuery<RawScorecardsData>(
+          scorecardsKey,
+          SCORECARDS_QUERY,
+          { ct: ctNum, id },
+          dataTtl,
+          { ct: ctNum, id },
+        ),
       );
     }
   }

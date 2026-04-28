@@ -9,6 +9,7 @@ import { CACHE_SCHEMA_VERSION } from "@/lib/constants";
 import { parseMatchCacheKey, persistActiveMatchToD1 } from "@/lib/match-data-store";
 import { markUpstreamDegraded } from "@/lib/upstream-status";
 import { upstreamTelemetry, hashVariables, type UpstreamOutcome } from "@/lib/upstream-telemetry";
+import { cacheTelemetry } from "@/lib/cache-telemetry";
 
 /**
  * Check if the current request is an admin-authenticated request
@@ -251,6 +252,256 @@ export const MATCH_QUERY = `
     }
   }
 `;
+
+// ─── Query: match-level "if-modified-since" probe ────────────────────────────
+// Tiny probe that returns only `IpscMatchNode.updated`, `status`, `results`.
+// Used by `refreshCachedMatchQuery` to skip the heavy MATCH_QUERY/SCORECARDS_QUERY
+// refetch when nothing has changed upstream.
+//
+// Response is ~50 bytes vs. tens-to-hundreds of KB for a full scorecard pull.
+export const MATCH_UPDATED_PROBE_QUERY = `
+  query MatchUpdatedProbe($ct: Int!, $id: String!) {
+    event(content_type: $ct, id: $id) {
+      status
+      results
+      ... on IpscMatchNode {
+        updated
+      }
+    }
+  }
+`;
+
+interface MatchUpdatedProbeData {
+  event: {
+    updated?: string | null;
+    status?: string | null;
+    results?: string | null;
+  } | null;
+}
+
+/** Sidecar Redis key storing the last-seen probe state for a match. Shared
+ *  across both GetMatch and GetMatchScorecards SWR refreshes for the same
+ *  (ct, id) — one probe gates both keys' refetch decisions. */
+function probeStateKey(ct: number, id: string): string {
+  return `probe:match-state:${ct}:${id}`;
+}
+
+interface ProbeState {
+  updated: string | null;
+  status: string | null;
+  results: string | null;
+}
+
+function probesEqual(a: ProbeState, b: ProbeState): boolean {
+  return a.updated === b.updated && a.status === b.status && a.results === b.results;
+}
+
+/** Kill switch: when set to "off", the probe-aware refresh degrades to the
+ *  pre-#361 behaviour (always do a full refetch). Used to disable the probe
+ *  if `IpscMatchNode.updated` turns out to under-report scorecard activity. */
+function isMatchProbeEnabled(): boolean {
+  return process.env.MATCH_PROBE_ENABLED !== "off";
+}
+
+/** Belt-and-braces ceiling: even when the probe says "no change", never skip
+ *  if the cached entry's *original* `cachedAt` is older than this many seconds.
+ *  Caps the worst case if `match.updated` lies — at most we'd serve N-seconds
+ *  stale data instead of indefinitely-stale. Default 5 minutes; override via
+ *  `MATCH_PROBE_MAX_SKIP_AGE_SECONDS`. */
+function maxProbeSkipAgeSeconds(): number {
+  const raw = process.env.MATCH_PROBE_MAX_SKIP_AGE_SECONDS;
+  if (raw == null) return 300;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : 300;
+}
+
+/** Read the cached entry's original `cachedAt` (the timestamp of the last
+ *  *full* fetch, not the last TTL bump) so we can age-cap probe skips.
+ *  Returns null if the entry is gone or unparseable. */
+async function readCachedAt(cacheKey: string): Promise<string | null> {
+  try {
+    const raw = await cache.get(cacheKey);
+    if (!raw) return null;
+    const entry = JSON.parse(raw) as { cachedAt?: string };
+    return entry.cachedAt ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Probe-aware single-flight refresh of a cached match-level GraphQL query
+ * (GetMatch or GetMatchScorecards). Sends a tiny `MatchUpdatedProbe` first;
+ * if `IpscMatchNode.updated` (and `status`/`results`) match the last-seen
+ * sidecar state, just extend the cache TTL and skip the full refetch entirely.
+ *
+ * Falls back to a full `refreshCachedQuery` on first-seen state, mismatch,
+ * or any probe error.
+ */
+export async function refreshCachedMatchQuery<T>(
+  cacheKey: string,
+  query: string,
+  variables: Record<string, unknown>,
+  ttlSeconds: number | null,
+  match: { ct: number; id: string },
+  lockTtlSeconds = 90,
+): Promise<void> {
+  // Kill switch: degrade to the original always-refetch path. Useful if the
+  // upstream `match.updated` field turns out not to track scorecard entry
+  // (e.g. only bumps on match-level admin edits, not per-scorecard saves).
+  if (!isMatchProbeEnabled()) {
+    return refreshCachedQuery<T>(cacheKey, query, variables, ttlSeconds, lockTtlSeconds);
+  }
+
+  const lockKey = `inflight:${cacheKey}`;
+  let acquired = false;
+  try {
+    acquired = await cache.setIfAbsent(lockKey, "1", lockTtlSeconds);
+  } catch {
+    return;
+  }
+  if (!acquired) return;
+
+  const sidecarKey = probeStateKey(match.ct, match.id);
+  const probeStartedAt = Date.now();
+  let probeOutcome: "skip" | "changed" | "first-seen" | "error" | "forced-refresh" = "error";
+  let cachedAgeSeconds: number | null = null;
+  let upstreamUpdatedIso: string | null = null;
+  let prevUpstreamUpdatedIso: string | null = null;
+  const parsed = parseMatchCacheKey(cacheKey);
+  const keyType: "match" | "scorecards" | "other" =
+    parsed?.keyType === "match" ? "match"
+      : parsed?.keyType === "scorecards" ? "scorecards"
+      : "other";
+
+  try {
+    let prevState: ProbeState | null = null;
+    try {
+      const raw = await cache.get(sidecarKey);
+      if (raw) prevState = JSON.parse(raw) as ProbeState;
+    } catch {
+      // Sidecar read failed — proceed as first-seen.
+    }
+
+    let probeData: MatchUpdatedProbeData;
+    try {
+      probeData = await executeQuery<MatchUpdatedProbeData>(MATCH_UPDATED_PROBE_QUERY, variables);
+    } catch {
+      // Probe itself failed — fall through to a full refetch via refreshCachedQuery.
+      probeOutcome = "error";
+      await fullRefresh<T>(cacheKey, query, variables, ttlSeconds);
+      return;
+    }
+
+    const ev = probeData.event;
+    if (!ev) {
+      // Match deleted/unavailable upstream — let the full refresh handle it.
+      probeOutcome = "error";
+      await fullRefresh<T>(cacheKey, query, variables, ttlSeconds);
+      return;
+    }
+
+    const currentState: ProbeState = {
+      updated: ev.updated ?? null,
+      status: ev.status ?? null,
+      results: ev.results ?? null,
+    };
+    upstreamUpdatedIso = currentState.updated;
+    prevUpstreamUpdatedIso = prevState?.updated ?? null;
+
+    if (prevState && probesEqual(prevState, currentState)) {
+      // Probe says nothing changed — but cap how long we'll trust that. If the
+      // cached entry's *original* fetch is older than the max-skip-age ceiling,
+      // force a full refetch anyway. This bounds worst-case staleness if
+      // `match.updated` under-reports scorecard activity.
+      const cachedAt = await readCachedAt(cacheKey);
+      const ageSeconds = cachedAt
+        ? (Date.now() - new Date(cachedAt).getTime()) / 1000
+        : Infinity; // unknown age → assume too old, force refresh
+      cachedAgeSeconds = Number.isFinite(ageSeconds) ? ageSeconds : null;
+      if (ageSeconds > maxProbeSkipAgeSeconds()) {
+        probeOutcome = "forced-refresh";
+        await fullRefresh<T>(cacheKey, query, variables, ttlSeconds);
+        try {
+          await cache.set(sidecarKey, JSON.stringify(currentState), ttlSeconds ?? null);
+        } catch { /* sidecar write failure is non-fatal */ }
+        return;
+      }
+
+      // Within the safety window — extend the existing cache TTL and skip
+      // the heavy refetch.
+      probeOutcome = "skip";
+      if (ttlSeconds !== null) {
+        try {
+          await cache.expire(cacheKey, ttlSeconds);
+        } catch {
+          // Entry may have been evicted — fall through silently. The next
+          // request will hit the fallback / GraphQL path and self-heal.
+        }
+        try {
+          await cache.expire(sidecarKey, ttlSeconds);
+        } catch { /* sidecar TTL miss is harmless */ }
+      }
+      return;
+    }
+
+    // First-seen or state changed — do the full refresh, then update sidecar.
+    probeOutcome = prevState ? "changed" : "first-seen";
+    await fullRefresh<T>(cacheKey, query, variables, ttlSeconds);
+    try {
+      await cache.set(sidecarKey, JSON.stringify(currentState), ttlSeconds ?? null);
+    } catch {
+      // Sidecar write failure just costs us one extra full refetch next cycle.
+    }
+  } finally {
+    cacheTelemetry({
+      op: "match-probe",
+      matchKey: cacheKey,
+      keyType,
+      outcome: probeOutcome,
+      probeMs: Date.now() - probeStartedAt,
+      cachedAgeSeconds,
+      upstreamUpdatedIso,
+      prevUpstreamUpdatedIso,
+    });
+    try {
+      await cache.del(lockKey);
+    } catch { /* lock will expire via TTL */ }
+  }
+}
+
+/**
+ * Inner: do the actual full refresh + cache write + D1 mirror. Mirrors
+ * `refreshCachedQuery` but without the lock (caller holds it).
+ */
+async function fullRefresh<T>(
+  cacheKey: string,
+  query: string,
+  variables: Record<string, unknown>,
+  ttlSeconds: number | null,
+): Promise<void> {
+  try {
+    const data = await executeQuery<T>(query, variables);
+    const entry: CacheEntry<T> = {
+      data,
+      cachedAt: new Date().toISOString(),
+      v: CACHE_SCHEMA_VERSION,
+    };
+    const payload = JSON.stringify(entry);
+    await cache.set(cacheKey, payload, ttlSeconds);
+    if (parseMatchCacheKey(cacheKey)) {
+      afterResponse(persistActiveMatchToD1(cacheKey, payload));
+    }
+  } catch (err) {
+    console.error("[cache] background refresh failed for key:", cacheKey, err);
+    await markUpstreamDegraded();
+    if (ttlSeconds !== null) {
+      try {
+        await cache.expire(cacheKey, ttlSeconds);
+      } catch { /* entry may already be gone — D1 fallback covers it */ }
+    }
+  }
+}
 
 /// ─── Query: list IPSC events ──────────────────────────────────────────────────
 // Returns all publicly-visible IPSC matches filtered by optional free-text

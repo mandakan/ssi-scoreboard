@@ -3,7 +3,7 @@
 // in the match page server component.
 
 import { cache } from "react";
-import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY, refreshCachedQuery } from "@/lib/graphql";
+import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY, refreshCachedMatchQuery } from "@/lib/graphql";
 import cacheAdapter from "@/lib/cache-impl";
 import { computeMatchFreshness, computeMatchSwrTtl, isMatchComplete } from "@/lib/match-ttl";
 import { extractDivision } from "@/lib/divisions";
@@ -200,7 +200,13 @@ export async function fetchMatchData(
     const ageSeconds = (Date.now() - new Date(cachedAt).getTime()) / 1000;
     if (ageSeconds > freshness) {
       afterResponse(
-        refreshCachedQuery<RawMatchData>(matchKey, MATCH_QUERY, { ct: ctNum, id }, ttl),
+        refreshCachedMatchQuery<RawMatchData>(
+          matchKey,
+          MATCH_QUERY,
+          { ct: ctNum, id },
+          ttl,
+          { ct: ctNum, id },
+        ),
       );
     }
   }
