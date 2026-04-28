@@ -31,5 +31,8 @@ export const MAX_COMPETITORS = 12;
  *       rule (daysSince > MATCH_COMPLETE_DAYS_SINCE before any pinning,
  *       even on SSI flag flips). Invalidates any D1 entries pinned via
  *       results=all or status=cp during a match's first 3 days.
+ *  14 → added scorecard_created to CompetitorSummary on CompareResponse
+ *       (powers the stage-times export feature so video editors can align
+ *       per-stage runs to a recording timeline).
  */
-export const CACHE_SCHEMA_VERSION = 13;
+export const CACHE_SCHEMA_VERSION = 14;

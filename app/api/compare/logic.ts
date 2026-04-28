@@ -633,6 +633,7 @@ export function computeGroupRankings(
           stageClassification: null,
           hitLossPoints: null,
           penaltyLossPoints: 0,
+          scorecard_created: sc?.scorecard_created ?? null,
         };
       } else {
         const hf = effectiveHF(sc);
@@ -698,6 +699,7 @@ export function computeGroupRankings(
           ),
           hitLossPoints,
           penaltyLossPoints,
+          scorecard_created: sc.scorecard_created ?? null,
         };
       }
     }
