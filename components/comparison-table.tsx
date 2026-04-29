@@ -1310,83 +1310,87 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                 return (
                   <th
                     key={comp.id}
-                    className="relative py-2 px-3 text-center font-medium min-w-[5.5rem] sm:min-w-32"
+                    className="py-2 px-1 sm:px-3 text-center font-medium min-w-[5.5rem] sm:min-w-32 align-top"
                     style={{ borderBottom: `3px solid ${colorMap[comp.id]}` }}
                     aria-sort={isSortedByComp ? "ascending" : "none"}
                   >
-                    {onToggleTracked && comp.shooterId !== null && (() => {
-                      const isTracked = trackedShooterIds?.has(comp.shooterId!) ?? false;
-                      return (
-                        <button
-                          onClick={() => onToggleTracked(comp)}
-                          className={cn(
-                            "absolute top-0 left-0 p-2 rounded-br transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
-                            isTracked
-                              ? "text-amber-500 hover:text-amber-600 hover:bg-amber-500/10"
-                              : "text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10",
-                          )}
-                          aria-label={isTracked ? `Untrack ${comp.name}` : `Track ${comp.name}`}
-                          aria-pressed={isTracked}
-                        >
-                          <Star
-                            className="w-3 h-3"
-                            aria-hidden="true"
-                            fill={isTracked ? "currentColor" : "none"}
-                          />
-                        </button>
-                      );
-                    })()}
-                    {(onMove || onRemove) && (
-                      <span
-                        className="absolute top-0 right-0 inline-flex items-center"
-                        role="group"
-                        aria-label={`Column actions for ${comp.name}`}
-                      >
-                        {onMove && (
-                          <button
-                            onClick={() => canMoveLeft && onMove(comp.id, "left")}
-                            disabled={!canMoveLeft}
-                            className={cn(
-                              "p-1.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
-                              canMoveLeft
-                                ? "text-muted-foreground hover:text-foreground hover:bg-muted"
-                                : "text-muted-foreground/30 cursor-not-allowed",
-                            )}
-                            aria-label={`Move ${comp.name} left`}
-                          >
-                            <ChevronLeft className="w-3 h-3" aria-hidden="true" />
-                          </button>
-                        )}
-                        {onMove && (
-                          <button
-                            onClick={() => canMoveRight && onMove(comp.id, "right")}
-                            disabled={!canMoveRight}
-                            className={cn(
-                              "p-1.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
-                              canMoveRight
-                                ? "text-muted-foreground hover:text-foreground hover:bg-muted"
-                                : "text-muted-foreground/30 cursor-not-allowed",
-                            )}
-                            aria-label={`Move ${comp.name} right`}
-                          >
-                            <ChevronRight className="w-3 h-3" aria-hidden="true" />
-                          </button>
-                        )}
-                        {onRemove && (
-                          <button
-                            onClick={() => onRemove(comp.id)}
-                            className="p-2 rounded-bl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                            aria-label={`Remove ${comp.name}`}
-                          >
-                            <X className="w-3 h-3" aria-hidden="true" />
-                          </button>
-                        )}
-                      </span>
-                    )}
                     <div className="flex flex-col items-center gap-0.5">
-                      <span className="font-mono text-xs text-muted-foreground">
-                        #{comp.competitor_number}
-                      </span>
+                      <div className="grid grid-cols-[1fr_auto_1fr] items-center w-full">
+                        <div className="flex justify-start">
+                          {onToggleTracked && comp.shooterId !== null && (() => {
+                            const isTracked = trackedShooterIds?.has(comp.shooterId!) ?? false;
+                            return (
+                              <button
+                                onClick={() => onToggleTracked(comp)}
+                                className={cn(
+                                  "p-1.5 rounded transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+                                  isTracked
+                                    ? "text-amber-500 hover:text-amber-600 hover:bg-amber-500/10"
+                                    : "text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10",
+                                )}
+                                aria-label={isTracked ? `Untrack ${comp.name}` : `Track ${comp.name}`}
+                                aria-pressed={isTracked}
+                              >
+                                <Star
+                                  className="w-3 h-3"
+                                  aria-hidden="true"
+                                  fill={isTracked ? "currentColor" : "none"}
+                                />
+                              </button>
+                            );
+                          })()}
+                        </div>
+                        <div
+                          className="flex items-center justify-center gap-0.5"
+                          role="group"
+                          aria-label={`Position controls for ${comp.name}`}
+                        >
+                          {onMove && (
+                            <button
+                              onClick={() => canMoveLeft && onMove(comp.id, "left")}
+                              disabled={!canMoveLeft}
+                              className={cn(
+                                "p-1 rounded transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+                                canMoveLeft
+                                  ? "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                  : "text-muted-foreground/30 cursor-not-allowed",
+                              )}
+                              aria-label={`Move ${comp.name} left`}
+                            >
+                              <ChevronLeft className="w-3 h-3" aria-hidden="true" />
+                            </button>
+                          )}
+                          <span className="font-mono text-xs text-muted-foreground tabular-nums">
+                            #{comp.competitor_number}
+                          </span>
+                          {onMove && (
+                            <button
+                              onClick={() => canMoveRight && onMove(comp.id, "right")}
+                              disabled={!canMoveRight}
+                              className={cn(
+                                "p-1 rounded transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+                                canMoveRight
+                                  ? "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                  : "text-muted-foreground/30 cursor-not-allowed",
+                              )}
+                              aria-label={`Move ${comp.name} right`}
+                            >
+                              <ChevronRight className="w-3 h-3" aria-hidden="true" />
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex justify-end">
+                          {onRemove && (
+                            <button
+                              onClick={() => onRemove(comp.id)}
+                              className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                              aria-label={`Remove ${comp.name}`}
+                            >
+                              <X className="w-3 h-3" aria-hidden="true" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
                       <span className="inline-flex items-center gap-1">
                         {comp.shooterId != null ? (
                           <Link
