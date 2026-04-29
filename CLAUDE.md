@@ -1,13 +1,15 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code (claude.ai/code) when working with this repo.
+
+For deeper background on a topic, follow the pointer to the matching `docs/*.md` file.
 
 ## Dev Commands
 ```bash
 pnpm dev              # start Next.js dev server (port 3000)
 pnpm build            # production build
-pnpm -w run lint      # ESLint (eslint .) — zero warnings required
-pnpm -w run typecheck # tsc --noEmit — zero errors required
+pnpm -w run lint      # ESLint (eslint .) -- zero warnings required
+pnpm -w run typecheck # tsc --noEmit -- zero errors required
 pnpm -w test          # vitest run (unit + component)
 pnpm test:watch       # vitest watch mode
 pnpm test:e2e         # playwright test (mocked API, no live key needed)
@@ -24,56 +26,52 @@ and doesn't define its own `lint`/`typecheck`/`test` scripts that match the root
 ## Architecture
 
 Next.js 16 full-stack app. Route Handlers in `app/api/` are the only place that call
-the ShootNScoreIt GraphQL API — the `SSI_API_KEY` lives in `.env.local` and must never
+the ShootNScoreIt GraphQL API -- the `SSI_API_KEY` lives in `.env.local` and must never
 be referenced from any file with `"use client"` or any file under `lib/` that is imported
 by client components.
 
 ```
-Browser → Next.js Route Handlers → shootnscoreit.com/graphql/
+Browser -> Next.js Route Handlers -> shootnscoreit.com/graphql/
 ```
 
 Key directories:
-- `app/api/match/[ct]/[id]/route.ts` — proxies match overview query
-- `app/api/compare/route.ts` — fans out competitor scorecard queries, calls logic.ts
-- `app/api/compare/logic.ts` — **pure function** `computeGroupRankings()`, no I/O, fully unit-tested
-- `app/api/mcp/route.ts` — MCP HTTP endpoint (JSON-RPC, single-shot transport); optional `MCP_SECRET` bearer auth
-- `lib/graphql.ts` — GQL query strings + `executeQuery()`, server-only (no NEXT_PUBLIC_ prefix)
-- `lib/cache.ts` — `CacheAdapter` interface (get/set/persist/del/expire/scanCachedMatchKeys)
-- `lib/cache-node.ts` — ioredis implementation (Docker / Node.js target)
-- `lib/cache-edge.ts` — @upstash/redis HTTP implementation (Cloudflare Pages target)
-- `lib/cache-impl.ts` — re-exports node adapter by default; CF builds override via webpack alias
-- `lib/db.ts` — `AppDatabase` interface (persistent shooter profiles, match indices, popularity tracking, achievements, match data cache)
-- `lib/db-migrations.ts` — shared migration definitions + runtime runner (single source of truth for schema)
-- `lib/db-sqlite.ts` — better-sqlite3 implementation (Docker / Node.js target)
-- `lib/db-d1.ts` — Cloudflare D1 implementation (Cloudflare Pages target)
-- `lib/db-impl.ts` — re-exports SQLite adapter by default; CF builds override via webpack/turbopack alias
-- `lib/match-data-store.ts` — tiered match data read/write helpers: `getMatchDataWithFallback()` (Redis → D1 → null), `persistToMatchStore()` (D1 write + Redis 24h drain), `parseMatchCacheKey()`
-- `lib/match-ttl.ts` — pure `computeMatchTtl()` — smart TTL tiers for pre/active/complete matches
-- `lib/mcp-tools.ts` — shared MCP tool registration (server-only, used by HTTP route + stdio server)
-- `lib/types.ts` — single source of truth for all TypeScript interfaces
-- `lib/queries.ts` — TanStack Query v5 hooks used by client components
-- `components/` — all UI; no direct API calls, all data via hooks from `lib/queries.ts`
-- `app/api/events/route.ts` — event search; defaults to `minLevel=l2plus` (hides Level I club matches); users can switch to "All", "L3+", or "L4+" in the filter panel
-- `app/api/og/match/[ct]/[id]/route.tsx` — dynamic OG image generation (match overview, single competitor, multi-competitor variants); uses `next/og` (Satori)
-- `app/api/admin/cache/health/route.ts` — protected diagnostic endpoint (`Authorization: Bearer <CACHE_PURGE_SECRET>`); reports env var presence and runs a live write→read→delete round-trip against the cache adapter with latency
-- `app/match/[ct]/[id]/layout.tsx` — match layout with `generateMetadata()` for dynamic page titles + OG meta tags
-- `app/match/[ct]/[id]/match-page-client.tsx` — `"use client"` match page component (extracted from page.tsx to allow server-side metadata generation)
-- `lib/og-data.ts` — server-only helper that fetches match data for OG images and page metadata (1500ms timeout via `Promise.race`)
-- `lib/shooter-index.ts` — `decodeShooterId()` + `indexMatchShooters()` — writes shooter profiles and match refs into AppDatabase (SQLite/D1)
-- `lib/backfill.ts` — pure `runBackfill()` — scans cached matches for a shooter, dependency-injected, fully unit-tested
-- `app/api/shooter/[shooterId]/route.ts` — GET shooter dashboard (aggregates from AppDatabase + match data cache)
-- `app/api/shooter/[shooterId]/backfill/route.ts` — POST cache-scan backfill (zero GraphQL calls)
-- `app/api/shooter/[shooterId]/add-match/route.ts` — POST manual match URL (may hit GraphQL)
-- `app/api/shooter/search/route.ts` — GET name search over `shooter_profiles` (`?q=&limit=`); returns `ShooterSearchResult[]`
-- `components/my-shooters-button.tsx` — homepage entry point button that opens `TrackedShootersSheet`
-- `lib/achievements/types.ts` — achievement type definitions (AchievementDefinition, AchievementProgress, StoredAchievement)
-- `lib/achievements/definitions.ts` — ACHIEVEMENT_ENTRIES array (5 achievements) with pure evaluator functions
-- `lib/achievements/evaluate.ts` — **pure function** `evaluateAchievements()`, no I/O, fully unit-tested
-- `lib/feature-previews.ts` — generic feature preview toggle system (localStorage + URL params)
-- `hooks/use-preview-feature.ts` — SSR-safe `usePreviewFeature()` hook for client components
-- `scripts/warm-cache.ts` — CLI cache warming script; writes permanent entries to both Redis and D1/SQLite; indexes known shooters as a side effect. Use `--upcoming` to warm future matches (populates the `matches` domain table for shooter dashboards)
-- `scripts/migrate-match-cache.ts` — one-time migration: moves permanent match data from Redis to D1/SQLite (`--drain` sets 24h Redis TTL, `--dry-run`, `--limit`)
-- `mcp/` — pnpm workspace package; stdio MCP server (`mcp/src/index.ts`) using `tsx` from root `node_modules`
+- `app/api/match/[ct]/[id]/route.ts` -- proxies match overview query
+- `app/api/compare/route.ts` -- fans out competitor scorecard queries, calls logic.ts
+- `app/api/compare/logic.ts` -- **pure function** `computeGroupRankings()`, no I/O, fully unit-tested
+- `app/api/mcp/route.ts` -- MCP HTTP endpoint (JSON-RPC, single-shot transport); optional `MCP_SECRET` bearer auth
+- `lib/graphql.ts` -- GQL query strings + `executeQuery()`, server-only (no NEXT_PUBLIC_ prefix)
+- `lib/cache.ts` -- `CacheAdapter` interface (get/set/persist/del/expire/scanCachedMatchKeys)
+- `lib/cache-node.ts` -- ioredis implementation (Docker / Node.js target)
+- `lib/cache-edge.ts` -- @upstash/redis HTTP implementation (Cloudflare Pages target)
+- `lib/cache-impl.ts` -- re-exports node adapter by default; CF builds override via webpack alias
+- `lib/db.ts` -- `AppDatabase` interface (persistent shooter profiles, match indices, popularity tracking, achievements, match data cache)
+- `lib/db-migrations.ts` -- shared migration definitions + runtime runner (single source of truth for schema)
+- `lib/db-sqlite.ts` -- better-sqlite3 implementation (Docker / Node.js target)
+- `lib/db-d1.ts` -- Cloudflare D1 implementation (Cloudflare Pages target)
+- `lib/db-impl.ts` -- re-exports SQLite adapter by default; CF builds override via webpack/turbopack alias
+- `lib/match-data-store.ts` -- tiered match data read/write helpers: `getMatchDataWithFallback()` (Redis -> D1 -> null), `persistToMatchStore()` (D1 write + Redis 24h drain), `parseMatchCacheKey()`
+- `lib/match-ttl.ts` -- pure `computeMatchTtl()` -- smart TTL tiers for pre/active/complete matches
+- `lib/mcp-tools.ts` -- shared MCP tool registration (server-only, used by HTTP route + stdio server)
+- `lib/types.ts` -- single source of truth for all TypeScript interfaces
+- `lib/queries.ts` -- TanStack Query v5 hooks used by client components
+- `components/` -- all UI; no direct API calls, all data via hooks from `lib/queries.ts`
+- `app/api/events/route.ts` -- event search; defaults to `minLevel=l2plus` (hides Level I club matches)
+- `app/api/og/match/[ct]/[id]/route.tsx` -- dynamic OG image generation (see `docs/og-images.md`)
+- `app/api/admin/cache/health/route.ts` -- protected diagnostic endpoint (`Authorization: Bearer <CACHE_PURGE_SECRET>`); reports env var presence and runs a live write->read->delete round-trip against the cache adapter with latency
+- `app/match/[ct]/[id]/layout.tsx` -- match layout with `generateMetadata()` for dynamic page titles + OG meta tags
+- `app/match/[ct]/[id]/match-page-client.tsx` -- `"use client"` match page component (extracted from page.tsx to allow server-side metadata generation)
+- `lib/og-data.ts` -- server-only helper that fetches match data for OG images and page metadata (1500ms timeout via `Promise.race`)
+- `lib/shooter-index.ts` -- `decodeShooterId()` + `indexMatchShooters()` -- writes shooter profiles and match refs into AppDatabase (SQLite/D1)
+- `lib/backfill.ts` -- pure `runBackfill()` -- scans cached matches for a shooter, dependency-injected, fully unit-tested
+- `app/api/shooter/[shooterId]/route.ts` -- GET shooter dashboard (aggregates from AppDatabase + match data cache)
+- `app/api/shooter/[shooterId]/backfill/route.ts` -- POST cache-scan backfill (zero GraphQL calls)
+- `app/api/shooter/[shooterId]/add-match/route.ts` -- POST manual match URL (may hit GraphQL)
+- `app/api/shooter/search/route.ts` -- GET name search over `shooter_profiles` (`?q=&limit=`); returns `ShooterSearchResult[]`
+- `lib/achievements/` -- types, definitions, and pure `evaluateAchievements()` (see `docs/achievements.md`)
+- `lib/feature-previews.ts` + `hooks/use-preview-feature.ts` -- preview feature toggle system
+- `scripts/warm-cache.ts` -- CLI cache warming script; writes permanent entries to both Redis and D1/SQLite. Use `--upcoming` to populate the `matches` domain table for shooter dashboards
+- `scripts/migrate-match-cache.ts` -- one-time migration: moves permanent match data from Redis to D1/SQLite (`--drain`, `--dry-run`, `--limit`)
+- `mcp/` -- pnpm workspace package; stdio MCP server (`mcp/src/index.ts`) using `tsx` from root `node_modules`
 
 ## GraphQL Patterns
 The SSI API uses Django content-type discrimination. Match URLs encode this:
@@ -81,38 +79,38 @@ The SSI API uses Django content-type discrimination. Match URLs encode this:
 
 - IPSC matches: `content_type = 22`
 - All queries use inline fragments: `... on IpscMatchNode { }`, `... on IpscCompetitorNode { }`
-- `get_results` (official standings) is blocked during active matches — use raw scorecard data instead
+- `get_results` (official standings) is blocked during active matches -- use raw scorecard data instead
 - Scorecard data is available via `event -> stages -> scorecards` path
 
 ## Testing Approach
-- **Unit tests** (`tests/unit/`): pure functions only — `parseMatchUrl`, `buildColorMap`, `computeGroupRankings`, `computeMatchTtl`
+- **Unit tests** (`tests/unit/`): pure functions only -- `parseMatchUrl`, `buildColorMap`, `computeGroupRankings`, `computeMatchTtl`
 - **Component tests** (`tests/components/`): React Testing Library, focus on conditional cell rendering
-- **E2E tests** (`tests/e2e/`): Playwright with `route.fulfill()` to mock `/api/*` — no live API key needed in CI
+- **E2E tests** (`tests/e2e/`): Playwright with `route.fulfill()` to mock `/api/*` -- no live API key needed in CI
 - Extract I/O-free logic into separate files to keep unit tests fast and reliable
-- CI runs: lint → typecheck → test → build → test:e2e
+- CI runs: lint -> typecheck -> test -> build -> test:e2e
 - **All tests must pass, all linters and type checkers must produce zero errors and zero warnings**
 
 ## Mobile-First Design (non-negotiable)
 
-This app is used courtside during live IPSC competitions — on a phone, outdoors, one-handed.
+This app is used courtside during live IPSC competitions -- on a phone, outdoors, one-handed.
 **Every feature must be designed mobile-first.** Desktop is an enhancement, not the baseline.
 
 - Design for **390px width** (iPhone 14) as the primary breakpoint
 - **No unintentional horizontal page overflow** at any viewport width
-- All interactive elements: minimum **44×44px touch target** (enforced in `globals.css`)
-- Data readable without zooming: ≥14px for values, ≥12px for secondary labels
+- All interactive elements: minimum **44x44px touch target** (enforced in `globals.css`)
+- Data readable without zooming: >=14px for values, >=12px for secondary labels
 - Test every UI change at mobile width before considering it done
-- The comparison table is the hardest challenge — prefer card layouts or constrained
+- The comparison table is the hardest challenge -- prefer card layouts or constrained
   column widths on small screens over bare horizontal scroll
 
 ## UX & Accessibility
-- Follow **WCAG 2.1 AA** throughout — all interactive elements must be keyboard-navigable
+- Follow **WCAG 2.1 AA** throughout -- all interactive elements must be keyboard-navigable
   and have accessible names (`aria-label`, `aria-labelledby`, or visible text).
-- Minimum touch target: 44×44px (`min-height: 2.75rem` applied globally in `globals.css`)
+- Minimum touch target: 44x44px (`min-height: 2.75rem` applied globally in `globals.css`)
 - All error states must use `role="alert"` so screen readers announce them immediately.
-- Focus ring is enforced globally via `:focus-visible` in `globals.css` — never suppress it
+- Focus ring is enforced globally via `:focus-visible` in `globals.css` -- never suppress it
   with `outline-none` without providing an alternative visible focus indicator.
-- **WCAG 2.1 SC 1.4.1 (Use of Color)** — color is never the sole means of conveying information.
+- **WCAG 2.1 SC 1.4.1 (Use of Color)** -- color is never the sole means of conveying information.
   Always pair with text, icon, shape, or pattern. The competitor palette in `lib/colors.ts`
   is the Okabe-Ito CVD-safe set and is paired with `SHAPE_PALETTE` (coprime cycle length, see
   `buildShapeMap()`); chart series and legend swatches must render via `CompetitorMarker` /
@@ -121,605 +119,170 @@ This app is used courtside during live IPSC competitions — on a phone, outdoor
 - Images and icons must have `alt` text or `aria-hidden="true"` if decorative.
 - Use semantic HTML elements (`<button>`, `<nav>`, `<main>`, `<table>`, `<th scope>`, etc.)
   rather than `<div>` with click handlers.
-- **Accordion / disclosure pattern**: always use `<hN><button aria-expanded aria-controls>…</button></hN>`
-  — never nest a heading element inside a button (invalid HTML). Expanded panels should be
+- **Accordion / disclosure pattern**: always use `<hN><button aria-expanded aria-controls>...</button></hN>`
+  -- never nest a heading element inside a button (invalid HTML). Expanded panels should be
   `<section role="region" aria-labelledby="button-id">` so screen readers can navigate them.
 - **No duplicate landmark names**: every `role="region"` must have a unique `aria-labelledby`
   label. Two sections on the same page cannot share the same accessible name.
-
-## What's New dialog
-
-A "What's New" dialog auto-shows once per release whenever a user opens the app after a new
-entry has been added. It is also accessible at any time via the "What's new" link in the footer.
-
-**To announce a new release:**
-1. Open `lib/releases.ts`.
-2. **Prepend** a new `Release` object to the `RELEASES` array (newest entry must always be first).
-3. Set `id` to an ISO date string (e.g. `"2026-03-15"`) — this is the key stored in
-   `localStorage("whats-new-seen-id")`. The dialog shows whenever this `id` differs from
-   what the user's browser last saw.
-4. Fill in `date` (human-readable), optional `title`, and one or more `sections`
-   (`heading` + `items` string array).
-
-```ts
-// lib/releases.ts — example new entry
-{
-  id: "2026-03-15",
-  date: "March 15, 2026",
-  title: "Squad View & Performance Trends",
-  sections: [
-    {
-      heading: "New",
-      items: [
-        "Squad view: filter the comparison table to a single squad.",
-        "Performance trend sparklines on the stage list.",
-      ],
-    },
-    {
-      heading: "Improved",
-      items: ["Faster initial load on slow connections."],
-    },
-  ],
-},
-```
-
-**Key files:**
-- `lib/releases.ts` — the only file you edit to publish a new What's New
-- `lib/types.ts` — `Release` / `ReleaseSection` interfaces
-- `components/whats-new-provider.tsx` — context, auto-show logic, dialog render
-- `components/footer.tsx` — "What's new" trigger link
-
-**Rule of thumb:** add an entry whenever a user-visible feature ships. Skip patch/fix-only
-deploys unless the fix is prominent enough that users should know about it.
-
-**`screenshotScenes`:** new releases must include a `screenshotScenes` array. Point it at
-the scenes from `scripts/screenshot-match.ts` that best showcase the new feature.
-Each scene is captured at both mobile (390×844) and desktop (1280×900).
-
-Current catalogue: `comparison-table`, `degradation-chart`, `hf-level-bars`,
-`archetype-chart`, `style-fingerprint`, `stage-times-export`, `shooter-dashboard`,
-`competitor-identity`, `tracked-shooters-sheet`, `whats-new-dialog`. Omit the field
-to capture all.
-
-**When to add a new scene:** if a new chart or UI section isn't well-represented by any
-existing scene, add one to `scripts/screenshot-match.ts` (follow the existing `Scene`
-pattern: `name`, `description`, `suppressWhatsNew`, `setup`). If the new section is inside
-the "Coaching analysis" accordion, call `openCoachingSection(page)` before scrolling.
-Update the catalogue list above and in `docs/release-post.md` whenever scenes are added.
 
 ## Chart info popovers
 Every chart section in `app/match/[ct]/[id]/match-page-client.tsx` has a `?` (`HelpCircle`) icon button
 that opens a `<Popover>` explaining the chart. **When adding a new chart section, always add
 a matching info popover.** When modifying what a chart shows, update its popover text to match.
-The popover should include: what the axes/axes represent, how to read the visual, and 1–2
-actionable interpretation tips. Keep language concise — max ~4 short paragraphs.
+The popover should include: what the axes/axes represent, how to read the visual, and 1-2
+actionable interpretation tips. Keep language concise -- max ~4 short paragraphs.
 
 The same pattern applies to sections on the shooter dashboard. The Achievements section
 has a section-level info popover explaining the tier ladder concept, and each achievement
 card is tappable to reveal its full unlock ladder with progress indicators.
 
 ## Design System & Tailwind v4
-- Use **Tailwind v4** utility classes everywhere — no inline styles.
+- Use **Tailwind v4** utility classes everywhere -- no inline styles.
 - All colors, spacing, and radii come from **CSS custom property design tokens** defined
   in `app/globals.css`. Prefer semantic tokens (`bg-background`, `text-foreground`,
   `text-muted-foreground`, `border-border`) over raw palette classes (`bg-gray-100`).
-- The color palette uses **OKLCH** for perceptual uniformity — extend tokens in `globals.css`
+- The color palette uses **OKLCH** for perceptual uniformity -- extend tokens in `globals.css`
   under `@theme inline` when new semantic colors are needed. Do not hard-code hex/rgb.
-- Dark mode is supported via the `.dark` class — all tokens have dark-mode values.
+- Dark mode is supported via the `.dark` class -- all tokens have dark-mode values.
 - shadcn/ui components in `components/ui/` are the primary component library.
   Do not modify them directly; use `pnpm dlx shadcn@latest add` to add/update.
 - Competitor colors (`lib/colors.ts`) use explicit hex values chosen for WCAG contrast
-  against both light and dark backgrounds — update with care.
+  against both light and dark backgrounds -- update with care.
 
 ## Code Conventions
-- All interfaces in `lib/types.ts` — do not define inline types in components
-- `lib/graphql.ts` is server-only — never import it from client components
+- All interfaces in `lib/types.ts` -- do not define inline types in components
+- `lib/graphql.ts` is server-only -- never import it from client components
 - Competitor colors are deterministic by index in `selectedIds` array (see `lib/colors.ts`)
-- `group_leader_points` on `StageComparison` is reserved for the future benchmark overlay feature — do not remove
-- shadcn components live in `components/ui/` — do not modify generated files directly
+- `group_leader_points` on `StageComparison` is reserved for the future benchmark overlay feature -- do not remove
+- shadcn components live in `components/ui/` -- do not modify generated files directly
 
 ## Cache Schema Versioning
-`CACHE_SCHEMA_VERSION` in `lib/constants.ts` is embedded in every cache entry as `v` — in
+
+`CACHE_SCHEMA_VERSION` in `lib/constants.ts` is embedded in every cache entry as `v` -- in
 both Redis and the D1/SQLite `match_data_cache` table (`schema_version` column).
 Whenever the **shape** of a cached GraphQL response changes (new fields, removed fields,
 renamed fields), bump `CACHE_SCHEMA_VERSION` by 1 and add a one-line history comment.
 
 Entries missing `v` or carrying an older version are treated as cache misses and re-fetched
-automatically — no manual `CACHE_PURGE_SECRET` flush is needed. The new entry is written
-with the current version on the first request, so the cache self-heals within one TTL cycle.
-This applies to both Redis entries and D1/SQLite entries read via `getMatchDataWithFallback()`.
+automatically -- no manual `CACHE_PURGE_SECRET` flush is needed. The cache self-heals within
+one TTL cycle. This applies to both Redis entries and D1/SQLite entries read via
+`getMatchDataWithFallback()`.
 
 **Rule of thumb:** bump whenever you add or remove a field on `MatchResponse`, `CompareResponse`,
 or any other type that is serialised into the **match cache** (Redis/D1) via `cachedExecuteQuery`.
-This does **not** apply to AppDatabase schema changes — those are managed independently by
+This does **not** apply to AppDatabase schema changes -- those are managed independently by
 the SQLite/D1 adapters via `CREATE TABLE IF NOT EXISTS`.
 
-## Delta-merge contract (CRITICAL)
+## Delta-merge contract (CRITICAL) -> `docs/delta-merge.md`
 
-`refreshCachedMatchQuery` no longer just caches SSI responses opaquely — when the match-level
-probe (#361) reports `changed`, the helper attempts an incremental scorecard delta merge (#362)
-via `scorecards(updated_after:)`. We are now **mirroring SSI's data structure** and applying
-upstream changes incrementally, so any SSI schema drift can silently corrupt cached snapshots.
+`refreshCachedMatchQuery` mirrors SSI's data structure and applies upstream changes
+incrementally via the match-level probe (#361) and scorecard delta merge (#362). SSI schema
+drift can silently corrupt cached snapshots, so changes to scorecard fields must touch
+**all** of: `SCORECARD_NODE_FIELDS`, `RawScCard`, `ScorecardDeltaEntry`, `deltaToCacheCard()`,
+`parseRawScorecards()`, `CACHE_SCHEMA_VERSION`, and `scripts/ssi-schema-snapshot.json` -- in
+the same PR. Run `pnpm check:ssi-schema` and `pnpm validate:ssi-queries` before committing.
+Recovery lever: `POST /api/admin/cache/force-refresh?ct=&id=`. Full details, drift triage,
+and recovery commands live in `docs/delta-merge.md`.
 
-**When changing scorecard fields, ALL of these must be updated together — in the SAME PR:**
+## Telemetry -> `docs/telemetry.md`
 
-1. **`SCORECARD_NODE_FIELDS`** in `lib/graphql.ts` — the shared GraphQL fragment used by both
-   `SCORECARDS_QUERY` (full fetch) and `SCORECARDS_DELTA_QUERY` (delta fetch). Adding the field
-   here automatically threads it through both. Do NOT add a field to one query and not the other.
-2. **`RawScCard`** in `lib/scorecard-data.ts` — the TypeScript shape of a cached scorecard.
-3. **`ScorecardDeltaEntry`** in `lib/graphql.ts` — the delta-payload shape (subset of `RawScCard`
-   plus `stage.id`).
-4. **`deltaToCacheCard()`** in `lib/scorecard-merge.ts` — the field-by-field copy from delta entry
-   to cached scorecard. New fields must be copied here or they will be silently dropped on every
-   delta merge.
-5. **`parseRawScorecards()`** in `lib/scorecard-data.ts` — if the field is consumed downstream
-   (e.g. used in `computeGroupRankings`).
-6. **`CACHE_SCHEMA_VERSION`** in `lib/constants.ts` — bump by 1 with a one-line history comment.
-   Otherwise old delta-merged entries written before the change will linger.
-7. **`scripts/ssi-schema-snapshot.json`** — run `pnpm check:ssi-schema --update` to refresh the
-   snapshot. Commit the diff. Reviewers can see exactly which SSI fields changed.
+Structured-event logging in `lib/telemetry.ts` with per-domain wrappers (`cache-`, `upstream-`,
+`error-`, `usage-`, `mcp-telemetry.ts`). MCP traffic is auto-tagged `via:"mcp"` via
+AsyncLocalStorage. **Privacy commitments:** never log IP/UA/shooter IDs/specific competitor IDs
+or raw search text -- only bucketed counts and lengths. Sinks: `console.info` always, R2 NDJSON
+on Cloudflare. New REST routes that the MCP toolset reaches must call `maybeTagAsMcp(req)` at
+the top of the handler. See `docs/telemetry.md` for adding domains/sinks, R2 setup, and how to
+read R2 telemetry via `wrangler login` + REST API.
 
-**For other tracked types** (`IpscMatchNode`, `IpscStageNode`, `IpscCompetitorNode`,
-`IpscSquadNode`): the same discipline applies, but the surface area is smaller — match metadata
-goes through the standard probe + full refetch path, no merge logic. Update the relevant
-GraphQL query, the corresponding TypeScript type, and bump `CACHE_SCHEMA_VERSION`.
+## Shooter Index & Match Backfill -> `docs/shooter-index.md`
 
-**Detecting SSI drift before users do:**
-
-```bash
-pnpm check:ssi-schema           # report drift, exit 1 if any
-pnpm check:ssi-schema --update  # accept current schema as the new snapshot
-pnpm check:ssi-schema --json    # machine-readable output for CI
-
-pnpm validate:ssi-queries       # static check: every field/arg in every
-                                # outbound query exists on the parent type
-                                # in the snapshot. Zero network. Runs in CI.
-```
-
-`validate:ssi-queries` parses each query in `lib/graphql.ts`, walks the AST
-against `scripts/ssi-schema-snapshot.json`, and fails on missing fields,
-undeclared arguments, or fields whose parent type doesn't declare them. It
-catches snapshot/query drift and typos. It **does not** catch resolver-level
-bugs where the schema advertises a field on an interface but the underlying
-Django model on a subtype throws `AttributeError` at runtime (the #367 class) —
-that gap needs a live dry-run smoke test, not static introspection.
-
-The script introspects `RootQuery`, `EventInterface`, `IpscMatchNode`,
-`IpscStageNode`, `IpscScoreCardNode`, `IpscCompetitorNode`, and `IpscSquadNode`
-from the live SSI GraphQL endpoint and compares against
-`scripts/ssi-schema-snapshot.json`. Run it weekly (manually or via cron) to catch silent
-upstream changes. If it reports drift:
-
-- **Added fields** — usually safe to ignore unless we want to consume them. Update the snapshot
-  with `--update` once you've decided.
-- **Removed fields** — high-risk. The delta merge will write `null` for removed fields, so
-  cached entries gradually lose data. Plan a migration: stop reading the field, bump
-  `CACHE_SCHEMA_VERSION`, then update the snapshot.
-- **Type / argument changes** — read the diff carefully; may be a breaking change.
-
-**Recovery from a corrupted snapshot:**
-
-If a delta merge produces wrong data on a live match, the user-facing recovery lever is:
-
-```bash
-curl -X POST -H "Authorization: Bearer $CACHE_PURGE_SECRET" \
-  "https://scoreboard.urdr.dev/api/admin/cache/force-refresh?ct=22&id=<match-id>"
-```
-
-This sets a `force-refresh:{ct}:{id}` Redis sentinel that bypasses probe / delta paths and
-forces a clean full refetch on the next SWR cycle. The sentinel auto-clears after a successful
-refresh and auto-expires after 5 minutes.
-
-## Telemetry
-
-Structured-event logging for cache decisions and other server-side observability.
-Lives in `lib/telemetry.ts` (transport) + per-domain typed wrappers:
-
-- `lib/cache-telemetry.ts` — match TTL decisions, cache reads, schema evictions
-- `lib/upstream-telemetry.ts` — every SSI GraphQL fetch (latency, outcome, bytes)
-- `lib/error-telemetry.ts` — `reportError(site, err, extra)` for swallowed-catch sites; records error class + truncated message (no stack — avoids PII)
-- `lib/usage-telemetry.ts` — server-side product analytics (match views, comparisons, searches, OG renders, dashboard views)
-- `lib/mcp-telemetry.ts` — MCP-server-boundary events (JSON-RPC requests, tool calls, auth fails) emitted from `/api/mcp`.
-
-**`via:"mcp"` enrichment.** The MCP HTTP route opens an AsyncLocalStorage telemetry context (`lib/telemetry-context.ts`) so every event emitted while serving that request carries `via:"mcp"`. Stdio/Smithery MCP shims call REST endpoints directly with an `x-mcp-client` header; the six routes MCP tools hit (`/api/events`, `/api/match/[ct]/[id]`, `/api/compare`, `/api/popular-matches`, `/api/shooter/[shooterId]`, `/api/shooter/search`) call `maybeTagAsMcp(req)` at the top of the handler to open the same context. Result: any usage/cache/upstream/error/d1 event emitted under MCP traffic can be filtered with `select(.via == "mcp")` in jq/DuckDB. New REST routes that the MCP toolset reaches must add `maybeTagAsMcp(req)` to keep this property.
-
-**Privacy commitments — enforced by code review:**
-
-- **Never** record IP addresses, User-Agent strings, shooter IDs, or specific competitor IDs.
-- **Never** record raw search query text — only `queryLength` and a bucketed `resultBucket`.
-- Match IDs *are* recorded — matches are public events whose IDs are not personally identifying.
-- New `usage` events must use bucketed counts (`bucketCount`, `bucketScoring`) instead of raw numbers when the underlying value could correlate to a person.
-- The user-facing privacy policy at `/legal` describes this contract (Section 6). Update it whenever telemetry collection changes.
-
-**Sinks (registered automatically per deploy target):**
-- `console.info` — always on. Picked up by Cloudflare Workers Logs and Docker stdout.
-- R2 NDJSON — Cloudflare only, when the `TELEMETRY` binding is present (see `lib/telemetry-sinks-cf.ts`).
-  Per-isolate batching, flushed via `ctx.waitUntil()` to one object per request burst at
-  `cache-telemetry/YYYY-MM-DD/HHmmss-NNNN.ndjson`. Lifecycle rule on the bucket auto-deletes
-  after 30 days. Sampling controlled by `TELEMETRY_SAMPLE`.
-
-**Adding a new domain:**
-1. Create `lib/<domain>-telemetry.ts` with a typed discriminated union over `op`.
-2. Export a thin wrapper: `export function fooTelemetry(ev: FooEvent) { telemetry({ domain: "foo", ...ev }); }`.
-   No transport changes needed — the existing sinks handle it automatically.
-
-**Adding a new sink:**
-1. Implement `TelemetrySink` (a function over `EnrichedEvent`).
-2. For deploy-target-agnostic sinks: call `registerSink()` at module load.
-3. For CF-only sinks: append to `extraSinks` in `lib/telemetry-sinks-cf.ts`.
-4. For Docker-only sinks: append to `lib/telemetry-sinks-impl.ts`.
-
-**One-time R2 setup (Cloudflare) — already applied; documented for reproducibility:**
-```bash
-# Production
-wrangler r2 bucket create ssi-scoreboard-telemetry
-wrangler r2 bucket lifecycle add ssi-scoreboard-telemetry expire-30d "" \
-  --expire-days 30 --force
-
-# Staging
-wrangler r2 bucket create ssi-scoreboard-telemetry-staging
-wrangler r2 bucket lifecycle add ssi-scoreboard-telemetry-staging expire-30d "" \
-  --expire-days 30 --force
-```
-
-**Reading telemetry:**
-
-`wrangler` only ships `r2 object get|put|delete` — there is no `r2 object list`.
-Listing has to go through the Cloudflare REST API, using the OAuth token that
-`wrangler login` already cached at `~/Library/Preferences/.wrangler/config/default.toml`
-(macOS) or `~/.config/.wrangler/config/default.toml` (Linux).
-
-```bash
-# Account ID (one-time lookup)
-ACCOUNT_ID=$(wrangler whoami 2>&1 | awk -F'│' '/Account ID/{getline; getline; print $3}' | xargs)
-TOKEN=$(grep '^oauth_token' ~/Library/Preferences/.wrangler/config/default.toml | \
-  sed -E 's/oauth_token = "([^"]+)"/\1/')
-
-# List a day's events (REST API)
-curl -s -H "Authorization: Bearer $TOKEN" \
-  "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/r2/buckets/ssi-scoreboard-telemetry/objects" \
-  | jq -r '.result[].key' | grep cache-telemetry/2026-04-28/
-
-# Fetch one object (REST — works as a stream, no wrangler needed)
-curl -s -H "Authorization: Bearer $TOKEN" \
-  "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/r2/buckets/ssi-scoreboard-telemetry/objects/cache-telemetry/2026-04-28/132405-a1b2c3.ndjson" \
-  | jq 'select(.op == "match-ttl-decision" and .trulyDone == true)'
-
-# Same fetch via wrangler (handy when the path is already known)
-wrangler r2 object get ssi-scoreboard-telemetry/cache-telemetry/2026-04-28/132405-a1b2c3.ndjson \
-  --pipe | jq -r '.'
-
-# Bulk: download a whole day's prefix and feed into DuckDB / sqlite for analysis
-```
-
-The OAuth token rotates every ~hour — re-run `wrangler login` if curl returns
-`{"success":false,"errors":[{"code":10000,"message":"Authentication error"}]}`.
-
-## Shooter Index & Match Backfill
-
-The shooter dashboard (`/shooter/{id}`) shows cross-competition stats. It relies on
-persistent **AppDatabase** (SQLite on Docker, D1 on Cloudflare) to track which matches
-each shooter has appeared in. This data survives Redis flushes. The database is populated
-through several paths:
-
-| Path | Indexes who? | When? | GraphQL calls? |
-|------|-------------|-------|----------------|
-| Match page view (`fetchMatchData`) | ALL competitors | On every match page visit | Only on cache miss |
-| Compare API (`/api/compare`) | ALL competitors | On every comparison | Only on cache miss |
-| `warm-cache.ts` | **Known shooters only** | During scheduled/manual warming | Zero (data already fetched) |
-| Backfill endpoint (`POST /api/shooter/{id}/backfill`) | **One specific shooter** | On-demand from dashboard | Zero (reads cached data) |
-| Add-match endpoint (`POST /api/shooter/{id}/add-match`) | ALL competitors | When user submits a URL | Only if match not cached |
-
-**"Known shooter"** = a shooterId that has a row in the `shooter_profiles` table
-(i.e. the app has seen them before through normal usage, warm-cache, or backfill).
-
-**Important scope limitation:** the backfill scan can discover matches in both the Redis cache
-**and** the D1/SQLite `match_data_cache` table (keys are unioned). Matches never viewed by anyone
-on the app are invisible to both. The add-match endpoint is the only path that can reach an
-arbitrary SSI match.
-
-**AppDatabase tables (same schema on SQLite and D1):**
-- `shooter_profiles` — `{ shooter_id PK, name, club, division, last_seen }` — permanent; searchable via `db.searchShooterProfiles(query, { limit })` (case-insensitive LIKE, empty query returns recently active)
-- `shooter_matches` — `{ shooter_id, match_ref, start_timestamp }` — composite PK, capped at 200 per shooter
-- `match_popularity` — `{ cache_key PK, last_seen_at, hit_count }` — tracks popular `gql:GetMatch:*` keys
-- `shooter_achievements` — `{ shooter_id, achievement_id, tier }` — composite PK, persists unlocked tiers with `unlocked_at`, `match_ref`, `value`
-- `match_data_cache` — `{ cache_key PK, key_type, ct, match_id, data (JSON blob), schema_version, stored_at }` — durable store for historical match data offloaded from Redis (GetMatch, GetMatchScorecards, matchglobal)
-- `matches` — `{ match_ref PK, ct, match_id, name, venue, date, level, region, sub_rule, discipline, status, results_status, scoring_completed, competitors_count, stages_count, lat, lng, data, updated_at }` — structured match-level metadata, populated opportunistically on every match page visit via `indexMatchShooters()`. Provides durable match identity for the shooter dashboard (especially upcoming matches whose full JSON blob expires from Redis). This is an **opportunistic index**, not a complete catalogue — landing page search still uses the GraphQL API.
-
-**Tiered match data read path:**
-```
-Redis (hot cache) → D1/SQLite match_data_cache → GraphQL API
-```
-When a completed match is persisted to D1 (`persistToMatchStore()`), its Redis key gets a
-24h drain TTL. Historical match data thus self-drains from Redis, freeing storage. Active
-and recent matches remain in Redis at their normal TTLs.
-
-**Still in Redis only (ephemeral):**
-- `computed:shooter:{id}:dashboard` — pre-computed dashboard JSON, 5min TTL
-- `backfill:lock:{id}` — 60s cooldown lock
-
-`lib/backfill.ts` is the core scan logic — dependency-injected (no direct cache/db
-imports) so it can be unit-tested with mocked deps. `lib/shooter-index.ts` handles the
-actual AppDatabase writes via the `AppDatabase` interface.
-
-**Schema migrations:**
-
-Schema is defined in two places that must be kept in sync:
-- `lib/db-migrations.ts` — `MIGRATIONS` array, used by the SQLite adapter's runtime
-  migration runner (`runMigrationsSync`). Auto-applies on first DB access (Docker).
-- `migrations/*.sql` — SQL files applied by `wrangler d1 migrations apply` (Cloudflare D1).
-  Applied automatically in CI before each deploy (see `deploy-cloudflare.yml` and
-  `deploy-staging.yml`).
-
-- Migrations are idempotent: `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`
-- `ALTER TABLE ADD COLUMN` failures are silently caught (column already exists)
-- Expand-contract pattern: migrations only ADD — never drop or rename in the same release
-
-**Adding a new migration:**
-1. Append a new entry to `MIGRATIONS` in `lib/db-migrations.ts` (increment version)
-2. Create a matching SQL file in `migrations/` (for D1)
-3. Use idempotent DDL; one statement per array entry for `ALTER TABLE ADD COLUMN`
-
-**One-time data migrations:**
-- `scripts/migrate-shooter-data.ts` — one-time script that reads existing shooter data from
-  Redis sorted sets and writes it to SQLite. Run after deploying the AppDatabase change to
-  preserve historical data. Use `--cleanup` to delete permanent Redis keys (shooter profiles,
-  match sorted sets, popularity sets) after migration — this frees Upstash storage quota since
-  those keys are now in SQLite.
-- `scripts/migrate-match-cache.ts` — one-time script that moves permanent match data from Redis
-  to D1/SQLite. Run after deploying migration 0003 (`match_data_cache` table). Scans all
-  permanent `gql:GetMatch:*`, `gql:GetMatchScorecards:*`, and `computed:matchglobal:*` keys.
-  Use `--drain` to set a 24h TTL on migrated Redis keys (freeing Redis storage over 24h).
-  Use `--dry-run` to preview, `--limit N` to cap the number of keys migrated.
-
-**Match cache migration steps (Cloudflare):**
-1. Deploy the code (creates `match_data_cache` table via migration 0003)
-2. Run: `wrangler d1 migrations apply APP_DB` (if not auto-applied)
-3. Run: `pnpm tsx scripts/migrate-match-cache.ts --drain` to move permanent Redis keys to D1
-4. Verify: Upstash storage drops over 24h as drained keys expire
-
-**Match cache migration steps (Docker):**
-1. Deploy the code (SQLite table auto-created via `CREATE TABLE IF NOT EXISTS`)
-2. Run: `pnpm tsx scripts/migrate-match-cache.ts --drain` to move permanent Redis keys to SQLite
-3. Verify: Redis `DBSIZE` drops over 24h as drained keys expire
+Persistent **AppDatabase** (SQLite on Docker, D1 on Cloudflare) tracks which matches each
+shooter has appeared in. Tables: `shooter_profiles`, `shooter_matches` (capped 200/shooter),
+`match_popularity`, `shooter_achievements`, `match_data_cache`, `matches`. Tiered read path:
+Redis -> D1/SQLite `match_data_cache` -> GraphQL. Schema is dual-defined in
+`lib/db-migrations.ts` (SQLite runtime) and `migrations/*.sql` (D1) -- keep them in sync,
+idempotent DDL only, expand-contract pattern. See `docs/shooter-index.md` for the full
+population matrix, schema details, and one-time migration steps.
 
 ## Feature Previews
 
 Beta features are toggled per-user via localStorage under key `ssi-preview-features`.
 Activate/deactivate at runtime via URL params:
-- `?preview=new-id` — enable a feature
-- `?preview=-new-id` — disable
-- `?preview=a,b` — comma-separated for multiple
+- `?preview=new-id` -- enable a feature
+- `?preview=-new-id` -- disable
+- `?preview=a,b` -- comma-separated for multiple
 
-The `usePreviewFeature("new-id")` hook (from `hooks/use-preview-feature.ts`)
-provides SSR-safe access for client components. Preview-gated sections render a "Preview"
-badge next to their heading. When a feature graduates to stable, remove the preview check.
+The `usePreviewFeature("new-id")` hook (from `hooks/use-preview-feature.ts`) provides
+SSR-safe access for client components. Preview-gated sections render a "Preview" badge
+next to their heading. When a feature graduates to stable, remove the preview check.
 
 **Adding a new preview feature:**
 1. Add the string ID to `PREVIEW_FEATURES` in `lib/feature-previews.ts`
 2. Use `usePreviewFeature("new-id")` in the relevant component
 3. Share `?preview=new-id` URLs with testers
 
-## Achievement System
+## Achievement System -> `docs/achievements.md`
 
-The shooter dashboard shows tiered achievements that track cross-match progress. Each
-achievement has a progressive unlock ladder — multiple tiers from beginner milestones to
-elite goals. Unlocked tiers are persisted in AppDatabase (`shooter_achievements` table)
-so they survive the 200-match pruning window.
+Tiered achievements on the shooter dashboard, persisted in `shooter_achievements` so unlocks
+survive the 200-match prune window. Pure `evaluateAchievements()` runs on dashboard cache miss
+and persists new tiers fire-and-forget. Adding an achievement: append one entry to
+`ACHIEVEMENT_ENTRIES` in `lib/achievements/definitions.ts` -- no schema changes needed. See
+`docs/achievements.md` for the full category list and key files.
 
-**Achievement categories (10 achievements, 35 tiers):**
-- **Milestone:** Competitor (1–100 L2+ matches), Stage Warrior (10–500 L2+ stages), Championship (1–5 L4+ matches), World Shoot (1 Level V match), DQ Club (1 DQ)
-- **Accuracy:** Sharpshooter (60–85% A-zone), Bullseye (1–25 perfect stages), Clean Sheet (1–10 clean matches)
-- **Variety:** Globe Trotter (2–5 countries), Versatile (2–5 divisions)
+## What's New dialog -> `docs/whats-new.md`
 
-**Evaluation flow:** on each dashboard load (cache miss), `evaluateAchievements()` compares
-computed stats against tier thresholds, diffs against stored tiers, and persists new unlocks
-(fire-and-forget). The function is pure (no I/O) and fully unit-tested.
+Auto-shows once per release; also reachable from the footer. To announce a release, prepend a
+`Release` entry (with ISO `id`, `date`, `sections`, and `screenshotScenes`) to `RELEASES` in
+`lib/releases.ts`. Add an entry whenever a user-visible feature ships. See `docs/whats-new.md`
+for the full entry shape, screenshot scene catalogue, and rules for adding new scenes.
 
-**Adding a new achievement:** add one `AchievementEntry` object to `ACHIEVEMENT_ENTRIES` in
-`lib/achievements/definitions.ts` (id, name, description, category, icon, tiers, evaluator).
-No schema changes or migrations needed — the composite PK `(shooter_id, achievement_id, tier)`
-handles new achievements and tiers automatically.
+## Environment Variables -> `docs/env-vars.md`
 
-**Key files:**
-- `lib/achievements/definitions.ts` — define achievements here
-- `lib/achievements/evaluate.ts` — pure evaluation logic
-- `lib/achievements/types.ts` — interfaces
-- `app/api/shooter/[shooterId]/route.ts` — calls evaluator, persists unlocks
-- `app/shooter/[shooterId]/shooter-dashboard-client.tsx` — `AchievementsSection` UI
-- `tests/unit/achievements.test.ts` — unit tests
+Full table of every env var, where it's read, which deploy target uses it, and notes/defaults.
+Headline gotchas:
+- `SSI_API_KEY`, `CACHE_PURGE_SECRET`, all `*_TELEMETRY*`, `MATCH_*`, `SCORECARDS_*`,
+  `MCP_SECRET`, `AI_*` -- **never** prefix with `NEXT_PUBLIC_`.
+- `NEXT_PUBLIC_BUILD_ID`, `NEXT_PUBLIC_APP_URL` are the only intentionally public ones.
+- Docker target needs `REDIS_URL` and optionally `SHOOTER_DB_PATH`. Cloudflare target needs
+  `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` plus the `APP_DB` and `AI` bindings.
 
-## Environment Variables
-| Variable | Where used | Target | Notes |
-|---|---|---|---|
-| `SSI_API_KEY` | `lib/graphql.ts` (server-only) | Both | Never use `NEXT_PUBLIC_` prefix |
-| `CACHE_PURGE_SECRET` | `app/api/admin/cache/purge/route.ts`, `app/api/admin/cache/health/route.ts` | Both | Any strong random string; never `NEXT_PUBLIC_` |
-| `MIN_CACHE_TTL_SECONDS` | `lib/match-ttl.ts` (server-only) | Both | Minimum TTL floor for all non-permanent cache entries. Default `30` (s) — keeps active matches near-real-time so courtside polling picks up fresh scorecards within seconds. Raise it to reduce upstream load on shared deployments. Set to `0` to disable. Never `NEXT_PUBLIC_`. |
-| `MATCH_COMPLETE_DAYS_SINCE` | `lib/match-ttl.ts` (server-only) | Both | Hard time gate (days) before a match can be permanently pinned to durable cache. Default `3`. Even SSI flag flips (`status=cp`, `results=all`) cannot pin earlier than this — protects against the Skepplanda-style premature pinning bug where a mid-match flag flip caused stale data to stick. Raise for events with very long scoring tails (e.g. World Shoots that run 5+ days). Never `NEXT_PUBLIC_`. |
-| `MATCH_COMPLETE_SCORING_PCT` | `lib/match-ttl.ts` (server-only) | Both | Scoring threshold (percent, 0-100) for the un-flagged completion heuristic. Default `98`. Used only when SSI never flips `status=cp`/`results=all` and the time gate has passed. Lower values pin more matches earlier (saves upstream calls) at the risk of catching matches still accruing scorecards. Never `NEXT_PUBLIC_`. |
-| `MATCH_PROBE_ENABLED` | `lib/graphql.ts` (server-only) | Both | Kill switch for the match-level "if-modified-since" probe (`refreshCachedMatchQuery`). Default on. Set to `off` to disable the probe and fall back to always-refetch SWR behaviour. Use this if telemetry shows `IpscMatchNode.updated` doesn't track scorecard activity (e.g. only bumps on match-level admin edits, not per-scorecard saves). Never `NEXT_PUBLIC_`. |
-| `MATCH_PROBE_MAX_SKIP_AGE_SECONDS` | `lib/graphql.ts` (server-only) | Both | Belt-and-braces ceiling: even when the probe says "no change", never skip a refetch if the cached entry's *original* `cachedAt` is older than this many seconds. Default `300` (5 min). Caps worst-case staleness if `match.updated` lies — at most we'd serve N-seconds-stale data instead of indefinitely-stale. Lower for more conservative safety, raise once empirical telemetry validates the probe. Never `NEXT_PUBLIC_`. |
-| `SCORECARDS_DELTA_ENABLED` | `lib/graphql.ts` (server-only) | Both | Kill switch for the incremental scorecard delta path (`scorecards(updated_after:)`). Default on. Set to `off` to disable delta merges and fall back to full refetches on every `changed` probe outcome. Use this if delta merges produce subtly wrong scorecard data. Never `NEXT_PUBLIC_`. |
-| `SCORECARDS_DELTA_MAX_AGE_SECONDS` | `lib/graphql.ts` (server-only) | Both | Reconcile interval (seconds): even when delta merges succeed, force a periodic full refetch to self-heal from drift the delta cannot detect (upstream deletions, new stages, subtle merge bugs). Default `600` (10 min). Lower for more aggressive self-healing during high-stakes events. Never `NEXT_PUBLIC_`. |
-| (admin) `POST /api/admin/cache/force-refresh?ct=&id=` | `app/api/admin/cache/force-refresh/route.ts` | Both | Recovery lever: sets a `force-refresh:{ct}:{id}` Redis sentinel that bypasses probe / delta on the next SWR cycle. Requires `Authorization: Bearer <CACHE_PURGE_SECRET>`. Sentinel auto-clears after a successful full refresh; auto-expires after 5 min. |
-| `CACHE_TELEMETRY` | `lib/telemetry.ts` (server-only) | Both | Set to `off` to suppress all telemetry. Default on — emits one JSON line per event via `console.info` (picked up by Cloudflare Workers Logs / Docker stdout) and additionally writes to R2 on Cloudflare when the `TELEMETRY` binding is bound. Never `NEXT_PUBLIC_`. |
-| `TELEMETRY_SAMPLE_<DOMAIN>` | `lib/telemetry-sinks-cf.ts` (Cloudflare only) | Cloudflare only | Per-domain sample rate, value in `[0, 1]`. `1` keeps every event, `0` drops everything, `0.1` keeps 10%. All domains (`cache`, `upstream`, `error`, `ai`, `d1`, `background`, `usage`) default to `1` — at current ~3-6k requests/day even the highest-volume `usage` domain stays under 2% of the R2 free-tier cap. The `upstream` domain includes `status-checked` events from the homepage banner poll (every 30s per active client) — set `TELEMETRY_SAMPLE_UPSTREAM=0.1` if active-client volume grows enough to push that domain past the cap. Set e.g. `TELEMETRY_SAMPLE_USAGE=0.1` if traffic grows ~10x. Never `NEXT_PUBLIC_`. |
-| `NEXT_PUBLIC_BUILD_ID` | `components/update-banner.tsx`, `app/api/version/route.ts` | Both | Git SHA baked into the client bundle at Docker build time; powers new-version detection. Auto-injected by `pnpm docker:build`. Unset in `pnpm dev` — version check is skipped. |
-| `REDIS_URL` | `lib/cache-node.ts` | Docker only | `redis://localhost:6379` locally, `rediss://...` for managed Redis. Not needed for CF builds. |
-| `APP_DB_PATH` | `lib/db-sqlite.ts` | Docker only | Path to SQLite database file. Defaults to `./data/shooter-index.db`. Not needed for CF builds. |
-| `UPSTASH_REDIS_REST_URL` | `lib/cache-edge.ts` | Cloudflare only | REST URL from Upstash console. Set via `wrangler secret put` in production. |
-| `UPSTASH_REDIS_REST_TOKEN` | `lib/cache-edge.ts` | Cloudflare only | REST token from Upstash console. Set via `wrangler secret put` in production. |
-| `MCP_SECRET` | `app/api/mcp/route.ts` | Both | Optional. If set, `POST /api/mcp` requires `Authorization: Bearer <MCP_SECRET>`. Omit for public access. |
-| `NEXT_PUBLIC_APP_URL` | `app/api/mcp/route.ts`, `app/match/[ct]/[id]/layout.tsx` | Both | Base URL used by MCP tools and OG image meta tags. Defaults to `http://localhost:PORT`. Required for Cloudflare Pages (set to the external URL, e.g. `https://scoreboard.urdr.dev`). |
-| `AI_PROVIDER` | `lib/ai-provider.ts` (server-only) | Both | `"cloudflare"` or `"openai"`. Omit to disable AI coaching tips. Never `NEXT_PUBLIC_`. |
-| `AI_MODEL` | `lib/ai-provider.ts` (server-only) | Both | Model identifier, e.g. `"gpt-4o-mini"` or `"@cf/meta/llama-3.1-8b-instruct"`. Never `NEXT_PUBLIC_`. |
-| `AI_API_KEY` | `lib/ai-provider.ts` (server-only) | Both | API key/token for the AI provider. **Optional for `cloudflare` provider** — omit to use the Workers AI binding (`env.AI`) instead of the REST API. Never `NEXT_PUBLIC_`. |
-| `AI_API_URL` | `lib/ai-provider.ts` (server-only) | Both | Base URL. Required for Cloudflare Workers AI. Defaults to `https://api.openai.com/v1` for `openai`. |
-| `SMITHERY_API_KEY` | `.github/workflows/smithery-publish.yml` | CI only | Smithery registry API key. Store as a GitHub `production` environment secret. Obtain from https://smithery.ai/account/api-keys. Never `NEXT_PUBLIC_`. |
+## OG Images -> `docs/og-images.md`
 
-## OG Images
+`app/api/og/match/[ct]/[id]/route.tsx` renders three Satori variants (overview, single
+competitor, multi-competitor). `lib/og-data.ts` uses the cached GraphQL path with a 1500ms
+timeout via `Promise.race` so slow upstreams never block `generateMetadata()`. Cache-Control
+varies by completion state. See `docs/og-images.md` for local testing commands.
 
-Dynamic Open Graph images are generated on-the-fly for match pages using `next/og` (Satori).
-The OG image endpoint at `app/api/og/match/[ct]/[id]/route.tsx` renders three variants:
+## MCP Server -> `docs/mcp-server.md` (developer) and `docs/mcp.md` (user)
 
-- **Match overview** — match name, venue/date/level, stat badges (stages, competitors, % scored)
-- **Single competitor** — competitor name, division/club, match context
-- **Multi-competitor** — "Comparing N competitors" with colored bullets (uses PALETTE from `lib/colors.ts`)
+Seven tools shared via `lib/mcp-tools.ts` (`search_events`, `get_match`, `compare_competitors`,
+`get_stage_times`, `get_popular_matches`, `get_shooter_dashboard`, `find_shooter`) between two transports:
+- HTTP stateless JSON-RPC at `app/api/mcp/route.ts`
+- stdio at `mcp/src/index.ts` (Claude Desktop / Claude Code via `.mcp.json`)
 
-Page metadata in `app/match/[ct]/[id]/layout.tsx` sets `<meta property="og:image">` pointing at
-the OG endpoint. The OG URL intentionally omits `?competitors=` to avoid `searchParams` dependency
-(which would block client-side soft navigation). The endpoint accepts an optional `?competitors=`
-param for direct use.
-
-`lib/og-data.ts` fetches match data using the same cached GraphQL path as the match API route
-(usually a Redis cache hit). A 1500ms timeout via `Promise.race` prevents slow upstreams from
-blocking `generateMetadata()` during client-side `router.replace()` soft navigations.
-
-Cache-Control headers are set based on match completion: active matches get short TTLs (1min/5min),
-completed matches get long TTLs (1day/7days).
-
-**Local testing:**
-```bash
-pnpm dev
-# Open directly in browser — returns a PNG:
-open http://localhost:3000/api/og/match/22/{match_id}
-# With competitors:
-open http://localhost:3000/api/og/match/22/{match_id}?competitors=123,456
-# Inspect the meta tags in page source:
-curl -s http://localhost:3000/match/22/{match_id} | grep 'og:image'
-```
-
-## MCP Server
-
-The app exposes a [Model Context Protocol](https://modelcontextprotocol.io) server with six tools:
-`search_events`, `get_match`, `compare_competitors`, `get_popular_matches`, `get_shooter_dashboard`, `find_shooter`.
-
-Two transport modes share the same tool logic via `lib/mcp-tools.ts`:
-- **HTTP** (`app/api/mcp/route.ts`) — stateless JSON-RPC, single-shot transport; used by the Smithery
-  external deployment and any MCP-over-HTTP client.
-- **stdio** (`mcp/src/index.ts`) — spawned by Claude Desktop / Claude Code via `.mcp.json`.
-
-The stdio server's `configSchema` (a Zod schema exported from `mcp/src/index.ts`) and `createServer`
-default export are used by Smithery's hosted TypeScript runtime. The HTTP server always uses
-`NEXT_PUBLIC_APP_URL` (or `http://localhost:PORT`) as its `baseUrl` — it does not read session config.
-
-User-facing setup guide: `docs/mcp.md`.
-
-### Smithery registry
-
-The server is published on [smithery.ai](https://smithery.ai) as an **external** server
-pointing at `https://scoreboard.urdr.dev/api/mcp` (qualified name: `mandakan/ssi-scoreboard`).
-
-**Metadata set via the Smithery UI (registry listing page):**
-- Homepage → `https://scoreboard.urdr.dev`
-- Icon → `https://scoreboard.urdr.dev/icons/icon-512.png`
-
-**Tool annotations** (`readOnlyHint: true`, `openWorldHint: true`) are declared inline in
-`lib/mcp-tools.ts` as the 4th argument to each `server.tool()` call.
-
-**Publishing / updating the registry entry** — trigger the `Publish to Smithery Registry`
-workflow manually from the GitHub Actions tab (workflow_dispatch). This pushes the latest
-configSchema (`mcp/smithery-config-schema.json`) to the external deployment. The Smithery UI
-has no field for configSchema on external servers — the workflow is the only way to update it.
-
-Prerequisite: add `SMITHERY_API_KEY` as a secret in the GitHub repo's `production` environment
-(Settings → Environments → production → Add secret). Obtain the key from
-https://smithery.ai/account/api-keys.
-
-The `configSchema` block in `smithery.yaml` mirrors `mcp/smithery-config-schema.json` and
-covers the hosted TypeScript runtime path. Keep both in sync when changing the schema.
+Smithery publishes us as an external server; updating the registry's configSchema requires
+running the `Publish to Smithery Registry` GitHub workflow (the UI has no field for it on
+external servers). See `docs/mcp-server.md` for full developer notes.
 
 ## Package Manager
 This project uses **pnpm@10.30.3**. Do not use npm or yarn. Use `pnpm add` / `pnpm add -D`.
 When adding new packages, always specify the exact latest stable version (check with `npm show <pkg> version`).
 
-### Intentionally pinned majors — do not blindly upgrade these
+### Intentionally pinned majors -- do not blindly upgrade these
 
 | Package | Pinned at | Reason |
 |---|---|---|
 | `zod` | `3.x` | Zod 4 has a breaking API (new parse behaviour, removed methods). Requires a dedicated migration pass across all usages in `lib/` and `app/api/`. |
 | `eslint` | `^9` | ESLint 10 is brand-new; ecosystem plugins (including `eslint-config-next`) may not yet support it. Revisit once `eslint-config-next` explicitly lists `eslint@10` as a peer. |
 
-## Deployment targets
+## Deployment targets -> `docs/deployment.md`
 
-The app supports two build targets selected by the `DEPLOY_TARGET` env var at build time.
+Two targets selected by `DEPLOY_TARGET`:
+- **Docker / Docker Compose** (default): `pnpm docker:build` + `pnpm docker:up`. Uses ioredis +
+  better-sqlite3. Two named volumes (`redis_data`, `shooter_data`) persist state.
+- **Cloudflare Pages**: `pnpm cf:build` + `pnpm cf:deploy`. `DEPLOY_TARGET=cloudflare`
+  swaps `lib/cache-impl` -> `lib/cache-edge` (Upstash HTTP) and `lib/db-impl` -> `lib/db-d1`.
+  Bindings: `AI` (Workers AI), `APP_DB` (D1).
 
-### Docker / Docker Compose (default)
-```bash
-cp .env.local.example .env.local   # fill in SSI_API_KEY, CACHE_PURGE_SECRET
-pnpm docker:build                  # builds image (passes --env-file .env.local)
-pnpm docker:up                     # starts redis + app on port 3000
-```
-`docker:up` passes `--env-file .env.local` so `${SSI_API_KEY}`, `${CACHE_PURGE_SECRET}` are
-available at runtime. `REDIS_URL` is set automatically via the compose service name
-(`redis://redis:6379`) — no manual entry needed.
-The Dockerfile uses multi-stage builds (deps → builder → runner) with a non-root user.
-`output: "standalone"` in `next.config.ts` is set automatically when `DEPLOY_TARGET` is unset.
-Two named volumes persist state across container restarts:
-- `redis_data` — Redis hot cache (active/recent matches only; can be flushed safely — D1/SQLite has historical data)
-- `shooter_data` → `/app/data` — SQLite persistent store (shooter profiles, match indices, popularity, achievements, and historical match data cache)
-
-#### Deploying without Docker Compose (bare server, Kubernetes, Fly.io)
-Run a Redis instance (managed or self-hosted) and set `REDIS_URL` to its connection string.
-Use `rediss://` (TLS) for cloud-managed providers such as Upstash or Redis Cloud.
-The app connects with `lazyConnect: true`, so a missing Redis at startup is non-fatal —
-requests will fall back to direct GraphQL fetches until Redis is reachable.
-
-### Cloudflare Pages
-```bash
-pnpm cf:build    # DEPLOY_TARGET=cloudflare @opennextjs/cloudflare build (runs next build internally)
-pnpm cf:deploy   # cf:build + wrangler deploy
-```
-`DEPLOY_TARGET=cloudflare` triggers turbopack/webpack aliases that swap two adapters:
-- `lib/cache-impl` → `lib/cache-edge` (Upstash HTTP instead of ioredis)
-- `lib/db-impl` → `lib/db-d1` (Cloudflare D1 instead of SQLite)
-
-This prevents Node.js-only native modules (`ioredis`, `better-sqlite3`) from being bundled
-into the Worker. Route handlers use the default Node.js runtime — `@opennextjs/cloudflare`
-handles the Workers bundling without requiring `export const runtime = "edge"` on each route.
-
-**Cache adapter:** the CF build uses `@upstash/redis` (HTTP-based) instead of ioredis.
-`automaticDeserialization: false` is set on the Upstash client so values are returned as raw
-strings, consistent with the ioredis adapter — callers always do their own `JSON.parse`.
-
-**Persistent store:** the CF build uses Cloudflare D1 via the `APP_DB` binding declared in
-`wrangler.toml`. D1 holds shooter profiles, match indices, achievements, and the historical
-match data cache (offloaded from Upstash Redis). Migrations are applied automatically in CI
-before each deploy via `wrangler d1 migrations apply` (see deploy workflows). Migration files
-in `migrations/`:
-- `0001_init.sql` — shooter profiles, matches, popularity
-- `0002_achievements.sql` — shooter achievements
-- `0003_match_data_cache.sql` — historical match data cache
-- `0004_shooter_profile_demographics.sql` — demographic fields on shooter profiles
-- `0005_matches.sql` — matches domain table (structured match-level metadata)
-
-**Bindings** (configured in `wrangler.toml`, not secrets):
-- `AI` — Workers AI binding for coaching tips
-- `APP_DB` — D1 database for persistent shooter data
-
-**One-time D1 setup** — use the idempotent setup script (creates databases if missing,
-patches `wrangler.toml` with real IDs, applies migrations):
-```bash
-pnpm tsx scripts/setup-d1.ts           # production + staging
-pnpm tsx scripts/setup-d1.ts --staging # staging only
-```
-Or manually:
-```bash
-# Production
-wrangler d1 create ssi-scoreboard-shooter
-# Copy database_id into wrangler.toml [[d1_databases]]
-wrangler d1 migrations apply APP_DB
-
-# Staging
-wrangler d1 create ssi-scoreboard-shooter-staging
-# Copy database_id into wrangler.toml [[env.staging.d1_databases]]
-wrangler d1 migrations apply APP_DB --env staging
-```
-
-**Secrets** (set via `wrangler secret put` or the Cloudflare dashboard):
-```bash
-wrangler secret put SSI_API_KEY
-wrangler secret put CACHE_PURGE_SECRET
-wrangler secret put UPSTASH_REDIS_REST_URL
-wrangler secret put UPSTASH_REDIS_REST_TOKEN
-```
+See `docs/deployment.md` for the full setup steps (one-time D1 setup, secrets, bare-server
+deploys without Docker Compose).

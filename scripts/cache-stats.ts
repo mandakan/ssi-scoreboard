@@ -518,7 +518,7 @@ async function main(): Promise<void> {
     if (args.target === "d1") {
       dbReader = createD1Reader();
     } else {
-      const dbPath = process.env.APP_DB_PATH ?? "./data/shooter-index.db";
+      const dbPath = process.env.SHOOTER_DB_PATH ?? "./data/shooter-index.db";
       dbReader = createSqliteReader(dbPath);
     }
 
