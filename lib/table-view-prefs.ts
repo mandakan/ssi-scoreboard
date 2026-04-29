@@ -93,11 +93,16 @@ function isValidGroups(g: unknown): g is Record<TableViewGroup, boolean> {
   return true;
 }
 
-export function readPrefs(): TableViewPrefs {
-  if (typeof window === "undefined") return DEFAULT_PREFS;
+// Cached snapshot: useSyncExternalStore requires reference-stable returns.
+// Re-parsing on every read produced a fresh object every time, which made
+// React think the store had changed each render and triggered an infinite
+// update loop (error #185).
+let cachedRaw: string | null | undefined = undefined;
+let cachedPrefs: TableViewPrefs = DEFAULT_PREFS;
+
+function parsePrefs(raw: string | null): TableViewPrefs {
+  if (raw == null) return DEFAULT_PREFS;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_PREFS;
     const parsed = JSON.parse(raw) as { preset?: unknown; groups?: unknown };
     const preset = (
       parsed.preset === "courtside" ||
@@ -116,9 +121,26 @@ export function readPrefs(): TableViewPrefs {
   }
 }
 
+export function readPrefs(): TableViewPrefs {
+  if (typeof window === "undefined") return DEFAULT_PREFS;
+  let raw: string | null;
+  try {
+    raw = localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return DEFAULT_PREFS;
+  }
+  if (raw === cachedRaw) return cachedPrefs;
+  cachedRaw = raw;
+  cachedPrefs = parsePrefs(raw);
+  return cachedPrefs;
+}
+
 export function writePrefs(prefs: TableViewPrefs): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+    const raw = JSON.stringify(prefs);
+    localStorage.setItem(STORAGE_KEY, raw);
+    cachedRaw = raw;
+    cachedPrefs = prefs;
     window.dispatchEvent(new CustomEvent("ssi-table-view-change"));
   } catch {
     /* ignore storage errors */
