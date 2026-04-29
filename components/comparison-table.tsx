@@ -12,7 +12,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CloudSun, Crosshair, ExternalLink, Flame, Focus, Gauge, Hand, HandMetal, HelpCircle, Info, Layers, Shield, Star, Target, Timer, TrendingUp, X, Zap } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Crosshair, ExternalLink, Flame, Focus, Gauge, Hand, HandMetal, HelpCircle, Info, Layers, Shield, Star, Target, Timer, TrendingUp, X, Zap } from "lucide-react";
 import Link from "next/link";
 import { cn, formatHF, formatTime, formatPct, computePointsDelta, formatDelta } from "@/lib/utils";
 import { buildColorMap } from "@/lib/colors";
@@ -23,6 +23,8 @@ import { RankBadge, ShootingOrderBadge, StageClassificationBadge, ConditionsBadg
 import { CellHelpModal } from "@/components/cell-help-modal";
 import { CoachingTip } from "@/components/coaching-tip";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { TableViewSheet } from "@/components/table-view-sheet";
+import { useTableViewPrefs } from "@/hooks/use-table-view-prefs";
 import type { CompareResponse, CompetitorInfo, CompetitorSummary, LossBreakdownStats, PctMode, ShooterArchetype, StageArchetype, StageComparison, StageConditions, StageConstraints, ViewMode, WhatIfResult } from "@/lib/types";
 
 interface ComparisonTableProps {
@@ -941,7 +943,12 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
       }
     }
   };
-  const [showConditions, setShowConditions] = useState(false);
+  const { prefs: viewPrefs } = useTableViewPrefs();
+  const showConditions = viewPrefs.groups.conditions;
+  const showRanking = viewPrefs.groups.ranking;
+  const showHits = viewPrefs.groups.hits;
+  const showCoaching = viewPrefs.groups.coaching;
+  const showStageInfo = viewPrefs.groups.stageInfo;
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [showWhatIf, setShowWhatIf] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -1187,28 +1194,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
         {viewMode === "absolute" && (
           <ModeToggle mode={mode} onChange={setMode} competitorCount={competitors.length} />
         )}
-        {data.mode === "coaching" && data.stageConditions != null && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => setShowConditions((v) => !v)}
-                aria-pressed={showConditions}
-                className={cn(
-                  "inline-flex items-center justify-center rounded p-1.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
-                  showConditions
-                    ? "bg-foreground text-background"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-                aria-label={showConditions ? "Hide conditions overlay" : "Show conditions overlay"}
-              >
-                <CloudSun className="w-4 h-4" aria-hidden="true" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="text-xs">
-              {showConditions ? "Hide conditions" : "Show conditions"}
-            </TooltipContent>
-          </Tooltip>
-        )}
+        <TableViewSheet />
         <button
           onClick={() => setHelpOpen(true)}
           className="ml-auto shrink-0 inline-flex items-center justify-center text-muted-foreground hover:text-foreground rounded p-1.5 hover:bg-muted transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
@@ -1440,7 +1426,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                           {comp.division}
                         </span>
                       )}
-                      {hasClassifications && t && (
+                      {showCoaching && hasClassifications && t && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <span
@@ -1478,7 +1464,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                           </TooltipContent>
                         </Tooltip>
                       )}
-                      {(() => {
+                      {showCoaching && (() => {
                         const archetype = styleFingerprintStats?.[comp.id]?.archetype;
                         return archetype ? (
                           <ArchetypePill archetype={archetype} color={colorMap[comp.id]} />
@@ -1513,6 +1499,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                           S{stage.stage_num}
                         </span>
                       )}
+                      {showStageInfo && (
                       <Popover>
                         <PopoverTrigger asChild>
                           <button
@@ -1573,6 +1560,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                           </div>
                         </PopoverContent>
                       </Popover>
+                      )}
                     </div>
 
                     {/* Desktop: full 4-line layout */}
@@ -1595,20 +1583,24 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                             Stage {stage.stage_num}
                           </span>
                         )}
-                        <StageHFLevelIcon
-                          level={stage.stageDifficultyLevel}
-                          label={stage.stageDifficultyLabel}
-                          medianHF={stage.field_median_hf}
-                          medianAccuracy={stage.field_median_accuracy} // FEATURE: accuracy-metric
-                        />
-                        {stage.stageSeparatorLevel === 3 && <StageSeparatorIcon competitorCount={stage.field_competitor_count} />}
-                        {stage.stageArchetype && (
-                          <StageArchetypeIcon archetype={stage.stageArchetype} />
+                        {showStageInfo && (
+                          <>
+                            <StageHFLevelIcon
+                              level={stage.stageDifficultyLevel}
+                              label={stage.stageDifficultyLabel}
+                              medianHF={stage.field_median_hf}
+                              medianAccuracy={stage.field_median_accuracy} // FEATURE: accuracy-metric
+                            />
+                            {stage.stageSeparatorLevel === 3 && <StageSeparatorIcon competitorCount={stage.field_competitor_count} />}
+                            {stage.stageArchetype && (
+                              <StageArchetypeIcon archetype={stage.stageArchetype} />
+                            )}
+                            <StageConstraintBadges constraints={stage.constraints} />
+                          </>
                         )}
-                        <StageConstraintBadges constraints={stage.constraints} />
                       </div>
                       <span className="truncate max-w-32">{stage.stage_name}</span>
-                      {(stage.min_rounds != null || stage.paper_targets != null ||
+                      {showStageInfo && (stage.min_rounds != null || stage.paper_targets != null ||
                         (stage.steel_targets != null && stage.steel_targets > 0)) && (
                         <span className="text-xs text-muted-foreground tabular-nums">
                           {[
@@ -1618,7 +1610,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                           ].filter(Boolean).join(" · ")}
                         </span>
                       )}
-                      {stage.field_median_hf != null && (
+                      {showStageInfo && stage.field_median_hf != null && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <span
@@ -1652,6 +1644,9 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                         groupSize={competitors.length}
                         divisionName={comp.division}
                         conditions={cellConditions}
+                        showRanking={showRanking}
+                        showHits={showHits}
+                        showCoaching={showCoaching}
                       />
                     </td>
                   );
@@ -1700,7 +1695,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                         )}
                       </span>
                       <div className="flex items-center gap-1">
-                        {t.matchRank != null && (
+                        {showRanking && t.matchRank != null && (
                           <RankBadge
                             rank={t.matchRank.rank}
                             tooltip={matchRankTooltip(
@@ -1714,20 +1709,22 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                           {t.matchPct != null ? formatPct(t.matchPct) : "—"}
                         </span>
                       </div>
-                      <HitZoneBar
-                        aHits={t.aHits}
-                        cHits={t.cHits}
-                        dHits={t.dHits}
-                        misses={t.misses}
-                        noShoots={t.noShoots}
-                        procedurals={t.procedurals}
-                      />
-                      {t.totalPenaltyPts > 0 && (
+                      {showHits && (
+                        <HitZoneBar
+                          aHits={t.aHits}
+                          cHits={t.cHits}
+                          dHits={t.dHits}
+                          misses={t.misses}
+                          noShoots={t.noShoots}
+                          procedurals={t.procedurals}
+                        />
+                      )}
+                      {showHits && t.totalPenaltyPts > 0 && (
                         <span className="text-xs font-medium text-red-600 dark:text-red-400 tabular-nums">
                           {`\u2212${t.totalPenaltyPts}pts`}
                         </span>
                       )}
-                      {penaltyStats[t.id]?.totalPenalties > 0 && (
+                      {showHits && penaltyStats[t.id]?.totalPenalties > 0 && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Badge
@@ -1744,7 +1741,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                           </TooltipContent>
                         </Tooltip>
                       )}
-                      {efficiencyStats[t.id]?.pointsPerShot != null && (
+                      {showCoaching && efficiencyStats[t.id]?.pointsPerShot != null && (
                         <div className="flex flex-col items-center gap-0">
                           <span className="text-xs text-muted-foreground font-normal tabular-nums">
                             {`${efficiencyStats[t.id].pointsPerShot!.toFixed(2)} pts/shot`}
@@ -1758,7 +1755,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                           />
                         </div>
                       )}
-                      {consistencyStats[t.id]?.coefficientOfVariation != null && (
+                      {showCoaching && consistencyStats[t.id]?.coefficientOfVariation != null && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Badge
@@ -1781,7 +1778,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                           </TooltipContent>
                         </Tooltip>
                       )}
-                      {(() => {
+                      {showCoaching && (() => {
                         const lbs = lossBreakdownStats[t.id];
                         if (!lbs || lbs.totalLoss === 0) return null;
                         const hasBoth = lbs.totalHitLoss > 0 && lbs.totalPenaltyLoss > 0;
@@ -1807,7 +1804,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                           </button>
                         );
                       })()}
-                      {t.isClean && (
+                      {showHits && t.isClean && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <span
@@ -2135,6 +2132,9 @@ function StageCell({
   groupSize,
   divisionName,
   conditions,
+  showRanking,
+  showHits,
+  showCoaching,
 }: {
   sc: CompetitorSummary | undefined;
   maxPoints: number;
@@ -2144,6 +2144,9 @@ function StageCell({
   groupSize: number;
   divisionName: string | null;
   conditions: StageConditions | null;
+  showRanking: boolean;
+  showHits: boolean;
+  showCoaching: boolean;
 }) {
   if (!sc) {
     return <span className="text-muted-foreground text-xs">—</span>;
@@ -2265,7 +2268,7 @@ function StageCell({
       )}
       {/* Primary: hit factor + rank badge */}
       <div className="flex items-center gap-1">
-        {rank != null && (
+        {showRanking && rank != null && (
           <RankBadge
             rank={rank}
             tooltip={rankTooltip(rank, mode, groupSize, divisionName)}
@@ -2298,13 +2301,13 @@ function StageCell({
         {formatTime(sc.time)}
       </div>
       {/* Percentage in selected mode */}
-      {pct != null && (
+      {showRanking && pct != null && (
         <span className="text-xs font-medium text-muted-foreground">
           {formatPct(pct)}
         </span>
       )}
       {/* Percentile placement in full field */}
-      {sc.overall_percentile != null && (
+      {showRanking && sc.overall_percentile != null && (
         <Tooltip>
           <TooltipTrigger asChild>
             <span
@@ -2322,16 +2325,18 @@ function StageCell({
       {/* Hit zone distribution bar — penalty pips below carry M/NS/P;
           per-stage points-lost text is omitted (penalty totals shown in
           the bottom summary row instead). Hover/tap the bar for details. */}
-      <HitZoneBar
-        aHits={sc.a_hits}
-        cHits={sc.c_hits}
-        dHits={sc.d_hits}
-        misses={sc.miss_count}
-        noShoots={sc.no_shoots}
-        procedurals={sc.procedurals}
-      />
+      {showHits && (
+        <HitZoneBar
+          aHits={sc.a_hits}
+          cHits={sc.c_hits}
+          dHits={sc.d_hits}
+          misses={sc.miss_count}
+          noShoots={sc.no_shoots}
+          procedurals={sc.procedurals}
+        />
+      )}
       {/* Run classification badge */}
-      {(() => {
+      {showCoaching && (() => {
         const totalHits =
           (sc.a_hits ?? 0) + (sc.c_hits ?? 0) + (sc.d_hits ?? 0) + (sc.miss_count ?? 0);
         const aPct = totalHits > 0 ? ((sc.a_hits ?? 0) / totalHits) * 100 : null;

@@ -11,11 +11,33 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-04-28-ipsc-match-percent";
+export const LATEST_RELEASE_ID = "2026-04-29-table-view-presets";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "April 29, 2026",
+    title: "Tame the comparison table",
+    screenshotScenes: ["comparison-table"],
+    sections: [
+      {
+        heading: "New",
+        items: [
+          "View control in the comparison-table toolbar with three presets: Courtside (just the essentials — HF, points/time, rank), Standard (today's default minus coaching analysis), and Deep dive (everything turned on).",
+          "Per-group switches behind the same control — toggle Ranking, Hits & penalties, Coaching analysis, Stage details, or Weather & time on or off independently. Touching any switch flips the preset to Custom; one tap resets back to Standard.",
+          "Your choice is remembered across matches and reloads.",
+        ],
+      },
+      {
+        heading: "Improved",
+        items: [
+          "The standalone weather toggle is now part of the View control, under Weather & time.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-04-28-ipsc-match-percent",
     date: "April 28, 2026",
     title: "Match % and rank now match SSI",
     screenshotScenes: ["comparison-table", "shooter-dashboard"],
