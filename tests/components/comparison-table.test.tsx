@@ -562,6 +562,31 @@ describe("ComparisonTable — delta view mode", () => {
     // Both competitors show ±0.0 pts (per-stage); totals row also shows ±0.0 pts
     expect(screen.getAllByText("±0.0 pts").length).toBeGreaterThanOrEqual(2);
   });
+
+  it("applies sticky positioning to thead and first-column body cells", () => {
+    const { container } = renderWithProviders(
+      <ComparisonTable scoringCompleted={100} data={baseData} />
+    );
+    // Default view is "absolute" (the main comparison table)
+    const thead = container.querySelector("table thead");
+    expect(thead).not.toBeNull();
+    const headerCells = thead!.querySelectorAll("th");
+    // Every header cell should be sticky-top so it survives vertical page scroll
+    for (const th of Array.from(headerCells)) {
+      expect(th.className).toContain("sticky");
+      expect(th.className).toContain("top-0");
+    }
+    // The corner cell additionally pins to the left
+    expect(headerCells[0].className).toContain("left-0");
+
+    // The first cell of every body row pins to the left for horizontal scroll
+    const firstBodyRow = container.querySelector("table tbody tr");
+    expect(firstBodyRow).not.toBeNull();
+    const firstCell = firstBodyRow!.querySelector("td");
+    expect(firstCell).not.toBeNull();
+    expect(firstCell!.className).toContain("sticky");
+    expect(firstCell!.className).toContain("left-0");
+  });
 });
 
 describe("ComparisonTable — stages (per-stage scorecard) view", () => {

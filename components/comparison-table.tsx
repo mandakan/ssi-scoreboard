@@ -735,7 +735,7 @@ function StageScorecardTable({
           <caption className="sr-only">{`Stage ${stage.stage_num} ${stage.stage_name} scorecards for the selected competitors`}</caption>
           <thead>
             <tr className="border-b border-border text-xs text-muted-foreground">
-              <th scope="col" className="text-left py-1.5 pl-3 pr-2 font-medium">
+              <th scope="col" className="sticky left-0 z-10 bg-card text-left py-1.5 pl-3 pr-2 font-medium shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.4)]">
                 Competitor
               </th>
               <th scope="col" className="text-right py-1.5 px-2 font-medium tabular-nums">
@@ -879,7 +879,7 @@ function StageScorecardRow({
   if (status) {
     return (
       <tr className="border-b border-border/40 last:border-0">
-        <td className="py-1.5 pl-3 pr-2 align-middle">{nameCell}</td>
+        <td className="sticky left-0 z-[1] bg-card py-1.5 pl-3 pr-2 align-middle shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.4)]">{nameCell}</td>
         <td colSpan={9} className="py-1.5 px-2 text-center text-xs text-muted-foreground">
           <Badge variant="outline" className="font-medium">
             {status}
@@ -891,7 +891,7 @@ function StageScorecardRow({
 
   return (
     <tr className="border-b border-border/40 last:border-0 hover:bg-muted/30">
-      <td className="py-1.5 pl-3 pr-2 align-middle">{nameCell}</td>
+      <td className="sticky left-0 z-[1] bg-card py-1.5 pl-3 pr-2 align-middle shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.4)]">{nameCell}</td>
       <td className="py-1.5 px-2 text-right tabular-nums">
         {sc?.time != null ? formatTime(sc.time) : <span className="text-muted-foreground">—</span>}
       </td>
@@ -1243,7 +1243,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
           <thead>
             <tr className="border-b">
               <th
-                className="text-left py-2 pr-4 font-medium text-muted-foreground"
+                className="sticky top-0 left-0 z-30 bg-background text-left py-2 pr-4 font-medium text-muted-foreground shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.4)]"
                 aria-sort={stageSort === "stage" ? "ascending" : "none"}
               >
                 <Tooltip>
@@ -1296,7 +1296,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                 return (
                   <th
                     key={comp.id}
-                    className="py-2 px-1 sm:px-3 text-center font-medium min-w-[5.5rem] sm:min-w-32 align-top"
+                    className="sticky top-0 z-20 bg-background py-2 px-1 sm:px-3 text-center font-medium min-w-[5.5rem] sm:min-w-32 align-top"
                     style={{ borderBottom: `3px solid ${colorMap[comp.id]}` }}
                     aria-sort={isSortedByComp ? "ascending" : "none"}
                   >
@@ -1479,7 +1479,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
           <tbody>
             {sortedStages.map((stage) => (
               <tr key={stage.stage_id} className="border-b hover:bg-muted/30">
-                <td className="py-2 pr-4 font-medium">
+                <td className="sticky left-0 z-10 bg-background py-2 pr-4 font-medium shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.4)]">
                   <div className="flex flex-col gap-0.5">
                     {/* Mobile: stage number + info popover icon */}
                     <div className="flex items-center gap-1 sm:hidden">
@@ -1656,7 +1656,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
 
             {/* Totals row */}
             <tr className="border-t-2 font-semibold bg-muted/20">
-              <td className="py-2 pr-4 text-xs text-muted-foreground font-normal">
+              <td className="sticky left-0 z-10 bg-background py-2 pr-4 text-xs text-muted-foreground font-normal shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.4)]">
                 {viewMode === "delta" ? (
                   <div>Total deficit</div>
                 ) : (
@@ -1827,7 +1827,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
             {/* AI coaching row — one sparkle button per competitor */}
             {aiAvailable && isComplete && ct && matchId && (
               <tr className="border-t bg-muted/20">
-                <td className="py-2 pr-4">
+                <td className="sticky left-0 z-10 bg-background py-2 pr-4 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.4)]">
                   <span className="text-xs text-muted-foreground font-medium">
                     AI Coach
                   </span>
