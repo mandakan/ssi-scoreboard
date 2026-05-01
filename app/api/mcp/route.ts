@@ -82,7 +82,15 @@ export async function GET(request: Request) {
           "MCP server for SSI Scoreboard — query IPSC competition data via Claude or any MCP-compatible client.",
         transport: "streamable-http",
         endpoint: "/api/mcp",
-        tools: ["search_events", "get_match", "compare_competitors", "get_popular_matches", "get_shooter_dashboard", "find_shooter"],
+        tools: [
+          "search_events",
+          "get_match",
+          "compare_competitors",
+          "get_stage_times",
+          "get_popular_matches",
+          "get_shooter_dashboard",
+          "find_shooter",
+        ],
       },
       { headers: CORS },
     );
@@ -115,43 +123,57 @@ export async function GET(request: Request) {
   });
 }
 
+// Discovery / handshake methods clients call before they have an OAuth token.
+// Gating these behind auth means proxies that don't complete our OAuth dance
+// register zero tools (see #389). The endpoint is a public read-only API, so
+// only tool *invocations* need the Bearer challenge.
+const PUBLIC_METHODS = new Set([
+  "initialize",
+  "notifications/initialized",
+  "ping",
+  "tools/list",
+  "resources/list",
+  "resources/templates/list",
+  "prompts/list",
+]);
+
 export async function POST(request: Request) {
-  const auth = request.headers.get("Authorization");
-  const secret = process.env.MCP_SECRET;
-  const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://scoreboard.urdr.dev";
-
-  // Always require a Bearer token so the OAuth flow is triggered correctly:
-  // unauthenticated clients receive 401 with WWW-Authenticate, complete the
-  // OAuth dance, then retry with the token (per RFC 9728 / MCP OAuth spec).
-  if (!auth?.startsWith("Bearer ")) {
-    mcpTelemetry({ op: "auth-fail", transport: "http", reason: "no-bearer" });
-    return new Response("Unauthorized", {
-      status: 401,
-      headers: {
-        ...CORS,
-        "WWW-Authenticate": `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource"`,
-      },
-    });
-  }
-
-  // If MCP_SECRET is configured, enforce it.  Otherwise accept any Bearer token
-  // (public API — the token is a formality to satisfy the OAuth handshake).
-  if (secret && auth !== `Bearer ${secret}`) {
-    mcpTelemetry({ op: "auth-fail", transport: "http", reason: "wrong-secret" });
-    return new Response("Unauthorized", {
-      status: 401,
-      headers: {
-        ...CORS,
-        "WWW-Authenticate": `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource"`,
-      },
-    });
-  }
-
   let body: JSONRPCMessage;
   try {
     body = (await request.json()) as JSONRPCMessage;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400, headers: CORS });
+  }
+
+  const method = typeof (body as { method?: unknown }).method === "string"
+    ? (body as { method: string }).method
+    : "unknown";
+
+  if (!PUBLIC_METHODS.has(method)) {
+    const auth = request.headers.get("Authorization");
+    const secret = process.env.MCP_SECRET;
+    const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://scoreboard.urdr.dev";
+
+    // Per RFC 9728 §5.1, prefer the resource-path-specific metadata URL.
+    const wwwAuth = `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource/api/mcp"`;
+
+    if (!auth?.startsWith("Bearer ")) {
+      mcpTelemetry({ op: "auth-fail", transport: "http", reason: "no-bearer" });
+      return new Response("Unauthorized", {
+        status: 401,
+        headers: { ...CORS, "WWW-Authenticate": wwwAuth },
+      });
+    }
+
+    // If MCP_SECRET is configured, enforce it.  Otherwise accept any Bearer token
+    // (public API — the token is a formality to satisfy the OAuth handshake).
+    if (secret && auth !== `Bearer ${secret}`) {
+      mcpTelemetry({ op: "auth-fail", transport: "http", reason: "wrong-secret" });
+      return new Response("Unauthorized", {
+        status: 401,
+        headers: { ...CORS, "WWW-Authenticate": wwwAuth },
+      });
+    }
   }
 
   // Wrap the rest of the request in a telemetry context so downstream
@@ -174,9 +196,6 @@ export async function POST(request: Request) {
     }
 
     const startedAt = Date.now();
-    const method = typeof (body as { method?: unknown }).method === "string"
-      ? (body as { method: string }).method
-      : "unknown";
     const params = (body as { params?: Record<string, unknown> }).params;
 
     // Deliver the request and wait for the server's async response. Using a
