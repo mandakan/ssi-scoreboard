@@ -15,6 +15,39 @@ import { cacheTelemetry } from "@/lib/cache-telemetry";
 import { reportError } from "@/lib/error-telemetry";
 import type { MatchResponse, StageInfo, CompetitorInfo, SquadInfo } from "@/lib/types";
 
+// ── Effective match-level scoring percentage ────────────────────────────────
+//
+// SSI's match-level `event.scoring_completed` aggregate is unreliable: it can
+// return "0" while every stage independently reports 20-30% scored (observed
+// during SPSK Open 2026, match 22/27190). A 0 here cascades into the
+// "match started, no scoring yet" TTL tier (5 min freshness) and freezes the
+// scoreboard for users courtside.
+//
+// `effectiveMatchScoringPct` trusts the match-level value when it is plausible
+// and falls back to the unweighted mean of per-stage `scoring_completed`
+// values whenever it is materially lower than the stage average. This catches
+// the bug without changing behaviour for healthy matches.
+
+interface MatchEventForScoring {
+  scoring_completed?: string | number | null;
+  stages?: Array<{ scoring_completed?: string | number | null }> | null;
+}
+
+export function effectiveMatchScoringPct(event: MatchEventForScoring | null | undefined): number {
+  if (!event) return 0;
+  const matchPct = event.scoring_completed != null
+    ? parseFloat(String(event.scoring_completed))
+    : 0;
+  const stagePcts = (event.stages ?? [])
+    .map((s) => (s?.scoring_completed != null ? parseFloat(String(s.scoring_completed)) : NaN))
+    .filter((n) => Number.isFinite(n)) as number[];
+  if (stagePcts.length === 0) return matchPct;
+  const stageMean = stagePcts.reduce((a, b) => a + b, 0) / stagePcts.length;
+  // 1 percentage point of slack absorbs rounding while still catching the
+  // "match=0, stages=29%" failure mode.
+  return stageMean > matchPct + 1 ? stageMean : matchPct;
+}
+
 // ── Raw GraphQL response shapes ─────────────────────────────────────────────
 
 interface RawStage {
@@ -31,6 +64,10 @@ interface RawStage {
   get_course_display?: string | null;
   procedure?: string | null;
   firearm_condition?: string | null;
+  /** Per-stage scoring percentage as a decimal string (e.g. "29.487179487179485").
+   *  Added in cache schema v15 — used to derive a match-level percentage when
+   *  SSI's own `event.scoring_completed` aggregate is broken. */
+  scoring_completed?: string | number | null;
 }
 
 interface RawCompetitor {
@@ -147,7 +184,7 @@ export async function fetchMatchData(
 
   const ev = raw.event;
 
-  const scoringPct = parseFloat(String(ev.scoring_completed ?? 0));
+  const scoringPct = effectiveMatchScoringPct(ev);
   const matchDate = ev.starts ? new Date(ev.starts) : null;
   const daysSince = matchDate ? (Date.now() - matchDate.getTime()) / 86_400_000 : 0;
   const resultsPublished = ev.results === "all";
@@ -323,10 +360,7 @@ export async function fetchMatchData(
     stages_count: ev.stages_count ?? stages.length,
     competitors_count: ev.competitors_count ?? competitors.length,
     max_competitors: ev.max_competitors ?? null,
-    scoring_completed:
-      ev.scoring_completed != null
-        ? parseFloat(String(ev.scoring_completed))
-        : 0,
+    scoring_completed: effectiveMatchScoringPct(ev),
     match_status: ev.status ?? "on",
     results_status: ev.results ?? "org",
     registration_status: ev.registration ?? "cl",

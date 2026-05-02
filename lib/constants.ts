@@ -34,5 +34,11 @@ export const MAX_COMPETITORS = 12;
  *  14 → added scorecard_created to CompetitorSummary on CompareResponse
  *       (powers the stage-times export feature so video editors can align
  *       per-stage runs to a recording timeline).
+ *  15 → added scoring_completed to IpscStageNode in MATCH_QUERY. Lets us
+ *       derive a match-level scoring percentage from the stages when SSI's
+ *       own match-level `scoring_completed` is broken — observed during
+ *       SPSK Open 2026 (match 22/27190): every stage reported 21-29% but
+ *       the match-level field returned "0", which froze the cache TTL on
+ *       the 5-min "started, no scoring yet" tier.
  */
-export const CACHE_SCHEMA_VERSION = 14;
+export const CACHE_SCHEMA_VERSION = 15;

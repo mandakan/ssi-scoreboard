@@ -18,7 +18,7 @@ import { parseMatchUrl } from "@/lib/utils";
 import { extractDivision } from "@/lib/divisions";
 import db from "@/lib/db-impl";
 import cache from "@/lib/cache-impl";
-import type { RawMatchData } from "@/lib/match-data";
+import { effectiveMatchScoringPct, type RawMatchData } from "@/lib/match-data";
 
 interface RawScorecardsResponse {
   event: unknown;
@@ -80,7 +80,7 @@ export async function POST(
 
     // Compute proper TTL for this entry
     if (matchData.event) {
-      const scoringPct = Math.round(parseFloat(String(matchData.event.scoring_completed ?? 0)));
+      const scoringPct = Math.round(effectiveMatchScoringPct(matchData.event));
       const matchDate = matchData.event.starts ? new Date(matchData.event.starts) : null;
       const daysSince = matchDate ? (Date.now() - matchDate.getTime()) / 86_400_000 : 99;
       const ttl = computeMatchTtl(scoringPct, daysSince, matchData.event.starts ?? null, undefined, {
