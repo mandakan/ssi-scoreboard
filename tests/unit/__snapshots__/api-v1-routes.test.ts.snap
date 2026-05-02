@@ -1,0 +1,121 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`/api/v1/events > forwards query params and returns the inner payload unchanged 1`] = `
+[
+  {
+    "content_type": 22,
+    "date": "2026-04-26T00:00:00",
+    "discipline": "IPSC Handgun",
+    "ends": "2026-04-27T00:00:00",
+    "id": 27190,
+    "is_registration_possible": false,
+    "is_squadding_possible": false,
+    "level": "Level III",
+    "max_competitors": 240,
+    "name": "SPSK Open 2026",
+    "region": "SWE",
+    "registration_closes": null,
+    "registration_starts": null,
+    "registration_status": "cl",
+    "scoring_completed": 42.5,
+    "squadding_closes": null,
+    "squadding_starts": null,
+    "status": "on",
+    "venue": "Stockholm",
+  },
+]
+`;
+
+exports[`/api/v1/events > maps inner 502 to upstream_failed envelope 1`] = `
+{
+  "error": {
+    "code": "upstream_failed",
+    "message": "SSI down",
+  },
+}
+`;
+
+exports[`/api/v1/match/[ct]/[id] > maps a 400 from the inner route to bad_request 1`] = `
+{
+  "error": {
+    "code": "bad_request",
+    "message": "Invalid content_type",
+  },
+}
+`;
+
+exports[`/api/v1/match/[ct]/[id] > maps a 404 from the inner route to not_found 1`] = `
+{
+  "error": {
+    "code": "not_found",
+    "message": "Match not found",
+  },
+}
+`;
+
+exports[`/api/v1/match/[ct]/[id] > returns the match payload through the v1 envelope 1`] = `
+{
+  "cacheInfo": {
+    "cachedAt": "2026-04-27T10:00:00Z",
+  },
+  "competitors_count": 200,
+  "date": "2026-04-26T00:00:00",
+  "discipline": "IPSC Handgun",
+  "ends": "2026-04-27T00:00:00",
+  "lat": null,
+  "level": "Level III",
+  "lng": null,
+  "name": "SPSK Open 2026",
+  "region": "SWE",
+  "scoring_completed": 100,
+  "stages_count": 12,
+  "sub_rule": null,
+  "venue": "Stockholm",
+}
+`;
+
+exports[`/api/v1/shooter/[shooterId] > maps GDPR 410 to not_found preserving the 410 status code 1`] = `
+{
+  "error": {
+    "code": "not_found",
+    "message": "This profile has been removed at the owner's request",
+  },
+}
+`;
+
+exports[`/api/v1/shooter/[shooterId] > returns the shooter dashboard payload 1`] = `
+{
+  "achievements": [],
+  "matchCount": 1,
+  "matches": [],
+  "profile": {
+    "club": "Bromma PK",
+    "division": "Production Optics",
+    "firstSeenAt": "2024-01-01T00:00:00Z",
+    "lastSeenAt": "2026-04-27T00:00:00Z",
+    "name": "Jane Doe",
+    "shooterId": 12345,
+  },
+  "shooterId": 12345,
+  "stats": null,
+}
+`;
+
+exports[`/api/v1/shooter/search > returns shooter search results 1`] = `
+[
+  {
+    "club": "Bromma PK",
+    "division": "Production Optics",
+    "matchCount": 27,
+    "name": "Jane Doe",
+    "shooterId": 12345,
+  },
+  {
+    "club": null,
+    "division": null,
+    "matchCount": 3,
+    "name": "John Doe",
+    "shooterId": 67890,
+  },
+]
+`;

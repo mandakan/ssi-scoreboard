@@ -280,6 +280,38 @@ Smithery publishes us as an external server; updating the registry's configSchem
 running the `Publish to Smithery Registry` GitHub workflow (the UI has no field for it on
 external servers). See `docs/mcp-server.md` for full developer notes.
 
+## Public API v1 -> `docs/api-v1.md`
+
+`/api/v1/*` is the **stable** external surface (currently consumed by
+[splitsmith](https://github.com/mandakan/splitsmith)). The internal `/api/*`
+routes the browser app uses are unauthenticated and have no contract. Only
+`/api/v1/*` is bearer-token-gated, per-token rate-limited, and shape-locked.
+
+Endpoints (thin wrappers around the internal routes, see `app/api/v1/`):
+- `GET /api/v1/events` -- match search
+- `GET /api/v1/match/{ct}/{id}` -- match overview
+- `GET /api/v1/shooter/search` -- name search
+- `GET /api/v1/shooter/{shooterId}` -- shooter dashboard
+
+**Contract rules (CRITICAL):**
+- Within v1, only **additive** changes are allowed -- new optional fields, never
+  rename/remove/retype existing ones. Breaking changes go to `/api/v2/`.
+- Snapshot tests in `tests/unit/api-v1-routes.test.ts` enforce response shapes;
+  any drift fails CI. Updating a snapshot is a contract change -- review it.
+- Whenever an internal route response shape changes, check whether the v1 wrapper
+  for it is affected. If a field is removed or renamed upstream, the v1 wrapper
+  must either (a) preserve the old field by reshaping in the wrapper, or
+  (b) bump to v2.
+- Error envelope is fixed: `{ "error": { "code": string, "message": string } }`.
+  Codes: `unauthorized`, `rate_limited`, `not_found`, `upstream_failed`,
+  `bad_request`. Add a new code only with a v2 bump.
+
+`lib/api-v1.ts` holds the auth + per-token rate-limit + error-mapping helpers.
+The wrapper bypasses the inner IP-based rate limit via
+`runWithIpRateLimitSkipped` so the documented per-token limit is the effective
+one. See `docs/api-v1.md` for the full contract, token rotation procedure, and
+the `EXTERNAL_API_TOKENS` / `EXTERNAL_API_RATE_LIMIT_PER_MIN` env vars.
+
 ## Package Manager
 This project uses **pnpm@10.30.3**. Do not use npm or yarn. Use `pnpm add` / `pnpm add -D`.
 When adding new packages, always specify the exact latest stable version (check with `npm show <pkg> version`).
