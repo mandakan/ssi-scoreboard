@@ -735,7 +735,7 @@ function StageScorecardTable({
           <caption className="sr-only">{`Stage ${stage.stage_num} ${stage.stage_name} scorecards for the selected competitors`}</caption>
           <thead>
             <tr className="border-b border-border text-xs text-muted-foreground">
-              <th scope="col" className="text-left py-1.5 pl-3 pr-2 font-medium">
+              <th scope="col" className="sticky left-0 z-10 bg-card text-left py-1.5 pl-3 pr-2 font-medium shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.4)]">
                 Competitor
               </th>
               <th scope="col" className="text-right py-1.5 px-2 font-medium tabular-nums">
@@ -879,7 +879,7 @@ function StageScorecardRow({
   if (status) {
     return (
       <tr className="border-b border-border/40 last:border-0">
-        <td className="py-1.5 pl-3 pr-2 align-middle">{nameCell}</td>
+        <td className="sticky left-0 z-[1] bg-card py-1.5 pl-3 pr-2 align-middle shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.4)]">{nameCell}</td>
         <td colSpan={9} className="py-1.5 px-2 text-center text-xs text-muted-foreground">
           <Badge variant="outline" className="font-medium">
             {status}
@@ -891,7 +891,7 @@ function StageScorecardRow({
 
   return (
     <tr className="border-b border-border/40 last:border-0 hover:bg-muted/30">
-      <td className="py-1.5 pl-3 pr-2 align-middle">{nameCell}</td>
+      <td className="sticky left-0 z-[1] bg-card py-1.5 pl-3 pr-2 align-middle shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.4)]">{nameCell}</td>
       <td className="py-1.5 px-2 text-right tabular-nums">
         {sc?.time != null ? formatTime(sc.time) : <span className="text-muted-foreground">—</span>}
       </td>
@@ -1238,12 +1238,12 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
           matchId={matchId}
         />
       ) : (
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto overflow-y-clip">
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="border-b">
               <th
-                className="text-left py-2 pr-4 font-medium text-muted-foreground"
+                className="sticky top-0 left-0 z-30 bg-background text-left py-2 pr-2 font-medium text-muted-foreground shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.4)]"
                 aria-sort={stageSort === "stage" ? "ascending" : "none"}
               >
                 <Tooltip>
@@ -1262,7 +1262,8 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                           : "Reset to stage-number order"
                       }
                     >
-                      Stage
+                      <span className="sm:hidden">St.</span>
+                      <span className="hidden sm:inline">Stage</span>
                       {stageSort === "stage" ? (
                         <ArrowUp className="w-3 h-3" aria-hidden="true" />
                       ) : (
@@ -1296,7 +1297,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                 return (
                   <th
                     key={comp.id}
-                    className="py-2 px-1 sm:px-3 text-center font-medium min-w-[5.5rem] sm:min-w-32 align-top"
+                    className="sticky top-0 z-20 bg-background py-2 px-1 sm:px-3 text-center font-medium min-w-[5.5rem] sm:min-w-32 align-top"
                     style={{ borderBottom: `3px solid ${colorMap[comp.id]}` }}
                     aria-sort={isSortedByComp ? "ascending" : "none"}
                   >
@@ -1479,16 +1480,16 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
           <tbody>
             {sortedStages.map((stage) => (
               <tr key={stage.stage_id} className="border-b hover:bg-muted/30">
-                <td className="py-2 pr-4 font-medium">
-                  <div className="flex flex-col gap-0.5">
-                    {/* Mobile: stage number + info popover icon */}
-                    <div className="flex items-center gap-1 sm:hidden">
+                <td className="sticky left-0 z-10 bg-background py-2 pr-2 font-medium shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.4)]">
+                  <div className="flex flex-col items-start gap-0.5">
+                    {/* Mobile + desktop: compact "S{n}" label */}
+                    <div className="flex flex-col items-start gap-0.5">
                       {stage.ssi_url ? (
                         <a
                           href={stage.ssi_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-1.5 -mx-1.5"
+                          className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-1 -mx-1"
                           aria-label={`Stage ${stage.stage_num}: open ${stage.stage_name} on ShootNScoreIt (opens in new tab)`}
                         >
                           S{stage.stage_num}
@@ -1563,69 +1564,21 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
                       )}
                     </div>
 
-                    {/* Desktop: full 4-line layout */}
-                    <div className="hidden sm:flex flex-col gap-0.5">
-                      <div className="inline-flex items-center gap-1.5">
-                        {stage.ssi_url ? (
-                          <a
-                            href={stage.ssi_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                            aria-label={`Open ${stage.stage_name} on ShootNScoreIt (opens in new tab)`}
-                          >
-                            Stage {stage.stage_num}
-                            <ExternalLink className="w-3 h-3" aria-hidden="true" />
-                            <span className="sr-only">(opens in new tab)</span>
-                          </a>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            Stage {stage.stage_num}
-                          </span>
+                    {showStageInfo && (
+                      <div className="flex flex-col items-start gap-0.5">
+                        <StageHFLevelIcon
+                          level={stage.stageDifficultyLevel}
+                          label={stage.stageDifficultyLabel}
+                          medianHF={stage.field_median_hf}
+                          medianAccuracy={stage.field_median_accuracy} // FEATURE: accuracy-metric
+                        />
+                        {stage.stageSeparatorLevel === 3 && <StageSeparatorIcon competitorCount={stage.field_competitor_count} />}
+                        {stage.stageArchetype && (
+                          <StageArchetypeIcon archetype={stage.stageArchetype} />
                         )}
-                        {showStageInfo && (
-                          <>
-                            <StageHFLevelIcon
-                              level={stage.stageDifficultyLevel}
-                              label={stage.stageDifficultyLabel}
-                              medianHF={stage.field_median_hf}
-                              medianAccuracy={stage.field_median_accuracy} // FEATURE: accuracy-metric
-                            />
-                            {stage.stageSeparatorLevel === 3 && <StageSeparatorIcon competitorCount={stage.field_competitor_count} />}
-                            {stage.stageArchetype && (
-                              <StageArchetypeIcon archetype={stage.stageArchetype} />
-                            )}
-                            <StageConstraintBadges constraints={stage.constraints} />
-                          </>
-                        )}
+                        <StageConstraintBadges constraints={stage.constraints} />
                       </div>
-                      <span className="truncate max-w-32">{stage.stage_name}</span>
-                      {showStageInfo && (stage.min_rounds != null || stage.paper_targets != null ||
-                        (stage.steel_targets != null && stage.steel_targets > 0)) && (
-                        <span className="text-xs text-muted-foreground tabular-nums">
-                          {[
-                            stage.min_rounds != null ? `${stage.min_rounds} rds` : null,
-                            stage.paper_targets != null ? `${stage.paper_targets} paper` : null,
-                            stage.steel_targets != null && stage.steel_targets > 0 ? `${stage.steel_targets} steel` : null,
-                          ].filter(Boolean).join(" · ")}
-                        </span>
-                      )}
-                      {showStageInfo && stage.field_median_hf != null && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span
-                              className="text-xs text-muted-foreground tabular-nums cursor-help"
-                              aria-label={`Field median hit factor: ${formatHF(stage.field_median_hf)} across ${stage.field_competitor_count} competitors`}
-                            >
-                              {`med: ${formatHF(stage.field_median_hf)}`}
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="max-w-52 text-center text-xs">
-                            {`Field median hit factor: ${formatHF(stage.field_median_hf)} across ${stage.field_competitor_count} competitors (excludes DNF/DQ/zeroed)`}
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
-                    </div>
+                    )}
                   </div>
                 </td>
                 {competitors.map((comp) => {
@@ -1656,7 +1609,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
 
             {/* Totals row */}
             <tr className="border-t-2 font-semibold bg-muted/20">
-              <td className="py-2 pr-4 text-xs text-muted-foreground font-normal">
+              <td className="sticky left-0 z-10 bg-background py-2 pr-4 text-xs text-muted-foreground font-normal shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.4)]">
                 {viewMode === "delta" ? (
                   <div>Total deficit</div>
                 ) : (
@@ -1827,7 +1780,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
             {/* AI coaching row — one sparkle button per competitor */}
             {aiAvailable && isComplete && ct && matchId && (
               <tr className="border-t bg-muted/20">
-                <td className="py-2 pr-4">
+                <td className="sticky left-0 z-10 bg-background py-2 pr-4 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.4)]">
                   <span className="text-xs text-muted-foreground font-medium">
                     AI Coach
                   </span>

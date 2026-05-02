@@ -133,9 +133,10 @@ describe("ComparisonTable", () => {
     expect(screen.getByText("Bob")).toBeInTheDocument();
   });
 
-  it("renders stage name", () => {
+  it("renders compact stage label", () => {
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
-    expect(screen.getByText("Stage One")).toBeInTheDocument();
+    // Stage column collapses to "S{n}" to save horizontal space — full name is in the popover.
+    expect(screen.getAllByText("S1").length).toBeGreaterThan(0);
   });
 
   it("renders hit factors as primary metric", () => {
@@ -285,22 +286,7 @@ describe("ComparisonTable", () => {
     };
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={dataNoUrl} />);
     expect(screen.queryAllByRole("link", { name: /stage one.*shootnscoreit/i })).toHaveLength(0);
-    // Both mobile and desktop views render the label — use getAllByText
-    expect(screen.getAllByText("Stage 1").length).toBeGreaterThan(0);
-  });
-
-  it("renders stage metadata row when min_rounds and paper_targets are present", () => {
-    const dataWithMeta = {
-      ...baseData,
-      stages: [{ ...baseData.stages[0], min_rounds: 16, paper_targets: 8, steel_targets: 0 }],
-    };
-    renderWithProviders(<ComparisonTable scoringCompleted={100} data={dataWithMeta} />);
-    expect(screen.getByText("16 rds · 8 paper")).toBeInTheDocument();
-  });
-
-  it("omits metadata row when all optional fields are absent", () => {
-    renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
-    expect(screen.queryByText(/rds/)).not.toBeInTheDocument();
+    expect(screen.getAllByText("S1").length).toBeGreaterThan(0);
   });
 });
 
@@ -561,6 +547,31 @@ describe("ComparisonTable — delta view mode", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Delta" }));
     // Both competitors show ±0.0 pts (per-stage); totals row also shows ±0.0 pts
     expect(screen.getAllByText("±0.0 pts").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("applies sticky positioning to thead and first-column body cells", () => {
+    const { container } = renderWithProviders(
+      <ComparisonTable scoringCompleted={100} data={baseData} />
+    );
+    // Default view is "absolute" (the main comparison table)
+    const thead = container.querySelector("table thead");
+    expect(thead).not.toBeNull();
+    const headerCells = thead!.querySelectorAll("th");
+    // Every header cell should be sticky-top so it survives vertical page scroll
+    for (const th of Array.from(headerCells)) {
+      expect(th.className).toContain("sticky");
+      expect(th.className).toContain("top-0");
+    }
+    // The corner cell additionally pins to the left
+    expect(headerCells[0].className).toContain("left-0");
+
+    // The first cell of every body row pins to the left for horizontal scroll
+    const firstBodyRow = container.querySelector("table tbody tr");
+    expect(firstBodyRow).not.toBeNull();
+    const firstCell = firstBodyRow!.querySelector("td");
+    expect(firstCell).not.toBeNull();
+    expect(firstCell!.className).toContain("sticky");
+    expect(firstCell!.className).toContain("left-0");
   });
 });
 

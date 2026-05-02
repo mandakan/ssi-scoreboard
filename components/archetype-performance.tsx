@@ -76,7 +76,7 @@ export function ArchetypePerformanceSummary({ data }: ArchetypePerformanceSummar
         <table className="w-full text-sm" role="table">
           <thead>
             <tr>
-              <th scope="col" className="text-left text-xs text-muted-foreground font-medium pr-3 pb-1">Type</th>
+              <th scope="col" className="sticky left-0 z-10 bg-background text-left text-xs text-muted-foreground font-medium pr-3 pb-1 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.4)]">Type</th>
               {competitors.map((comp) => (
                 <th
                   key={comp.id}
@@ -108,7 +108,7 @@ export function ArchetypePerformanceSummary({ data }: ArchetypePerformanceSummar
 
               return (
                 <tr key={archetype} className="border-t border-border/50">
-                  <td className="py-1.5 pr-3 whitespace-nowrap">
+                  <td className="sticky left-0 z-[1] bg-background py-1.5 pr-3 whitespace-nowrap shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.4)]">
                     <span className={cn("inline-flex items-center gap-1", color)}>
                       <Icon className="w-3 h-3 flex-none" aria-hidden="true" />
                       <span className="hidden sm:inline">{label}</span>
