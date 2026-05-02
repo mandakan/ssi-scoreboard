@@ -173,16 +173,32 @@ or any other type that is serialised into the **match cache** (Redis/D1) via `ca
 This does **not** apply to AppDatabase schema changes -- those are managed independently by
 the SQLite/D1 adapters via `CREATE TABLE IF NOT EXISTS`.
 
-## Delta-merge contract (CRITICAL) -> `docs/delta-merge.md`
+## Match cache refresh contract (CRITICAL) -> `docs/delta-merge.md`
 
-`refreshCachedMatchQuery` mirrors SSI's data structure and applies upstream changes
-incrementally via the match-level probe (#361) and scorecard delta merge (#362). SSI schema
-drift can silently corrupt cached snapshots, so changes to scorecard fields must touch
-**all** of: `SCORECARD_NODE_FIELDS`, `RawScCard`, `ScorecardDeltaEntry`, `deltaToCacheCard()`,
-`parseRawScorecards()`, `CACHE_SCHEMA_VERSION`, and `scripts/ssi-schema-snapshot.json` -- in
-the same PR. Run `pnpm check:ssi-schema` and `pnpm validate:ssi-queries` before committing.
-Recovery lever: `POST /api/admin/cache/force-refresh?ct=&id=`. Full details, drift triage,
-and recovery commands live in `docs/delta-merge.md`.
+`refreshCachedMatchQuery` is split by cache key:
+
+- **`GetMatch` (match overview)** — uses the if-modified-since probe (#361) on
+  `IpscMatchNode.updated`. Probe-skip extends TTL; `MATCH_PROBE_MAX_SKIP_AGE_SECONDS`
+  (default 300s) caps worst-case staleness.
+- **`GetMatchScorecards`** — bypasses the probe entirely. SSI's `IpscMatchNode.updated`
+  does NOT tick on scorecard saves (verified live during SPSK Open 2026, match 22/27190),
+  so probe-skip on scorecards strands the cache. Every SWR fire does a full refetch,
+  single-flighted via the inflight lock. The PR #366 incremental delta merge has been
+  removed; the merge helper (`lib/scorecard-merge.ts`) and `SCORECARDS_DELTA_QUERY` are
+  preserved for future revival should SSI expose a usable scorecard-mutation timestamp.
+
+Schema drift can silently corrupt cached snapshots, so changes to scorecard fields must touch
+**all** of: `SCORECARD_NODE_FIELDS`, `RawScCard`, `parseRawScorecards()`, `CACHE_SCHEMA_VERSION`,
+and `scripts/ssi-schema-snapshot.json` -- in the same PR. Run `pnpm check:ssi-schema` and
+`pnpm validate:ssi-queries` before committing.
+
+Levers and overrides:
+- `MATCH_PROBE_ENABLED=off` -- emergency kill switch; degrades the match-overview path to
+  always-refetch as well. Set via `wrangler secret put` for instant prod recovery without
+  a code deploy.
+- `POST /api/admin/cache/force-refresh?ct=&id=` -- one-shot full refetch for both keys.
+
+Full details and recovery commands live in `docs/delta-merge.md`.
 
 ## Telemetry -> `docs/telemetry.md`
 
