@@ -4,8 +4,19 @@
 // consumer) can pin to it. These snapshots fail CI if the shape drifts --
 // any field rename or removal is a breaking change that requires v2.
 // Additive changes (new optional fields) need an intentional snapshot update.
+//
+// Fixtures are typed against the real interfaces in lib/types.ts via
+// `satisfies`, so the typechecker also catches drift between the fixture and
+// the production type -- the snapshot alone could lock a fictional shape if
+// the fixture was hand-written without that constraint.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type {
+  EventSummary,
+  MatchResponse,
+  ShooterDashboardResponse,
+  ShooterSearchResult,
+} from "@/lib/types";
 
 const cacheMock = vi.hoisted(() => ({
   get: vi.fn<(k: string) => Promise<string | null>>(),
@@ -57,6 +68,8 @@ describe("/api/v1/events", () => {
   });
 
   it("forwards query params and returns the inner payload unchanged", async () => {
+    // Real EventSummary shape -- the `satisfies` clause makes the typechecker
+    // fail this test if the fixture drifts from the production interface.
     const payload = [
       {
         id: 27190,
@@ -79,7 +92,7 @@ describe("/api/v1/events", () => {
         max_competitors: 240,
         scoring_completed: 42.5,
       },
-    ];
+    ] satisfies EventSummary[];
     innerEvents.mockResolvedValue(
       new Response(JSON.stringify(payload), {
         status: 200,
@@ -114,8 +127,8 @@ describe("/api/v1/match/[ct]/[id]", () => {
     const payload = {
       name: "SPSK Open 2026",
       venue: "Stockholm",
-      lat: null,
-      lng: null,
+      lat: 59.3293,
+      lng: 18.0686,
       date: "2026-04-26T00:00:00",
       ends: "2026-04-27T00:00:00",
       level: "Level III",
@@ -124,9 +137,51 @@ describe("/api/v1/match/[ct]/[id]", () => {
       region: "SWE",
       stages_count: 12,
       competitors_count: 200,
+      max_competitors: 240,
       scoring_completed: 100,
+      match_status: "cp",
+      results_status: "all",
+      registration_status: "cl",
+      registration_starts: null,
+      registration_closes: null,
+      is_registration_possible: false,
+      squadding_starts: null,
+      squadding_closes: null,
+      is_squadding_possible: false,
+      ssi_url: "https://shootnscoreit.com/event/22/27190/",
+      stages: [
+        {
+          id: 1,
+          name: "Stage 1",
+          stage_number: 1,
+          max_points: 150,
+          min_rounds: 30,
+          paper_targets: 12,
+          steel_targets: 2,
+          ssi_url: null,
+          course_display: "Long",
+          procedure: null,
+          firearm_condition: null,
+        },
+      ],
+      competitors: [
+        {
+          id: 101,
+          shooterId: 12345,
+          name: "Jane Doe",
+          competitor_number: "1",
+          club: "Bromma PK",
+          division: "Production Optics",
+          region: "SWE",
+          region_display: "Sweden",
+          category: "L",
+          ics_alias: null,
+          license: "SE-12345",
+        },
+      ],
+      squads: [{ id: 1, number: 1, name: "Squad 1", competitorIds: [101] }],
       cacheInfo: { cachedAt: "2026-04-27T10:00:00Z" },
-    };
+    } satisfies MatchResponse;
     innerMatch.mockResolvedValue(
       new Response(JSON.stringify(payload), {
         status: 200,
@@ -178,9 +233,21 @@ describe("/api/v1/match/[ct]/[id]", () => {
 describe("/api/v1/shooter/search", () => {
   it("returns shooter search results", async () => {
     const payload = [
-      { shooterId: 12345, name: "Jane Doe", club: "Bromma PK", division: "Production Optics", matchCount: 27 },
-      { shooterId: 67890, name: "John Doe", club: null, division: null, matchCount: 3 },
-    ];
+      {
+        shooterId: 12345,
+        name: "Jane Doe",
+        club: "Bromma PK",
+        division: "Production Optics",
+        lastSeen: "2026-04-27T00:00:00Z",
+      },
+      {
+        shooterId: 67890,
+        name: "John Doe",
+        club: null,
+        division: null,
+        lastSeen: "2025-09-12T00:00:00Z",
+      },
+    ] satisfies ShooterSearchResult[];
     innerShooterSearch.mockResolvedValue(
       new Response(JSON.stringify(payload), { status: 200 }),
     );
@@ -198,18 +265,53 @@ describe("/api/v1/shooter/[shooterId]", () => {
     const payload = {
       shooterId: 12345,
       profile: {
-        shooterId: 12345,
         name: "Jane Doe",
         club: "Bromma PK",
         division: "Production Optics",
-        firstSeenAt: "2024-01-01T00:00:00Z",
-        lastSeenAt: "2026-04-27T00:00:00Z",
+        lastSeen: "2026-04-27T00:00:00Z",
+        region: "SWE",
+        region_display: "Sweden",
+        category: "L",
+        ics_alias: null,
+        license: "SE-12345",
       },
       matchCount: 1,
-      matches: [],
-      stats: null,
+      matches: [
+        {
+          ct: "22",
+          matchId: "27190",
+          name: "SPSK Open 2026",
+          date: "2026-04-26T00:00:00",
+          venue: "Stockholm",
+          level: "Level III",
+          region: "Sweden",
+          division: "Production Optics",
+          competitorId: 101,
+          competitorsInDivision: 42,
+          stageCount: 12,
+          avgHF: 6.42,
+          matchPct: 87.4,
+          totalA: 200,
+          totalC: 40,
+          totalD: 5,
+          totalMiss: 2,
+          totalNoShoots: 0,
+        },
+      ],
+      stats: {
+        totalStages: 12,
+        dateRange: { from: "2026-04-26T00:00:00", to: "2026-04-26T00:00:00" },
+        overallAvgHF: 6.42,
+        overallMatchPct: 87.4,
+        aPercent: 81.0,
+        cPercent: 16.0,
+        dPercent: 2.0,
+        missPercent: 1.0,
+        consistencyCV: null,
+        hfTrendSlope: null,
+      },
       achievements: [],
-    };
+    } satisfies ShooterDashboardResponse;
     innerShooterDashboard.mockResolvedValue(
       new Response(JSON.stringify(payload), { status: 200 }),
     );
