@@ -2,7 +2,24 @@
 // Uses a simple fixed-window counter per IP + route (one cache key per window).
 // Fails open: if the cache is unavailable, the request is allowed through.
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import cache from "@/lib/cache-impl";
+
+// Async-local flag set by /api/v1/* wrappers when they forward to an internal
+// route. The v1 surface enforces its own per-token bucket (lib/api-v1.ts), so
+// the inner IP-based limit must not also fire — otherwise the consumer's
+// effective rate is the *minimum* of the two, defeating the documented v1
+// limit. The flag is request-scoped via AsyncLocalStorage; external clients
+// cannot set it because there is no header that maps to it.
+const skipStorage = new AsyncLocalStorage<true>();
+
+/**
+ * Run `fn` with the IP-based rate limit suppressed. Used by /api/v1/* wrappers
+ * which apply per-token rate limiting before forwarding to the internal route.
+ */
+export function runWithIpRateLimitSkipped<T>(fn: () => T): T {
+  return skipStorage.run(true, fn);
+}
 
 interface RateLimitOptions {
   /** Unique prefix for the rate limit bucket (e.g. "events", "compare"). */
@@ -37,6 +54,7 @@ export async function checkRateLimit(
   req: Request,
   opts: RateLimitOptions,
 ): Promise<{ allowed: true } | { allowed: false; retryAfter: number }> {
+  if (skipStorage.getStore()) return { allowed: true };
   const ip = getClientIp(req);
   const window = Math.floor(Date.now() / 1000 / opts.windowSeconds);
   const key = `rl:${opts.prefix}:${ip}:${window}`;
