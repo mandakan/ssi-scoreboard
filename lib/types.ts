@@ -71,6 +71,15 @@ export interface CacheInfo {
    *  a "data is N minutes old" indicator on ongoing matches even when the
    *  cache itself looks fresh. Absent when no scorecards have been recorded. */
   lastScorecardAt?: string | null;
+  /** ISO timestamp of when the **scorecards** cache entry was last refetched.
+   *  Set only by the compare route, where we read both the match-overview
+   *  and scorecards keys. Distinct from `cachedAt`, which mirrors the
+   *  match-overview key — that one drifts toward the probe safety ceiling
+   *  during scoring (event.updated doesn't tick on scorecard saves), so
+   *  it's a misleading signal for "is my scoring data fresh?". The client
+   *  prefers this field during the live phase. Absent on responses where
+   *  no scorecards key was read. */
+  scorecardsCachedAt?: string | null;
 }
 
 export interface MatchResponse {

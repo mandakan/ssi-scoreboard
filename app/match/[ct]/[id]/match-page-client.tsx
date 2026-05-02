@@ -506,30 +506,29 @@ export default function MatchPageClient() {
   // (e.g. early squads have finished but their afternoon/day-2 squad hasn't).
   const isPreMatch = effectiveMode === "prematch";
 
-  // Pick the cachedAt to show in the "Updated X ago" badge. null means
-  // "just fetched live" — prefer non-null if one is cached.
+  // Pick the cachedAt to show in the "Updated X ago" badge.
   //
-  // During the **live** phase, prefer `compareCachedAt` (scorecards cache)
-  // over the staler-of-two. Reason: the match-overview cache uses the
-  // if-modified-since probe (lib/graphql.ts), and probe-skip — which is the
-  // common outcome during scoring since `event.updated` doesn't tick on
-  // scorecard saves — bumps TTL without writing a new `cachedAt`. So
-  // `matchCachedAt` legitimately drifts toward the 5-min probe ceiling
-  // even while scorecards are < 30s fresh. Surfacing the older value made
-  // the badge read "Updated 4 minutes ago" on a match whose scorecards
-  // data was actually 20 seconds old (reported during SPSK Open 2026,
-  // match 22/27190).
+  // During the **live** phase, prefer the dedicated `scorecardsCachedAt`
+  // shipped by the compare route — that's the timestamp of the last
+  // scorecards-key refetch, which after PR #392 is full-refetched on every
+  // SWR cycle. The legacy `cacheInfo.cachedAt` reflects the match-overview
+  // key, which uses the if-modified-since probe and drifts toward the 5-min
+  // probe ceiling during scoring (event.updated doesn't tick on scorecard
+  // saves). Surfacing the match-overview age made the badge read
+  // "Updated 4 minutes ago" on a match whose scorecards data was actually
+  // 20 seconds old (reported during SPSK Open 2026, match 22/27190).
   //
-  // For prematch / finished phases the staler-of-two is still correct:
-  // match metadata changes (squadding, registration, results-published
-  // flag) matter to the user, and there's no scoring loop driving
-  // scorecards freshness.
+  // For prematch / finished phases the staler-of-two is still right:
+  // match metadata changes (squadding, registration, results-published)
+  // matter, and there's no scoring loop driving scorecards freshness.
   const matchCachedAt = match.cacheInfo.cachedAt;
   const compareCachedAt = compareQuery.data?.cacheInfo.cachedAt ?? null;
+  const scorecardsCachedAt =
+    compareQuery.data?.cacheInfo.scorecardsCachedAt ?? null;
   const isLivePhase =
     effectiveMode !== "prematch" && effectiveMode !== "coaching";
   const stalestCachedAt = isLivePhase
-    ? compareCachedAt ?? matchCachedAt
+    ? scorecardsCachedAt ?? compareCachedAt ?? matchCachedAt
     : matchCachedAt && compareCachedAt
       ? new Date(matchCachedAt) < new Date(compareCachedAt)
         ? matchCachedAt
