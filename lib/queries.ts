@@ -17,6 +17,13 @@ export function useMatchQuery(ct: string, id: string) {
     // and tab-return show data instantly while a background refetch resolves,
     // instead of triggering a fresh skeleton load.
     gcTime: 1_800_000,
+    // Refetch immediately when the tab regains focus. The global default
+    // (Providers.tsx) is `false` to avoid sitewide refetch storms, but for
+    // a live courtside scoreboard the user-visible regression of "I picked
+    // up my phone and the score is 3 minutes old" is exactly what we have
+    // to avoid. The server side's stale-while-revalidate makes a focus
+    // refetch cheap — usually resolves from Redis.
+    refetchOnWindowFocus: true,
     // Poll while the match is active (scoring in progress and results not yet
     // published). The server's stale-while-revalidate path makes these polls
     // cheap — they almost always resolve from Redis without blocking on the
@@ -101,6 +108,11 @@ export function useCompareQuery(
     queryFn: () => fetchCompare(ct, id, competitorIds, mode),
     staleTime: mode === "live" ? 30_000 : 300_000,
     refetchInterval: mode === "live" ? 30_000 : false,
+    // Refetch immediately on tab focus during the live phase. See the same
+    // override on `useMatchQuery` for rationale — the global default in
+    // Providers.tsx is `false` site-wide, but courtside users tap back into
+    // the page expecting the latest scorecards.
+    refetchOnWindowFocus: mode === "live",
     enabled: Boolean(ct && id && competitorIds.length > 0),
   });
 }
