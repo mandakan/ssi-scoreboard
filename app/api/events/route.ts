@@ -72,6 +72,37 @@ const ALLOWED_LEVELS: Record<string, Set<string> | null> = {
 // 30-day month, and confirm none of them get truncated. Don't guess.
 const SUB_WINDOW_DAYS = 7;
 
+/**
+ * Filter the event list down to matches that are clearly happening right now.
+ *
+ * Primary signal is `scoring_completed > 0` (active scoring). SSI's
+ * match-level aggregate has been observed reporting 0 while individual stages
+ * were 21-29% scored — see SPSK Open 2026 (match 22/27190). Relying on that
+ * field alone would hide the live section for the entire day, so we accept
+ * any `status="on"` match whose start window is now as a fallback. The upper
+ * time bound prevents matches that linger in `status="on"` for days
+ * (organizers slow to flip to "cp") from hanging around.
+ *
+ * Pure / unit-testable. Order is preserved; no slicing here — callers cap.
+ */
+export function filterLiveEvents(
+  events: readonly EventSummary[],
+  nowMs: number,
+): EventSummary[] {
+  const HOUR_MS = 3_600_000;
+  return events.filter((e) => {
+    if (e.status !== "on") return false;
+    if (e.scoring_completed >= 100) return false;
+    if (e.scoring_completed > 0) return true;
+    // SSI scoring_completed === 0 fallback: temporal liveness.
+    if (!e.date) return false;
+    const startMs = new Date(e.date).getTime();
+    if (!Number.isFinite(startMs)) return false;
+    const endMs = e.ends ? new Date(e.ends).getTime() : startMs + 24 * HOUR_MS;
+    return nowMs >= startMs && nowMs <= endMs + 6 * HOUR_MS;
+  });
+}
+
 function buildSubWindows(
   startsAfter: string,
   startsBefore: string,
@@ -309,12 +340,8 @@ export async function GET(req: Request) {
         e.scoring_completed != null ? parseFloat(String(e.scoring_completed)) : 0,
     }));
 
-  // Live mode post-filter: only matches with status=on and active scoring,
-  // capped at 8 to keep the homepage section compact on mobile.
   const finalEvents: EventSummary[] = liveMode
-    ? events
-        .filter((e) => e.status === "on" && e.scoring_completed > 0 && e.scoring_completed < 100)
-        .slice(0, 8)
+    ? filterLiveEvents(events, Date.now()).slice(0, 8)
     : events;
 
   console.log(JSON.stringify({
