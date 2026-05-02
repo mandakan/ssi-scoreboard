@@ -106,12 +106,41 @@ export function CacheInfoBadge({
   const cacheAgeSeconds = cachedAt
     ? Math.max(0, Math.floor((now - new Date(cachedAt).getTime()) / 1000))
     : 0;
+  const lastDataAgeSeconds = lastScorecardAt
+    ? Math.max(0, Math.floor((now - new Date(lastScorecardAt).getTime()) / 1000))
+    : null;
   const isLive = phase === "live";
   const isAlert = isLive && cachedAt && cacheAgeSeconds > STALE_ALERT_SECONDS;
   const isWarning =
     !isAlert && isLive && cachedAt && cacheAgeSeconds > STALE_WARNING_SECONDS;
 
-  const label = cachedAt ? `Updated ${formatTimeAgo(cachedAt)}` : "Live";
+  // Two distinct freshness signals, separated so the user can tell at a glance
+  // whether a long "last data" age is the app's fault (sync stuck) or just an
+  // upstream lull (no new entries).
+  //
+  //   - syncLabel:     when we last verified upstream (cachedAt). Drives the
+  //                    warning/alert escalation — that's the real "are we
+  //                    out of sync" signal.
+  //   - dataSubLabel:  when the most recent scorecard entry landed at SSI
+  //                    (lastScorecardAt). Purely informational; never
+  //                    triggers warnings. Reassures users that a quiet match
+  //                    is quiet because nothing is being shot, not because
+  //                    we lost the connection.
+  //
+  // Dropped on warning/alert states to avoid burying the sync issue. Also
+  // dropped outside the live phase (prematch / finished — no scoring loop).
+  const syncLabel = cachedAt
+    ? isLive && !isWarning && !isAlert
+      ? `Synced ${formatTimeAgo(cachedAt)}`
+      : `Updated ${formatTimeAgo(cachedAt)}`
+    : "Live";
+  const dataSubLabel =
+    isLive && !isWarning && !isAlert && lastScorecardAt && lastDataAgeSeconds != null
+      ? lastDataAgeSeconds < 60
+        ? "data fresh"
+        : `last data ${formatTimeAgo(lastScorecardAt)}`
+      : null;
+  const label = dataSubLabel ? `${syncLabel} · ${dataSubLabel}` : syncLabel;
   const buttonClass = cn(
     "inline-flex items-center gap-1 text-xs transition-colors rounded px-1.5 py-0.5",
     "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
@@ -122,10 +151,12 @@ export function CacheInfoBadge({
         : "text-muted-foreground hover:text-foreground",
   );
   const ariaLabel = isAlert
-    ? `Live updates appear paused — last sync ${label.toLowerCase()}. Click to manage cache.`
+    ? `Live updates appear paused — last sync ${syncLabel.toLowerCase()}. Click to manage cache.`
     : isWarning
-      ? `Last sync ${label.toLowerCase()} — slower than usual. Click to manage cache.`
-      : `Cache status: ${label}. Click to manage cache.`;
+      ? `Last sync ${syncLabel.toLowerCase()} — slower than usual. Click to manage cache.`
+      : dataSubLabel
+        ? `${syncLabel}; ${dataSubLabel}. Click to manage cache.`
+        : `Cache status: ${syncLabel}. Click to manage cache.`;
 
   return (
     <>
@@ -151,14 +182,21 @@ export function CacheInfoBadge({
           <DialogHeader>
             <DialogTitle>Cache status</DialogTitle>
             <DialogDescription>
+              <strong>Last sync with shootnscoreit.com:</strong>{" "}
               {cachedAt
-                ? `Data was cached at ${new Date(cachedAt).toLocaleString()}.`
-                : "Data was just fetched fresh."}
+                ? `${new Date(cachedAt).toLocaleString()} (${formatTimeAgo(cachedAt)}).`
+                : "just fetched fresh."}
               {lastScorecardAt ? (
                 <>
                   <br />
-                  Most recent scorecard upstream: {new Date(lastScorecardAt).toLocaleString()}
+                  <strong>Last new scorecard entry:</strong>{" "}
+                  {new Date(lastScorecardAt).toLocaleString()}
                   {" "}({formatTimeAgo(lastScorecardAt)}).
+                  <br />
+                  <span className="text-muted-foreground">
+                    A long gap between these two means the sync is healthy but
+                    no new shots have been entered upstream — not an app problem.
+                  </span>
                 </>
               ) : null}
             </DialogDescription>

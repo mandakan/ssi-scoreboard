@@ -10,8 +10,6 @@ import { parseMatchCacheKey, persistActiveMatchToD1 } from "@/lib/match-data-sto
 import { markUpstreamDegraded } from "@/lib/upstream-status";
 import { upstreamTelemetry, hashVariables, type UpstreamOutcome } from "@/lib/upstream-telemetry";
 import { cacheTelemetry } from "@/lib/cache-telemetry";
-import { mergeScorecardDelta } from "@/lib/scorecard-merge";
-import type { RawScorecardsData } from "@/lib/scorecard-data";
 
 /**
  * Check if the current request is an admin-authenticated request
@@ -382,29 +380,6 @@ async function readCachedAt(cacheKey: string): Promise<string | null> {
   }
 }
 
-/** Kill switch for the incremental scorecard delta path. When off, the
- *  `changed` probe outcome falls through to a full refetch — same as #361
- *  alone. Use this if the delta path proves buggy in production. */
-function isScorecardsDeltaEnabled(): boolean {
-  return process.env.SCORECARDS_DELTA_ENABLED !== "off";
-}
-
-/** Reconcile interval (seconds): even when delta merges succeed, force a
- *  periodic full refetch to self-heal from drift the delta cannot detect:
- *    - scorecards deleted upstream (DQ reversals, admin deletes)
- *    - new stages added to the match
- *    - subtle merge bugs that don't trigger structural failures
- *  Default 10 minutes — at the 30s active-match polling cadence that's one
- *  reconcile per ~20 polls. The cached entry's *original* `cachedAt` is the
- *  timer reference; delta merges intentionally do NOT bump it so the reconcile
- *  timer keeps ticking on a steady delta stream. */
-function scorecardsDeltaMaxAgeSeconds(): number {
-  const raw = process.env.SCORECARDS_DELTA_MAX_AGE_SECONDS;
-  if (raw == null) return 600;
-  const n = parseInt(raw, 10);
-  return Number.isFinite(n) && n > 0 ? n : 600;
-}
-
 /** Sentinel Redis key that any code path can set to force the next probe-aware
  *  refresh to do a clean full refetch — bypassing probe, sidecar, and delta
  *  paths entirely. Cleared after a successful full refresh.
@@ -435,144 +410,32 @@ async function clearForceRefresh(ct: number, id: string): Promise<void> {
   } catch { /* best-effort */ }
 }
 
-interface DeltaMergeAttempt {
-  outcome: "delta-merge" | "full-fallback" | "reconcile" | "error" | "disabled";
-  /** Number of scorecards in the delta payload. */
-  deltaCount: number;
-  /** Number of cached scorecards replaced by the merge. */
-  updatedCount: number;
-  /** Number of scorecards added by the merge. */
-  addedCount: number;
-  /** Pure-merge time (ms). Excludes upstream fetch + cache I/O. */
-  mergeMs: number;
-  /** Bytes returned by the delta query (vs. full refetch payload). */
-  deltaBytes: number | null;
-  /** Short reason string when outcome is `full-fallback` or `error`. */
-  reason: string | null;
-}
+// Note: the previous PR #366 incremental scorecards delta merge has been
+// removed. It depended on `IpscMatchNode.updated` ticking when scorecards
+// landed, but that field only reflects match-level admin edits — see the
+// comment at the top of `refreshCachedMatchQuery`. The merge helper
+// (`mergeScorecardDelta` in `lib/scorecard-merge.ts`) and the delta query
+// (`SCORECARDS_DELTA_QUERY` below) are kept around since they are correct
+// in isolation and could be revived if SSI ever exposes a usable
+// scorecard-mutation timestamp.
 
 /**
- * Attempt a delta merge for a `GetMatchScorecards` cache entry. Returns the
- * outcome details for telemetry; on `delta-merge` / `reconcile` the cache has
- * been updated. On `full-fallback` / `error` / `disabled` the caller should
- * run a full refresh.
- */
-async function tryScorecardsDeltaMerge(
-  cacheKey: string,
-  variables: { ct: number; id: string },
-  since: string,
-  ttlSeconds: number | null,
-): Promise<DeltaMergeAttempt> {
-  if (!isScorecardsDeltaEnabled()) {
-    return { outcome: "disabled", deltaCount: 0, updatedCount: 0, addedCount: 0, mergeMs: 0, deltaBytes: null, reason: null };
-  }
-
-  let cachedEntry: CacheEntry<RawScorecardsData>;
-  let cachedAtIso: string;
-  try {
-    const raw = await cache.get(cacheKey);
-    if (!raw) {
-      return { outcome: "full-fallback", deltaCount: 0, updatedCount: 0, addedCount: 0, mergeMs: 0, deltaBytes: null, reason: "no-cached-entry" };
-    }
-    cachedEntry = JSON.parse(raw) as CacheEntry<RawScorecardsData>;
-    cachedAtIso = cachedEntry.cachedAt;
-    if (cachedEntry.v !== CACHE_SCHEMA_VERSION) {
-      return { outcome: "full-fallback", deltaCount: 0, updatedCount: 0, addedCount: 0, mergeMs: 0, deltaBytes: null, reason: "schema-version-mismatch" };
-    }
-  } catch {
-    return { outcome: "full-fallback", deltaCount: 0, updatedCount: 0, addedCount: 0, mergeMs: 0, deltaBytes: null, reason: "cache-read-error" };
-  }
-
-  // Reconcile gate: if the cached entry's *original* fetch is older than the
-  // ceiling, force a full refetch even though a delta would merge cleanly.
-  // Self-heals from upstream deletions and stage additions.
-  const cacheAgeSeconds = (Date.now() - new Date(cachedAtIso).getTime()) / 1000;
-  if (cacheAgeSeconds > scorecardsDeltaMaxAgeSeconds()) {
-    return { outcome: "reconcile", deltaCount: 0, updatedCount: 0, addedCount: 0, mergeMs: 0, deltaBytes: null, reason: null };
-  }
-
-  let deltaData: ScorecardDeltaData;
-  let deltaBytes: number | null = null;
-  try {
-    // We can't get bytes here (executeQuery does, but doesn't expose it);
-    // approximate with serialized JSON length post-fetch.
-    deltaData = await executeQuery<ScorecardDeltaData>(SCORECARDS_DELTA_QUERY, { ...variables, since });
-    try { deltaBytes = JSON.stringify(deltaData).length; } catch { /* ignore */ }
-  } catch (err) {
-    return {
-      outcome: "error",
-      deltaCount: 0,
-      updatedCount: 0,
-      addedCount: 0,
-      mergeMs: 0,
-      deltaBytes: null,
-      reason: err instanceof Error ? err.name : "fetch-error",
-    };
-  }
-
-  const delta = deltaData.event?.scorecards ?? [];
-  const t0 = Date.now();
-  const merge = mergeScorecardDelta(cachedEntry.data, delta);
-  const mergeMs = Date.now() - t0;
-
-  if (!merge.ok) {
-    return {
-      outcome: "full-fallback",
-      deltaCount: delta.length,
-      updatedCount: 0,
-      addedCount: 0,
-      mergeMs,
-      deltaBytes,
-      reason: merge.reason,
-    };
-  }
-
-  // Write the merged snapshot back. CRITICAL: keep the original `cachedAt`
-  // so the reconcile timer keeps ticking on a steady delta stream.
-  const newEntry: CacheEntry<RawScorecardsData> = {
-    data: merge.data,
-    cachedAt: cachedAtIso,
-    v: CACHE_SCHEMA_VERSION,
-  };
-  const payload = JSON.stringify(newEntry);
-  try {
-    await cache.set(cacheKey, payload, ttlSeconds);
-  } catch {
-    // Cache write failed — surface as full-fallback so caller does a full
-    // refetch and writes a coherent snapshot via the standard path.
-    return {
-      outcome: "full-fallback",
-      deltaCount: delta.length,
-      updatedCount: merge.updatedCount,
-      addedCount: merge.addedCount,
-      mergeMs,
-      deltaBytes,
-      reason: "cache-write-error",
-    };
-  }
-  if (parseMatchCacheKey(cacheKey)) {
-    afterResponse(persistActiveMatchToD1(cacheKey, payload));
-  }
-
-  return {
-    outcome: "delta-merge",
-    deltaCount: delta.length,
-    updatedCount: merge.updatedCount,
-    addedCount: merge.addedCount,
-    mergeMs,
-    deltaBytes,
-    reason: null,
-  };
-}
-
-/**
- * Probe-aware single-flight refresh of a cached match-level GraphQL query
- * (GetMatch or GetMatchScorecards). Sends a tiny `MatchUpdatedProbe` first;
- * if `IpscMatchNode.updated` (and `status`/`results`) match the last-seen
- * sidecar state, just extend the cache TTL and skip the full refetch entirely.
+ * Probe-aware single-flight refresh of a cached match-level GraphQL query.
  *
- * Falls back to a full `refreshCachedQuery` on first-seen state, mismatch,
- * or any probe error.
+ * For the **match overview** key (`GetMatch`), sends a tiny
+ * `MatchUpdatedProbe` first; if `IpscMatchNode.updated`, `status`, and
+ * `results` all match the last-seen sidecar state, the cache TTL is extended
+ * and the full refetch is skipped. Falls back to a full `refreshCachedQuery`
+ * on first-seen state, mismatch, or any probe error.
+ *
+ * For the **scorecards** key (`GetMatchScorecards`), the probe is bypassed:
+ * `IpscMatchNode.updated` does not tick when scorecards are added (verified
+ * in production during SPSK Open 2026, match 22/27190 — `event.updated`
+ * stayed at the prior day's setup time while every stage advanced from 0%
+ * to 26% scored). Trusting the probe-skip outcome on the scorecards key
+ * pegged refreshes at the `MATCH_PROBE_MAX_SKIP_AGE_SECONDS` ceiling
+ * (5 minutes) instead of the intended 30s freshness window. So scorecards
+ * always go through `refreshCachedQuery`.
  */
 export async function refreshCachedMatchQuery<T>(
   cacheKey: string,
@@ -582,28 +445,32 @@ export async function refreshCachedMatchQuery<T>(
   match: { ct: number; id: string },
   lockTtlSeconds = 90,
 ): Promise<void> {
-  // Kill switch: degrade to the original always-refetch path. Useful if the
-  // upstream `match.updated` field turns out not to track scorecard entry
-  // (e.g. only bumps on match-level admin edits, not per-scorecard saves).
+  const parsed = parseMatchCacheKey(cacheKey);
+  const keyType: "match" | "scorecards" | "other" =
+    parsed?.keyType === "match" ? "match"
+      : parsed?.keyType === "scorecards" ? "scorecards"
+      : "other";
+
+  // Kill switch: degrade to the original always-refetch path. Kept as a
+  // belt-and-braces lever even though scorecards are now bypassed by default
+  // — if the match-overview probe path is itself observed misbehaving, this
+  // disables it without a code deploy.
   if (!isMatchProbeEnabled()) {
     return refreshCachedQuery<T>(cacheKey, query, variables, ttlSeconds, lockTtlSeconds);
   }
 
   // Force-refresh sentinel: any code path (admin endpoint, recovery script)
   // can request a clean full refetch by setting `force-refresh:{ct}:{id}` in
-  // Redis. We bypass probe, sidecar, and delta entirely. After a successful
-  // refresh the sentinel is cleared. Both probe (#361) and delta (#362)
-  // paths respect this for symmetry.
+  // Redis. Bypasses probe, sidecar, and delta entirely. After a successful
+  // refresh the sentinel is cleared. Applies to both keytypes so the admin
+  // lever flushes match overview AND scorecards in the same gesture.
   if (await isForceRefreshRequested(match.ct, match.id)) {
     await refreshCachedQuery<T>(cacheKey, query, variables, ttlSeconds, lockTtlSeconds);
     await clearForceRefresh(match.ct, match.id);
     cacheTelemetry({
       op: "match-probe",
       matchKey: cacheKey,
-      keyType:
-        parseMatchCacheKey(cacheKey)?.keyType === "match" ? "match"
-          : parseMatchCacheKey(cacheKey)?.keyType === "scorecards" ? "scorecards"
-          : "other",
+      keyType,
       outcome: "forced-refresh",
       probeMs: 0,
       cachedAgeSeconds: null,
@@ -611,6 +478,19 @@ export async function refreshCachedMatchQuery<T>(
       prevUpstreamUpdatedIso: null,
     });
     return;
+  }
+
+  // Scorecards bypass: the probe field (`IpscMatchNode.updated`) cannot
+  // detect new scorecards — verified in production during SPSK Open 2026
+  // (match 22/27190): event.updated stayed at the prior day's setup time
+  // while every stage advanced from 0% to 26% scored. Skipping a scorecards
+  // refetch based on the probe strands the cache at the
+  // `MATCH_PROBE_MAX_SKIP_AGE_SECONDS` ceiling (5 minutes). Always do a
+  // full refetch for scorecards; the shared probe sidecar is still
+  // maintained by the match-key path so the overview optimization is
+  // unaffected.
+  if (keyType === "scorecards") {
+    return refreshCachedQuery<T>(cacheKey, query, variables, ttlSeconds, lockTtlSeconds);
   }
 
   const lockKey = `inflight:${cacheKey}`;
@@ -628,11 +508,6 @@ export async function refreshCachedMatchQuery<T>(
   let cachedAgeSeconds: number | null = null;
   let upstreamUpdatedIso: string | null = null;
   let prevUpstreamUpdatedIso: string | null = null;
-  const parsed = parseMatchCacheKey(cacheKey);
-  const keyType: "match" | "scorecards" | "other" =
-    parsed?.keyType === "match" ? "match"
-      : parsed?.keyType === "scorecards" ? "scorecards"
-      : "other";
 
   try {
     let prevState: ProbeState | null = null;
@@ -706,50 +581,18 @@ export async function refreshCachedMatchQuery<T>(
     }
 
     // First-seen or state changed — do the full refresh, then update sidecar.
+    // Note: scorecards keys never reach this path (early-returned at the top
+    // of the function). The `keyType === "scorecards"` delta-merge branch
+    // that used to live here was unreachable in practice — `event.updated`
+    // does not tick when scorecards land, so probeOutcome was never
+    // "changed" for that keyType — and removing it keeps the contract clear.
     probeOutcome = prevState ? "changed" : "first-seen";
 
-    // Delta path: on `changed` for a scorecards key, try fetching only the
-    // delta scorecards (`scorecards(updated_after: prev_match_updated)`) and
-    // merging into the cached snapshot. Falls through to the full refresh on
-    // any failure or when the periodic reconcile is due.
-    let deltaAttempt: DeltaMergeAttempt | null = null;
-    const canTryDelta =
-      keyType === "scorecards" &&
-      probeOutcome === "changed" &&
-      prevState?.updated != null;
-    if (canTryDelta && prevState?.updated) {
-      deltaAttempt = await tryScorecardsDeltaMerge(
-        cacheKey,
-        match,
-        prevState.updated,
-        ttlSeconds,
-      );
-    }
-
-    const skipFullRefresh =
-      deltaAttempt?.outcome === "delta-merge";
-
-    if (!skipFullRefresh) {
-      await fullRefresh<T>(cacheKey, query, variables, ttlSeconds);
-    }
+    await fullRefresh<T>(cacheKey, query, variables, ttlSeconds);
     try {
       await cache.set(sidecarKey, JSON.stringify(currentState), ttlSeconds ?? null);
     } catch {
       // Sidecar write failure just costs us one extra full refetch next cycle.
-    }
-
-    if (deltaAttempt) {
-      cacheTelemetry({
-        op: "scorecards-delta",
-        matchKey: cacheKey,
-        outcome: deltaAttempt.outcome,
-        deltaCount: deltaAttempt.deltaCount,
-        updatedCount: deltaAttempt.updatedCount,
-        addedCount: deltaAttempt.addedCount,
-        mergeMs: deltaAttempt.mergeMs,
-        deltaBytes: deltaAttempt.deltaBytes,
-        reason: deltaAttempt.reason,
-      });
     }
   } finally {
     cacheTelemetry({

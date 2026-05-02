@@ -36,8 +36,14 @@ vi.mock("next/headers", () => ({
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
-const KEY = 'gql:GetMatchScorecards:{"ct":22,"id":"26547"}';
-const QUERY = "query GetMatchScorecards { x }";
+// The probe-aware path is for the **match overview** key only. Scorecards
+// have their own bypass test below — IpscMatchNode.updated does not tick on
+// scorecard mutations, so any probe-skip outcome on the scorecards key is a
+// production regression.
+const KEY = 'gql:GetMatch:{"ct":22,"id":"26547"}';
+const SCORECARDS_KEY = 'gql:GetMatchScorecards:{"ct":22,"id":"26547"}';
+const QUERY = "query GetMatch { x }";
+const SCORECARDS_QUERY = "query GetMatchScorecards { x }";
 const VARS = { ct: 22, id: "26547" };
 const MATCH = { ct: 22, id: "26547" };
 const SIDECAR = "probe:match-state:22:26547";
@@ -240,5 +246,120 @@ describe("refreshCachedMatchQuery — probe-aware refresh", () => {
     // Permanent entries — no TTL extension; refetch was still skipped.
     expect(cacheMock.expire).not.toHaveBeenCalled();
     expect(cacheMock.set).not.toHaveBeenCalledWith(KEY, expect.any(String), expect.any(Number));
+  });
+});
+
+// ─── Regression contract: scorecards key bypasses the probe ─────────────────
+//
+// SPSK Open 2026 (match 22/27190): SSI's `IpscMatchNode.updated` did not
+// tick when scorecards landed — it stayed at the prior day's setup time
+// while every stage advanced from 0% to 26% scored. The probe-aware path
+// honoured the unchanged `updated` value as "skip" and pegged scorecards
+// refreshes at the `MATCH_PROBE_MAX_SKIP_AGE_SECONDS=300` ceiling. These
+// tests assert that the scorecards key always does a full refetch — no
+// probe roundtrip, no skip — so the regression cannot recur silently.
+
+describe("refreshCachedMatchQuery — scorecards bypass (regression guard)", () => {
+  let fetchSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    cacheMock.setIfAbsent.mockReset();
+    cacheMock.set.mockReset();
+    cacheMock.expire.mockReset();
+    cacheMock.del.mockReset();
+    cacheMock.get.mockReset();
+    cacheMock.setIfAbsent.mockResolvedValue(true);
+    cacheMock.set.mockResolvedValue(undefined);
+    cacheMock.expire.mockResolvedValue(undefined);
+    cacheMock.del.mockResolvedValue(undefined);
+    upstreamMock.markUpstreamDegraded.mockClear();
+
+    fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    process.env.SSI_API_KEY = "test-key";
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function fullScorecardsResponse() {
+    return new Response(JSON.stringify({ data: { event: { stages: [] } } }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  it("a scorecards-key refresh issues exactly one upstream request — no probe", async () => {
+    const { refreshCachedMatchQuery } = await import("@/lib/graphql");
+    cacheMock.get.mockResolvedValue(null);
+    fetchSpy.mockResolvedValue(fullScorecardsResponse());
+
+    await refreshCachedMatchQuery(SCORECARDS_KEY, SCORECARDS_QUERY, VARS, 90, MATCH);
+
+    // 1 fetch — the full scorecards query. NOT 2 (no probe roundtrip).
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(cacheMock.set).toHaveBeenCalledWith(SCORECARDS_KEY, expect.any(String), 90);
+  });
+
+  it("scorecards refresh ignores a matching probe sidecar (the SPSK regression)", async () => {
+    // This is the production failure mode: sidecar says event.updated has not
+    // changed (because SSI doesn't tick it on scorecard saves). The probe-aware
+    // path would have skipped. The bypass must do a full refetch anyway.
+    const { refreshCachedMatchQuery } = await import("@/lib/graphql");
+    const freshCachedAt = new Date(Date.now() - 5_000).toISOString();
+    cacheMock.get.mockImplementation(async (k) => {
+      if (k === SIDECAR) {
+        return JSON.stringify({
+          updated: "2026-05-01T12:08:38Z", // yesterday
+          status: "on",
+          results: "stg",
+        });
+      }
+      if (k === SCORECARDS_KEY) {
+        return JSON.stringify({ data: {}, cachedAt: freshCachedAt, v: 1 });
+      }
+      return null;
+    });
+    fetchSpy.mockResolvedValue(fullScorecardsResponse());
+
+    await refreshCachedMatchQuery(SCORECARDS_KEY, SCORECARDS_QUERY, VARS, 90, MATCH);
+
+    // No probe, just the full refetch.
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    // Probe sidecar must NOT be touched from the scorecards path — the
+    // match-overview path is the sole sidecar writer.
+    expect(cacheMock.set).not.toHaveBeenCalledWith(SIDECAR, expect.any(String), expect.any(Number));
+    // The cached scorecards entry was overwritten with a fresh snapshot.
+    expect(cacheMock.set).toHaveBeenCalledWith(SCORECARDS_KEY, expect.any(String), 90);
+  });
+
+  it("scorecards refresh respects the force-refresh sentinel and clears it", async () => {
+    const { refreshCachedMatchQuery } = await import("@/lib/graphql");
+    cacheMock.get.mockImplementation(async (k) => {
+      if (k === `force-refresh:${MATCH.ct}:${MATCH.id}`) return "1";
+      return null;
+    });
+    fetchSpy.mockResolvedValue(fullScorecardsResponse());
+
+    await refreshCachedMatchQuery(SCORECARDS_KEY, SCORECARDS_QUERY, VARS, 90, MATCH);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(cacheMock.del).toHaveBeenCalledWith(`force-refresh:${MATCH.ct}:${MATCH.id}`);
+  });
+
+  it("kill switch MATCH_PROBE_ENABLED=off behaves identically to scorecards bypass", async () => {
+    process.env.MATCH_PROBE_ENABLED = "off";
+    try {
+      const { refreshCachedMatchQuery } = await import("@/lib/graphql");
+      fetchSpy.mockResolvedValue(fullScorecardsResponse());
+
+      await refreshCachedMatchQuery(SCORECARDS_KEY, SCORECARDS_QUERY, VARS, 90, MATCH);
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(cacheMock.set).toHaveBeenCalledWith(SCORECARDS_KEY, expect.any(String), 90);
+    } finally {
+      delete process.env.MATCH_PROBE_ENABLED;
+    }
   });
 });
