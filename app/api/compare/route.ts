@@ -234,9 +234,22 @@ export async function GET(req: Request) {
 
   let fingerprintCacheHit: boolean | null = null;
 
-  // Report the older of the two cache timestamps (most stale data wins)
+  // Ship both the match-overview cachedAt and the scorecards cachedAt so the
+  // client can choose the right signal per phase. The legacy `cachedAt` field
+  // is the older of the two (preserves the original "most stale wins"
+  // intent for older clients / non-live phases). The dedicated
+  // `scorecardsCachedAt` is what the live-phase badge reads — see the
+  // CacheInfo doc for why the match-overview age is misleading during
+  // scoring.
+  const olderCachedAt =
+    matchCachedAt && scorecardsCachedAt
+      ? new Date(matchCachedAt) < new Date(scorecardsCachedAt)
+        ? matchCachedAt
+        : scorecardsCachedAt
+      : matchCachedAt ?? scorecardsCachedAt;
   const cacheInfo: CompareResponse["cacheInfo"] = {
-    cachedAt: matchCachedAt ?? scorecardsCachedAt,
+    cachedAt: olderCachedAt,
+    scorecardsCachedAt: scorecardsCachedAt,
   };
   if (cacheInfo.cachedAt && (await isUpstreamDegraded())) {
     cacheInfo.upstreamDegraded = true;
