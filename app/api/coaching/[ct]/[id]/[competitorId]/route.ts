@@ -23,6 +23,7 @@ import {
   type RawScorecard,
 } from "@/app/api/compare/logic";
 import { computeMatchTtl, isMatchComplete } from "@/lib/match-ttl";
+import { effectiveMatchScoringPct } from "@/lib/match-data";
 import { extractDivision } from "@/lib/divisions";
 import { decodeShooterId } from "@/lib/shooter-index";
 import cache from "@/lib/cache-impl";
@@ -137,6 +138,7 @@ interface RawMatchData {
       number: number;
       name: string;
       max_points: number;
+      scoring_completed?: string | number | null;
     }[];
     competitors_approved_w_wo_results_not_dnf?: RawCompetitor[];
   } | null;
@@ -199,9 +201,7 @@ export async function GET(
   }
 
   // Determine match state
-  const scoringPct = Math.round(
-    parseFloat(String(matchData.event.scoring_completed ?? 0)),
-  );
+  const scoringPct = Math.round(effectiveMatchScoringPct(matchData.event));
   const matchDate = matchData.event.starts
     ? new Date(matchData.event.starts)
     : null;

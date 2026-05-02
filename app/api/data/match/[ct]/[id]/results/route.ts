@@ -8,6 +8,7 @@ import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY, SCORECARDS_QUERY } from "
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
 import { computeFullFieldRankings } from "@/app/api/compare/logic";
 import { decodeShooterId } from "@/lib/shooter-index";
+import { effectiveMatchScoringPct } from "@/lib/match-data";
 
 interface RawMatchData {
   event: {
@@ -22,6 +23,7 @@ interface RawMatchData {
       number: number;
       name: string;
       max_points?: number | null;
+      scoring_completed?: string | number | null;
     }>;
     competitors_approved_w_wo_results_not_dnf?: Array<{
       id: string;
@@ -141,7 +143,7 @@ export async function GET(
       level: ev.level ?? null,
       region: ev.region ?? null,
       discipline: ev.get_full_rule_display ?? null,
-      scoringCompleted: Math.round(parseFloat(String(ev.scoring_completed ?? 0))),
+      scoringCompleted: Math.round(effectiveMatchScoringPct(ev)),
     },
     stages,
     competitors,

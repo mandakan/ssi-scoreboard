@@ -7,6 +7,7 @@ import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY, MATCH_QUERY, refresh
 import cache from "@/lib/cache-impl";
 import { computeMatchFreshness, computeMatchSwrTtl, isMatchComplete } from "@/lib/match-ttl";
 import { persistToMatchStore } from "@/lib/match-data-store";
+import { effectiveMatchScoringPct } from "@/lib/match-data";
 import { isUpstreamDegraded } from "@/lib/upstream-status";
 import { afterResponse } from "@/lib/background-impl";
 
@@ -62,6 +63,7 @@ interface RawMatchData {
       get_course_display?: string | null;
       procedure?: string | null;
       firearm_condition?: string | null;
+      scoring_completed?: string | number | null;
     }[];
     competitors_approved_w_wo_results_not_dnf?: RawCompetitor[];
   } | null;
@@ -126,9 +128,7 @@ export async function GET(req: Request) {
   }
 
   // Determine match state and compute TTL
-  const scoringPct = parseFloat(
-    String(matchData.event?.scoring_completed ?? 0)
-  );
+  const scoringPct = effectiveMatchScoringPct(matchData.event);
   const matchDate = matchData.event?.starts ? new Date(matchData.event.starts) : null;
   const daysSince = matchDate ? (Date.now() - matchDate.getTime()) / 86_400_000 : 0;
   const signals = {

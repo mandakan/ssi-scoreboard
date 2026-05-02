@@ -189,12 +189,22 @@ async function executeQueryOnce<T>(
 }
 
 // ─── Query: match overview ───────────────────────────────────────────────────
-// `venue` and `scoring_completed` are on EventInterface (top level).
-// `sub_rule`, `level`, `region`, `stages_count`, `competitors_count`, and
-// the nested lists require `... on IpscMatchNode`.
+// `venue` is on EventInterface (top level). `sub_rule`, `level`, `region`,
+// `stages_count`, `competitors_count`, and the nested lists require
+// `... on IpscMatchNode`.
 //
-// `scoring_completed` is returned as a decimal string (e.g. "56.31067961165048"),
-// not a number. Parse with parseFloat() in the route handler.
+// `scoring_completed` is requested inside the IpscMatchNode fragment for
+// consistency with EVENTS_QUERY (PR #368). It is returned as a decimal string
+// (e.g. "56.31067961165048"), not a number — parse with parseFloat().
+//
+// IMPORTANT: the match-level `scoring_completed` aggregate is unreliable
+// upstream. Observed during SPSK Open 2026 (match 22/27190): every stage
+// reported 21-29% scored but the match-level field returned "0". A 0 here
+// froze the cache TTL on the 5-min "started, no scoring yet" tier and made
+// live matches feel stuck. We therefore also request `scoring_completed` on
+// each IpscStageNode and derive an effective match-level percentage from the
+// per-stage values whenever the match-level value looks broken (see
+// `effectiveMatchScoringPct` in lib/match-data.ts).
 //
 // `competitor(content_type, id)` at the top level returns 404 in practice.
 // All competitor/scorecard data is fetched via the event node.
@@ -216,8 +226,8 @@ export const MATCH_QUERY = `
       starts
       status
       results
-      scoring_completed
       ... on IpscMatchNode {
+        scoring_completed
         region
         sub_rule
         get_full_rule_display
@@ -256,6 +266,7 @@ export const MATCH_QUERY = `
             get_course_display
             procedure
             firearm_condition
+            scoring_completed
           }
         }
         competitors_approved_w_wo_results_not_dnf {
