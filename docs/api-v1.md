@@ -22,10 +22,11 @@ All examples below use `$TOKEN` as a placeholder for a valid bearer token (see
 |---|---|---|
 | GET | `/api/v1/events` | Match search / browse |
 | GET | `/api/v1/match/{ct}/{id}` | Full match overview |
+| GET | `/api/v1/match/{ct}/{id}/competitor/{competitorId}/stages` | Per-competitor stage results for one match |
 | GET | `/api/v1/shooter/search` | Name search over indexed shooter profiles |
 | GET | `/api/v1/shooter/{shooterId}` | Shooter dashboard (stats, achievements, recent matches) |
 
-All four endpoints accept only `GET`. Other methods return `405 Method Not Allowed`.
+All endpoints accept only `GET`. Other methods return `405 Method Not Allowed`.
 
 ---
 
@@ -157,6 +158,70 @@ refetch -- absent on this endpoint, present in the compare endpoint).
 curl -s -H "Authorization: Bearer $TOKEN" \
   "https://scoreboard.urdr.dev/api/v1/match/22/27190" \
   | jq '{name, scoring_completed, stages: (.stages | length), competitors: (.competitors | length)}'
+```
+
+---
+
+## `GET /api/v1/match/{ct}/{id}/competitor/{competitorId}/stages`
+
+Per-competitor, per-stage results for a single match: time, hit factor, points,
+hit-zone counts, penalties, and DQ flag. Mirrors the data the MCP
+`compare_competitors` and `get_stage_times` tools return, but published on the
+v1 contract.
+
+### Path parameters
+
+| Param | Type | Notes |
+|---|---|---|
+| `ct` | number | SSI Django content type. `22` for IPSC matches. |
+| `id` | number | SSI numeric match ID. |
+| `competitorId` | number | Per-match competitor ID (`competitors[].id` from the match endpoint). **Not** the global `shooterId`. |
+
+### Response
+
+`200 OK` with a `CompetitorStageResults` object:
+
+| Field | Type | Notes |
+|---|---|---|
+| `ct` | number | Echoed. |
+| `matchId` | number | Echoed. |
+| `competitorId` | number | Echoed. |
+| `shooterId` | number \| null | Globally stable shooter ID. `null` when SSI did not surface one. |
+| `division` | string \| null | Division this competitor was registered in for this match (may differ from the shooter's profile division). |
+| `stages` | `CompetitorStageResult[]` | One entry per match stage, ordered by `stage_number` ascending. Stages without a scorecard are emitted with all numeric fields `null` and `dq=false` so callers see a stable per-stage entry. |
+| `cacheInfo` | `CacheInfo` | `cachedAt` is the match-overview cache age; `scorecardsCachedAt` is the scorecards cache age and is the right signal during scoring. |
+
+`CompetitorStageResult` per-stage fields:
+
+| Field | Type | Notes |
+|---|---|---|
+| `stage_number` | number | |
+| `stage_id` | number | SSI stage ID (matches `MatchResponse.stages[].id`). |
+| `time_seconds` | number \| null | Raw stage time. `null` for unscored / DNF / missing timer reading. |
+| `scorecard_updated_at` | string \| null | ISO timestamp of the scorecard. Drives splitsmith's video-match window. |
+| `hit_factor` | number \| null | |
+| `stage_points` | number \| null | Includes penalty deductions. |
+| `stage_pct` | number \| null | HF as percent of the overall stage leader's HF (0-100). |
+| `alphas` | number \| null | A-zone hit count. |
+| `charlies` | number \| null | C-zone hit count. SSI combines B-zone into C; this field reflects that. |
+| `deltas` | number \| null | D-zone hit count. |
+| `misses` | number \| null | |
+| `no_shoots` | number \| null | |
+| `procedurals` | number \| null | |
+| `dq` | boolean | `true` for the stage on which the competitor was disqualified. |
+
+### Errors
+
+- `404 not_found` -- match does not exist, or the competitor is not registered in this match.
+- `400 bad_request` -- `ct`, `id`, or `competitorId` is not a number.
+- `502 upstream_failed` -- SSI unreachable.
+
+### Example
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "https://scoreboard.urdr.dev/api/v1/match/22/27190/competitor/12345/stages" \
+  | jq '{division, stages: (.stages | map({stage_number, time_seconds, hit_factor}))}'
 ```
 
 ---

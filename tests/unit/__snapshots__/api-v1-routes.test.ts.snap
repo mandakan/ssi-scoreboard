@@ -125,6 +125,72 @@ exports[`/api/v1/match/[ct]/[id] > returns the match payload through the v1 enve
 }
 `;
 
+exports[`/api/v1/match/[ct]/[id]/competitor/[competitorId]/stages > maps a 400 from the inner route to bad_request 1`] = `
+{
+  "error": {
+    "code": "bad_request",
+    "message": "Invalid ct, id, or competitorId",
+  },
+}
+`;
+
+exports[`/api/v1/match/[ct]/[id]/competitor/[competitorId]/stages > maps a 404 from the inner route to not_found 1`] = `
+{
+  "error": {
+    "code": "not_found",
+    "message": "Match or competitor not found",
+  },
+}
+`;
+
+exports[`/api/v1/match/[ct]/[id]/competitor/[competitorId]/stages > returns the per-competitor stage results through the v1 envelope 1`] = `
+{
+  "cacheInfo": {
+    "cachedAt": "2026-04-27T10:00:00Z",
+    "scorecardsCachedAt": "2026-04-27T10:00:05Z",
+  },
+  "competitorId": 101,
+  "ct": 22,
+  "division": "Production Optics",
+  "matchId": 27190,
+  "shooterId": 12345,
+  "stages": [
+    {
+      "alphas": 12,
+      "charlies": 0,
+      "deltas": 0,
+      "dq": false,
+      "hit_factor": 8.142,
+      "misses": 0,
+      "no_shoots": 0,
+      "procedurals": 0,
+      "scorecard_updated_at": "2026-04-26T09:14:32Z",
+      "stage_id": 5001,
+      "stage_number": 1,
+      "stage_pct": 100,
+      "stage_points": 150,
+      "time_seconds": 18.42,
+    },
+    {
+      "alphas": null,
+      "charlies": null,
+      "deltas": null,
+      "dq": false,
+      "hit_factor": null,
+      "misses": null,
+      "no_shoots": null,
+      "procedurals": null,
+      "scorecard_updated_at": null,
+      "stage_id": 5002,
+      "stage_number": 2,
+      "stage_pct": null,
+      "stage_points": null,
+      "time_seconds": null,
+    },
+  ],
+}
+`;
+
 exports[`/api/v1/shooter/[shooterId] > maps GDPR 410 to not_found preserving the 410 status code 1`] = `
 {
   "error": {
