@@ -876,6 +876,47 @@ export interface ShooterSearchResult {
   lastSeen: string;
 }
 
+// Per-stage result for one competitor at one match.
+// Returned by GET /api/v1/match/{ct}/{id}/competitor/{competitorId}/stages.
+// Stages with no scorecard for the competitor have all numeric fields set to
+// null (and dq=false), so callers see a stable entry per match stage.
+export interface CompetitorStageResult {
+  stage_number: number;
+  stage_id: number;
+  /** Raw stage time in seconds; null when the competitor has no scorecard for the stage. */
+  time_seconds: number | null;
+  /** ISO timestamp of when the scorecard was recorded; null when unknown. */
+  scorecard_updated_at: string | null;
+  hit_factor: number | null;
+  /** Stage points after penalties; null when unscored. */
+  stage_points: number | null;
+  /** HF as percent of the overall stage leader's HF (0-100); null when unscored. */
+  stage_pct: number | null;
+  alphas: number | null;
+  /** B-zone is combined into C in the SSI scoring model. */
+  charlies: number | null;
+  deltas: number | null;
+  misses: number | null;
+  no_shoots: number | null;
+  procedurals: number | null;
+  /** True for the stage on which the competitor was disqualified. */
+  dq: boolean;
+}
+
+// Response from GET /api/v1/match/{ct}/{id}/competitor/{competitorId}/stages.
+export interface CompetitorStageResults {
+  ct: number;
+  matchId: number;
+  competitorId: number;
+  /** Globally stable ShooterNode ID; null when SSI did not surface one. */
+  shooterId: number | null;
+  /** Division this competitor was registered in for this match. */
+  division: string | null;
+  /** One entry per match stage, ordered by stage_number ascending. */
+  stages: CompetitorStageResult[];
+  cacheInfo: CacheInfo;
+}
+
 // Re-export achievement types for convenience.
 export type {
   AchievementProgress,

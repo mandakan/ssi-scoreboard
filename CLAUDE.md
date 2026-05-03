@@ -290,6 +290,7 @@ routes the browser app uses are unauthenticated and have no contract. Only
 Endpoints (thin wrappers around the internal routes, see `app/api/v1/`):
 - `GET /api/v1/events` -- match search
 - `GET /api/v1/match/{ct}/{id}` -- match overview
+- `GET /api/v1/match/{ct}/{id}/competitor/{competitorId}/stages` -- per-competitor stage results
 - `GET /api/v1/shooter/search` -- name search
 - `GET /api/v1/shooter/{shooterId}` -- shooter dashboard
 

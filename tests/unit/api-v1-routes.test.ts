@@ -12,6 +12,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
+  CompetitorStageResults,
   EventSummary,
   MatchResponse,
   ShooterDashboardResponse,
@@ -34,11 +35,20 @@ const innerShooterSearch = vi.hoisted(() => vi.fn<(req: Request) => Promise<Resp
 const innerShooterDashboard = vi.hoisted(() =>
   vi.fn<(req: Request, ctx: { params: Promise<{ shooterId: string }> }) => Promise<Response>>(),
 );
+const innerCompetitorStages = vi.hoisted(() =>
+  vi.fn<(
+    req: Request,
+    ctx: { params: Promise<{ ct: string; id: string; competitorId: string }> },
+  ) => Promise<Response>>(),
+);
 
 vi.mock("@/app/api/events/route", () => ({ GET: innerEvents }));
 vi.mock("@/app/api/match/[ct]/[id]/route", () => ({ GET: innerMatch }));
 vi.mock("@/app/api/shooter/search/route", () => ({ GET: innerShooterSearch }));
 vi.mock("@/app/api/shooter/[shooterId]/route", () => ({ GET: innerShooterDashboard }));
+vi.mock("@/app/api/match/[ct]/[id]/competitor/[competitorId]/stages/route", () => ({
+  GET: innerCompetitorStages,
+}));
 
 const ORIGINAL_TOKENS = process.env.EXTERNAL_API_TOKENS;
 
@@ -50,6 +60,7 @@ beforeEach(() => {
   innerMatch.mockReset();
   innerShooterSearch.mockReset();
   innerShooterDashboard.mockReset();
+  innerCompetitorStages.mockReset();
 });
 
 afterEach(() => {
@@ -336,6 +347,115 @@ describe("/api/v1/shooter/[shooterId]", () => {
       { params: Promise.resolve({ shooterId: "12345" }) },
     );
     expect(res.status).toBe(410);
+    expect(await res.json()).toMatchSnapshot();
+  });
+});
+
+describe("/api/v1/match/[ct]/[id]/competitor/[competitorId]/stages", () => {
+  it("returns the per-competitor stage results through the v1 envelope", async () => {
+    const payload = {
+      ct: 22,
+      matchId: 27190,
+      competitorId: 101,
+      shooterId: 12345,
+      division: "Production Optics",
+      stages: [
+        {
+          stage_number: 1,
+          stage_id: 5001,
+          time_seconds: 18.42,
+          scorecard_updated_at: "2026-04-26T09:14:32Z",
+          hit_factor: 8.142,
+          stage_points: 150,
+          stage_pct: 100,
+          alphas: 12,
+          charlies: 0,
+          deltas: 0,
+          misses: 0,
+          no_shoots: 0,
+          procedurals: 0,
+          dq: false,
+        },
+        {
+          stage_number: 2,
+          stage_id: 5002,
+          time_seconds: null,
+          scorecard_updated_at: null,
+          hit_factor: null,
+          stage_points: null,
+          stage_pct: null,
+          alphas: null,
+          charlies: null,
+          deltas: null,
+          misses: null,
+          no_shoots: null,
+          procedurals: null,
+          dq: false,
+        },
+      ],
+      cacheInfo: {
+        cachedAt: "2026-04-27T10:00:00Z",
+        scorecardsCachedAt: "2026-04-27T10:00:05Z",
+      },
+    } satisfies CompetitorStageResults;
+    innerCompetitorStages.mockResolvedValue(
+      new Response(JSON.stringify(payload), { status: 200 }),
+    );
+
+    const { GET } = await import(
+      "@/app/api/v1/match/[ct]/[id]/competitor/[competitorId]/stages/route"
+    );
+    const res = await GET(
+      new Request("http://x/api/v1/match/22/27190/competitor/101/stages", {
+        headers: auth,
+      }),
+      {
+        params: Promise.resolve({ ct: "22", id: "27190", competitorId: "101" }),
+      },
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchSnapshot();
+  });
+
+  it("maps a 404 from the inner route to not_found", async () => {
+    innerCompetitorStages.mockResolvedValue(
+      new Response(JSON.stringify({ error: "Competitor not found in this match" }), {
+        status: 404,
+      }),
+    );
+    const { GET } = await import(
+      "@/app/api/v1/match/[ct]/[id]/competitor/[competitorId]/stages/route"
+    );
+    const res = await GET(
+      new Request("http://x/api/v1/match/22/27190/competitor/999/stages", {
+        headers: auth,
+      }),
+      {
+        params: Promise.resolve({ ct: "22", id: "27190", competitorId: "999" }),
+      },
+    );
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchSnapshot();
+  });
+
+  it("maps a 400 from the inner route to bad_request", async () => {
+    innerCompetitorStages.mockResolvedValue(
+      new Response(JSON.stringify({ error: "Invalid ct, id, or competitorId" }), {
+        status: 400,
+      }),
+    );
+    const { GET } = await import(
+      "@/app/api/v1/match/[ct]/[id]/competitor/[competitorId]/stages/route"
+    );
+    const res = await GET(
+      new Request("http://x/api/v1/match/abc/27190/competitor/101/stages", {
+        headers: auth,
+      }),
+      {
+        params: Promise.resolve({ ct: "abc", id: "27190", competitorId: "101" }),
+      },
+    );
+    expect(res.status).toBe(400);
     expect(await res.json()).toMatchSnapshot();
   });
 });
