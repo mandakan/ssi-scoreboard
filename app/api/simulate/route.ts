@@ -1,8 +1,29 @@
 import { NextResponse } from "next/server";
-import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY } from "@/lib/graphql";
+import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY, SCORECARDS_QUERY } from "@/lib/graphql";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
 import { applyAdjustmentsToScorecards } from "@/lib/simulate-apply";
+import { effectiveMatchScoringPct } from "@/lib/match-data";
+import { isMatchCompleteFromEvent } from "@/lib/match-ttl";
 import type { WhatIfSimulationRequest, WhatIfSimulationResponse } from "@/lib/types";
+
+// Shape returned when the route is invoked on a live (not-yet-complete) match.
+// Per #410 the route's whole-match computation is gated until completion. UI
+// callers should branch on `available` and render the empty-state when false.
+interface NotAvailableResponse {
+  available: false;
+  reason: "match-not-complete";
+}
+
+// Minimal shape used to evaluate match completeness without pulling scorecards.
+interface MatchEventForGate {
+  event: {
+    starts?: string | null;
+    status?: string | null;
+    results?: string | null;
+    scoring_completed?: string | number | null;
+    stages?: Array<{ scoring_completed?: string | number | null }>;
+  } | null;
+}
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -49,6 +70,41 @@ export async function POST(req: Request) {
   const ctNum = parseInt(ct, 10);
   if (isNaN(ctNum)) {
     return NextResponse.json({ error: "Invalid content_type" }, { status: 400 });
+  }
+
+  // Gate on match completion before pulling scorecards. The simulator
+  // computes ranks across the whole field, which is unavailable during the
+  // live per-competitor data path (#410). Match metadata is small and almost
+  // always cache-hit, so this adds negligible latency for live requests
+  // while saving the heavy whole-match scorecards fetch.
+  const matchKey = gqlCacheKey("GetMatch", { ct: ctNum, id });
+  let matchData: MatchEventForGate;
+  try {
+    ({ data: matchData } = await cachedExecuteQuery<MatchEventForGate>(
+      matchKey,
+      MATCH_QUERY,
+      { ct: ctNum, id },
+      30,
+    ));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Upstream error";
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
+  if (!matchData.event) {
+    return NextResponse.json({ error: "Match not found" }, { status: 404 });
+  }
+  const isComplete = isMatchCompleteFromEvent({
+    scoringPct: effectiveMatchScoringPct(matchData.event),
+    startDate: matchData.event.starts ?? null,
+    status: matchData.event.status,
+    resultsStatus: matchData.event.results,
+  });
+  if (!isComplete) {
+    const payload: NotAvailableResponse = {
+      available: false,
+      reason: "match-not-complete",
+    };
+    return NextResponse.json(payload);
   }
 
   // Fetch scorecards (reuses the same cache key as the compare route)

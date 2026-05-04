@@ -213,6 +213,19 @@ export async function GET(
     resultsPublished: matchData.event.results === "all",
   };
   const isComplete = isMatchComplete(scoringPct, daysSince, signals);
+
+  // Gate the route before doing any expensive work (scorecards fetch + LLM
+  // call). Per #410 coaching analysis depends on whole-field statistics that
+  // are unavailable during the live per-competitor data path. Returning
+  // { available: false } here saves the upstream scorecards round-trip and
+  // the AI inference cost for live requests.
+  if (!isComplete) {
+    return NextResponse.json({
+      available: false,
+      reason: "match-not-complete" as const,
+    });
+  }
+
   const matchName = matchData.event.name ?? "Unknown Match";
 
   // 5. Fetch scorecards (reuses existing Redis cache)

@@ -9,11 +9,14 @@ import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data
 import { computeFullFieldRankings } from "@/app/api/compare/logic";
 import { decodeShooterId } from "@/lib/shooter-index";
 import { effectiveMatchScoringPct } from "@/lib/match-data";
+import { isMatchCompleteFromEvent } from "@/lib/match-ttl";
 
 interface RawMatchData {
   event: {
     name: string;
     starts: string | null;
+    status?: string | null;
+    results?: string | null;
     level?: string | null;
     region?: string | null;
     get_full_rule_display?: string | null;
@@ -69,6 +72,24 @@ export async function GET(
 
   if (!matchData.event) {
     return NextResponse.json({ error: "Match not found" }, { status: 404 });
+  }
+
+  // Gate before pulling scorecards. The admin/data-lab full-field rankings
+  // endpoint requires whole-match data; per #410 we no longer fetch that
+  // during live (the per-competitor live path covers selected competitors
+  // only). Match metadata is small and almost always cache-hit, so this is
+  // a cheap pre-check that saves the heavy scorecards fetch on live calls.
+  const isComplete = isMatchCompleteFromEvent({
+    scoringPct: effectiveMatchScoringPct(matchData.event),
+    startDate: matchData.event.starts ?? null,
+    status: matchData.event.status,
+    resultsStatus: matchData.event.results,
+  });
+  if (!isComplete) {
+    return NextResponse.json({
+      available: false,
+      reason: "match-not-complete" as const,
+    });
   }
 
   // Load scorecards — auto-refreshes stale/missing entries from GraphQL
