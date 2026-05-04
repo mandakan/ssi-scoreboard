@@ -109,6 +109,41 @@ export function isMatchComplete(
 }
 
 /**
+ * High-level form of `isMatchComplete()` that takes the raw fields callers
+ * already have on hand (an effective scoring percentage, a start-date string
+ * or Date, the SSI status, and the SSI results status). Computes `daysSince`
+ * and the signals object internally so each call site doesn't repeat that
+ * arithmetic.
+ *
+ * Use this whenever you have a match-event-shaped object; reach for the
+ * primitive `isMatchComplete()` only when the inputs come from somewhere
+ * non-event-shaped (e.g. a synthetic test fixture).
+ */
+export interface MatchCompletionInputs {
+  /** Effective scoring percentage (0-100). Use `effectiveMatchScoringPct(ev)` to derive. */
+  scoringPct: number;
+  /** Match start date — accepts ISO string, Date, or null/undefined for unknown. */
+  startDate: string | Date | null | undefined;
+  /** SSI `event.status` field — pass through unchanged. */
+  status: string | null | undefined;
+  /** SSI `event.results` field — pass through unchanged. The helper handles the `=== "all"` check. */
+  resultsStatus: string | null | undefined;
+}
+
+export function isMatchCompleteFromEvent(input: MatchCompletionInputs): boolean {
+  const matchDate = input.startDate
+    ? input.startDate instanceof Date
+      ? input.startDate
+      : new Date(input.startDate)
+    : null;
+  const daysSince = matchDate ? (Date.now() - matchDate.getTime()) / 86_400_000 : 0;
+  return isMatchComplete(input.scoringPct, daysSince, {
+    status: input.status ?? null,
+    resultsPublished: input.resultsStatus === "all",
+  });
+}
+
+/**
  * Is the match scoring "settled enough" for downstream consumers that need
  * authoritative data — e.g. coaching tips, achievement evaluation? Distinct
  * from `isMatchComplete()`, which gates *permanent cache pinning* and so

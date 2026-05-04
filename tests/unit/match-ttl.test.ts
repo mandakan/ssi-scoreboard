@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { computeMatchTtl, computeMatchFreshness, isMatchComplete } from "@/lib/match-ttl";
+import {
+  computeMatchTtl,
+  computeMatchFreshness,
+  isMatchComplete,
+  isMatchCompleteFromEvent,
+} from "@/lib/match-ttl";
 
 const NOW = new Date("2025-06-15T12:00:00Z").getTime();
 
@@ -91,6 +96,91 @@ describe("isMatchComplete", () => {
   it("false for future matches", () => {
     expect(isMatchComplete(0, -1)).toBe(false);
     expect(isMatchComplete(0, -10)).toBe(false);
+  });
+});
+
+describe("isMatchCompleteFromEvent", () => {
+  it("computes daysSince from an ISO start-date string", () => {
+    expect(
+      isMatchCompleteFromEvent({
+        scoringPct: 99,
+        startDate: isoHoursFromNow(-100),
+        status: null,
+        resultsStatus: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("accepts a Date object as well as a string", () => {
+    expect(
+      isMatchCompleteFromEvent({
+        scoringPct: 99,
+        startDate: new Date(NOW - 100 * 3_600_000),
+        status: null,
+        resultsStatus: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("treats null/undefined startDate as daysSince=0 (inside the time gate)", () => {
+    expect(
+      isMatchCompleteFromEvent({
+        scoringPct: 100,
+        startDate: null,
+        status: "cp",
+        resultsStatus: "all",
+      }),
+    ).toBe(false);
+    expect(
+      isMatchCompleteFromEvent({
+        scoringPct: 100,
+        startDate: undefined,
+        status: "cp",
+        resultsStatus: "all",
+      }),
+    ).toBe(false);
+  });
+
+  it("maps resultsStatus === 'all' to resultsPublished signal", () => {
+    expect(
+      isMatchCompleteFromEvent({
+        scoringPct: 0,
+        startDate: isoHoursFromNow(-100),
+        status: null,
+        resultsStatus: "all",
+      }),
+    ).toBe(true);
+    expect(
+      isMatchCompleteFromEvent({
+        scoringPct: 0,
+        startDate: isoHoursFromNow(-100),
+        status: null,
+        resultsStatus: "org", // not "all" -> not published
+      }),
+    ).toBe(false);
+  });
+
+  it("preserves the cancelled-status terminal short-circuit", () => {
+    expect(
+      isMatchCompleteFromEvent({
+        scoringPct: 0,
+        startDate: isoHoursFromNow(-1),
+        status: "cs",
+        resultsStatus: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("preserves the time-gate protection against premature flag flips", () => {
+    // Skepplanda regression: mid-match SSI flips results=all but daysSince <= 3
+    expect(
+      isMatchCompleteFromEvent({
+        scoringPct: 99,
+        startDate: isoHoursFromNow(-48),
+        status: "cp",
+        resultsStatus: "all",
+      }),
+    ).toBe(false);
   });
 });
 
