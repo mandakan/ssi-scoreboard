@@ -12,9 +12,8 @@ import { isUpstreamDegraded } from "@/lib/upstream-status";
 import { afterResponse } from "@/lib/background-impl";
 
 import { extractDivision } from "@/lib/divisions";
-import { computeGroupRankings, computeMatchPointTotals, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, computeStageDegradationData, type RawScorecard } from "@/app/api/compare/logic";
+import { computeGroupRankings, computeMatchPointTotals, computePenaltyStats, computeCompetitorPPS, computeFieldPPSDistribution, computeConsistencyStats, computeLossBreakdown, simulateWithoutWorstStage, computeStyleFingerprint, computeAllFingerprintPoints, computePercentileRank, assignArchetype, computeStylePercentiles, classifyStageArchetype, computeArchetypePerformance, parseStageConstraints, computeCourseLengthPerformance, computeConstraintPerformance, computeStageDegradationData } from "@/app/api/compare/logic";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
-import { fetchSelectedCompetitorsScorecards } from "@/lib/scorecards-per-competitor";
 import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
 import type { CompareMode, CompareResponse, CompetitorInfo, FieldFingerprintPoint, StageComparison, StageConditions } from "@/lib/types";
 import { fetchMatchWeatherRaw, getHourlySnapshot } from "@/lib/weather";
@@ -177,132 +176,53 @@ export async function GET(req: Request) {
     }
   }
 
-  // Step 2 — fetch scorecards with a path that depends on match state.
-  //
-  // Per #410: live matches must NOT pull whole-match scorecards. We fan out
-  // `competitor_scorecards()` for the requested competitor IDs only. Whole-
-  // field statistics (group-of-everyone leader, division medians, overall
-  // ranks, etc.) are unavailable during live and surface as null. PR-C
-  // (#406) handles UI gating around those nulls.
-  //
-  // For completed matches we keep the existing whole-match path; PR-D (#404
-  // redesigned) replaces it with a per-stage archive fan-out.
+  // Step 2 — fetch scorecards with TTL determined by match state
   const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
-  let scorecardsCachedAt: string | null = null;
-  let rawScorecards: RawScorecard[];
-  let scorecardsRestricted = false;
+  let scorecardsData: RawScorecardsData;
+  let scorecardsCachedAt: string | null;
+  try {
+    ({ data: scorecardsData, cachedAt: scorecardsCachedAt } =
+      await cachedExecuteQuery<RawScorecardsData>(
+        scorecardsKey,
+        SCORECARDS_QUERY,
+        { ct: ctNum, id },
+        dataTtl,
+      ));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Upstream error";
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
 
-  if (isComplete) {
-    let scorecardsData: RawScorecardsData;
-    try {
-      ({ data: scorecardsData, cachedAt: scorecardsCachedAt } =
-        await cachedExecuteQuery<RawScorecardsData>(
+  // Upgrade scorecards cache entry TTL based on match state
+  try {
+    if (dataTtl === null) {
+      const raw = await cache.get(scorecardsKey);
+      if (raw) {
+        await cache.persist(scorecardsKey);
+        // Persist completed scorecard data to D1/SQLite for durable storage
+        afterResponse(persistToMatchStore(scorecardsKey, raw));
+      }
+    } else if (!scorecardsCachedAt) {
+      await cache.expire(scorecardsKey, dataTtl);
+    }
+  } catch (err) {
+    reportError("compare.scorecards-ttl-apply", err, { matchKey: scorecardsKey });
+  }
+
+  // SWR for scorecards (the slowest upstream call) — same single-flight pattern.
+  if (scorecardsCachedAt && dataTtl != null && matchFreshness != null) {
+    const age = (Date.now() - new Date(scorecardsCachedAt).getTime()) / 1000;
+    if (age > matchFreshness) {
+      afterResponse(
+        refreshCachedMatchQuery<RawScorecardsData>(
           scorecardsKey,
           SCORECARDS_QUERY,
           { ct: ctNum, id },
           dataTtl,
-        ));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Upstream error";
-      return NextResponse.json({ error: message }, { status: 502 });
-    }
-
-    // Upgrade scorecards cache entry TTL based on match state
-    try {
-      if (dataTtl === null) {
-        const raw = await cache.get(scorecardsKey);
-        if (raw) {
-          await cache.persist(scorecardsKey);
-          // Persist completed scorecard data to D1/SQLite for durable storage
-          afterResponse(persistToMatchStore(scorecardsKey, raw));
-        }
-      } else if (!scorecardsCachedAt) {
-        await cache.expire(scorecardsKey, dataTtl);
-      }
-    } catch (err) {
-      reportError("compare.scorecards-ttl-apply", err, { matchKey: scorecardsKey });
-    }
-
-    // SWR for scorecards (the slowest upstream call) — same single-flight pattern.
-    if (scorecardsCachedAt && dataTtl != null && matchFreshness != null) {
-      const age = (Date.now() - new Date(scorecardsCachedAt).getTime()) / 1000;
-      if (age > matchFreshness) {
-        afterResponse(
-          refreshCachedMatchQuery<RawScorecardsData>(
-            scorecardsKey,
-            SCORECARDS_QUERY,
-            { ct: ctNum, id },
-            dataTtl,
-            { ct: ctNum, id },
-          ),
-        );
-      }
-    }
-
-    if (!scorecardsData.event || !matchData.event) {
-      return NextResponse.json({ error: "Match not found" }, { status: 404 });
-    }
-    rawScorecards = parseRawScorecards(scorecardsData);
-
-    // SSI hides per-shot scorecard detail on Level I (club) matches: it returns
-    // a non-zero `scoring_completed` but an empty `scorecards` array. Surface
-    // that as an explicit flag so the client can render a clear notice instead
-    // of a blank comparison table.
-    scorecardsRestricted =
-      scoringPct > 0 &&
-      rawScorecards.length === 0 &&
-      (matchData.event.stages?.length ?? 0) > 0;
-  } else {
-    // Live: per-competitor fan-out. Resolve each requested competitor's
-    // content_type from the match data first; bail out cleanly if any are
-    // missing (would indicate stale match-cache without the new field).
-    const allCompetitorsRaw = matchData.event?.competitors_approved_w_wo_results_not_dnf ?? [];
-    const ctByCompetitorId = new Map<number, number>();
-    for (const c of allCompetitorsRaw) {
-      ctByCompetitorId.set(parseInt(c.id, 10), c.get_content_type_key);
-    }
-    const refs = competitorIds
-      .map((cid) => {
-        const ct = ctByCompetitorId.get(cid);
-        if (ct == null) return null;
-        return { ct, id: String(cid), numericId: cid };
-      })
-      .filter((r): r is { ct: number; id: string; numericId: number } => r !== null);
-
-    if (refs.length === 0) {
-      return NextResponse.json(
-        { error: "Selected competitors not found in this match" },
-        { status: 404 },
+          { ct: ctNum, id },
+        ),
       );
     }
-
-    const matchStageIds = new Set(
-      (matchData.event?.stages ?? []).map((s) => parseInt(s.id, 10)),
-    );
-
-    try {
-      const result = await fetchSelectedCompetitorsScorecards(refs, matchStageIds, dataTtl);
-      rawScorecards = result.scorecards;
-      // Use the most-recent cachedAt across the per-competitor entries — the
-      // freshness signal the live UI cares about.
-      const newest = result.cachedAts.reduce<string | null>((acc, t) => {
-        if (!t) return acc;
-        if (!acc) return t;
-        return new Date(t) > new Date(acc) ? t : acc;
-      }, null);
-      scorecardsCachedAt = newest;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Upstream error";
-      return NextResponse.json({ error: message }, { status: 502 });
-    }
-
-    if (!matchData.event) {
-      return NextResponse.json({ error: "Match not found" }, { status: 404 });
-    }
-
-    // The Level-I "restricted" detection requires whole-match data; during
-    // live we cannot tell whether scorecards are hidden or merely sparse.
-    scorecardsRestricted = false;
   }
 
   // Start match-global cache read early so the Redis round-trip can resolve
@@ -337,7 +257,7 @@ export async function GET(req: Request) {
 
   const tFetch = performance.now();
 
-  if (!matchData.event) {
+  if (!scorecardsData.event || !matchData.event) {
     return NextResponse.json({ error: "Match not found" }, { status: 404 });
   }
 
@@ -348,7 +268,6 @@ export async function GET(req: Request) {
       parseInt(c.id, 10),
       {
         id: parseInt(c.id, 10),
-        content_type: c.get_content_type_key,
         shooterId: decodeShooterId(c.shooter?.id),
         name: [c.first_name, c.last_name].filter(Boolean).join(" ") || "Unknown",
         competitor_number: c.number ?? "",
@@ -387,8 +306,18 @@ export async function GET(req: Request) {
     );
   });
 
-  // `rawScorecards` and `scorecardsRestricted` were populated above by the
-  // isComplete branch.
+  // Flatten ALL stage scorecards — not filtered to requested competitors.
+  // computeGroupRankings needs the full field to compute division and overall rankings.
+  const rawScorecards = parseRawScorecards(scorecardsData);
+
+  // SSI hides per-shot scorecard detail on Level I (club) matches: it returns
+  // a non-zero `scoring_completed` but an empty `scorecards` array. Surface
+  // that as an explicit flag so the client can render a clear notice instead
+  // of a blank comparison table.
+  const scorecardsRestricted =
+    scoringPct > 0 &&
+    rawScorecards.length === 0 &&
+    (matchData.event.stages?.length ?? 0) > 0;
 
   // Surface max(scorecard_created) so the client can show how stale the
   // upstream itself is, independent of our cache age. On an active match
@@ -422,11 +351,7 @@ export async function GET(req: Request) {
     ])
   );
 
-  let stages: StageComparison[] = computeGroupRankings(
-    rawScorecards,
-    requestedCompetitors,
-    { fullFieldAvailable: isComplete },
-  ).map(
+  let stages: StageComparison[] = computeGroupRankings(rawScorecards, requestedCompetitors).map(
     (s) => {
       const meta = stageMetaMap.get(s.stage_id);
       return {
@@ -475,30 +400,18 @@ export async function GET(req: Request) {
 
   const tRankings = performance.now();
 
-  // Match-point totals and field-PPS distribution both require the full
-  // field. During live (per-competitor fetch) we only have data for the
-  // selected shooters, so these become empty / null. PR-C gates the UI.
   const {
     divisionLeaderMatchPts,
     overallLeaderMatchPts,
     divisionMatchRanks,
     overallMatchRanks,
-  } = isComplete
-    ? computeMatchPointTotals(rawScorecards)
-    : {
-        divisionLeaderMatchPts: {},
-        overallLeaderMatchPts: null,
-        divisionMatchRanks: {},
-        overallMatchRanks: {},
-      };
+  } = computeMatchPointTotals(rawScorecards);
 
   const penaltyStats = Object.fromEntries(
     requestedCompetitors.map((c) => [c.id, computePenaltyStats(stages, c.id)])
   );
 
-  const fieldPPS = isComplete
-    ? computeFieldPPSDistribution(rawScorecards)
-    : { fieldMin: null, fieldMedian: null, fieldMax: null, fieldCount: 0 };
+  const fieldPPS = computeFieldPPSDistribution(rawScorecards);
   const efficiencyStats = Object.fromEntries(
     requestedCompetitors.map((c) => [
       c.id,
@@ -517,9 +430,7 @@ export async function GET(req: Request) {
     requestedCompetitors.map((c) => [c.id, computeLossBreakdown(stages, c.id)])
   );
 
-  // Coaching-only computations — skipped in live mode for faster responses,
-  // and additionally gated on `isComplete` per #410 since several depend on
-  // whole-field data that the per-competitor live path does not have.
+  // Coaching-only computations — skipped in live mode for faster responses
   let archetypePerformance: CompareResponse["archetypePerformance"] = null;
   let courseLengthPerformance: CompareResponse["courseLengthPerformance"] = null;
   let constraintPerformance: CompareResponse["constraintPerformance"] = null;
@@ -529,7 +440,7 @@ export async function GET(req: Request) {
   let stageDegradationData: CompareResponse["stageDegradationData"] = null;
   let stageConditions: CompareResponse["stageConditions"] = null;
 
-  if (mode === "coaching" && isComplete) {
+  if (mode === "coaching") {
     archetypePerformance = Object.fromEntries(
       requestedCompetitors.map((c) => [c.id, computeArchetypePerformance(stages, c.id)])
     );
@@ -597,7 +508,7 @@ export async function GET(req: Request) {
 
   const tPerCompetitor = performance.now();
 
-  if (mode === "coaching" && isComplete) {
+  if (mode === "coaching") {
     const rawGlobal = await matchGlobalCachePromise;
     let cachedPoints: FieldFingerprintPoint[] | undefined;
     if (rawGlobal) {

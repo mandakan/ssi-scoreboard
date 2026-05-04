@@ -36,13 +36,6 @@ export interface StageInfo {
 
 export interface CompetitorInfo {
   id: number;
-  /**
-   * SSI content_type integer for this competitor's underlying node type
-   * (e.g. IpscCompetitorNode). Required for `competitor_scorecards(ct, id)`
-   * lookups. Optional only because pre-redesign cached responses don't carry
-   * it; freshly-served responses always include it.
-   */
-  content_type?: number;
   /** Globally stable ShooterNode primary key — same person across all matches. Null if unavailable. */
   shooterId: number | null;
   name: string;
