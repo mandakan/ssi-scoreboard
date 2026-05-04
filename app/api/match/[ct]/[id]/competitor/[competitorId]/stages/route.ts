@@ -12,9 +12,15 @@ import { reportError } from "@/lib/error-telemetry";
 import { cachedExecuteQuery, gqlCacheKey, refreshCachedMatchQuery, SCORECARDS_QUERY } from "@/lib/graphql";
 import { fetchMatchData } from "@/lib/match-data";
 import { persistToMatchStore } from "@/lib/match-data-store";
-import { computeMatchFreshness, computeMatchSwrTtl } from "@/lib/match-ttl";
+import {
+  computeMatchFreshness,
+  computeMatchSwrTtl,
+  isMatchCompleteFromEvent,
+} from "@/lib/match-ttl";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
+import { fetchSelectedCompetitorsScorecards } from "@/lib/scorecards-per-competitor";
+import type { RawScorecard } from "@/app/api/compare/logic";
 import { maybeTagAsMcp } from "@/lib/telemetry-context";
 import { isUpstreamDegraded } from "@/lib/upstream-status";
 import { computeGroupRankings } from "@/app/api/compare/logic";
@@ -77,72 +83,162 @@ export async function GET(
     signals,
   );
 
-  const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
-  let scorecardsData: RawScorecardsData;
+  // Pick the fetch path based on whether the match is complete:
+  //  - complete  -> whole-match scorecards (will move to per-stage archive in PR-D)
+  //  - live      -> per-competitor scorecards via SSI's `competitor_scorecards()`,
+  //                 the SSI-blessed pattern after their 2026-05-04 announcement.
+  // During live, whole-field-derived fields like `stage_pct` are not available
+  // and surface as null; the UI surfaces this via the gate added in PR-C.
+  const isComplete = isMatchCompleteFromEvent({
+    scoringPct: match.scoring_completed,
+    startDate: match.date,
+    status: match.match_status,
+    resultsStatus: match.results_status,
+  });
+
+  let rawScorecards: RawScorecard[];
   let scorecardsCachedAt: string | null;
-  try {
-    ({ data: scorecardsData, cachedAt: scorecardsCachedAt } =
-      await cachedExecuteQuery<RawScorecardsData>(
-        scorecardsKey,
-        SCORECARDS_QUERY,
-        { ct: ctNum, id },
-        dataTtl,
-      ));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Upstream error";
-    return NextResponse.json({ error: message }, { status: 502 });
-  }
+  // Map of stage_id → CompetitorSummary (full or partial) for the requested
+  // competitor. Whole-field-derived members are null when running the live
+  // (per-competitor) path.
+  const summaryByStageId = new Map<number, CompetitorSummary>();
 
-  // Promote the scorecards cache TTL to match the resolved match state.
-  try {
-    if (dataTtl === null) {
-      const raw = await cache.get(scorecardsKey);
-      if (raw) {
-        await cache.persist(scorecardsKey);
-        afterResponse(persistToMatchStore(scorecardsKey, raw));
-      }
-    } else if (!scorecardsCachedAt) {
-      await cache.expire(scorecardsKey, dataTtl);
-    }
-  } catch (err) {
-    reportError("competitor-stages.scorecards-ttl-apply", err, {
-      matchKey: scorecardsKey,
-    });
-  }
-
-  // SWR for scorecards — single-flighted inside refreshCachedMatchQuery.
-  const matchFreshness = computeMatchFreshness(
-    match.scoring_completed,
-    daysSince,
-    match.date,
-    signals,
-  );
-  if (scorecardsCachedAt && dataTtl != null && matchFreshness != null) {
-    const age =
-      (Date.now() - new Date(scorecardsCachedAt).getTime()) / 1000;
-    if (age > matchFreshness) {
-      afterResponse(
-        refreshCachedMatchQuery<RawScorecardsData>(
+  if (isComplete) {
+    // Post-match: existing whole-match path.
+    const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
+    let scorecardsData: RawScorecardsData;
+    try {
+      ({ data: scorecardsData, cachedAt: scorecardsCachedAt } =
+        await cachedExecuteQuery<RawScorecardsData>(
           scorecardsKey,
           SCORECARDS_QUERY,
           { ct: ctNum, id },
           dataTtl,
-          { ct: ctNum, id },
-        ),
+        ));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Upstream error";
+      return NextResponse.json({ error: message }, { status: 502 });
+    }
+
+    // Promote the scorecards cache TTL to match the resolved match state.
+    try {
+      if (dataTtl === null) {
+        const raw = await cache.get(scorecardsKey);
+        if (raw) {
+          await cache.persist(scorecardsKey);
+          afterResponse(persistToMatchStore(scorecardsKey, raw));
+        }
+      } else if (!scorecardsCachedAt) {
+        await cache.expire(scorecardsKey, dataTtl);
+      }
+    } catch (err) {
+      reportError("competitor-stages.scorecards-ttl-apply", err, {
+        matchKey: scorecardsKey,
+      });
+    }
+
+    // SWR for scorecards — single-flighted inside refreshCachedMatchQuery.
+    const matchFreshness = computeMatchFreshness(
+      match.scoring_completed,
+      daysSince,
+      match.date,
+      signals,
+    );
+    if (scorecardsCachedAt && dataTtl != null && matchFreshness != null) {
+      const age =
+        (Date.now() - new Date(scorecardsCachedAt).getTime()) / 1000;
+      if (age > matchFreshness) {
+        afterResponse(
+          refreshCachedMatchQuery<RawScorecardsData>(
+            scorecardsKey,
+            SCORECARDS_QUERY,
+            { ct: ctNum, id },
+            dataTtl,
+            { ct: ctNum, id },
+          ),
+        );
+      }
+    }
+
+    rawScorecards = parseRawScorecards(scorecardsData);
+    const stageComparisons = computeGroupRankings(rawScorecards, [competitor]);
+    for (const stage of stageComparisons) {
+      const summary = stage.competitors[competitor.id];
+      if (summary) summaryByStageId.set(stage.stage_id, summary);
+    }
+  } else {
+    // Live: per-competitor scorecards only. We never pull other shooters'
+    // data, so whole-field stats are unavailable and surface as null.
+    if (competitor.content_type == null) {
+      return NextResponse.json(
+        { error: "Competitor metadata missing content_type — refresh the match" },
+        { status: 502 },
       );
     }
-  }
+    const matchStageIds = new Set(match.stages.map((s) => s.id));
+    try {
+      const result = await fetchSelectedCompetitorsScorecards(
+        [
+          {
+            ct: competitor.content_type,
+            id: String(competitor.id),
+            numericId: competitor.id,
+          },
+        ],
+        matchStageIds,
+        dataTtl,
+      );
+      rawScorecards = result.scorecards;
+      scorecardsCachedAt = result.cachedAts[0] ?? null;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Upstream error";
+      return NextResponse.json({ error: message }, { status: 502 });
+    }
 
-  const rawScorecards = parseRawScorecards(scorecardsData);
-  const stageComparisons = computeGroupRankings(rawScorecards, [competitor]);
+    // Build per-stage summaries from per-competitor data only. Whole-field
+    // fields (group/division/overall ranks and percents, classification) stay
+    // null until the match is complete.
+    const withTimestamps = rawScorecards
+      .filter((sc) => sc.scorecard_created)
+      .sort((a, b) => a.scorecard_created!.localeCompare(b.scorecard_created!));
+    const shootingOrderByStageId = new Map<number, number>();
+    withTimestamps.forEach((sc, i) =>
+      shootingOrderByStageId.set(sc.stage_id, i + 1),
+    );
 
-  // Build a stage_id → CompetitorSummary lookup. Stages with no scorecards in
-  // the field are absent from `stageComparisons`; we still emit them with null
-  // fields so callers see one entry per match stage.
-  const summaryByStageId = new Map<number, CompetitorSummary>();
-  for (const stage of stageComparisons) {
-    const summary = stage.competitors[competitor.id];
-    if (summary) summaryByStageId.set(stage.stage_id, summary);
+    for (const sc of rawScorecards) {
+      const penaltyLossPoints =
+        ((sc.miss_count ?? 0) + (sc.no_shoots ?? 0) + (sc.procedurals ?? 0)) * 10;
+      summaryByStageId.set(sc.stage_id, {
+        competitor_id: sc.competitor_id,
+        points: sc.points,
+        hit_factor: sc.hit_factor,
+        time: sc.time,
+        group_rank: null,
+        group_percent: null,
+        div_rank: null,
+        div_percent: null,
+        overall_rank: null,
+        overall_percent: null,
+        overall_percentile: null,
+        dq: sc.dq,
+        zeroed: sc.zeroed,
+        dnf: sc.dnf,
+        incomplete: sc.incomplete,
+        a_hits: sc.a_hits,
+        c_hits: sc.c_hits,
+        d_hits: sc.d_hits,
+        miss_count: sc.miss_count,
+        no_shoots: sc.no_shoots,
+        procedurals: sc.procedurals,
+        shooting_order: shootingOrderByStageId.get(sc.stage_id) ?? null,
+        divisionKey: sc.competitor_division ?? null,
+        stageClassification: null,
+        hitLossPoints: null,
+        penaltyLossPoints,
+        scorecard_created: sc.scorecard_created,
+      });
+    }
   }
 
   const sortedMatchStages = [...match.stages].sort(
