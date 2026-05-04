@@ -268,6 +268,7 @@ export async function GET(req: Request) {
       parseInt(c.id, 10),
       {
         id: parseInt(c.id, 10),
+        content_type: c.get_content_type_key,
         shooterId: decodeShooterId(c.shooter?.id),
         name: [c.first_name, c.last_name].filter(Boolean).join(" ") || "Unknown",
         competitor_number: c.number ?? "",

@@ -50,6 +50,10 @@ import {
   SCORECARDS_QUERY,
   SCORECARDS_DELTA_QUERY,
 } from "../lib/graphql";
+import {
+  COMPETITOR_SCORECARDS_QUERY,
+  COMPETITOR_SCORECARDS_COUNT_QUERY,
+} from "../lib/scorecards-per-competitor";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SNAPSHOT_PATH = resolve(__dirname, "ssi-schema-snapshot.json");
@@ -80,6 +84,8 @@ const QUERIES: { name: string; src: string }[] = [
   { name: "UPCOMING_STATUS_QUERY", src: UPCOMING_STATUS_QUERY },
   { name: "SCORECARDS_QUERY", src: SCORECARDS_QUERY },
   { name: "SCORECARDS_DELTA_QUERY", src: SCORECARDS_DELTA_QUERY },
+  { name: "COMPETITOR_SCORECARDS_QUERY", src: COMPETITOR_SCORECARDS_QUERY },
+  { name: "COMPETITOR_SCORECARDS_COUNT_QUERY", src: COMPETITOR_SCORECARDS_COUNT_QUERY },
 ];
 
 export function loadSnapshot(): Snapshot {

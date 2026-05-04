@@ -39,6 +39,38 @@
       ]
     },
     {
+      "name": "competitor_scorecards",
+      "type": "[ScoreCardInterface!]!",
+      "args": [
+        {
+          "name": "content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "id",
+          "type": "String!"
+        },
+        {
+          "name": "updated_after",
+          "type": "String!"
+        }
+      ]
+    },
+    {
+      "name": "competitor_scorecards_count",
+      "type": "Int!",
+      "args": [
+        {
+          "name": "content_type",
+          "type": "Int!"
+        },
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
+    },
+    {
       "name": "event",
       "type": "EventInterface!",
       "args": [

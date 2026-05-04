@@ -271,6 +271,7 @@ export async function fetchMatchData(
     ev.competitors_approved_w_wo_results_not_dnf ?? []
   ).map((c) => ({
     id: parseInt(c.id, 10),
+    content_type: c.get_content_type_key,
     shooterId: decodeShooterId(c.shooter?.id),
     name: [c.first_name, c.last_name].filter(Boolean).join(" ") || "Unknown",
     competitor_number: c.number ?? "",
