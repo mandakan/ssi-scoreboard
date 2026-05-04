@@ -646,10 +646,25 @@ export function computeFullFieldRankings(
  *   - DNF (stage not fired) → null rank/percent
  *   - Ties share the same rank; next rank skips
  */
+export interface ComputeGroupRankingsOptions {
+  /**
+   * Set to `false` when `allScorecards` only contains the selected competitors'
+   * data (per-competitor live fetch path -- see #410). Causes overall/division
+   * field statistics to be omitted (null) since they cannot be computed without
+   * the rest of the field. Group rankings within `selectedCompetitors` remain
+   * fully populated.
+   *
+   * Default: true (back-compat with the whole-match path).
+   */
+  fullFieldAvailable?: boolean;
+}
+
 export function computeGroupRankings(
   allScorecards: RawScorecard[],
-  selectedCompetitors: CompetitorInfo[]
+  selectedCompetitors: CompetitorInfo[],
+  opts: ComputeGroupRankingsOptions = {}
 ): StageComparison[] {
+  const fullFieldAvailable = opts.fullFieldAvailable ?? true;
   const selectedIds = new Set(selectedCompetitors.map((c) => c.id));
 
   // Pre-compute per-competitor shooting order for selected competitors.
@@ -699,59 +714,83 @@ export function computeGroupRankings(
     const { rankMap: groupRankMap, leaderHF: groupLeaderHF } =
       rankByHF(groupScorecards);
 
-    // Overall rankings — all competitors across all divisions
-    const { rankMap: overallRankMap, leaderHF: overallLeaderHF } =
-      rankByHF(allStage);
-    // N for percentile: number of non-DNF competitors in the full field on this stage
-    const overallN = overallRankMap.size;
+    // Overall / division / field stats only make sense when we actually have
+    // the full field. During the per-competitor live path (#410), `allStage`
+    // contains *only* the selected competitors, so computing field statistics
+    // from it would lie about cohort size and leader benchmarks. Surface them
+    // as null instead — the UI gate (PR-C / #406) handles the messaging.
+    let overallRankMap: Map<number, number>;
+    let overallLeaderHF: number | null;
+    let overallN: number;
+    let fieldMedianHF: number | null;
+    let fieldCompetitorCount: number;
+    let fieldMedianAccuracy: number | null;
+    let fieldCV: number | null;
+    let divResults: Map<string, { rankMap: Map<number, number>; leaderHF: number | null }>;
+    let divisionDistributions: Record<string, DivisionHFDistribution>;
 
-    // Full-field median HF (excluding DNF/DQ/zeroed)
-    const { median: fieldMedianHF, count: fieldCompetitorCount } =
-      medianHF(allStage);
-    const fieldMedianAccuracy = medianAccuracy(allStage); // FEATURE: accuracy-metric
-    const fieldCV = stageCV(allStage);                    // FEATURE: separator-metric
+    if (fullFieldAvailable) {
+      // Overall rankings — all competitors across all divisions
+      ({ rankMap: overallRankMap, leaderHF: overallLeaderHF } =
+        rankByHF(allStage));
+      // N for percentile: number of non-DNF competitors in the full field on this stage
+      overallN = overallRankMap.size;
 
-    // Division rankings — group by division string, rank within each
-    const byDivision = new Map<string, RawScorecard[]>();
-    for (const sc of allStage) {
-      const key = sc.competitor_division ?? "__none__";
-      const existing = byDivision.get(key) ?? [];
-      existing.push(sc);
-      byDivision.set(key, existing);
-    }
-    const divResults = new Map<
-      string,
-      { rankMap: Map<number, number>; leaderHF: number | null }
-    >();
-    for (const [div, divCards] of byDivision) {
-      divResults.set(div, rankByHF(divCards));
-    }
+      // Full-field median HF (excluding DNF/DQ/zeroed)
+      ({ median: fieldMedianHF, count: fieldCompetitorCount } =
+        medianHF(allStage));
+      fieldMedianAccuracy = medianAccuracy(allStage); // FEATURE: accuracy-metric
+      fieldCV = stageCV(allStage);                    // FEATURE: separator-metric
 
-    // Per-division HF distributions (quartiles as % of division leader HF)
-    const divisionDistributions: Record<string, DivisionHFDistribution> = {};
-    for (const [div, divCards] of byDivision) {
-      if (div === "__none__") continue;
-      const divInfo = divResults.get(div);
-      const leaderHF = divInfo?.leaderHF;
-      if (!leaderHF || leaderHF <= 0) continue;
-      const validPcts = divCards
-        .filter(
-          (sc) =>
-            !sc.dnf && !sc.dq && !sc.zeroed &&
-            sc.hit_factor != null && sc.hit_factor > 0
-        )
-        .map((sc) => (sc.hit_factor! / leaderHF) * 100)
-        .sort((a, b) => a - b);
-      if (validPcts.length < 2) continue;
-      const q = computeQuartiles(validPcts);
-      if (!q) continue;
-      divisionDistributions[div] = {
-        minPct: validPcts[0],
-        q1Pct: q.q1,
-        medianPct: q.median,
-        q3Pct: q.q3,
-        count: validPcts.length,
-      };
+      // Division rankings — group by division string, rank within each
+      const byDivision = new Map<string, RawScorecard[]>();
+      for (const sc of allStage) {
+        const key = sc.competitor_division ?? "__none__";
+        const existing = byDivision.get(key) ?? [];
+        existing.push(sc);
+        byDivision.set(key, existing);
+      }
+      divResults = new Map();
+      for (const [div, divCards] of byDivision) {
+        divResults.set(div, rankByHF(divCards));
+      }
+
+      // Per-division HF distributions (quartiles as % of division leader HF)
+      divisionDistributions = {};
+      for (const [div, divCards] of byDivision) {
+        if (div === "__none__") continue;
+        const divInfo = divResults.get(div);
+        const leaderHF = divInfo?.leaderHF;
+        if (!leaderHF || leaderHF <= 0) continue;
+        const validPcts = divCards
+          .filter(
+            (sc) =>
+              !sc.dnf && !sc.dq && !sc.zeroed &&
+              sc.hit_factor != null && sc.hit_factor > 0
+          )
+          .map((sc) => (sc.hit_factor! / leaderHF) * 100)
+          .sort((a, b) => a - b);
+        if (validPcts.length < 2) continue;
+        const q = computeQuartiles(validPcts);
+        if (!q) continue;
+        divisionDistributions[div] = {
+          minPct: validPcts[0],
+          q1Pct: q.q1,
+          medianPct: q.median,
+          q3Pct: q.q3,
+          count: validPcts.length,
+        };
+      }
+    } else {
+      overallRankMap = new Map();
+      overallLeaderHF = null;
+      overallN = 0;
+      fieldMedianHF = null;
+      fieldCompetitorCount = 0;
+      fieldMedianAccuracy = null;
+      fieldCV = null;
+      divResults = new Map();
+      divisionDistributions = {};
     }
 
     // group_leader_points kept for the benchmark overlay hook (issue #1)

@@ -157,6 +157,82 @@ describe("computeGroupRankings — group rankings", () => {
   });
 });
 
+describe("computeGroupRankings — fullFieldAvailable=false (live per-competitor)", () => {
+  // Per #410 the live path passes only the selected competitors' scorecards
+  // and sets fullFieldAvailable: false. Whole-field-derived stats must come
+  // back null so callers (and the UI gate in PR-C / #406) can render an
+  // "unavailable during live" notice instead of stats computed against a
+  // non-representative cohort.
+
+  it("nullifies overall, division, and field stats when fullFieldAvailable is false", () => {
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 5.0, points: 100 }),
+      makeCard(2, 1, { hit_factor: 4.0, points: 80 }),
+    ];
+    const result = computeGroupRankings(
+      scorecards,
+      [competitors[0], competitors[1]],
+      { fullFieldAvailable: false },
+    );
+    expect(result).toHaveLength(1);
+    const stage = result[0];
+    expect(stage.overall_leader_hf).toBeNull();
+    expect(stage.field_median_hf).toBeNull();
+    expect(stage.field_median_accuracy).toBeNull();
+    expect(stage.field_cv).toBeNull();
+    expect(stage.field_competitor_count).toBe(0);
+    expect(stage.divisionDistributions).toEqual({});
+  });
+
+  it("preserves group-rank / group-leader / group-percent within selected", () => {
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 5.0, points: 100 }),
+      makeCard(2, 1, { hit_factor: 4.0, points: 80 }),
+    ];
+    const stage = computeGroupRankings(
+      scorecards,
+      [competitors[0], competitors[1]],
+      { fullFieldAvailable: false },
+    )[0];
+    expect(stage.group_leader_hf).toBe(5.0);
+    expect(stage.group_leader_points).toBe(100);
+    expect(stage.competitors[1].group_rank).toBe(1);
+    expect(stage.competitors[2].group_rank).toBe(2);
+    expect(stage.competitors[1].group_percent).toBeCloseTo(100, 5);
+    expect(stage.competitors[2].group_percent).toBeCloseTo(80, 5);
+  });
+
+  it("nullifies per-competitor overall and division ranks/percents", () => {
+    const scorecards = [makeCard(1, 1, { hit_factor: 5.0 })];
+    const stage = computeGroupRankings(
+      scorecards,
+      [competitors[0]],
+      { fullFieldAvailable: false },
+    )[0];
+    expect(stage.competitors[1].overall_rank).toBeNull();
+    expect(stage.competitors[1].overall_percent).toBeNull();
+    expect(stage.competitors[1].overall_percentile).toBeNull();
+    expect(stage.competitors[1].div_rank).toBeNull();
+    expect(stage.competitors[1].div_percent).toBeNull();
+  });
+
+  it("default fullFieldAvailable=true preserves whole-field behaviour", () => {
+    const scorecards = [
+      makeCard(1, 1, { hit_factor: 5.0, points: 100 }),
+      makeCard(2, 1, { hit_factor: 4.0, points: 80 }),
+    ];
+    const stage = computeGroupRankings(
+      scorecards,
+      [competitors[0]], // only Alice selected; Bob is part of "field"
+    )[0];
+    // Without the flag, field stats should be present.
+    expect(stage.overall_leader_hf).toBe(5.0);
+    expect(stage.field_competitor_count).toBeGreaterThan(0);
+    // Alice is overall #1 (5.0 HF beats Bob's 4.0)
+    expect(stage.competitors[1].overall_rank).toBe(1);
+  });
+});
+
 describe("computeGroupRankings — division rankings", () => {
   it("ranks each competitor within their own division", () => {
     // Alice (hg1) and Charlie (hg1) compete within hg1
