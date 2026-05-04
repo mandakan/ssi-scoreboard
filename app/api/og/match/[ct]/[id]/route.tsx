@@ -137,7 +137,7 @@ export async function GET(
       ? singleCompetitorImage(match, selectedCompetitors[0], statsMap)
       : variant === "multi"
         ? multiCompetitorImage(match, selectedCompetitors, statsMap)
-        : matchOverviewImage(match);
+        : matchOverviewImage(match, isComplete);
 
   usageTelemetry({
     op: "og-render",
@@ -368,15 +368,15 @@ function matchContext(match: OgMatchData): string {
 // ── Image variants ──────────────────────────────────────────────────────
 
 /** Match overview — no competitors selected. Shows match metadata + stats. */
-function matchOverviewImage(match: OgMatchData) {
+function matchOverviewImage(match: OgMatchData, isComplete: boolean) {
   const subtitle = matchSubtitle(match);
   const scored = match.scoringCompleted;
-  const statusText =
-    scored >= 95
-      ? "Results complete"
-      : scored > 0
-        ? `Scoring in progress (${String(scored)}%)`
-        : "Upcoming match";
+  const liveStatus = !isComplete && scored > 0;
+  const statusText = isComplete
+    ? "Results complete"
+    : liveStatus
+      ? `Scoring in progress (${String(scored)}%)`
+      : "Upcoming match";
 
   return (
     <div
@@ -415,7 +415,10 @@ function matchOverviewImage(match: OgMatchData) {
             justifyContent: "space-between",
           }}
         >
-          {brandHeader()}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+            {brandHeader()}
+            {liveStatus ? pill("LIVE", "#ef4444") : null}
+          </div>
 
           {/* Main content — match name and subtitle */}
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>

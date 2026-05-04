@@ -683,6 +683,14 @@ export interface WhatIfSimulationResponse {
   newMatchAvgOverallPercent: number | null;
   newDivRank:                number | null;
   newOverallRank:            number | null;
+  /**
+   * Set when the route declined to compute results because the match isn't
+   * complete yet. When present, all other fields are absent and consumers
+   * should render an "available after match completes" state instead of
+   * displaying numeric output. See #410.
+   */
+  available?: false;
+  reason?: "match-not-complete";
 }
 
 // ── Backfill ─────────────────────────────────────────────────────────────────
@@ -937,12 +945,20 @@ export type {
 // ── AI Coaching Tips ─────────────────────────────────────────────────────────
 
 export interface CoachingTipResponse {
-  tip: string;                // 1–2 sentence coaching insight
-  generatedAt: string;        // ISO timestamp of generation
-  model: string;              // model identifier used (e.g. "@cf/meta/llama-3.1-8b-instruct")
-  competitorId: number;
-  matchId: string;
-  ct: string;
+  tip?: string;                // 1–2 sentence coaching insight (absent when available === false)
+  generatedAt?: string;        // ISO timestamp of generation
+  model?: string;              // model identifier used (e.g. "@cf/meta/llama-3.1-8b-instruct")
+  competitorId?: number;
+  matchId?: string;
+  ct?: string;
+  /**
+   * Set when the coaching route declined to compute a tip because the match
+   * isn't complete yet. When present, the other fields are absent and
+   * consumers should render an "available after match completes" empty
+   * state instead of treating the response as a tip. See #410.
+   */
+  available?: false;
+  reason?: "match-not-complete";
 }
 
 export interface CoachingAvailability {

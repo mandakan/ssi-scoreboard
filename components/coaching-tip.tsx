@@ -72,7 +72,15 @@ function TipPanel({ ct, id, competitorId, competitorName, mode, autoFetch }: Tip
     );
   }
 
-  if (data) {
+  if (data?.available === false) {
+    return (
+      <p className="text-sm text-muted-foreground italic">
+        Available after match completes
+      </p>
+    );
+  }
+
+  if (data?.tip) {
     return <p className="text-sm leading-relaxed">{data.tip}</p>;
   }
 

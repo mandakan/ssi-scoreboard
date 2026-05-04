@@ -769,8 +769,14 @@ export function StageSimulator({ ct, id, data, competitors, scoringCompleted }: 
                       deltaPositive={simMatch ? (simMatch.matchPctDelta ?? 0) > 0 : null}
                     />
                   )}
-                  {/* Div / overall rank — always shown; current from whatIfStats, simulated from server */}
-                  {(() => {
+                  {/* Div / overall rank — always shown; current from whatIfStats, simulated from server.
+                      Hidden during live matches (server returns { available: false }) since rank
+                      simulation requires whole-field data. Per #410. */}
+                  {serverRank?.available === false ? (
+                    <p className="text-xs text-muted-foreground italic pt-1">
+                      Available after match completes
+                    </p>
+                  ) : (() => {
                     const currentDivRank = data.whatIfStats?.[selectedComp.id]?.actualDivRank ?? null;
                     const currentOverallRank = data.whatIfStats?.[selectedComp.id]?.actualOverallRank ?? null;
                     const simDivRank = serverRank?.newDivRank ?? null;

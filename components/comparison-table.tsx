@@ -1171,6 +1171,14 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
     return { ...t, matchPct, matchRank };
   });
 
+  // During live the compare route only fetches the selected competitors'
+  // scorecards (per #410), so every stage's whole-field median is null and
+  // any "vs the field" benchmark cannot be computed. Detect that purely
+  // from the data shape and surface a single-line notice — rather than
+  // letting the absent values silently look like a stale or broken table.
+  const fieldStatsUnavailable =
+    stages.length > 0 && stages.every((s) => s.field_median_hf == null);
+
   return (
     <div className="space-y-3">
       {/* Match-level DQ banners */}
@@ -1184,6 +1192,15 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
           <span>— Disqualified from match</span>
         </div>
       ))}
+
+      {fieldStatsUnavailable && (
+        <p
+          role="status"
+          className="text-xs text-muted-foreground italic"
+        >
+          Stage-winner benchmarks and field rankings: available after match completes
+        </p>
+      )}
 
       {/* View mode toggle (Absolute / Delta) + percentage context + help */}
       {/* Toolbar wraps on narrow screens — at 390px the three view-mode
