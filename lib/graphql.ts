@@ -120,6 +120,7 @@ async function executeQueryOnce<T>(
       headers: {
         "Content-Type": "application/json",
         Authorization: `Api-Key ${apiKey}`,
+        "x-api-key": apiKey,
       },
       body: JSON.stringify({ query, variables }),
       cache: revalidate === false ? "no-store" : undefined,
