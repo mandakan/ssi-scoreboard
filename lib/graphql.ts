@@ -890,16 +890,12 @@ export async function cachedExecuteQuery<T>(
 }
 
 // ─── Shared scorecard field set ──────────────────────────────────────────────
-// CRITICAL: SCORECARDS_QUERY, SCORECARDS_DELTA_QUERY, and
-// COMPETITOR_SCORECARDS_QUERY MUST request the same scorecard fields. The delta
-// merge (#362, lib/scorecard-merge.ts) writes delta entries into the cached
-// full snapshot — if the delta is missing fields the full query has, the merge
-// silently corrupts the cached entry. The per-competitor query in
-// lib/scorecards-per-competitor.ts feeds the same RawScorecard parser, so it
-// must project the same field set too.
+// CRITICAL: SCORECARDS_QUERY and SCORECARDS_DELTA_QUERY MUST request the same
+// scorecard fields. The delta merge (#362, lib/scorecard-merge.ts) writes
+// delta entries into the cached full snapshot — if the delta is missing fields
+// the full query has, the merge silently corrupts the cached entry.
 //
-// This shared constant is interpolated into all three queries so they CANNOT
-// drift. Exported so the per-competitor module can reuse it without copying.
+// This shared constant is interpolated into both queries so they CANNOT drift.
 //
 // When adding a scorecard field, see CLAUDE.md → "Delta-merge contract" for
 // the full list of files that must be updated together. In short:
@@ -909,7 +905,7 @@ export async function cachedExecuteQuery<T>(
 //   4. Copy in deltaToCacheCard() (lib/scorecard-merge.ts)
 //   5. Bump CACHE_SCHEMA_VERSION (lib/constants.ts)
 //   6. Run `pnpm check:ssi-schema --update` and commit the snapshot diff
-export const SCORECARD_NODE_FIELDS = `
+const SCORECARD_NODE_FIELDS = `
   ... on IpscScoreCardNode {
     created
     points
