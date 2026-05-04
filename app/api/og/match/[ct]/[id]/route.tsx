@@ -63,18 +63,14 @@ export async function GET(
         .filter((n) => Number.isFinite(n) && n > 0)
     : [];
 
-  // Run match-data and compare-data fetches in parallel.
-  // Stats are fetched directly from the scorecard cache — no HTTP subrequest
-  // needed. CF Workers stateless model spawns a new Worker invocation per
-  // subrequest, giving it a separate CPU budget that the compare endpoint can
-  // exhaust. Fetching scorecards inline avoids that entirely.
-  // Social-media crawlers are patient — allow up to 15s for cold-cache.
-  const [match, prefetchedStats] = await Promise.all([
-    fetchOgMatchData(ct, id, 15_000),
-    rawCompetitorIds.length > 0
-      ? fetchOgCompareStats(ct, id, rawCompetitorIds, 14_000)
-      : Promise.resolve(null),
-  ]);
+  // Match data first, then conditionally stats. Per #410 we no longer pull
+  // whole-match scorecards during live, so stats are fetched only when the
+  // match is complete. We lose the parallelism the previous Promise.all
+  // gave us, but match metadata is small and almost always cache-hit (the
+  // social-media crawler hits OG after a normal page-view warmed the
+  // cache), so the sequential cost is negligible compared to skipping the
+  // whole-match scorecards fetch entirely on live matches.
+  const match = await fetchOgMatchData(ct, id, 15_000);
 
   const ctNum = parseInt(ct, 10);
 
@@ -99,6 +95,14 @@ export async function GET(
     status: match.matchStatus,
     resultsPublished: match.resultsStatus === "all",
   });
+
+  // Stats need whole-field data; fetch only when the match is complete.
+  // Live OG renders the no-stats variant (renderers already handle that
+  // path for cold-cache cases). PR-C-3 will add per-competitor live OG.
+  const prefetchedStats =
+    rawCompetitorIds.length > 0 && isComplete
+      ? await fetchOgCompareStats(ct, id, rawCompetitorIds, 14_000)
+      : null;
 
   // Resolve which of the requested IDs actually exist in the match.
   const selectedCompetitors = rawCompetitorIds

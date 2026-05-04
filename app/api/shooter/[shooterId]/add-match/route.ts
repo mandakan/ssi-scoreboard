@@ -11,7 +11,7 @@
  */
 import { NextResponse } from "next/server";
 import { reportError } from "@/lib/error-telemetry";
-import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY, SCORECARDS_QUERY } from "@/lib/graphql";
+import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
 import { computeMatchTtl } from "@/lib/match-ttl";
 import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
 import { parseMatchUrl } from "@/lib/utils";
@@ -19,10 +19,6 @@ import { extractDivision } from "@/lib/divisions";
 import db from "@/lib/db-impl";
 import cache from "@/lib/cache-impl";
 import { effectiveMatchScoringPct, type RawMatchData } from "@/lib/match-data";
-
-interface RawScorecardsResponse {
-  event: unknown;
-}
 
 export async function POST(
   req: Request,
@@ -106,13 +102,10 @@ export async function POST(
 
   const matchName = matchData.event.name;
 
-  // Also fetch scorecards to enable full indexing
-  try {
-    const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
-    await cachedExecuteQuery<RawScorecardsResponse>(scorecardsKey, SCORECARDS_QUERY, { ct: ctNum, id }, null);
-  } catch {
-    // Non-fatal — scorecards may not be available for all matches
-  }
+  // Note: per #410 we no longer pre-warm whole-match scorecards here. The
+  // shooter index only needs match metadata to record which shooters
+  // appeared in this match. Live matches that the user adds will fetch
+  // per-competitor scorecards on demand from the shooter dashboard.
 
   // Build competitor list and index ALL competitors
   const rawCompetitors = matchData.event.competitors_approved_w_wo_results_not_dnf ?? [];
