@@ -74,7 +74,7 @@ async function introspectType(typeName: string, endpoint: string, token: string)
   const query = `{ __type(name: "${typeName}") { fields { name type { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind } } } } } args { name type { name kind ofType { name kind ofType { name kind ofType { name kind } } } } } } } }`;
   const r = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Token ${token}` },
+    headers: { "Content-Type": "application/json", Authorization: `Token ${token}`, "x-api-key": token },
     body: JSON.stringify({ query }),
   });
   if (!r.ok) throw new Error(`SSI HTTP ${r.status}`);
