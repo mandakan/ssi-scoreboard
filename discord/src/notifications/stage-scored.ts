@@ -93,6 +93,25 @@ async function pollGuildWatch(
     trackedCompetitors.map((c) => c.competitorId),
   );
 
+  // SSI withholds per-stage scorecards while results visibility is "org" (live
+  // matches). stages will be empty; skip detection and let the auto-unwatch
+  // below fire when scoring eventually completes. Preserved: if SSI reinstates
+  // live scorecard access, remove this early-return and detection resumes.
+  if (compareResult.scorecardsRestricted) {
+    if (isMatchDone(match.scoring_completed, match.date)) {
+      await env.BOT_KV.delete(watchKey(guildId));
+      const label = match.scoring_completed >= 95
+        ? `**${state.matchName}** is fully scored!`
+        : `**${state.matchName}** appears to be done (${match.scoring_completed}% scored, match date passed).`;
+      await postChannelMessage(
+        env.DISCORD_BOT_TOKEN,
+        state.channelId,
+        `${label} Stopped watching.\nFull results: ${env.SCOREBOARD_BASE_URL}/match/${state.matchCt}/${state.matchId}`,
+      );
+    }
+    return;
+  }
+
   // Detect newly scored stages per competitor
   const newScores: NewStageScore[] = [];
   const updatedNotified = { ...state.notifiedStages };

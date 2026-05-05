@@ -133,6 +133,23 @@ export async function handleWatch(
       ? `${fullMatch.scoring_completed}% scored`
       : "Not started yet";
 
+  // SSI currently withholds per-stage scorecards while a match is live, so
+  // live stage notifications are unavailable until scoring completes. The watch
+  // state is stored anyway so results post automatically once done. If SSI
+  // reinstates live access, this branch can be removed to restore real-time
+  // notifications.
+  const isLive =
+    fullMatch.scoring_completed < 95 &&
+    (() => {
+      if (!fullMatch.date) return true;
+      const daysSince =
+        (Date.now() - new Date(fullMatch.date).getTime()) / (1000 * 60 * 60 * 24);
+      return daysSince <= 3;
+    })();
+  const footerText = isLive
+    ? "Detailed results will post once scoring is complete. Use /unwatch to cancel."
+    : "I'll post here when these shooters finish a stage. Use /unwatch to stop.";
+
   const embed: APIEmbed = {
     title: `Now watching: ${matchName}`,
     url: matchUrl,
@@ -143,10 +160,7 @@ export async function handleWatch(
       { name: "Competitors", value: String(fullMatch.competitors_count), inline: true },
       { name: "Tracking", value: trackedNames.join(", "), inline: false },
     ],
-    footer: {
-      text:
-        "I'll post here when these shooters finish a stage. Use /unwatch to stop.",
-    },
+    footer: { text: footerText },
   };
 
   return { content: "", embeds: [embed] };
