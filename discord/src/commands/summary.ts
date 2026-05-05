@@ -92,6 +92,20 @@ export async function handleSummary(
     tracked.map((t) => t.competitorId),
   );
 
+  // SSI withholds per-stage scorecards while a match is live. Return a holding
+  // message instead of an empty table. Preserved: remove this gate if SSI
+  // reinstates live scorecard access.
+  if (compareResult.scorecardsRestricted) {
+    const matchUrl = `${baseUrl}/match/${matchCt}/${matchId}`;
+    return {
+      content:
+        `**${matchName}** is currently in progress (${match.scoring_completed}% scored).\n` +
+        `Stage-by-stage results aren't available during active scoring — check back once the match is complete.\n` +
+        matchUrl,
+      embeds: [],
+    };
+  }
+
   // Build per-shooter summaries
   const summaries: ShooterSummary[] = [];
   for (const t of tracked) {

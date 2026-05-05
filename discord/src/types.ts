@@ -160,6 +160,12 @@ export interface CompareResult {
     division: string | null;
     club: string | null;
   }>;
+  /**
+   * True when the match is still live and SSI withholds per-stage scorecards.
+   * stages will be empty; callers should surface a "check back after scoring"
+   * message instead of showing empty data.
+   */
+  scorecardsRestricted?: boolean;
 }
 
 export interface CompetitorStageResult {
