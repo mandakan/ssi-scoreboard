@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY, SCORECARDS_QUERY } from "@/lib/graphql";
+import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
+import { cachedWholeMatchArchive } from "@/lib/scorecards-archive";
 import { applyAdjustmentsToScorecards } from "@/lib/simulate-apply";
 import { effectiveMatchScoringPct } from "@/lib/match-data";
 import { isMatchCompleteFromEvent } from "@/lib/match-ttl";
@@ -14,14 +15,15 @@ interface NotAvailableResponse {
   reason: "match-not-complete";
 }
 
-// Minimal shape used to evaluate match completeness without pulling scorecards.
+// Minimal shape used to evaluate match completeness and feed the per-stage
+// archival fan-out without pulling scorecards.
 interface MatchEventForGate {
   event: {
     starts?: string | null;
     status?: string | null;
     results?: string | null;
     scoring_completed?: string | number | null;
-    stages?: Array<{ scoring_completed?: string | number | null }>;
+    stages?: Array<{ id: string; scoring_completed?: string | number | null }>;
   } | null;
 }
 
@@ -107,11 +109,16 @@ export async function POST(req: Request) {
     return NextResponse.json(payload);
   }
 
-  // Fetch scorecards (reuses the same cache key as the compare route)
-  const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
+  // Fetch scorecards via per-stage archival fan-out (#410). Gated above on
+  // isComplete; cache key matches the legacy SCORECARDS_QUERY layout so it
+  // hits the same Redis/D1 entries the compare route warms (and vice versa).
+  const stageRefs = (matchData.event.stages ?? []).map((s) => ({
+    ct: 24,
+    id: s.id,
+  }));
   let scorecardsData: RawScorecardsData;
   try {
-    ({ data: scorecardsData } = await cachedExecuteQuery<RawScorecardsData>(scorecardsKey, SCORECARDS_QUERY, { ct: ctNum, id }, 30));
+    ({ data: scorecardsData } = await cachedWholeMatchArchive(ctNum, id, stageRefs));
   } catch (err) {
     const message = err instanceof Error ? err.message : "Upstream error";
     return NextResponse.json({ error: message }, { status: 502 });

@@ -4,6 +4,7 @@ import { reportError } from "@/lib/error-telemetry";
 import { usageTelemetry } from "@/lib/usage-telemetry";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY, MATCH_QUERY, refreshCachedMatchQuery } from "@/lib/graphql";
+import { cachedWholeMatchArchive } from "@/lib/scorecards-archive";
 import cache from "@/lib/cache-impl";
 import { computeMatchFreshness, computeMatchSwrTtl, isMatchComplete } from "@/lib/match-ttl";
 import { persistToMatchStore } from "@/lib/match-data-store";
@@ -176,52 +177,74 @@ export async function GET(req: Request) {
     }
   }
 
-  // Step 2 — fetch scorecards with TTL determined by match state
+  // Step 2 — fetch scorecards.
+  //
+  // Post-match: per-stage archival fan-out (#410). Permanent cache, no SWR
+  // refresh needed (results are immutable once results=all).
+  //
+  // Live: legacy whole-match path. Returns `[]` for results=org matches
+  // (the gate is the match's results visibility, not the query shape — see
+  // #410 round-2 comment trail). Kept here so the route still functions if
+  // SSI later restores live access; PR-3 (#416) will short-circuit this
+  // entirely so we don't even hit SSI for live calls.
   const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
   let scorecardsData: RawScorecardsData;
   let scorecardsCachedAt: string | null;
-  try {
-    ({ data: scorecardsData, cachedAt: scorecardsCachedAt } =
-      await cachedExecuteQuery<RawScorecardsData>(
-        scorecardsKey,
-        SCORECARDS_QUERY,
-        { ct: ctNum, id },
-        dataTtl,
-      ));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Upstream error";
-    return NextResponse.json({ error: message }, { status: 502 });
-  }
-
-  // Upgrade scorecards cache entry TTL based on match state
-  try {
-    if (dataTtl === null) {
-      const raw = await cache.get(scorecardsKey);
-      if (raw) {
-        await cache.persist(scorecardsKey);
-        // Persist completed scorecard data to D1/SQLite for durable storage
-        afterResponse(persistToMatchStore(scorecardsKey, raw));
-      }
-    } else if (!scorecardsCachedAt) {
-      await cache.expire(scorecardsKey, dataTtl);
+  if (isComplete) {
+    const stageRefs = (matchData.event?.stages ?? []).map((s) => ({
+      ct: 24,
+      id: s.id,
+    }));
+    try {
+      ({ data: scorecardsData, cachedAt: scorecardsCachedAt } =
+        await cachedWholeMatchArchive(ctNum, id, stageRefs));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Upstream error";
+      return NextResponse.json({ error: message }, { status: 502 });
     }
-  } catch (err) {
-    reportError("compare.scorecards-ttl-apply", err, { matchKey: scorecardsKey });
-  }
-
-  // SWR for scorecards (the slowest upstream call) — same single-flight pattern.
-  if (scorecardsCachedAt && dataTtl != null && matchFreshness != null) {
-    const age = (Date.now() - new Date(scorecardsCachedAt).getTime()) / 1000;
-    if (age > matchFreshness) {
-      afterResponse(
-        refreshCachedMatchQuery<RawScorecardsData>(
+    // Archive entries are permanent by construction; no TTL upgrade or SWR
+    // refresh applies. The cache wrapper already mirrors to D1.
+  } else {
+    try {
+      ({ data: scorecardsData, cachedAt: scorecardsCachedAt } =
+        await cachedExecuteQuery<RawScorecardsData>(
           scorecardsKey,
           SCORECARDS_QUERY,
           { ct: ctNum, id },
           dataTtl,
-          { ct: ctNum, id },
-        ),
-      );
+        ));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Upstream error";
+      return NextResponse.json({ error: message }, { status: 502 });
+    }
+    // Upgrade scorecards cache entry TTL based on match state
+    try {
+      if (dataTtl === null) {
+        const raw = await cache.get(scorecardsKey);
+        if (raw) {
+          await cache.persist(scorecardsKey);
+          afterResponse(persistToMatchStore(scorecardsKey, raw));
+        }
+      } else if (!scorecardsCachedAt) {
+        await cache.expire(scorecardsKey, dataTtl);
+      }
+    } catch (err) {
+      reportError("compare.scorecards-ttl-apply", err, { matchKey: scorecardsKey });
+    }
+    // SWR for scorecards on live matches — same single-flight pattern.
+    if (scorecardsCachedAt && dataTtl != null && matchFreshness != null) {
+      const age = (Date.now() - new Date(scorecardsCachedAt).getTime()) / 1000;
+      if (age > matchFreshness) {
+        afterResponse(
+          refreshCachedMatchQuery<RawScorecardsData>(
+            scorecardsKey,
+            SCORECARDS_QUERY,
+            { ct: ctNum, id },
+            dataTtl,
+            { ct: ctNum, id },
+          ),
+        );
+      }
     }
   }
 

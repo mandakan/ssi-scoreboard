@@ -1,7 +1,8 @@
 import { ImageResponse } from "next/og";
 import { fetchOgMatchData, type OgMatchData } from "@/lib/og-data";
-import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY } from "@/lib/graphql";
-import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
+import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
+import { parseRawScorecards } from "@/lib/scorecard-data";
+import { cachedWholeMatchArchive, type StageRef } from "@/lib/scorecards-archive";
 import {
   computeGroupRankings,
   computeConsistencyStats,
@@ -192,13 +193,21 @@ async function fetchOgCompareStatsImpl(
   if (isNaN(ctNum)) return null;
 
   try {
-    const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
-    const { data } = await cachedExecuteQuery<RawScorecardsData>(
-      scorecardsKey,
-      SCORECARDS_QUERY,
-      { ct: ctNum, id },
-      3600, // fallback TTL on cache miss; compare route will correct it later
-    );
+    // Get stage IDs from the match cache (almost always cache-hit since the
+    // outer route already warmed it). Then run the per-stage archival fan-out
+    // (#410). Caller already gates this whole function on isComplete, so the
+    // archive's permanent-cache contract is correct.
+    const matchKey = gqlCacheKey("GetMatch", { ct: ctNum, id });
+    const { data: matchData } = await cachedExecuteQuery<{
+      event: { stages?: { id: string }[] } | null;
+    }>(matchKey, MATCH_QUERY, { ct: ctNum, id }, 30);
+    if (!matchData.event) return null;
+
+    const stageRefs: StageRef[] = (matchData.event.stages ?? []).map((s) => ({
+      ct: 24,
+      id: s.id,
+    }));
+    const { data } = await cachedWholeMatchArchive(ctNum, id, stageRefs);
 
     if (!data.event) return null;
 
