@@ -89,6 +89,42 @@ export async function GET(
     resultsStatus: match.results_status,
   });
 
+  // Short-circuit for live matches (#416 / PR-3): SSI withholds per-stage
+  // scorecards while results visibility is "org". Return placeholder (all-null)
+  // stage entries immediately without touching SSI. Preserved live branch below
+  // can be re-enabled by removing this guard if SSI reinstates live access.
+  if (!isComplete) {
+    const sortedMatchStages = [...match.stages].sort(
+      (a, b) => a.stage_number - b.stage_number,
+    );
+    const placeholderStages: CompetitorStageResult[] = sortedMatchStages.map((s) => ({
+      stage_number: s.stage_number,
+      stage_id: s.id,
+      time_seconds: null,
+      scorecard_updated_at: null,
+      hit_factor: null,
+      stage_points: null,
+      stage_pct: null,
+      alphas: null,
+      charlies: null,
+      deltas: null,
+      misses: null,
+      no_shoots: null,
+      procedurals: null,
+      dq: false,
+    }));
+    const response: CompetitorStageResults = {
+      ct: ctNum,
+      matchId: matchIdNum,
+      competitorId: competitor.id,
+      shooterId: competitor.shooterId,
+      division: competitor.division,
+      stages: placeholderStages,
+      cacheInfo: { cachedAt: matchResult.cachedAt },
+    };
+    return NextResponse.json(response);
+  }
+
   const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
   let scorecardsData: RawScorecardsData;
   let scorecardsCachedAt: string | null;
@@ -104,8 +140,9 @@ export async function GET(
     }
     // Archive entries are permanent; no TTL upgrade or SWR refresh needed.
   } else {
-    // Live: legacy whole-match path. Returns `[]` for results=org matches —
-    // PR-3 (#416) will short-circuit so this branch never fires for live.
+    // Live: legacy whole-match path — currently unreachable because the
+    // short-circuit above returns early for all non-complete matches (#416).
+    // Preserved as fallback if SSI reinstates live scorecard access.
     try {
       ({ data: scorecardsData, cachedAt: scorecardsCachedAt } =
         await cachedExecuteQuery<RawScorecardsData>(

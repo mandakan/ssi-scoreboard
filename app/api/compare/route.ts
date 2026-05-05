@@ -177,16 +177,43 @@ export async function GET(req: Request) {
     }
   }
 
+  // Short-circuit for live matches (#416 / PR-3): SSI does not publish
+  // per-stage scorecards while results visibility is "org". Skip the scorecards
+  // fetch entirely and return a minimal response with scorecardsRestricted=true.
+  // The live branch below is preserved so the route can be re-enabled by removing
+  // this guard if SSI reinstates live scorecard access.
+  if (!isComplete) {
+    const payload: CompareResponse = {
+      match_id: parseInt(id, 10),
+      mode,
+      stages: [],
+      competitors: [],
+      penaltyStats: {},
+      efficiencyStats: {},
+      consistencyStats: {},
+      lossBreakdownStats: {},
+      whatIfStats: null,
+      styleFingerprintStats: null,
+      fieldFingerprintPoints: null,
+      archetypePerformance: null,
+      courseLengthPerformance: null,
+      constraintPerformance: null,
+      stageDegradationData: null,
+      stageConditions: null,
+      scorecardsRestricted: true,
+      cacheInfo: { cachedAt: matchCachedAt },
+    };
+    return NextResponse.json(payload);
+  }
+
   // Step 2 — fetch scorecards.
   //
   // Post-match: per-stage archival fan-out (#410). Permanent cache, no SWR
   // refresh needed (results are immutable once results=all).
   //
-  // Live: legacy whole-match path. Returns `[]` for results=org matches
-  // (the gate is the match's results visibility, not the query shape — see
-  // #410 round-2 comment trail). Kept here so the route still functions if
-  // SSI later restores live access; PR-3 (#416) will short-circuit this
-  // entirely so we don't even hit SSI for live calls.
+  // Live: legacy whole-match path — kept as fallback if SSI reinstates live
+  // scorecard access. Currently unreachable because the short-circuit above
+  // returns early for all non-complete matches (#416).
   const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
   let scorecardsData: RawScorecardsData;
   let scorecardsCachedAt: string | null;
