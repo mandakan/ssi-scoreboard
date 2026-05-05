@@ -11,11 +11,27 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-04-29-table-view-presets";
+export const LATEST_RELEASE_ID = "2026-05-04-post-match-only";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "May 4, 2026",
+    title: "Post-match analysis, reimagined",
+    screenshotScenes: ["comparison-table"],
+    sections: [
+      {
+        heading: "What changed",
+        items: [
+          "ShootNScoreIt stopped publishing per-stage scorecards for active matches. Stage results, hit zones, and coaching analysis are now only available once scoring is complete.",
+          "While a match is in progress, the app shows a notice with the current scoring percentage and a link to follow live on ShootNScoreIt.",
+          "For completed matches, nothing changes -- all analysis is still there and loads faster thanks to a new per-stage archival cache that replaces the old whole-match query.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-04-29-table-view-presets",
     date: "April 29, 2026",
     title: "Tame the comparison table",
     screenshotScenes: ["comparison-table"],
