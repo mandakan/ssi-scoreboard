@@ -235,10 +235,12 @@ export default function MatchPageClient() {
       })
     : false;
 
-  // Compare query: skipped when in the pre-match view (no scores to fetch).
-  // The mode passed to the API is always "live" or "coaching".
+  // Compare query: only fires for completed matches (coaching mode). Live
+  // matches return empty scorecards from SSI (#410), so there is nothing to
+  // render -- the "Match in progress" empty-state is shown instead. Pre-match
+  // is skipped for the same reason (no scores yet).
   const compareMode: CompareMode = effectiveMode === "coaching" ? "coaching" : "live";
-  const compareEnabled = effectiveMode !== "prematch";
+  const compareEnabled = effectiveMode === "coaching";
   const compareQuery = useCompareQuery(
     ct,
     id,
@@ -644,7 +646,7 @@ export default function MatchPageClient() {
               </PopoverHeader>
               <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
                 <p><strong>Pre-match</strong> — squad rotation, weather, registered field, and AI brief. Useful when your squad hasn&apos;t shot yet, even if early squads have finished.</p>
-                <p><strong>Live</strong> — for active matches. Refreshes every 30 seconds. Shows stage results, charts, and core stats only. Skips heavy analytics to keep things fast courtside.</p>
+                <p><strong>Live</strong> — for active matches. SSI does not publish per-stage scorecards while scoring is in progress, so detailed results are not available until the match completes.</p>
                 <p><strong>Coaching</strong> — for completed matches. Full analysis: style fingerprints, archetype breakdown, course-length splits, constraint performance, and the stage simulator.</p>
                 <p>The view is auto-detected: pre-match before scoring really gets going, live once scoring is underway, and coaching for ≥ 95% scored or matches older than 3 days. Tap any mode to override, or tap the active mode to reset to auto.</p>
               </div>
@@ -655,7 +657,7 @@ export default function MatchPageClient() {
           {effectiveMode === "prematch"
             ? "Squad rotation, weather, and registered field. No scores shown."
             : effectiveMode === "live"
-            ? "Fast refresh, stage-focused view. Coaching analytics hidden."
+            ? "Scoring in progress -- detailed results available when the match is complete."
             : "Full analysis with style fingerprints, breakdowns, and simulator."}
         </p>
       </div>
@@ -789,8 +791,39 @@ export default function MatchPageClient() {
         />
       )}
 
-      {/* Comparison views */}
-      {!isPreMatch && selectedIds.length > 0 && (
+      {/* Match in progress -- scorecards are not published by SSI until scoring completes */}
+      {effectiveMode === "live" && (
+        <div
+          role="status"
+          className="rounded-lg border bg-muted/40 p-4 space-y-2"
+        >
+          <h2 className="font-semibold">Match in progress</h2>
+          <p className="text-sm text-muted-foreground">
+            Detailed stage results and analysis are available once scoring is complete
+            {match.scoring_completed > 0
+              ? ` (${Math.round(match.scoring_completed)}% scored so far)`
+              : ""}
+            . Check back when the match is done.
+          </p>
+          {match.ssi_url && (
+            <p className="text-sm">
+              <a
+                href={match.ssi_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-primary underline underline-offset-2 hover:opacity-80"
+              >
+                Follow live on ShootNScoreIt
+                <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                <span className="sr-only">(opens in new tab)</span>
+              </a>
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Comparison views -- only rendered for completed matches (coaching mode) */}
+      {effectiveMode === "coaching" && selectedIds.length > 0 && (
         <div className="space-y-6">
           {compareQuery.isLoading && (
             <div className="rounded-lg border p-4 space-y-3">
@@ -834,15 +867,10 @@ export default function MatchPageClient() {
               role="status"
               className="rounded-lg border bg-muted/40 p-4 space-y-2"
             >
-              <h2 className="font-semibold">Detailed scores aren&apos;t available for this match</h2>
+              <h2 className="font-semibold">Per-stage scorecards not available</h2>
               <p className="text-sm text-muted-foreground">
-                ShootnScoreIt shows that scoring is in progress
-                {match.scoring_completed > 0
-                  ? ` (${Math.round(match.scoring_completed)}% complete)`
-                  : ""}
-                , but they don&apos;t share the per-stage scorecards publicly for
-                club matches (Level I). You&apos;ll be able to see the official
-                results on shootnscoreit.com once the organiser publishes them.
+                ShootNScoreIt does not publish per-stage scorecard data for Level I
+                club matches. Official results are available on shootnscoreit.com.
               </p>
               {match.ssi_url && (
                 <p className="text-sm">
