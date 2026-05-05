@@ -4,8 +4,9 @@
 // Uses cachedExecuteQuery — stale/missing cache entries are auto-refreshed from GraphQL.
 
 import { NextResponse, type NextRequest } from "next/server";
-import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY, SCORECARDS_QUERY } from "@/lib/graphql";
+import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
+import { cachedWholeMatchArchive } from "@/lib/scorecards-archive";
 import { computeFullFieldRankings } from "@/app/api/compare/logic";
 import { decodeShooterId } from "@/lib/shooter-index";
 import { effectiveMatchScoringPct } from "@/lib/match-data";
@@ -92,11 +93,19 @@ export async function GET(
     });
   }
 
-  // Load scorecards — auto-refreshes stale/missing entries from GraphQL
-  const scKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
+  // Load scorecards via the per-stage archival fan-out (#410). Cache key
+  // matches the legacy SCORECARDS_QUERY layout so D1 mirroring works
+  // unchanged. First post-completion request pays the fan-out cost
+  // (~3-5s for a typical 8-12 stage match); subsequent reads are cache
+  // hits. ct=24 hardcoded because IpscStageNode's content_type is stable
+  // across all IPSC disciplines.
+  const stageRefs = (matchData.event.stages ?? []).map((s) => ({
+    ct: 24,
+    id: s.id,
+  }));
   let scorecardsData: RawScorecardsData;
   try {
-    ({ data: scorecardsData } = await cachedExecuteQuery<RawScorecardsData>(scKey, SCORECARDS_QUERY, { ct: ctNum, id }, null));
+    ({ data: scorecardsData } = await cachedWholeMatchArchive(ctNum, id, stageRefs));
   } catch {
     return NextResponse.json({ error: "Failed to fetch scorecards" }, { status: 502 });
   }

@@ -49,6 +49,7 @@ import {
   UPCOMING_STATUS_QUERY,
   SCORECARDS_QUERY,
   SCORECARDS_DELTA_QUERY,
+  STAGE_SCORECARDS_QUERY,
 } from "../lib/graphql";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -80,6 +81,7 @@ const QUERIES: { name: string; src: string }[] = [
   { name: "UPCOMING_STATUS_QUERY", src: UPCOMING_STATUS_QUERY },
   { name: "SCORECARDS_QUERY", src: SCORECARDS_QUERY },
   { name: "SCORECARDS_DELTA_QUERY", src: SCORECARDS_DELTA_QUERY },
+  { name: "STAGE_SCORECARDS_QUERY", src: STAGE_SCORECARDS_QUERY },
 ];
 
 export function loadSnapshot(): Snapshot {

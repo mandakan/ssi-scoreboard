@@ -820,11 +820,25 @@ export async function refreshCachedQuery<T>(
  * Callers that want stale-while-revalidate should compare `cachedAt` against
  * a freshness window and schedule `refreshCachedQuery()` when exceeded.
  */
+export interface CachedExecuteQueryOptions<T> {
+  /**
+   * Override the upstream fetch on cache miss. When provided, the cache
+   * layer skips its built-in `executeQuery(query, variables)` call and
+   * uses this function instead. Used by `lib/scorecards-archive.ts` to
+   * substitute a per-stage fan-out for a single GraphQL call without
+   * giving up the existing Redis + D1 cache plumbing. The `query` and
+   * `variables` arguments are still used for telemetry / diagnostics
+   * (and for legibility of cache-miss logs).
+   */
+  fetcher?: () => Promise<T>;
+}
+
 export async function cachedExecuteQuery<T>(
   cacheKey: string,
   query: string,
   variables: Record<string, unknown>,
   ttlSeconds: number | null,
+  options: CachedExecuteQueryOptions<T> = {},
 ): Promise<{ data: T; cachedAt: string | null }> {
   try {
     const raw = await cache.get(cacheKey);
@@ -862,7 +876,9 @@ export async function cachedExecuteQuery<T>(
     }
   }
 
-  const data = await executeQuery<T>(query, variables);
+  const data = options.fetcher
+    ? await options.fetcher()
+    : await executeQuery<T>(query, variables);
   const cachedAt = new Date().toISOString();
 
   const entry: CacheEntry<T> = { data, cachedAt, v: CACHE_SCHEMA_VERSION };
@@ -890,12 +906,16 @@ export async function cachedExecuteQuery<T>(
 }
 
 // ─── Shared scorecard field set ──────────────────────────────────────────────
-// CRITICAL: SCORECARDS_QUERY and SCORECARDS_DELTA_QUERY MUST request the same
-// scorecard fields. The delta merge (#362, lib/scorecard-merge.ts) writes
-// delta entries into the cached full snapshot — if the delta is missing fields
-// the full query has, the merge silently corrupts the cached entry.
+// CRITICAL: SCORECARDS_QUERY, SCORECARDS_DELTA_QUERY, and STAGE_SCORECARDS_QUERY
+// MUST request the same scorecard fields. The delta merge (#362,
+// lib/scorecard-merge.ts) writes delta entries into the cached full snapshot —
+// if the delta is missing fields the full query has, the merge silently
+// corrupts the cached entry. The per-stage archival fan-out
+// (lib/scorecards-archive.ts) reassembles per-stage responses into the same
+// RawScorecardsData shape, so it must project the same field set too.
 //
-// This shared constant is interpolated into both queries so they CANNOT drift.
+// This shared constant is interpolated into all three queries so they CANNOT
+// drift. Exported so the archive module can reuse it without copying.
 //
 // When adding a scorecard field, see CLAUDE.md → "Delta-merge contract" for
 // the full list of files that must be updated together. In short:
@@ -905,7 +925,7 @@ export async function cachedExecuteQuery<T>(
 //   4. Copy in deltaToCacheCard() (lib/scorecard-merge.ts)
 //   5. Bump CACHE_SCHEMA_VERSION (lib/constants.ts)
 //   6. Run `pnpm check:ssi-schema --update` and commit the snapshot diff
-const SCORECARD_NODE_FIELDS = `
+export const SCORECARD_NODE_FIELDS = `
   ... on IpscScoreCardNode {
     created
     points
@@ -944,9 +964,20 @@ const SCORECARD_NODE_FIELDS = `
 
 // ─── Query: all stage scorecards for a match ─────────────────────────────────
 // Returns raw scorecard data for every competitor on every stage.
-// `get_results` (official placement) is blocked during active matches — this
-// query uses the raw scorecards path which is always accessible.
-// Filter the response to the desired competitor IDs server-side.
+//
+// **DEPRECATION NOTICE:** SSI announced 2026-05-04 that
+// `EventInterface.scorecards` is being deprecated in favour of
+// `StageInterface.scorecards`. The replacement runtime path is the per-stage
+// archival fan-out via root `stage(content_type, id) { scorecards }` —
+// implemented in `lib/scorecards-archive.ts`. This query is kept as a
+// fallback so callers can switch back if SSI re-exposes live data, and as
+// the canonical reference for the scorecard field set, but new runtime
+// paths must NOT call it.
+//
+// Empirical 2026-05-04: returns `[]` for live matches with `results=org`
+// (organizer-only visibility) — same gate applies to all scorecard paths
+// under API-key auth. Use only for matches where `isMatchCompleteFromEvent`
+// is true.
 export const SCORECARDS_QUERY = `
   query GetMatchScorecards($ct: Int!, $id: String!) {
     event(content_type: $ct, id: $id) {
@@ -961,6 +992,37 @@ export const SCORECARDS_QUERY = `
           scorecards {
             ${SCORECARD_NODE_FIELDS}
           }
+        }
+      }
+    }
+  }
+`;
+
+// ─── Query: per-stage scorecards ─────────────────────────────────────────────
+// SSI's blessed path post-2026-05-04: fetch one stage at a time via the root
+// `stage(content_type, id)` query. Compared to the legacy whole-match query
+// it is empirically 2-5× faster on cold loads for completed matches because
+// SSI parallelizes 8-10 small per-stage queries instead of one big blocking
+// one (verified against matches 26193, 27046, 27704 on 2026-05-04).
+//
+// Variables:
+//   $ct  - IpscStageNode content_type (24)
+//   $id  - the stage's primary key (NOT the match's id)
+//
+// Used by `lib/scorecards-archive.ts` for the post-match archival fetch.
+// Like the deprecated SCORECARDS_QUERY, returns `scorecards: []` for live
+// matches with `results=org` because the gate is on the match's results
+// visibility, not the query shape.
+export const STAGE_SCORECARDS_QUERY = `
+  query GetStageScorecards($ct: Int!, $id: String!) {
+    stage(content_type: $ct, id: $id) {
+      id
+      number
+      name
+      ... on IpscStageNode {
+        max_points
+        scorecards {
+          ${SCORECARD_NODE_FIELDS}
         }
       }
     }

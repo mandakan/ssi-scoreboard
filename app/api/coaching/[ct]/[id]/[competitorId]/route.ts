@@ -6,8 +6,9 @@ import {
   checkCoachingEligibility,
   COACHING_PROMPT_VERSION,
 } from "@/lib/coaching-prompt";
-import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY, SCORECARDS_QUERY } from "@/lib/graphql";
+import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
+import { cachedWholeMatchArchive } from "@/lib/scorecards-archive";
 import {
   computeGroupRankings,
   computePenaltyStats,
@@ -22,7 +23,7 @@ import {
   computeStageDegradationData,
   type RawScorecard,
 } from "@/app/api/compare/logic";
-import { computeMatchTtl, isMatchComplete } from "@/lib/match-ttl";
+import { isMatchComplete } from "@/lib/match-ttl";
 import { effectiveMatchScoringPct } from "@/lib/match-data";
 import { extractDivision } from "@/lib/divisions";
 import { decodeShooterId } from "@/lib/shooter-index";
@@ -228,23 +229,17 @@ export async function GET(
 
   const matchName = matchData.event.name ?? "Unknown Match";
 
-  // 5. Fetch scorecards (reuses existing Redis cache)
-  const dataTtl = computeMatchTtl(
-    scoringPct,
-    daysSince,
-    matchData.event.starts ?? null,
-    undefined,
-    signals,
-  );
-  const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
+  // 5. Fetch scorecards via per-stage archival fan-out (#410). Gated above
+  // on isComplete, so this is the post-match path: ttl=null (permanent),
+  // first request pays the fan-out cost, all subsequent reads are cache
+  // hits.
+  const stageRefs = (matchData.event.stages ?? []).map((s) => ({
+    ct: 24,
+    id: s.id,
+  }));
   let scorecardsData: RawScorecardsData;
   try {
-    ({ data: scorecardsData } = await cachedExecuteQuery<RawScorecardsData>(
-      scorecardsKey,
-      SCORECARDS_QUERY,
-      { ct: ctNum, id },
-      dataTtl,
-    ));
+    ({ data: scorecardsData } = await cachedWholeMatchArchive(ctNum, id, stageRefs));
   } catch (err) {
     const message = err instanceof Error ? err.message : "Upstream error";
     return NextResponse.json({ error: message }, { status: 502 });
