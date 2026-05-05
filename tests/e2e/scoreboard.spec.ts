@@ -158,6 +158,18 @@ const MOCK_COMPARE: CompareResponse = {
   ],
 };
 
+// Far-future date keeps daysSinceMatchStart and daysSinceEnd negative, which
+// prevents detectMatchView from ever flipping to "coaching" as time passes.
+// scoring_completed=75 + results_status="org" → effectiveMode === "live".
+const MOCK_LIVE_MATCH: typeof MOCK_MATCH = {
+  ...MOCK_MATCH,
+  date: "2099-12-30T09:00:00+00:00",
+  ends: "2099-12-31T09:00:00+00:00",
+  scoring_completed: 75,
+  results_status: "org",
+  match_status: "on",
+};
+
 const MOCK_COMPARE_2: CompareResponse = {
   ...MOCK_COMPARE,
   competitors: [MOCK_MATCH.competitors[0], MOCK_MATCH.competitors[1]],
@@ -519,5 +531,32 @@ test.describe("Mobile 390px viewport", () => {
       () => document.documentElement.scrollWidth > window.innerWidth
     );
     expect(hasOverflow).toBe(false);
+  });
+
+  test("live match shows 'Match in progress' notice and never calls compare API", async ({ page }) => {
+    let compareCallCount = 0;
+    await page.route("/api/match/22/99999999", (route) =>
+      route.fulfill({ json: MOCK_LIVE_MATCH })
+    );
+    await page.route(/\/api\/compare/, (route) => {
+      compareCallCount++;
+      route.fulfill({ json: { scorecardsRestricted: true, stages: [], competitors: [] } });
+    });
+
+    await page.goto("/match/22/99999999");
+    await expect(page.getByText("Test IPSC Match")).toBeVisible();
+
+    // "Match in progress" notice should be visible immediately (no selection needed)
+    await expect(page.getByText("Match in progress")).toBeVisible();
+    await expect(page.getByText(/scoring is complete/i)).toBeVisible();
+
+    // Select a competitor — notice should still be shown, not a comparison table
+    await page.getByRole("button", { name: /add competitor/i }).click();
+    await page.getByRole("option", { name: /alice/i }).click();
+    await expect(page.getByText("Match in progress")).toBeVisible();
+    await expect(page.getByRole("table")).not.toBeVisible();
+
+    // Compare API must never have been called
+    expect(compareCallCount).toBe(0);
   });
 });

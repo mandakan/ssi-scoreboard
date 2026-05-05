@@ -974,10 +974,11 @@ export const SCORECARD_NODE_FIELDS = `
 // the canonical reference for the scorecard field set, but new runtime
 // paths must NOT call it.
 //
-// Empirical 2026-05-04: returns `[]` for live matches with `results=org`
-// (organizer-only visibility) — same gate applies to all scorecard paths
-// under API-key auth. Use only for matches where `isMatchCompleteFromEvent`
-// is true.
+// Current status (2026-05-04): all callers that previously ran this on live
+// matches have been short-circuited (#416 / PR-3) and now return early. The
+// live else-branch in compare/route.ts and stages/route.ts is preserved for
+// revival but is currently unreachable code. Only `cachedWholeMatchArchive`
+// (post-match path, `isMatchCompleteFromEvent === true`) reaches SSI now.
 export const SCORECARDS_QUERY = `
   query GetMatchScorecards($ct: Int!, $id: String!) {
     event(content_type: $ct, id: $id) {
