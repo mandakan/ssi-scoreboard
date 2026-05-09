@@ -266,6 +266,20 @@ export const JWT_EXPIRED_ERROR_PATTERNS = [
   "User must be authenticated",
 ];
 
+/**
+ * Drop the cached JWT so the next caller to `getJwt()` re-mints from scratch.
+ *
+ * Use this after the bot's permissions on SSI change in a way that doesn't
+ * surface as a JWT-expiry error -- e.g. when the bot is added to a club whose
+ * matches use `clb` visibility. Role changes for `event(ct, id)` propagate
+ * without re-mint, but club-membership-driven access has been observed to
+ * require a fresh token. Cheap to call -- does at most one Redis DEL.
+ */
+export async function purgeJwtCache(): Promise<void> {
+  inflight = null;
+  await cache.del(CACHE_KEY);
+}
+
 /** Test-only reset — clears the in-isolate single-flight promise. */
 export function __resetForTests(): void {
   inflight = null;

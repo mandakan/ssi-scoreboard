@@ -12,7 +12,7 @@ const cacheMock = vi.hoisted(() => ({
 
 vi.mock("@/lib/cache-impl", () => ({ default: cacheMock }));
 
-import { getJwt, __resetForTests } from "@/lib/ssi-auth";
+import { getJwt, purgeJwtCache, __resetForTests } from "@/lib/ssi-auth";
 
 const FUTURE_ISO = () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 const NEAR_EXPIRY_ISO = () => new Date(Date.now() + 60 * 1000).toISOString(); // 1 min left
@@ -244,5 +244,18 @@ describe("ssi-auth getJwt", () => {
 
     const jwt = await getJwt();
     expect(jwt).toBe("RECOVERED-JWT");
+  });
+});
+
+describe("ssi-auth purgeJwtCache", () => {
+  beforeEach(() => {
+    cacheMock.del.mockReset();
+    cacheMock.del.mockResolvedValue(undefined);
+    __resetForTests();
+  });
+
+  it("deletes the cached JWT key from Redis", async () => {
+    await purgeJwtCache();
+    expect(cacheMock.del).toHaveBeenCalledWith("ssi:jwt:v1");
   });
 });
