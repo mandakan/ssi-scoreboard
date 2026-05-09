@@ -10,6 +10,7 @@ import { parseMatchCacheKey, persistActiveMatchToD1 } from "@/lib/match-data-sto
 import { markUpstreamDegraded } from "@/lib/upstream-status";
 import { upstreamTelemetry, hashVariables, type UpstreamOutcome } from "@/lib/upstream-telemetry";
 import { cacheTelemetry } from "@/lib/cache-telemetry";
+import { getJwt, JWT_EXPIRED_ERROR_PATTERNS } from "@/lib/ssi-auth";
 
 /**
  * Check if the current request is an admin-authenticated request
@@ -71,6 +72,14 @@ export async function executeQuery<T>(
     return await executeQueryOnce<T>(query, variables, revalidate, options);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
+    if (JWT_EXPIRED_ERROR_PATTERNS.some((m) => msg.includes(m))) {
+      // JWT rejected by SSI — force-refresh once and retry. Covers the
+      // window where our cached JWT has expired but the next isolate hasn't
+      // re-minted yet, and the cold-start case where a stale Redis entry
+      // outlives its actual exp claim.
+      await getJwt({ force: true });
+      return await executeQueryOnce<T>(query, variables, revalidate, options);
+    }
     if (RETRY_GRAPHQL_MESSAGES.some((m) => msg.includes(m))) {
       // Single immediate retry. We don't back off — the failure mode is a
       // dropped body at SSI's gateway, not load shedding, so a retry helps
@@ -89,6 +98,10 @@ async function executeQueryOnce<T>(
 ): Promise<T> {
   const apiKey = process.env.SSI_API_KEY;
   if (!apiKey) throw new Error("SSI_API_KEY is not configured");
+
+  // SSI now requires both `x-api-key` AND a JWT (`Authorization: JWT <token>`)
+  // on every resolver. See lib/ssi-auth.ts for the lifecycle.
+  const jwt = await getJwt();
 
   // Extract the operation name for log context, e.g. "GetMatchScorecards"
   const operationName = query.match(/query\s+(\w+)/)?.[1] ?? "unknown";
@@ -119,7 +132,7 @@ async function executeQueryOnce<T>(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Api-Key ${apiKey}`,
+        Authorization: `JWT ${jwt}`,
         "x-api-key": apiKey,
       },
       body: JSON.stringify({ query, variables }),

@@ -40,6 +40,7 @@ Key directories:
 - `app/api/compare/logic.ts` -- **pure function** `computeGroupRankings()`, no I/O, fully unit-tested
 - `app/api/mcp/route.ts` -- MCP HTTP endpoint (JSON-RPC, single-shot transport); optional `MCP_SECRET` bearer auth
 - `lib/graphql.ts` -- GQL query strings + `executeQuery()`, server-only (no NEXT_PUBLIC_ prefix)
+- `lib/ssi-auth.ts` -- JWT lifecycle for SSI's `Authorization: JWT <token>` header. Single-flighted, Redis-shared, refreshes via `refresh_token` then falls back to `token_auth(email, password)`. Driven by `SSI_SERVICE_EMAIL`/`SSI_SERVICE_PASSWORD` (bot account)
 - `lib/cache.ts` -- `CacheAdapter` interface (get/set/persist/del/expire/scanCachedMatchKeys)
 - `lib/cache-node.ts` -- ioredis implementation (Docker / Node.js target)
 - `lib/cache-edge.ts` -- @upstash/redis HTTP implementation (Cloudflare Pages target)

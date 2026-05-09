@@ -4,10 +4,14 @@
 #
 # Secrets must be set via wrangler CLI, NOT committed here:
 #   Production:  wrangler secret put SSI_API_KEY
+#                wrangler secret put SSI_SERVICE_EMAIL          # bot account login (lib/ssi-auth.ts)
+#                wrangler secret put SSI_SERVICE_PASSWORD       # bot account password
 #                wrangler secret put UPSTASH_REDIS_REST_URL
 #                wrangler secret put UPSTASH_REDIS_REST_TOKEN
 #                wrangler secret put CACHE_PURGE_SECRET
 #   Staging:     wrangler secret put SSI_API_KEY --env staging
+#                wrangler secret put SSI_SERVICE_EMAIL --env staging
+#                wrangler secret put SSI_SERVICE_PASSWORD --env staging
 #                wrangler secret put UPSTASH_REDIS_REST_URL --env staging
 #                wrangler secret put UPSTASH_REDIS_REST_TOKEN --env staging
 #                wrangler secret put CACHE_PURGE_SECRET --env staging
