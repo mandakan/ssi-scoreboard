@@ -34,6 +34,10 @@ vi.mock("@/lib/background-impl", () => ({
 vi.mock("next/headers", () => ({
   headers: () => Promise.resolve(new Map()),
 }));
+vi.mock("@/lib/ssi-auth", () => ({
+  getJwt: vi.fn(() => Promise.resolve("test-jwt")),
+  JWT_EXPIRED_ERROR_PATTERNS: ["Signature has expired", "Invalid token", "User must be authenticated"],
+}));
 
 // ─── Tests ────────────────────────────────────────────────────────────────
 

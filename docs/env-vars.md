@@ -2,7 +2,9 @@
 
 | Variable | Where used | Target | Notes |
 |---|---|---|---|
-| `SSI_API_KEY` | `lib/graphql.ts` (server-only) | Both | Never use `NEXT_PUBLIC_` prefix |
+| `SSI_API_KEY` | `lib/graphql.ts`, `lib/ssi-auth.ts` (server-only) | Both | Sent as the `x-api-key` header on every upstream call. As of 2026-05 the API key alone is not sufficient -- a JWT is also required (see `SSI_SERVICE_EMAIL`/`PASSWORD`). Never use `NEXT_PUBLIC_` prefix. |
+| `SSI_SERVICE_EMAIL` | `lib/ssi-auth.ts` (server-only) | Both | Email for the dedicated SSI bot account that backs every upstream request. SSI now requires a logged-in user (JWT obtained via `token_auth(email, password)`) on every GraphQL resolver. Use a dedicated bot account, never a real user. Never `NEXT_PUBLIC_`. |
+| `SSI_SERVICE_PASSWORD` | `lib/ssi-auth.ts` (server-only) | Both | Password for the bot account. Set via `wrangler secret put`. Quote with single quotes in `.env.local` so shell `$`/`!` chars survive. Never `NEXT_PUBLIC_`. |
 | `CACHE_PURGE_SECRET` | `app/api/admin/cache/purge/route.ts`, `app/api/admin/cache/health/route.ts` | Both | Any strong random string; never `NEXT_PUBLIC_` |
 | `MIN_CACHE_TTL_SECONDS` | `lib/match-ttl.ts` (server-only) | Both | Minimum TTL floor for all non-permanent cache entries. Default `30` (s) -- keeps active matches near-real-time so courtside polling picks up fresh scorecards within seconds. Raise it to reduce upstream load on shared deployments. Set to `0` to disable. Never `NEXT_PUBLIC_`. |
 | `MATCH_COMPLETE_DAYS_SINCE` | `lib/match-ttl.ts` (server-only) | Both | Hard time gate (days) before a match can be permanently pinned to durable cache. Default `3`. Even SSI flag flips (`status=cp`, `results=all`) cannot pin earlier than this -- protects against the Skepplanda-style premature pinning bug where a mid-match flag flip caused stale data to stick. Raise for events with very long scoring tails (e.g. World Shoots that run 5+ days). Never `NEXT_PUBLIC_`. |
