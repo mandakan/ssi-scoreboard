@@ -31,6 +31,13 @@ export async function GET(req: Request) {
       : "MISSING",
     CACHE_PURGE_SECRET: secret ? "set" : "MISSING",
     SSI_API_KEY: process.env.SSI_API_KEY ? "set" : "MISSING",
+    // JWT auth (lib/ssi-auth.ts) -- without these the bot can't re-mint the
+    // cached JWT, and every match fetch will 404 once the cache (30 min) expires.
+    // See PR-bug from 2026-05-09: SSI_SERVICE_EMAIL was set as a dashboard
+    // "Variable" rather than a Secret, so each deploy clobbered it via
+    // wrangler.toml's [vars] block. Health-check guard catches this in CI.
+    SSI_SERVICE_EMAIL: process.env.SSI_SERVICE_EMAIL ? "set" : "MISSING",
+    SSI_SERVICE_PASSWORD: process.env.SSI_SERVICE_PASSWORD ? "set" : "MISSING",
   };
 
   // Live round-trip: write a probe key, read it back, then delete it.
