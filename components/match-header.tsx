@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { MapPin, Calendar, Target, ExternalLink } from "lucide-react";
+import { OrganizerPublishedBadge } from "@/components/organizer-published-badge";
 import type { MatchResponse } from "@/lib/types";
 
 interface MatchHeaderProps {
@@ -64,6 +65,7 @@ export function MatchHeader({ match }: MatchHeaderProps) {
           {match.region && (
             <Badge variant="outline">{match.region}</Badge>
           )}
+          <OrganizerPublishedBadge visibility={match.visibility} />
         </div>
       </div>
 

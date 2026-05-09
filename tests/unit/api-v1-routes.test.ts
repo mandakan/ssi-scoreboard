@@ -160,6 +160,7 @@ describe("/api/v1/match/[ct]/[id]", () => {
       squadding_closes: null,
       is_squadding_possible: false,
       ssi_url: "https://shootnscoreit.com/event/22/27190/",
+      visibility: { class: "public", rawCode: "pub", displayName: "Public, searchable and details/names for all" },
       stages: [
         {
           id: 1,

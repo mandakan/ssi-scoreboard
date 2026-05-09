@@ -121,10 +121,26 @@ export interface MatchResponse {
   /** Whether squadding is currently possible. */
   is_squadding_possible: boolean;
   ssi_url: string | null;
+  /** SSI-side visibility classification for this match (issue #426). The
+   *  classifier collapses SSI's 5-code enum into 3 classes; the badge in the
+   *  UI is rendered only for "organizer-published". `rawCode` and `displayName`
+   *  preserve the upstream values verbatim so tooltips can show the exact SSI
+   *  description without us hard-coding it. */
+  visibility: Visibility;
   stages: StageInfo[];
   competitors: CompetitorInfo[];
   squads: SquadInfo[];
   cacheInfo: CacheInfo;
+}
+
+export type VisibilityClass = "public" | "unlisted" | "organizer-published";
+
+export interface Visibility {
+  class: VisibilityClass;
+  /** SSI's short code: "pub" | "lim" | "res" | "csd" | "clb" (or future values). */
+  rawCode: string;
+  /** SSI's `get_visibility_display` string, e.g. "Public, searchable and details/names for all". */
+  displayName: string;
 }
 
 export interface StageResult {

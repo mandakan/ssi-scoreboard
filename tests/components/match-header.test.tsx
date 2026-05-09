@@ -29,6 +29,7 @@ const baseMatch: MatchResponse = {
   max_competitors: null,
   ends: null,
   ssi_url: "https://shootnscoreit.com/event/22/123/",
+  visibility: { class: "public", rawCode: "pub", displayName: "Public, searchable and details/names for all" },
   stages: [],
   competitors: [],
   squads: [],

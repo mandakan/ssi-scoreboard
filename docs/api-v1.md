@@ -124,6 +124,7 @@ Fetch the full match overview for a single match.
 | `squadding_starts`, `squadding_closes` | string \| null | ISO timestamps. |
 | `is_squadding_possible` | boolean | |
 | `ssi_url` | string \| null | Canonical SSI URL for the match. |
+| `visibility` | `Visibility` | SSI visibility classification (see below). Added 2026-05 (issue #426). |
 | `stages` | `StageInfo[]` | One entry per stage. |
 | `competitors` | `CompetitorInfo[]` | Approved, non-DNF competitors. |
 | `squads` | `SquadInfo[]` | Squad assignments. |
@@ -133,6 +134,14 @@ Fetch the full match overview for a single match.
 `paper_targets`, `steel_targets`, `ssi_url`, `course_display` (`Short` /
 `Medium` / `Long`), `procedure`, `firearm_condition` -- nullable where SSI did
 not provide a value.
+
+`Visibility`: `class` (`"public"` | `"unlisted"` | `"organizer-published"`),
+`rawCode` (SSI short code: `pub` / `lim` / `res` / `csd` / `clb` / future),
+`displayName` (SSI's human-readable label, e.g. `"Public, searchable and
+details/names for all"`). The `class` collapses SSI's enum into three buckets:
+`public` (`pub`), `unlisted` (`lim` -- full names public on SSI but not
+searchable), `organizer-published` (everything else -- only visible because the
+match organizer invited our service account as Staff).
 
 `CompetitorInfo`: `id` (per-match competitor ID), `shooterId` (globally stable
 SSI ShooterNode ID -- the same across matches for the same person), `name`,

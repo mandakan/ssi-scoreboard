@@ -240,6 +240,8 @@ export const MATCH_QUERY = `
       results
       ... on IpscMatchNode {
         scoring_completed
+        visibility
+        get_visibility_display
         region
         sub_rule
         get_full_rule_display

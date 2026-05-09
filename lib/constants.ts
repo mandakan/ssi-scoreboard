@@ -40,5 +40,8 @@ export const MAX_COMPETITORS = 12;
  *       SPSK Open 2026 (match 22/27190): every stage reported 21-29% but
  *       the match-level field returned "0", which froze the cache TTL on
  *       the 5-min "started, no scoring yet" tier.
+ *  16 → added visibility, get_visibility_display to IpscMatchNode in
+ *       MATCH_QUERY; `visibility: { class, rawCode, displayName }` on
+ *       MatchResponse (issue #426 — organizer-published private matches).
  */
-export const CACHE_SCHEMA_VERSION = 15;
+export const CACHE_SCHEMA_VERSION = 16;
