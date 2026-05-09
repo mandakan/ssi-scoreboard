@@ -27,6 +27,14 @@ import cache from "@/lib/cache-impl";
 const GRAPHQL_ENDPOINT = "https://shootnscoreit.com/graphql/";
 const CACHE_KEY = "ssi:jwt:v1";
 
+// Sentinel API key set by the CI e2e job (.github/workflows/ci.yml). When seen
+// we skip JWT acquisition entirely and return a placeholder -- e2e tests mock
+// every /api/* call, so the placeholder never reaches the wire. Without this
+// short-circuit every server-side render (e.g. generateMetadata) would throw
+// from missing creds, slowing navigations enough to flake URL-timing tests.
+const E2E_SENTINEL_API_KEY = "dummy_key_for_e2e";
+const E2E_PLACEHOLDER_JWT = "e2e-placeholder-jwt";
+
 // Refresh tokens live ~7 days per SSI. Re-mint when <24h remain so no in-flight
 // request hits an expired refresh and has to fall back to password login.
 const REFRESH_RENEW_BEFORE_SECONDS = 24 * 60 * 60;
@@ -78,6 +86,10 @@ let inflight: Promise<string> | null = null;
  * an upstream call fails with a JWT-expiry GraphQL error.
  */
 export async function getJwt(opts: { force?: boolean } = {}): Promise<string> {
+  if (process.env.SSI_API_KEY === E2E_SENTINEL_API_KEY) {
+    return E2E_PLACEHOLDER_JWT;
+  }
+
   if (!opts.force) {
     // Single-flight within this isolate. Concurrent callers all wait on the
     // same promise so we only do one network roundtrip per cold-start burst.

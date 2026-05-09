@@ -226,6 +226,18 @@ describe("ssi-auth getJwt", () => {
     await expect(getJwt()).rejects.toThrow(/token_auth rejected/);
   });
 
+  it("short-circuits to a placeholder JWT when API key is the e2e sentinel", async () => {
+    process.env.SSI_API_KEY = "dummy_key_for_e2e";
+    delete process.env.SSI_SERVICE_EMAIL;
+    delete process.env.SSI_SERVICE_PASSWORD;
+
+    const jwt = await getJwt();
+
+    expect(jwt).toBe("e2e-placeholder-jwt");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(cacheMock.get).not.toHaveBeenCalled();
+  });
+
   it("survives cache-read failure (treats it as a miss)", async () => {
     cacheMock.get.mockRejectedValueOnce(new Error("redis is down"));
     fetchSpy.mockResolvedValueOnce(tokenAuthOk("RECOVERED-JWT", "RECOVERED-REF"));
