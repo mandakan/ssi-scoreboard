@@ -40,6 +40,7 @@ export const MOCK_MATCH: MatchResponse = {
   max_competitors: null,
   ends: null,
   ssi_url: "https://shootnscoreit.com/event/22/88888888/",
+  visibility: { class: "public", rawCode: "pub", displayName: "Public, searchable and details/names for all" },
   cacheInfo: { cachedAt: "2026-03-02T12:00:00.000Z" },
   stages: [
     {

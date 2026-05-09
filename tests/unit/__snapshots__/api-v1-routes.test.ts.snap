@@ -122,6 +122,11 @@ exports[`/api/v1/match/[ct]/[id] > returns the match payload through the v1 enve
   "stages_count": 12,
   "sub_rule": null,
   "venue": "Stockholm",
+  "visibility": {
+    "class": "public",
+    "displayName": "Public, searchable and details/names for all",
+    "rawCode": "pub",
+  },
 }
 `;
 

@@ -13,7 +13,9 @@ import { persistToMatchStore } from "@/lib/match-data-store";
 import { isUpstreamDegraded } from "@/lib/upstream-status";
 import { cacheTelemetry } from "@/lib/cache-telemetry";
 import { reportError } from "@/lib/error-telemetry";
-import type { MatchResponse, StageInfo, CompetitorInfo, SquadInfo } from "@/lib/types";
+import { classifyVisibility } from "@/lib/visibility";
+import { visibilityTelemetry } from "@/lib/visibility-telemetry";
+import type { MatchResponse, StageInfo, CompetitorInfo, SquadInfo, Visibility } from "@/lib/types";
 
 // ── Effective match-level scoring percentage ────────────────────────────────
 //
@@ -107,6 +109,10 @@ export interface RawMatchData {
     status?: string | null;
     results?: string | null;
     scoring_completed?: string | number | null;
+    /** SSI visibility short code: "pub" | "lim" | "res" | "csd" | "clb". Added in cache schema v16 (issue #426). */
+    visibility?: string | null;
+    /** SSI's human-readable visibility label, e.g. "Public, searchable and details/names for all". */
+    get_visibility_display?: string | null;
     region?: string | null;
     sub_rule?: string | null;
     get_full_rule_display?: string | null;
@@ -346,6 +352,21 @@ export async function fetchMatchData(
     maxCompetitors: ev.max_competitors ?? null,
   }));
 
+  const visibilityRaw = ev.visibility ?? "";
+  const visibility: Visibility = {
+    class: classifyVisibility(visibilityRaw),
+    rawCode: visibilityRaw,
+    displayName: ev.get_visibility_display ?? "",
+  };
+  visibilityTelemetry({
+    op: "visibility-decision",
+    matchKey,
+    ct: ctNum,
+    id,
+    rawCode: visibilityRaw,
+    class: visibility.class,
+  });
+
   const response: MatchResponse = {
     name: ev.name,
     venue: ev.venue ?? null,
@@ -371,6 +392,7 @@ export async function fetchMatchData(
     squadding_closes: ev.squadding_closes ?? null,
     is_squadding_possible: ev.is_squadding_possible ?? false,
     ssi_url: `https://shootnscoreit.com/event/${ct}/${id}/`,
+    visibility,
     stages,
     competitors,
     squads,

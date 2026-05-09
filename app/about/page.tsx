@@ -256,6 +256,27 @@ export default function AboutPage() {
           <McpEndpoint />
         </section>
 
+        <section aria-labelledby="about-organizers-heading" className="space-y-4">
+          <h2
+            id="about-organizers-heading"
+            className="text-xl font-semibold border-b border-border pb-2"
+          >
+            For match organizers
+          </h2>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            Running a private match on ShootNScoreIt? You can opt in to
+            having it appear on SSI Scoreboard by inviting our service
+            account as Staff.{" "}
+            <Link
+              href="/about/organizer-published"
+              className="underline underline-offset-4 hover:text-foreground"
+            >
+              Step-by-step instructions
+            </Link>
+            .
+          </p>
+        </section>
+
         <section aria-labelledby="about-links-heading" className="space-y-4">
           <h2
             id="about-links-heading"
