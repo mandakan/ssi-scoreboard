@@ -9,8 +9,7 @@ import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data
 import { getMatchScorecards } from "@/lib/scorecards-archive";
 import { computeFullFieldRankings } from "@/app/api/compare/logic";
 import { decodeShooterId } from "@/lib/shooter-index";
-import { computeMatchScoringPct } from "@/lib/match-data";
-import { isMatchCompleteFromEvent } from "@/lib/match-ttl";
+import { computeMatchScoringPct, isMatchCompleteFromRawEvent } from "@/lib/match-ttl";
 
 interface RawMatchData {
   event: {
@@ -79,12 +78,7 @@ export async function GET(
   // during live (the per-competitor live path covers selected competitors
   // only). Match metadata is small and almost always cache-hit, so this is
   // a cheap pre-check that saves the heavy scorecards fetch on live calls.
-  const isComplete = isMatchCompleteFromEvent({
-    scoringPct: computeMatchScoringPct(matchData.event),
-    startDate: matchData.event.starts ?? null,
-    status: matchData.event.status,
-    resultsStatus: matchData.event.results,
-  });
+  const isComplete = isMatchCompleteFromRawEvent(matchData.event);
   if (!isComplete) {
     return NextResponse.json({
       available: false,

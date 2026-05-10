@@ -4,6 +4,7 @@ import {
   computeMatchFreshness,
   isMatchComplete,
   isMatchCompleteFromEvent,
+  isMatchCompleteFromRawEvent,
 } from "@/lib/match-ttl";
 
 const NOW = new Date("2025-06-15T12:00:00Z").getTime();
@@ -179,6 +180,51 @@ describe("isMatchCompleteFromEvent", () => {
         startDate: isoHoursFromNow(-48),
         status: "cp",
         resultsStatus: "all",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("isMatchCompleteFromRawEvent", () => {
+  it("returns false for a null/undefined event", () => {
+    expect(isMatchCompleteFromRawEvent(null)).toBe(false);
+    expect(isMatchCompleteFromRawEvent(undefined)).toBe(false);
+  });
+
+  it("aggregates per-stage scoring_progress and treats >=98% past the time gate as complete", () => {
+    // ~4.2 days back (past the 3-day gate, before the 7-day historical fallback)
+    // so the scoringPct=100 signal is what flips the completion bit.
+    expect(
+      isMatchCompleteFromRawEvent({
+        starts: isoHoursFromNow(-100),
+        status: null,
+        results: null,
+        stages: [
+          { scoring_progress: { scored: 100, total: 100 } },
+          { scoring_progress: { scored: 100, total: 100 } },
+        ],
+      }),
+    ).toBe(true);
+  });
+
+  it("respects the time gate even with results=all + 100% scoring", () => {
+    expect(
+      isMatchCompleteFromRawEvent({
+        starts: isoHoursFromNow(-24),
+        status: "cp",
+        results: "all",
+        stages: [{ scoring_progress: { scored: 50, total: 50 } }],
+      }),
+    ).toBe(false);
+  });
+
+  it("treats stages with no progress data as 0% (no flip without other signals)", () => {
+    expect(
+      isMatchCompleteFromRawEvent({
+        starts: isoHoursFromNow(-100),
+        status: null,
+        results: null,
+        stages: [{ scoring_progress: null }, {}],
       }),
     ).toBe(false);
   });

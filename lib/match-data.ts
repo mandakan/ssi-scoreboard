@@ -5,7 +5,7 @@
 import { cache } from "react";
 import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY, refreshCachedMatchQuery } from "@/lib/graphql";
 import cacheAdapter from "@/lib/cache-impl";
-import { computeMatchFreshness, computeMatchSwrTtl, isMatchComplete } from "@/lib/match-ttl";
+import { computeMatchFreshness, computeMatchScoringPct, computeMatchSwrTtl, isMatchComplete } from "@/lib/match-ttl";
 import { extractDivision } from "@/lib/divisions";
 import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
 import { afterResponse } from "@/lib/background-impl";
@@ -17,34 +17,10 @@ import { classifyVisibility } from "@/lib/visibility";
 import { visibilityTelemetry } from "@/lib/visibility-telemetry";
 import type { MatchResponse, StageInfo, CompetitorInfo, SquadInfo, Visibility } from "@/lib/types";
 
-// ── Match-level scoring percentage ──────────────────────────────────────────
-//
-// SSI exposes scoring progress as integer counts on each `IpscStageNode` via
-// `scoring_progress { scored, total }`. The match-level percentage is the
-// weighted ratio across all stages — i.e. the share of (competitor × stage)
-// pairs that have been scored. This matches SSI's own match-page progress
-// indicator and stays meaningful when stages have unequal squad sizes.
-//
-// (The legacy `IpscMatchNode.scoring_completed` field was deprecated by SSI
-// with the note "Always returns 0. Use scoring_progress / squad_scoring_progress
-// on stages instead." We do exactly that.)
-
-interface MatchEventForScoring {
-  stages?: Array<{ scoring_progress?: { scored?: number | null; total?: number | null } | null }> | null;
-}
-
-export function computeMatchScoringPct(event: MatchEventForScoring | null | undefined): number {
-  if (!event?.stages?.length) return 0;
-  let scored = 0;
-  let total = 0;
-  for (const s of event.stages) {
-    const sp = s?.scoring_progress;
-    if (!sp) continue;
-    if (typeof sp.scored === "number") scored += sp.scored;
-    if (typeof sp.total === "number") total += sp.total;
-  }
-  return total > 0 ? (scored / total) * 100 : 0;
-}
+// `computeMatchScoringPct` lives in lib/match-ttl.ts (alongside the other
+// scoring-state helpers); re-exported here for back-compat with existing
+// imports from `@/lib/match-data`.
+export { computeMatchScoringPct } from "@/lib/match-ttl";
 
 // ── Raw GraphQL response shapes ─────────────────────────────────────────────
 
