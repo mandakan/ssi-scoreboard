@@ -166,7 +166,7 @@ interface EventSummary {
 
 interface MatchResponse {
   name: string;
-  scoring_completed: number;
+  scoring_pct: number;
   competitors_count: number;
   stages_count: number;
   date: string | null;
@@ -312,7 +312,7 @@ async function main(): Promise<void> {
     }
 
     const fetchMs = Date.now() - t0;
-    const scoring = matchResponse.scoring_completed;
+    const scoring = matchResponse.scoring_pct;
     const matchDate = matchResponse.date ? new Date(matchResponse.date) : null;
     const daysSince = matchDate ? (Date.now() - matchDate.getTime()) / 86_400_000 : 99;
 

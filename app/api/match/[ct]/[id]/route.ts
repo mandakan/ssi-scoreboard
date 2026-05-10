@@ -31,7 +31,7 @@ export async function GET(
     cache_hit: cachedAt !== null,
     competitors_count: response.competitors_count,
     stages_count: response.stages_count,
-    scoring_completed: response.scoring_completed,
+    scoring_pct: response.scoring_pct,
     is_complete: isComplete,
     ms_graphql: Math.round(result.msFetch),
     ms_total: Math.round(tDone - t0),

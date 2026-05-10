@@ -101,7 +101,12 @@ export interface MatchResponse {
   competitors_count: number;
   /** Maximum number of competitors allowed; null if not set. */
   max_competitors: number | null;
-  scoring_completed: number; // percentage 0-100
+  /** Match-level scoring percentage (0-100), aggregated from per-stage
+   *  `scoring_progress` via `computeMatchScoringPct`. The internal name
+   *  matches the underlying semantic (a percentage, not a boolean). The
+   *  v1 surface keeps the legacy `scoring_completed` name -- the v1 wrapper
+   *  re-maps from this field. */
+  scoring_pct: number;
   /** SSI match lifecycle status: "dr" Draft | "on" Active | "ol" Active/no-self-edit | "pr" Preliminary | "cp" Completed | "cs" Cancelled */
   match_status: string;
   /** SSI results visibility: "org" organizers-only | "stg" scores-public | "cmp" participants-only | "all" publicly published */
@@ -610,7 +615,8 @@ export interface PopularMatch {
   name: string;
   venue: string | null;
   date: string | null;
-  scoring_completed: number;
+  /** Match-level scoring percentage (0-100). Same semantic as `MatchResponse.scoring_pct`. */
+  scoring_pct: number;
 }
 
 export interface EventSummary {

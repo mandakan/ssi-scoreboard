@@ -98,7 +98,7 @@ export default async function MatchPage({ params }: PageProps) {
           ct: ctNum,
           level: result.data.level ?? null,
           region: result.data.region ?? null,
-          scoringBucket: bucketScoring(result.data.scoring_completed ?? 0),
+          scoringBucket: bucketScoring(result.data.scoring_pct ?? 0),
           cacheHit: result.cachedAt !== null,
         });
       }

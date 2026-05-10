@@ -74,7 +74,15 @@ export function PopularMatches() {
       </h2>
       <div className="grid gap-3 sm:grid-cols-2">
         {visible.map((match) => (
-          <CompetitionCard key={`${match.ct}-${match.id}`} comp={match} />
+          <CompetitionCard
+            key={`${match.ct}-${match.id}`}
+            // Map the API field to the localStorage-shaped `CompetitionCardData`
+            // so the same card component renders both the popular-matches and
+            // recent-competitions sources. The `scoring_completed` name on
+            // CompetitionCardData mirrors `StoredCompetition` (the boundary
+            // type for browser-stored data).
+            comp={{ ...match, scoring_completed: match.scoring_pct }}
+          />
         ))}
       </div>
       {filtered.length > INITIAL_VISIBLE && (

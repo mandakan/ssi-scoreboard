@@ -16,7 +16,7 @@ const baseMatch: MatchResponse = {
   region: "SWE",
   stages_count: 8,
   competitors_count: 105,
-  scoring_completed: 56,
+  scoring_pct: 56,
   match_status: "on",
   results_status: "org",
   is_live_scores_accessible: false,
@@ -57,18 +57,18 @@ describe("MatchHeader", () => {
     expect(screen.getByText("SWE")).toBeInTheDocument();
   });
 
-  it("shows 56% progress for scoring_completed=56", () => {
+  it("shows 56% progress for scoring_pct=56", () => {
     render(<MatchHeader match={baseMatch} />);
     expect(screen.getByText("56%")).toBeInTheDocument();
   });
 
-  it("shows 'Complete' when scoring_completed=100", () => {
-    render(<MatchHeader match={{ ...baseMatch, scoring_completed: 100 }} />);
+  it("shows 'Complete' when scoring_pct=100", () => {
+    render(<MatchHeader match={{ ...baseMatch, scoring_pct: 100 }} />);
     expect(screen.getByText("Complete")).toBeInTheDocument();
   });
 
-  it("shows 0% progress for scoring_completed=0", () => {
-    render(<MatchHeader match={{ ...baseMatch, scoring_completed: 0 }} />);
+  it("shows 0% progress for scoring_pct=0", () => {
+    render(<MatchHeader match={{ ...baseMatch, scoring_pct: 0 }} />);
     expect(screen.getByText("0%")).toBeInTheDocument();
   });
 

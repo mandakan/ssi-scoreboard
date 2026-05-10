@@ -35,7 +35,7 @@ const sampleMatches: PopularMatch[] = [
     name: "Regional Open 2025",
     venue: "Main Range",
     date: "2025-04-15T09:00:00+00:00",
-    scoring_completed: 100,
+    scoring_pct: 100,
   },
   {
     ct: "22",
@@ -43,7 +43,7 @@ const sampleMatches: PopularMatch[] = [
     name: "Spring Invitational",
     venue: null,
     date: null,
-    scoring_completed: 60,
+    scoring_pct: 60,
   },
 ];
 

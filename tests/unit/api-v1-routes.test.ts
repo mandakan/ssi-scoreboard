@@ -168,7 +168,7 @@ describe("/api/v1/match/[ct]/[id]", () => {
       stages_count: 12,
       competitors_count: 200,
       max_competitors: 240,
-      scoring_completed: 100,
+      scoring_pct: 100,
       match_status: "cp",
       results_status: "all",
       is_live_scores_accessible: true,

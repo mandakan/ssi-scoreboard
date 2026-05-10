@@ -71,14 +71,14 @@ export async function GET(
     resultsPublished: match.results_status === "all",
   };
   const dataTtl = computeMatchSwrTtl(
-    match.scoring_completed,
+    match.scoring_pct,
     daysSince,
     match.date,
     signals,
   );
 
   const isComplete = isMatchCompleteFromEvent({
-    scoringPct: match.scoring_completed,
+    scoringPct: match.scoring_pct,
     startDate: match.date,
     status: match.match_status,
     resultsStatus: match.results_status,
@@ -126,7 +126,7 @@ export async function GET(
   const stageRefs = match.stages.map((s) => ({ ct: 24, id: String(s.id) }));
   const matchFreshness = isComplete
     ? null
-    : computeMatchFreshness(match.scoring_completed, daysSince, match.date, signals);
+    : computeMatchFreshness(match.scoring_pct, daysSince, match.date, signals);
   let scorecardsData: RawScorecardsData;
   let scorecardsCachedAt: string | null;
   try {

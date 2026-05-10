@@ -354,7 +354,7 @@ export async function fetchMatchData(
     stages_count: ev.stages_count ?? stages.length,
     competitors_count: ev.competitors_count ?? competitors.length,
     max_competitors: ev.max_competitors ?? null,
-    scoring_completed: scoringPct,
+    scoring_pct: scoringPct,
     match_status: ev.status ?? "on",
     results_status: ev.results ?? "org",
     registration_status: ev.registration ?? "cl",
