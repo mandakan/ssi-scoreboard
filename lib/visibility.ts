@@ -29,3 +29,31 @@ export function classifyVisibility(rawCode: string | null | undefined): Visibili
   if (!rawCode) return "organizer-published";
   return CLASS_BY_RAW[rawCode] ?? "organizer-published";
 }
+
+/**
+ * True only if the given cached match data (raw GraphQL response or shaped
+ * MatchResponse) classifies as a fully public match. Used to keep
+ * non-public matches (unlisted / organizer-published) out of any "popular"
+ * or "trending" surface, matching the searchEvents publication boundary.
+ *
+ * Defensive on shape: missing or unrecognized visibility codes are treated
+ * as non-public via classifyVisibility's fallback. The data field can be
+ * either the raw event node (`{ visibility: "pub" }`) or the shaped
+ * MatchResponse (`{ visibility: { class: "public" } }`).
+ */
+export function isPublicMatchData(data: unknown): boolean {
+  if (!data || typeof data !== "object") return false;
+  const event = (data as { event?: unknown }).event;
+  if (event && typeof event === "object") {
+    const raw = (event as { visibility?: unknown }).visibility;
+    if (typeof raw === "string") {
+      return classifyVisibility(raw) === "public";
+    }
+  }
+  const shaped = (data as { visibility?: unknown }).visibility;
+  if (shaped && typeof shaped === "object") {
+    const cls = (shaped as { class?: unknown }).class;
+    return cls === "public";
+  }
+  return false;
+}

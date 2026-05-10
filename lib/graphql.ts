@@ -10,6 +10,7 @@ import { parseMatchCacheKey, persistActiveMatchToD1 } from "@/lib/match-data-sto
 import { markUpstreamDegraded } from "@/lib/upstream-status";
 import { upstreamTelemetry, hashVariables, type UpstreamOutcome } from "@/lib/upstream-telemetry";
 import { cacheTelemetry } from "@/lib/cache-telemetry";
+import { isPublicMatchData } from "@/lib/visibility";
 import { getJwt, JWT_EXPIRED_ERROR_PATTERNS } from "@/lib/ssi-auth";
 
 /**
@@ -862,7 +863,11 @@ export async function cachedExecuteQuery<T>(
       // Schema version gate: entries without a version or with an older version
       // are treated as misses. They will be overwritten on the next fetch.
       if (entry.v === CACHE_SCHEMA_VERSION) {
-        if (cacheKey.startsWith("gql:GetMatch:") && !(await isAdminRequest())) {
+        if (
+          cacheKey.startsWith("gql:GetMatch:") &&
+          !(await isAdminRequest()) &&
+          isPublicMatchData(entry.data)
+        ) {
           afterResponse(db.recordMatchAccess(cacheKey).catch(() => {}));
         }
         return { data: entry.data, cachedAt: entry.cachedAt };
@@ -880,7 +885,11 @@ export async function cachedExecuteQuery<T>(
       if (d1Raw) {
         const entry = JSON.parse(d1Raw) as CacheEntry<T>;
         if (entry.v === CACHE_SCHEMA_VERSION) {
-          if (cacheKey.startsWith("gql:GetMatch:") && !(await isAdminRequest())) {
+          if (
+            cacheKey.startsWith("gql:GetMatch:") &&
+            !(await isAdminRequest()) &&
+            isPublicMatchData(entry.data)
+          ) {
             afterResponse(db.recordMatchAccess(cacheKey).catch(() => {}));
           }
           return { data: entry.data, cachedAt: entry.cachedAt };
@@ -912,7 +921,13 @@ export async function cachedExecuteQuery<T>(
   }
 
   // Record access for popularity tracking (fire-and-forget, non-fatal).
-  if (cacheKey.startsWith("gql:GetMatch:") && !(await isAdminRequest())) {
+  // Skip non-public matches (unlisted / organizer-published) so they never
+  // surface on the popular-matches grid -- see lib/visibility.ts.
+  if (
+    cacheKey.startsWith("gql:GetMatch:") &&
+    !(await isAdminRequest()) &&
+    isPublicMatchData(data)
+  ) {
     void db.recordMatchAccess(cacheKey).catch(() => {});
   }
 
