@@ -303,8 +303,14 @@ Endpoints (thin wrappers around the internal routes, see `app/api/v1/`):
 **Contract rules (CRITICAL):**
 - Within v1, only **additive** changes are allowed -- new optional fields, never
   rename/remove/retype existing ones. Breaking changes go to `/api/v2/`.
-- Snapshot tests in `tests/unit/api-v1-routes.test.ts` enforce response shapes;
-  any drift fails CI. Updating a snapshot is a contract change -- review it.
+- The contract is locked by Zod schemas in `lib/api-v1-schemas.ts`. Each happy-path
+  test in `tests/unit/api-v1-routes.test.ts` runs `<schema>.parse(body)` before
+  the snapshot assertion -- removing or retyping a field fails with a named
+  TypeError pointing at the affected path, even when a developer reflexively
+  runs `vitest -u` to bless a snapshot diff. Adding a new field requires
+  extending the schema (an explicit, reviewable change).
+- Snapshot tests preserve the byte shape of each response so reviewers see the
+  impact of any change in the PR diff. Schema validation is the primary guard.
 - Whenever an internal route response shape changes, check whether the v1 wrapper
   for it is affected. If a field is removed or renamed upstream, the v1 wrapper
   must either (a) preserve the old field by reshaping in the wrapper, or

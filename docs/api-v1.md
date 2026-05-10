@@ -441,13 +441,19 @@ The shape of every successful 2xx response is locked at v1. Within v1:
 - **Not allowed**: renaming, removing, or changing the type of any existing
   field. Such changes require a `/api/v2/` namespace.
 
-Snapshot tests in `tests/unit/api-v1-routes.test.ts` enforce the shape; CI
-fails on any drift. Fixtures are typed against the production interfaces via
-`satisfies`, so the typechecker also catches divergence between the fixture
-and the real types -- snapshots alone could lock a fictional shape if the
-fixture was hand-written without that constraint. Updating a snapshot is an
-explicit signal that the contract is changing -- review carefully before
-doing so.
+The contract is locked by Zod schemas in `lib/api-v1-schemas.ts`. Each
+happy-path test in `tests/unit/api-v1-routes.test.ts` runs
+`<schema>.parse(body)` before the snapshot assertion -- removing or
+retyping a documented field fails with a named TypeError pointing at the
+affected path, even when a developer reflexively runs `vitest -u` to bless
+a snapshot diff. Adding a new field requires extending the schema (an
+explicit, reviewable change). Snapshot diffs preserve the byte shape so
+reviewers see the impact of every change in the PR.
+
+Fixtures are typed against the production interfaces via `satisfies`, so
+the typechecker also catches divergence between the fixture and the real
+types -- snapshots alone could lock a fictional shape if the fixture was
+hand-written without that constraint.
 
 ---
 
