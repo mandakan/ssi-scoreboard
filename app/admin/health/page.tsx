@@ -93,11 +93,12 @@ export default async function AdminHealthPage({ searchParams }: PageProps) {
 
   return (
     <main className="mx-auto flex max-w-md flex-col gap-3 p-3 pb-24">
-      <header className="flex items-baseline justify-between gap-2 px-1">
+      <header className="flex items-center justify-between gap-2 px-1">
         <h1 className="text-xl font-semibold">Health</h1>
         <Link
           href={refreshHref}
-          className="text-sm text-muted-foreground underline-offset-2 hover:underline"
+          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md px-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-label="Refresh dashboard"
         >
           refresh
         </Link>
@@ -172,34 +173,36 @@ function SsiCard({
           <span className="text-base font-normal text-muted-foreground">ok</span>
         </div>
         {data.by_op.length > 0 ? (
-          <table className="w-full text-sm">
-            <thead className="text-muted-foreground">
-              <tr>
-                <th className="text-left font-normal">op</th>
-                <th className="text-right font-normal">ok / err</th>
-                <th className="text-right font-normal">p50</th>
-                <th className="text-right font-normal">p95</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.by_op.map((row) => (
-                <tr key={row.operation}>
-                  <td className="py-1 font-mono">{row.operation}</td>
-                  <td className="py-1 text-right tabular-nums">
-                    {row.ok}
-                    {row.err > 0 ? (
-                      <span className="text-rose-600 dark:text-rose-400">
-                        {" "}
-                        / {row.err}
-                      </span>
-                    ) : null}
-                  </td>
-                  <td className="py-1 text-right tabular-nums">{row.p50_ms}</td>
-                  <td className="py-1 text-right tabular-nums">{row.p95_ms}</td>
+          <div className="-mx-2 overflow-x-auto px-2">
+            <table className="w-full text-sm">
+              <thead className="text-muted-foreground">
+                <tr>
+                  <th className="text-left font-normal">op</th>
+                  <th className="px-2 text-right font-normal">ok / err</th>
+                  <th className="px-2 text-right font-normal">p50</th>
+                  <th className="text-right font-normal">p95</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data.by_op.map((row) => (
+                  <tr key={row.operation}>
+                    <td className="py-1 pr-2 font-mono">{row.operation}</td>
+                    <td className="px-2 py-1 text-right tabular-nums">
+                      {row.ok}
+                      {row.err > 0 ? (
+                        <span className="text-rose-600 dark:text-rose-400">
+                          {" "}
+                          / {row.err}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="px-2 py-1 text-right tabular-nums">{row.p50_ms}</td>
+                    <td className="py-1 text-right tabular-nums">{row.p95_ms}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <p className="text-sm text-muted-foreground">No calls in window.</p>
         )}
@@ -340,21 +343,21 @@ function TopMatchesCard({
         {data.length === 0 ? (
           <p className="text-sm text-muted-foreground">No data yet.</p>
         ) : (
-          <ol className="flex flex-col gap-1 text-sm">
+          <ol className="-mx-2 flex flex-col text-sm">
             {data.map((m, i) => (
-              <li key={m.match_id} className="flex justify-between gap-2">
-                <span>
-                  <span className="text-muted-foreground">#{i + 1}</span>{" "}
-                  <Link
-                    href={`/match/22/${m.match_id}`}
-                    className="font-mono underline-offset-2 hover:underline"
-                  >
-                    {m.match_id}
-                  </Link>
-                </span>
-                <span className="tabular-nums text-muted-foreground">
-                  {m.count}
-                </span>
+              <li key={m.match_id}>
+                <Link
+                  href={`/match/22/${m.match_id}`}
+                  className="flex min-h-11 items-center justify-between gap-2 rounded-md px-2 hover:bg-muted"
+                >
+                  <span>
+                    <span className="text-muted-foreground">#{i + 1}</span>{" "}
+                    <span className="font-mono">{m.match_id}</span>
+                  </span>
+                  <span className="tabular-nums text-muted-foreground">
+                    {m.count}
+                  </span>
+                </Link>
               </li>
             ))}
           </ol>
