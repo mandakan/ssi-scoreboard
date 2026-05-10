@@ -71,6 +71,14 @@ database_name = "ssi-scoreboard-app-db-eu"
 database_id = "4a3d6cf5-31ce-4775-84f5-f9abee4206e2"  # patched by scripts/setup-d1.ts
 migrations_dir = "migrations"
 
+# R2 bucket binding for *reading* the telemetry Parquet files written by
+# Pipelines. The admin health dashboard (app/admin/health) lists+fetches recent
+# Parquet via this binding, decodes them, and renders aggregates. Writes are
+# owned by the Pipelines stream; this binding is read-only by convention.
+[[r2_buckets]]
+binding = "TELEMETRY_BUCKET"
+bucket_name = "ssi-scoreboard-telemetry"
+
 # Cloudflare Pipelines stream for telemetry events — see lib/telemetry-sinks-cf.ts.
 # The stream coalesces events across all isolates and writes Parquet batches to
 # R2 every 300s (or every 5MB). One-time provisioning:
@@ -111,6 +119,11 @@ binding = "APP_DB"
 database_name = "ssi-scoreboard-app-db-staging-eu"
 database_id = "1b1c7faf-c206-41f6-9557-adbdf1c0ba18"  # patched by scripts/setup-d1.ts
 migrations_dir = "migrations"
+
+# Staging R2 read binding for the telemetry dashboard.
+[[env.staging.r2_buckets]]
+binding = "TELEMETRY_BUCKET"
+bucket_name = "ssi-scoreboard-telemetry-staging"
 
 # Staging Pipelines stream (same provisioning as prod, with `_staging` suffix
 # and the staging bucket name). Stream id captured below; do not copy the prod id.

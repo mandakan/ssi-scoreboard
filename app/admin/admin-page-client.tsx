@@ -13,6 +13,7 @@ import {
   UserCheck,
   Activity,
   LogOut,
+  ExternalLink,
 } from "lucide-react";
 
 interface CacheHealthResult {
@@ -490,10 +491,30 @@ export function AdminPageClient() {
             <Shield className="h-5 w-5" />
             Admin
           </h1>
-          <Button size="sm" variant="ghost" onClick={logout}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Sign out
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button asChild size="sm" variant="ghost" className="min-h-11">
+              <a
+                href={`/admin/health?token=${encodeURIComponent(token)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Open health dashboard in new tab"
+              >
+                <Activity className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Dashboard</span>
+                <ExternalLink className="ml-1 hidden h-3 w-3 sm:inline" />
+              </a>
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={logout}
+              aria-label="Sign out"
+              className="min-h-11"
+            >
+              <LogOut className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Sign out</span>
+            </Button>
+          </div>
         </div>
 
         {/* Section tabs */}
@@ -502,7 +523,7 @@ export function AdminPageClient() {
             <button
               key={s.id}
               onClick={() => setActiveSection(s.id)}
-              className={`px-3 py-2 text-sm font-medium rounded-t-md transition-colors ${
+              className={`min-h-11 px-3 py-2 text-sm font-medium rounded-t-md transition-colors ${
                 activeSection === s.id
                   ? "bg-background text-foreground border border-border border-b-background -mb-px"
                   : "text-muted-foreground hover:text-foreground"
