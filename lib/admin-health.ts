@@ -4,7 +4,22 @@
 // The Pipelines-written rows look like { value: VARCHAR JSON } where the
 // JSON is `{"value": <event>}` — we unwrap once to reach the event.
 
-import { parquetReadObjects } from "hyparquet";
+import { parquetReadObjects, type Compressors } from "hyparquet";
+import { decompress as zstdDecompress } from "fzstd";
+
+// Pipelines defaults to ZSTD for Parquet output. hyparquet supports SNAPPY +
+// uncompressed natively, but its companion `hyparquet-compressors` package
+// uses runtime WebAssembly which CF Workers blocks. fzstd is pure JS and
+// works in the Workers runtime. Only ZSTD needs an entry — other codecs we
+// might encounter (snappy, plain) are handled by hyparquet itself.
+const compressors: Compressors = {
+  ZSTD: (input: Uint8Array, outputLength: number): Uint8Array => {
+    const out = zstdDecompress(input);
+    return outputLength && out.byteLength !== outputLength
+      ? out.subarray(0, outputLength)
+      : out;
+  },
+};
 
 interface R2Object {
   key: string;
@@ -116,8 +131,11 @@ async function loadEventsLast24h(bucket: R2Bucket, now: Date): Promise<{ events:
     const buf = await r.arrayBuffer();
     let rows: { value?: unknown }[];
     try {
-      rows = (await parquetReadObjects({ file: buf })) as { value?: unknown }[];
-    } catch {
+      rows = (await parquetReadObjects({ file: buf, compressors })) as { value?: unknown }[];
+    } catch (err) {
+      // Telemetry decode failures must not break the dashboard. Surface in
+      // the worker logs but keep aggregating other files.
+      console.warn("[admin-health] parquet decode failed for", key, err);
       return;
     }
     for (const row of rows) {
@@ -153,7 +171,7 @@ function aggregate(events: RawEvent[], filesScanned: number, now: Date): Dashboa
   for (const ev of events) {
     const t = parseTs(ev.ts);
     if (t == null) continue;
-    if (ev.domain === "upstream") {
+    if (ev.domain === "upstream" && ev.op === "graphql-request") {
       if (t >= h24Cutoff) upstreamH24.push(ev);
       if (t >= h1Cutoff) upstreamH1.push(ev);
     } else if (ev.domain === "error") {

@@ -8,6 +8,18 @@ const NOW = new Date("2026-05-10T15:00:00Z");
 const minutesAgo = (n: number) => new Date(NOW.getTime() - n * 60_000).toISOString();
 
 describe("admin-health aggregate", () => {
+  it("ignores non-graphql upstream events (probes etc.) in SSI rollup", () => {
+    const events = [
+      { ts: minutesAgo(5), domain: "upstream", op: "graphql-request", operation: "GetMatch", outcome: "ok", ms: 100 },
+      { ts: minutesAgo(10), domain: "upstream", op: "status-checked" },
+      { ts: minutesAgo(15), domain: "upstream", op: "status-checked" },
+    ];
+    const out = aggregate(events, 1, NOW);
+    expect(out.ssi_h1.calls).toBe(1);
+    expect(out.ssi_h1.by_op).toHaveLength(1);
+    expect(out.ssi_h1.by_op[0].operation).toBe("GetMatch");
+  });
+
   it("rolls up upstream calls into per-op p50/p95 and ok_pct", () => {
     const events = [
       { ts: minutesAgo(5), domain: "upstream", op: "graphql-request", operation: "GetMatch", outcome: "ok", ms: 100 },
