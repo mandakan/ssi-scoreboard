@@ -1789,7 +1789,8 @@
     {
       "name": "scoring_completed",
       "type": "Decimal!",
-      "args": []
+      "args": [],
+      "deprecationReason": "Always returns 0. Use scoring_progress / squad_scoring_progress on stages instead."
     },
     {
       "name": "serie_type",
@@ -3116,7 +3117,8 @@
     {
       "name": "scoring_completed",
       "type": "Decimal!",
-      "args": []
+      "args": [],
+      "deprecationReason": "Always returns 0. Use scoring_progress / squad_scoring_progress on stages instead."
     },
     {
       "name": "serie_type",
@@ -3728,7 +3730,8 @@
     {
       "name": "scoring_completed",
       "type": "Decimal!",
-      "args": []
+      "args": [],
+      "deprecationReason": "Always returns 0. Use scoring_progress / squad_scoring_progress instead."
     },
     {
       "name": "scoring_progress",
@@ -3980,12 +3983,14 @@
     {
       "name": "get_scoring_history",
       "type": "[VersionNode!]!",
-      "args": []
+      "args": [],
+      "deprecationReason": "Use top-level `get_history_versions(content_type, id)` query instead."
     },
     {
       "name": "get_scoring_history_as_list",
       "type": "[String!]!",
-      "args": []
+      "args": [],
+      "deprecationReason": "Use top-level `get_history_versions(content_type, id)` query instead."
     },
     {
       "name": "hitfactor",
@@ -4802,7 +4807,8 @@
     {
       "name": "scoring_history",
       "type": "[VersionNode!]!",
-      "args": []
+      "args": [],
+      "deprecationReason": "Use top-level `get_history_versions(content_type, id)` query instead."
     },
     {
       "name": "scoring_progress",
