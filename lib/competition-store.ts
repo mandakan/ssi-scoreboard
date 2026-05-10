@@ -46,7 +46,10 @@ export function saveRecentCompetition(
       name: match.name,
       venue: match.venue,
       date: match.date,
-      scoring_completed: match.scoring_completed,
+      // Boundary mapping: MatchResponse uses the renamed `scoring_pct`,
+      // StoredCompetition keeps `scoring_completed` so existing browser
+      // localStorage entries don't lose the field on read.
+      scoring_completed: match.scoring_pct,
       last_visited: Date.now(),
     };
     const updated = [entry, ...existing].slice(0, MAX_RECENT);

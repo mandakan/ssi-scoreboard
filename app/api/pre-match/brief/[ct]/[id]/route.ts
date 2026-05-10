@@ -69,7 +69,7 @@ export async function GET(
   // scoring (e.g. multi-day matches, RO squads shooting the day before).
   if (
     !isPreMatchEligible({
-      scoringPct: match.scoring_completed,
+      scoringPct: match.scoring_pct,
       resultsStatus: match.results_status,
       matchStatus: match.match_status,
     })

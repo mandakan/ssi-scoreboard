@@ -41,7 +41,7 @@ export function useMatchQuery(ct: string, id: string) {
       const isComplete =
         data.match_status === "cp" ||
         data.match_status === "cs" ||
-        data.scoring_completed >= 100;
+        data.scoring_pct >= 100;
       return isComplete ? false : 30_000;
     },
     enabled: Boolean(ct && id),

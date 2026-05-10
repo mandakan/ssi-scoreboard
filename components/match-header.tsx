@@ -32,7 +32,7 @@ export function MatchHeader({ match }: MatchHeaderProps) {
       })
     : null;
 
-  const pct = match.scoring_completed ?? 0;
+  const pct = match.scoring_pct ?? 0;
   const isComplete = match.results_status === "all" || pct >= 100;
 
   // For Handgun matches the sub_rule badge (Standard / PCC) is the meaningful

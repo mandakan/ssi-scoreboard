@@ -15,7 +15,7 @@ const MOCK_MATCH: MatchResponse = {
   region: "SWE",
   stages_count: 3,
   competitors_count: 10,
-  scoring_completed: 75,
+  scoring_pct: 75,
   match_status: "on",
   results_status: "org",
   is_live_scores_accessible: false,
@@ -162,12 +162,12 @@ const MOCK_COMPARE: CompareResponse = {
 
 // Far-future date keeps daysSinceMatchStart and daysSinceEnd negative, which
 // prevents detectMatchView from ever flipping to "coaching" as time passes.
-// scoring_completed=75 + results_status="org" → effectiveMode === "live".
+// scoring_pct=75 + results_status="org" → effectiveMode === "live".
 const MOCK_LIVE_MATCH: typeof MOCK_MATCH = {
   ...MOCK_MATCH,
   date: "2099-12-30T09:00:00+00:00",
   ends: "2099-12-31T09:00:00+00:00",
-  scoring_completed: 75,
+  scoring_pct: 75,
   results_status: "org",
   match_status: "on",
 };

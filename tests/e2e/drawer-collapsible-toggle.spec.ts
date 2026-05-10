@@ -17,7 +17,7 @@ const MOCK_MATCH: MatchResponse = {
   region: "SWE",
   stages_count: 3,
   competitors_count: 10,
-  scoring_completed: 100,
+  scoring_pct: 100,
   match_status: "cp",
   results_status: "org",
   is_live_scores_accessible: false,

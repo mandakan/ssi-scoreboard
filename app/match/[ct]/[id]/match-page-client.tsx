@@ -208,12 +208,12 @@ export default function MatchPageClient() {
 
   // Auto view is computed from match-only data first, then refined once the
   // compare response confirms whether any stage already has scores.
-  // (This enables falling back to "live" if `scoring_completed` is still 0
+  // (This enables falling back to "live" if `scoring_pct` is still 0
   // but the API has scores — handles rounding / delayed reporting.)
   const autoMode = useMemo(() => {
     if (!matchQuery.data) return "coaching" as const;
     return detectMatchView({
-      scoringPct: matchQuery.data.scoring_completed,
+      scoringPct: matchQuery.data.scoring_pct,
       daysSinceMatchStart,
       daysSinceMatchEnd,
       resultsStatus: matchQuery.data.results_status,
@@ -229,7 +229,7 @@ export default function MatchPageClient() {
   // available for multi-day matches where some squads still haven't shot.
   const preMatchEligible = matchQuery.data
     ? isPreMatchEligible({
-        scoringPct: matchQuery.data.scoring_completed,
+        scoringPct: matchQuery.data.scoring_pct,
         resultsStatus: matchQuery.data.results_status,
         matchStatus: matchQuery.data.match_status,
       })
@@ -812,8 +812,8 @@ export default function MatchPageClient() {
           <p className="text-sm text-muted-foreground">
             The organizer has not made live scores public for this match.
             Detailed stage results will be available once scoring is complete
-            {match.scoring_completed > 0
-              ? ` (${Math.round(match.scoring_completed)}% scored so far)`
+            {match.scoring_pct > 0
+              ? ` (${Math.round(match.scoring_pct)}% scored so far)`
               : ""}
             .
           </p>
@@ -926,7 +926,7 @@ export default function MatchPageClient() {
                 </div>
                 <ComparisonTable
                   data={compareQuery.data}
-                  scoringCompleted={match.scoring_completed}
+                  scoringCompleted={match.scoring_pct}
                   onRemove={(id) => handleSelectionChange(selectedIds.filter((s) => s !== id))}
                   aiAvailable={aiAvailable}
                   isComplete={isMatchComplete}
@@ -1245,7 +1245,7 @@ export default function MatchPageClient() {
                   </Collapsible>
 
                   {/* Stage Simulator — collapsed by default, only ≥ 80% complete */}
-                  {match.scoring_completed >= 80 && (
+                  {match.scoring_pct >= 80 && (
                     <Collapsible open={showSimulator} onOpenChange={setShowSimulator} className="rounded-lg border p-4">
                       <div className="flex items-start gap-2">
                         <h2 className="flex-1 font-semibold text-base m-0 leading-none">
@@ -1308,7 +1308,7 @@ export default function MatchPageClient() {
                             id={id}
                             data={compareQuery.data}
                             competitors={compareQuery.data.competitors}
-                            scoringCompleted={match.scoring_completed}
+                            scoringCompleted={match.scoring_pct}
                           />
                         </section>
                       </CollapsibleContent>

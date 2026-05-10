@@ -78,7 +78,7 @@ export async function GET(req: Request) {
           name: ev.name,
           venue: ev.venue ?? null,
           date: ev.starts ?? null,
-          scoring_completed: Math.round(computeMatchScoringPct(ev)),
+          scoring_pct: Math.round(computeMatchScoringPct(ev)),
         });
       } catch {
         // Skip malformed entries.
