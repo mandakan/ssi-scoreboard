@@ -39,8 +39,19 @@ interface PageProps {
 
 export default async function AdminHealthPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const expected = process.env.ADMIN_DASHBOARD_TOKEN;
-  if (!expected || params.token !== expected) {
+  // Two valid tokens:
+  //   ADMIN_DASHBOARD_TOKEN — share-only, rotatable independently
+  //   CACHE_PURGE_SECRET    — already used for /admin; lets a signed-in admin
+  //                           jump straight to /admin/health without juggling secrets
+  const provided = params.token;
+  const dashboardToken = process.env.ADMIN_DASHBOARD_TOKEN;
+  const adminToken = process.env.CACHE_PURGE_SECRET;
+  const valid = Boolean(
+    provided &&
+      ((dashboardToken && provided === dashboardToken) ||
+        (adminToken && provided === adminToken)),
+  );
+  if (!valid) {
     return (
       <main className="mx-auto max-w-md p-4">
         <Card>
@@ -73,9 +84,11 @@ export default async function AdminHealthPage({ searchParams }: PageProps) {
   }
 
   const generated = new Date(data.generated_at);
-  // Keep the bookmark intact across refreshes by passing the token through.
+  // Keep the bookmark intact across refreshes by passing the (already
+  // validated) provided token through — works for both share-token and
+  // signed-in admin paths.
   const refreshHref = `/admin/health?token=${encodeURIComponent(
-    expected,
+    provided as string,
   )}&refresh=1`;
 
   return (

@@ -26,8 +26,16 @@ interface CFEnvWithBucket {
 export async function GET(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const provided = url.searchParams.get("token");
-  const expected = process.env.ADMIN_DASHBOARD_TOKEN;
-  if (!expected || provided !== expected) {
+  // Two valid tokens: ADMIN_DASHBOARD_TOKEN (share-only) or CACHE_PURGE_SECRET
+  // (the existing /admin signed-in session). See app/admin/health/page.tsx.
+  const dashboardToken = process.env.ADMIN_DASHBOARD_TOKEN;
+  const adminToken = process.env.CACHE_PURGE_SECRET;
+  const valid = Boolean(
+    provided &&
+      ((dashboardToken && provided === dashboardToken) ||
+        (adminToken && provided === adminToken)),
+  );
+  if (!valid) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

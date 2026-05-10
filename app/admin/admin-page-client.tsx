@@ -13,6 +13,7 @@ import {
   UserCheck,
   Activity,
   LogOut,
+  ExternalLink,
 } from "lucide-react";
 
 interface CacheHealthResult {
@@ -490,10 +491,23 @@ export function AdminPageClient() {
             <Shield className="h-5 w-5" />
             Admin
           </h1>
-          <Button size="sm" variant="ghost" onClick={logout}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Sign out
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button asChild size="sm" variant="ghost">
+              <a
+                href={`/admin/health?token=${encodeURIComponent(token)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Activity className="h-4 w-4 mr-2" />
+                Dashboard
+                <ExternalLink className="h-3 w-3 ml-1" />
+              </a>
+            </Button>
+            <Button size="sm" variant="ghost" onClick={logout}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Sign out
+            </Button>
+          </div>
         </div>
 
         {/* Section tabs */}
