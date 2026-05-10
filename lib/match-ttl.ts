@@ -115,12 +115,13 @@ export function isMatchComplete(
  * and the signals object internally so each call site doesn't repeat that
  * arithmetic.
  *
- * Use this whenever you have a match-event-shaped object; reach for the
- * primitive `isMatchComplete()` only when the inputs come from somewhere
- * non-event-shaped (e.g. a synthetic test fixture).
+ * Use this whenever you have an already-parsed match (e.g. `MatchResponse`)
+ * with the scoring percentage already on hand. For raw GraphQL event data,
+ * `isMatchCompleteFromRawEvent` does the per-stage `scoring_progress`
+ * aggregation for you.
  */
 export interface MatchCompletionInputs {
-  /** Effective scoring percentage (0-100). Use `effectiveMatchScoringPct(ev)` to derive. */
+  /** Effective scoring percentage (0-100). Use `computeMatchScoringPct(ev)` to derive. */
   scoringPct: number;
   /** Match start date — accepts ISO string, Date, or null/undefined for unknown. */
   startDate: string | Date | null | undefined;
@@ -140,6 +141,60 @@ export function isMatchCompleteFromEvent(input: MatchCompletionInputs): boolean 
   return isMatchComplete(input.scoringPct, daysSince, {
     status: input.status ?? null,
     resultsPublished: input.resultsStatus === "all",
+  });
+}
+
+// ── Match-level scoring percentage ──────────────────────────────────────────
+//
+// SSI exposes scoring progress as integer counts on each `IpscStageNode` via
+// `scoring_progress { scored, total }`. The match-level percentage is the
+// weighted ratio across all stages — i.e. the share of (competitor × stage)
+// pairs that have been scored. This matches SSI's own match-page progress
+// indicator and stays meaningful when stages have unequal squad sizes.
+//
+// (The legacy `IpscMatchNode.scoring_completed` field was deprecated by SSI
+// with the note "Always returns 0. Use scoring_progress / squad_scoring_progress
+// on stages instead.")
+
+interface MatchEventForScoring {
+  stages?: Array<{ scoring_progress?: { scored?: number | null; total?: number | null } | null }> | null;
+}
+
+export function computeMatchScoringPct(event: MatchEventForScoring | null | undefined): number {
+  if (!event?.stages?.length) return 0;
+  let scored = 0;
+  let total = 0;
+  for (const s of event.stages) {
+    const sp = s?.scoring_progress;
+    if (!sp) continue;
+    if (typeof sp.scored === "number") scored += sp.scored;
+    if (typeof sp.total === "number") total += sp.total;
+  }
+  return total > 0 ? (scored / total) * 100 : 0;
+}
+
+/**
+ * Convenience wrapper for callers that hold the raw GraphQL event shape
+ * directly (e.g. `MatchEventForGate` in simulate, the parsed cache blob in
+ * data/results). Aggregates `scoring_progress` across stages internally and
+ * forwards to `isMatchCompleteFromEvent`. Returns `false` for null/undefined
+ * events.
+ */
+export interface RawMatchEventForCompletion extends MatchEventForScoring {
+  starts?: string | null;
+  status?: string | null;
+  results?: string | null;
+}
+
+export function isMatchCompleteFromRawEvent(
+  event: RawMatchEventForCompletion | null | undefined,
+): boolean {
+  if (!event) return false;
+  return isMatchCompleteFromEvent({
+    scoringPct: computeMatchScoringPct(event),
+    startDate: event.starts ?? null,
+    status: event.status,
+    resultsStatus: event.results,
   });
 }
 

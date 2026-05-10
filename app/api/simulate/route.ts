@@ -3,8 +3,7 @@ import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
 import { getMatchScorecards } from "@/lib/scorecards-archive";
 import { applyAdjustmentsToScorecards } from "@/lib/simulate-apply";
-import { computeMatchScoringPct } from "@/lib/match-data";
-import { isMatchCompleteFromEvent } from "@/lib/match-ttl";
+import { isMatchCompleteFromRawEvent } from "@/lib/match-ttl";
 import type { WhatIfSimulationRequest, WhatIfSimulationResponse } from "@/lib/types";
 
 // Shape returned when the route is invoked on a live (not-yet-complete) match.
@@ -94,12 +93,7 @@ export async function POST(req: Request) {
   if (!matchData.event) {
     return NextResponse.json({ error: "Match not found" }, { status: 404 });
   }
-  const isComplete = isMatchCompleteFromEvent({
-    scoringPct: computeMatchScoringPct(matchData.event),
-    startDate: matchData.event.starts ?? null,
-    status: matchData.event.status,
-    resultsStatus: matchData.event.results,
-  });
+  const isComplete = isMatchCompleteFromRawEvent(matchData.event);
   if (!isComplete) {
     const payload: NotAvailableResponse = {
       available: false,
