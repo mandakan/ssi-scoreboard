@@ -1,14 +1,22 @@
-// Snapshot tests for /api/v1/* response shapes.
+// Snapshot + schema tests for /api/v1/* response shapes.
 //
-// The whole point of the v1 contract is that splitsmith (and any future
-// consumer) can pin to it. These snapshots fail CI if the shape drifts --
-// any field rename or removal is a breaking change that requires v2.
-// Additive changes (new optional fields) need an intentional snapshot update.
+// The v1 contract has two layers of CI guard:
+//
+// 1. **Schema validation** (`lib/api-v1-schemas.ts`). Strict Zod schemas
+//    define the v1 surface field-by-field. Each happy-path test below runs
+//    `<schema>.parse(body)` -- removing or retyping a documented field
+//    fails with a named TypeError pointing at the affected path, even if
+//    a developer reflexively runs `vitest -u` to bless a snapshot diff.
+//    This is the primary guard.
+//
+// 2. **Snapshot diffs**. The `toMatchSnapshot()` calls below preserve the
+//    "exact byte shape" of each response so a reviewer sees the impact of
+//    any change in the PR diff, even when the schema-passable change is
+//    intentional (e.g. a new optional field being added to the schema).
 //
 // Fixtures are typed against the real interfaces in lib/types.ts via
-// `satisfies`, so the typechecker also catches drift between the fixture and
-// the production type -- the snapshot alone could lock a fictional shape if
-// the fixture was hand-written without that constraint.
+// `satisfies`, so the typechecker also catches drift between the fixture
+// and the production type.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
@@ -18,6 +26,14 @@ import type {
   ShooterDashboardResponse,
   ShooterSearchResult,
 } from "@/lib/types";
+import {
+  v1CompetitorStagesResponseSchema,
+  v1ErrorEnvelopeSchema,
+  v1EventsResponseSchema,
+  v1MatchResponseSchema,
+  v1ShooterDashboardSchema,
+  v1ShooterSearchResponseSchema,
+} from "@/lib/api-v1-schemas";
 
 const cacheMock = vi.hoisted(() => ({
   get: vi.fn<(k: string) => Promise<string | null>>(),
@@ -115,7 +131,9 @@ describe("/api/v1/events", () => {
       new Request("http://x/api/v1/events?q=SPSK&minLevel=l2plus&country=SWE", { headers: auth }),
     );
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchSnapshot();
+    const body = await res.json();
+    v1EventsResponseSchema.parse(body); // contract guard
+    expect(body).toMatchSnapshot();
 
     const innerReq = innerEvents.mock.calls[0]![0];
     expect(innerReq.url).toBe("http://x/api/events?q=SPSK&minLevel=l2plus&country=SWE");
@@ -128,7 +146,9 @@ describe("/api/v1/events", () => {
     const { GET } = await import("@/app/api/v1/events/route");
     const res = await GET(new Request("http://x/api/v1/events", { headers: auth }));
     expect(res.status).toBe(502);
-    expect(await res.json()).toMatchSnapshot();
+    const body = await res.json();
+    v1ErrorEnvelopeSchema.parse(body);
+    expect(body).toMatchSnapshot();
   });
 });
 
@@ -212,7 +232,9 @@ describe("/api/v1/match/[ct]/[id]", () => {
     expect(res.status).toBe(200);
     // Server-Timing should be stripped from the v1 envelope.
     expect(res.headers.get("Server-Timing")).toBeNull();
-    expect(await res.json()).toMatchSnapshot();
+    const body = await res.json();
+    v1MatchResponseSchema.parse(body);
+    expect(body).toMatchSnapshot();
   });
 
   it("maps a 404 from the inner route to not_found", async () => {
@@ -225,7 +247,9 @@ describe("/api/v1/match/[ct]/[id]", () => {
       { params: Promise.resolve({ ct: "22", id: "99999" }) },
     );
     expect(res.status).toBe(404);
-    expect(await res.json()).toMatchSnapshot();
+    const body = await res.json();
+    v1ErrorEnvelopeSchema.parse(body);
+    expect(body).toMatchSnapshot();
   });
 
   it("maps a 400 from the inner route to bad_request", async () => {
@@ -238,7 +262,9 @@ describe("/api/v1/match/[ct]/[id]", () => {
       { params: Promise.resolve({ ct: "abc", id: "27190" }) },
     );
     expect(res.status).toBe(400);
-    expect(await res.json()).toMatchSnapshot();
+    const body = await res.json();
+    v1ErrorEnvelopeSchema.parse(body);
+    expect(body).toMatchSnapshot();
   });
 });
 
@@ -268,7 +294,9 @@ describe("/api/v1/shooter/search", () => {
       new Request("http://x/api/v1/shooter/search?q=doe&limit=10", { headers: auth }),
     );
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchSnapshot();
+    const body = await res.json();
+    v1ShooterSearchResponseSchema.parse(body);
+    expect(body).toMatchSnapshot();
   });
 });
 
@@ -333,7 +361,9 @@ describe("/api/v1/shooter/[shooterId]", () => {
       { params: Promise.resolve({ shooterId: "12345" }) },
     );
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchSnapshot();
+    const body = await res.json();
+    v1ShooterDashboardSchema.parse(body);
+    expect(body).toMatchSnapshot();
   });
 
   it("maps GDPR 410 to not_found preserving the 410 status code", async () => {
@@ -348,7 +378,9 @@ describe("/api/v1/shooter/[shooterId]", () => {
       { params: Promise.resolve({ shooterId: "12345" }) },
     );
     expect(res.status).toBe(410);
-    expect(await res.json()).toMatchSnapshot();
+    const body = await res.json();
+    v1ErrorEnvelopeSchema.parse(body);
+    expect(body).toMatchSnapshot();
   });
 });
 
@@ -415,7 +447,9 @@ describe("/api/v1/match/[ct]/[id]/competitor/[competitorId]/stages", () => {
       },
     );
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchSnapshot();
+    const body = await res.json();
+    v1CompetitorStagesResponseSchema.parse(body);
+    expect(body).toMatchSnapshot();
   });
 
   it("maps a 404 from the inner route to not_found", async () => {
@@ -436,7 +470,9 @@ describe("/api/v1/match/[ct]/[id]/competitor/[competitorId]/stages", () => {
       },
     );
     expect(res.status).toBe(404);
-    expect(await res.json()).toMatchSnapshot();
+    const body = await res.json();
+    v1ErrorEnvelopeSchema.parse(body);
+    expect(body).toMatchSnapshot();
   });
 
   it("maps a 400 from the inner route to bad_request", async () => {
@@ -457,6 +493,8 @@ describe("/api/v1/match/[ct]/[id]/competitor/[competitorId]/stages", () => {
       },
     );
     expect(res.status).toBe(400);
-    expect(await res.json()).toMatchSnapshot();
+    const body = await res.json();
+    v1ErrorEnvelopeSchema.parse(body);
+    expect(body).toMatchSnapshot();
   });
 });

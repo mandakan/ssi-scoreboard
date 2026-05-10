@@ -17,6 +17,7 @@ exports[`/api/v1/events > forwards query params and returns the inner payload un
     "registration_closes": null,
     "registration_starts": null,
     "registration_status": "cl",
+    "scoring_completed": 0,
     "squadding_closes": null,
     "squadding_starts": null,
     "status": "on",
