@@ -129,17 +129,3 @@ describe("per-domain sampling", () => {
   });
 });
 
-describe("R2 object key shape", () => {
-  it("produces day-prefixed keys with a nonce", () => {
-    const key = _internal.makeObjectKey(new Date("2026-04-28T13:24:05.123Z"));
-    expect(key).toMatch(/^cache-telemetry\/2026-04-28\/132405-[0-9a-f]{6}\.ndjson$/);
-  });
-
-  it("two consecutive keys differ (nonce)", () => {
-    const now = new Date("2026-04-28T13:24:05.123Z");
-    const a = _internal.makeObjectKey(now);
-    const b = _internal.makeObjectKey(now);
-    // Statistical: collisions are 1/16M.
-    expect(a).not.toBe(b);
-  });
-});

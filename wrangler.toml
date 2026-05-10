@@ -71,14 +71,22 @@ database_name = "ssi-scoreboard-app-db-eu"
 database_id = "4a3d6cf5-31ce-4775-84f5-f9abee4206e2"  # patched by scripts/setup-d1.ts
 migrations_dir = "migrations"
 
-# R2 bucket for long-retention telemetry (cache decisions, etc.) — see
-# lib/telemetry-sinks-cf.ts. Free-tier friendly. One-time setup:
-#   wrangler r2 bucket create ssi-scoreboard-telemetry
-#   wrangler r2 bucket lifecycle add ssi-scoreboard-telemetry expire-30d "" \
-#     --expire-days 30 --force
-[[r2_buckets]]
-binding = "TELEMETRY"
-bucket_name = "ssi-scoreboard-telemetry"
+# Cloudflare Pipelines stream for telemetry events — see lib/telemetry-sinks-cf.ts.
+# The stream coalesces events across all isolates and writes Parquet batches to
+# R2 every 300s (or every 5MB). One-time provisioning:
+#   wrangler pipelines streams create ssi_telemetry --http-enabled false
+#   wrangler pipelines sinks create ssi_telemetry_r2 \
+#     --type r2 --bucket ssi-scoreboard-telemetry \
+#     --format parquet --compression zstd \
+#     --path 'pipelines/cache-telemetry/' --partitioning '%Y-%m-%d' \
+#     --roll-size 5 --roll-interval 300
+#   wrangler pipelines create ssi_telemetry \
+#     --sql 'INSERT INTO ssi_telemetry_r2 SELECT * FROM ssi_telemetry'
+# The `pipeline` field below is the *stream* id (CF's wrangler.toml field name
+# is historical — confusing but correct). Get it from `wrangler pipelines streams list`.
+[[pipelines]]
+binding = "TELEMETRY_PIPELINE"
+pipeline = "506f6888c6c9478e99ef925d50ce9aa5"
 
 [assets]
 directory = ".open-next/assets"
@@ -104,8 +112,8 @@ database_name = "ssi-scoreboard-app-db-staging-eu"
 database_id = "1b1c7faf-c206-41f6-9557-adbdf1c0ba18"  # patched by scripts/setup-d1.ts
 migrations_dir = "migrations"
 
-# Staging R2 bucket — same setup commands as prod, with --env staging:
-#   wrangler r2 bucket create ssi-scoreboard-telemetry-staging
-[[env.staging.r2_buckets]]
-binding = "TELEMETRY"
-bucket_name = "ssi-scoreboard-telemetry-staging"
+# Staging Pipelines stream (same provisioning as prod, with `_staging` suffix
+# and the staging bucket name). Stream id captured below; do not copy the prod id.
+[[env.staging.pipelines]]
+binding = "TELEMETRY_PIPELINE"
+pipeline = "d2fa22626af04c48bd9914574f9014a8"

@@ -5,8 +5,8 @@ and run canned or ad-hoc SQL against it.
 
 Layout:
     ~/.cache/ssi-scoreboard-telemetry/
-        prod/cache-telemetry/YYYY-MM-DD/*.ndjson
-        staging/cache-telemetry/YYYY-MM-DD/*.ndjson
+        prod/pipelines/cache-telemetry/YYYY-MM-DD/*.parquet
+        staging/pipelines/cache-telemetry/YYYY-MM-DD/*.parquet
         prod.duckdb
         staging.duckdb
 
@@ -29,9 +29,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import re
 import subprocess
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -55,6 +57,10 @@ BUCKETS = {
 CACHE_ROOT = Path.home() / ".cache" / "ssi-scoreboard-telemetry"
 SETUP_SQL = Path(__file__).resolve().parent / "setup.sql"
 
+MAX_RETRIES = 5
+INITIAL_BACKOFF_SECONDS = 1.0
+MAX_BACKOFF_SECONDS = 30.0
+
 
 def read_oauth_token() -> str:
     for path in WRANGLER_CONFIG_CANDIDATES:
@@ -68,15 +74,46 @@ def read_oauth_token() -> str:
 
 def cf_get(path: str, token: str) -> bytes:
     url = f"https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}{path}"
-    req = Request(url, headers={"Authorization": f"Bearer {token}"})
-    try:
-        with urlopen(req, timeout=30) as r:
-            return r.read()
-    except HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")[:300]
-        sys.exit(f"HTTP {e.code} on {path}: {body}")
-    except URLError as e:
-        sys.exit(f"Network error on {path}: {e}")
+    backoff = INITIAL_BACKOFF_SECONDS
+    last_err: str | None = None
+    for attempt in range(MAX_RETRIES + 1):
+        req = Request(url, headers={"Authorization": f"Bearer {token}"})
+        try:
+            with urlopen(req, timeout=30) as r:
+                return r.read()
+        except HTTPError as e:
+            if e.code == 429 or e.code >= 500:
+                if attempt >= MAX_RETRIES:
+                    last_err = f"HTTP {e.code} after {MAX_RETRIES} retries"
+                    break
+                retry_after = e.headers.get("Retry-After") if e.headers else None
+                if retry_after and retry_after.isdigit():
+                    sleep_for = float(retry_after)
+                else:
+                    sleep_for = backoff + random.uniform(0, backoff * 0.5)
+                sleep_for = min(sleep_for, MAX_BACKOFF_SECONDS)
+                print(
+                    f"# {e.code} on {path[:80]} -- retry {attempt + 1}/{MAX_RETRIES} in {sleep_for:.1f}s",
+                    file=sys.stderr,
+                )
+                time.sleep(sleep_for)
+                backoff = min(backoff * 2, MAX_BACKOFF_SECONDS)
+                continue
+            body = e.read().decode("utf-8", errors="replace")[:300]
+            sys.exit(f"HTTP {e.code} on {path}: {body}")
+        except URLError as e:
+            if attempt >= MAX_RETRIES:
+                last_err = f"network error: {e}"
+                break
+            sleep_for = min(backoff + random.uniform(0, backoff * 0.5), MAX_BACKOFF_SECONDS)
+            print(
+                f"# network error on {path[:80]} -- retry {attempt + 1}/{MAX_RETRIES} in {sleep_for:.1f}s",
+                file=sys.stderr,
+            )
+            time.sleep(sleep_for)
+            backoff = min(backoff * 2, MAX_BACKOFF_SECONDS)
+            continue
+    sys.exit(f"Exhausted retries on {path}: {last_err}")
 
 
 # ── Sync ────────────────────────────────────────────────────────────
@@ -143,7 +180,7 @@ def cmd_sync(args: argparse.Namespace) -> None:
     print(f"# scanning {len(days)} day(s) in {bucket}", file=sys.stderr)
     all_objects: list[dict] = []
     for day in days:
-        all_objects.extend(list_objects(bucket, f"cache-telemetry/{day}/", token))
+        all_objects.extend(list_objects(bucket, f"pipelines/cache-telemetry/{day}/", token))
     print(f"# {len(all_objects)} object(s) on R2", file=sys.stderr)
 
     new_count = 0
