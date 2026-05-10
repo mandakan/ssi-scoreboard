@@ -89,11 +89,12 @@ export async function GET(
     resultsStatus: match.results_status,
   });
 
-  // Short-circuit for live matches (#416 / PR-3): SSI withholds per-stage
-  // scorecards while results visibility is "org". Return placeholder (all-null)
-  // stage entries immediately without touching SSI. Preserved live branch below
-  // can be re-enabled by removing this guard if SSI reinstates live access.
-  if (!isComplete) {
+  // Short-circuit for live matches whose organizer has not enabled live
+  // scorecard access (`is_live_scores_accessible=false`). Return placeholder
+  // (all-null) stage entries immediately without touching SSI. When the flag
+  // is true the legacy live branch below runs and surfaces real per-stage
+  // data. See compare/route.ts for the full rationale.
+  if (!isComplete && !match.is_live_scores_accessible) {
     const sortedMatchStages = [...match.stages].sort(
       (a, b) => a.stage_number - b.stage_number,
     );
@@ -140,9 +141,9 @@ export async function GET(
     }
     // Archive entries are permanent; no TTL upgrade or SWR refresh needed.
   } else {
-    // Live: legacy whole-match path — currently unreachable because the
-    // short-circuit above returns early for all non-complete matches (#416).
-    // Preserved as fallback if SSI reinstates live scorecard access.
+    // Live: legacy whole-match SCORECARDS_QUERY path. Reachable when
+    // `is_live_scores_accessible` is true (organizer-enabled live publication
+    // or bot-Staff bypass).
     try {
       ({ data: scorecardsData, cachedAt: scorecardsCachedAt } =
         await cachedExecuteQuery<RawScorecardsData>(

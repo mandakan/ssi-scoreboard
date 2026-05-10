@@ -73,7 +73,7 @@ export default function AboutPage() {
               <ul className="space-y-2 list-disc list-inside">
                 <li>
                   Search competitions by name, country, level, or date range,
-                  and see which matches are live right now
+                  and see which matches are scoring right now
                 </li>
                 <li>
                   Compare up to 12 competitors side-by-side across every stage,
@@ -96,7 +96,10 @@ export default function AboutPage() {
                 </li>
                 <li>
                   Live, Pre-match, and Coaching views — auto-selected to match
-                  the phase of the event, with a manual override
+                  the phase of the event, with a manual override. Live per-stage
+                  scores appear when the match organizer has enabled live
+                  publication on ShootNScoreIt; otherwise the page shows a
+                  &ldquo;Match in progress&rdquo; notice until scoring completes
                 </li>
               </ul>
             </div>

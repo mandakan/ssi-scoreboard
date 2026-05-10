@@ -235,12 +235,18 @@ export default function MatchPageClient() {
       })
     : false;
 
-  // Compare query: only fires for completed matches (coaching mode). Live
-  // matches return empty scorecards from SSI (#410), so there is nothing to
-  // render -- the "Match in progress" empty-state is shown instead. Pre-match
-  // is skipped for the same reason (no scores yet).
+  // Compare query: fires for completed matches (coaching mode) and for live
+  // matches whose organizer has enabled live scorecard access (or where our
+  // bot has Staff bypass) — gated on `is_live_scores_accessible`. When that
+  // flag is false during a live match, SSI returns empty scorecards (#410)
+  // and we render the "Match in progress" empty state instead. Pre-match is
+  // always skipped (no scores yet by definition).
+  const liveScoresAccessible =
+    matchQuery.data?.is_live_scores_accessible === true;
   const compareMode: CompareMode = effectiveMode === "coaching" ? "coaching" : "live";
-  const compareEnabled = effectiveMode === "coaching";
+  const compareEnabled =
+    effectiveMode === "coaching" ||
+    (effectiveMode === "live" && liveScoresAccessible);
   const compareQuery = useCompareQuery(
     ct,
     id,
@@ -646,7 +652,7 @@ export default function MatchPageClient() {
               </PopoverHeader>
               <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
                 <p><strong>Pre-match</strong> — squad rotation, weather, registered field, and AI brief. Useful when your squad hasn&apos;t shot yet, even if early squads have finished.</p>
-                <p><strong>Live</strong> — for active matches. SSI does not publish per-stage scorecards while scoring is in progress, so detailed results are not available until the match completes.</p>
+                <p><strong>Live</strong> — for active matches. Per-stage scores appear when the match organizer has enabled live publication on SSI; otherwise the page shows a &ldquo;Match in progress&rdquo; notice until scoring completes.</p>
                 <p><strong>Coaching</strong> — for completed matches. Full analysis: style fingerprints, archetype breakdown, course-length splits, constraint performance, and the stage simulator.</p>
                 <p>The view is auto-detected: pre-match before scoring really gets going, live once scoring is underway, and coaching for ≥ 95% scored or matches older than 3 days. Tap any mode to override, or tap the active mode to reset to auto.</p>
               </div>
@@ -657,7 +663,9 @@ export default function MatchPageClient() {
           {effectiveMode === "prematch"
             ? "Squad rotation, weather, and registered field. No scores shown."
             : effectiveMode === "live"
-            ? "Scoring in progress -- detailed results available when the match is complete."
+            ? liveScoresAccessible
+              ? "Live scores published by the organizer. Coaching analysis unlocks once the match is complete."
+              : "Scoring in progress. Detailed results unlock when the organizer publishes live scores or when the match completes."
             : "Full analysis with style fingerprints, breakdowns, and simulator."}
         </p>
       </div>
@@ -791,19 +799,23 @@ export default function MatchPageClient() {
         />
       )}
 
-      {/* Match in progress -- scorecards are not published by SSI until scoring completes */}
-      {effectiveMode === "live" && (
+      {/* Match in progress -- shown when SSI/organizer has not enabled live
+          scorecard access for this match. When the organizer flips "Resultat"
+          to a public option (or our bot has Staff bypass), the comparison
+          renders below in live mode instead. */}
+      {effectiveMode === "live" && !match.is_live_scores_accessible && (
         <div
           role="status"
           className="rounded-lg border bg-muted/40 p-4 space-y-2"
         >
           <h2 className="font-semibold">Match in progress</h2>
           <p className="text-sm text-muted-foreground">
-            Detailed stage results and analysis are available once scoring is complete
+            The organizer has not made live scores public for this match.
+            Detailed stage results will be available once scoring is complete
             {match.scoring_completed > 0
               ? ` (${Math.round(match.scoring_completed)}% scored so far)`
               : ""}
-            . Check back when the match is done.
+            .
           </p>
           {match.ssi_url && (
             <p className="text-sm">
@@ -822,9 +834,22 @@ export default function MatchPageClient() {
         </div>
       )}
 
-      {/* Comparison views -- only rendered for completed matches (coaching mode) */}
-      {effectiveMode === "coaching" && selectedIds.length > 0 && (
+      {/* Comparison views — rendered for completed matches (coaching mode)
+          and for live matches whose organizer has enabled live scorecard access. */}
+      {(effectiveMode === "coaching" ||
+        (effectiveMode === "live" && match.is_live_scores_accessible)) &&
+        selectedIds.length > 0 && (
         <div className="space-y-6">
+          {effectiveMode === "live" &&
+            match.is_live_scores_accessible &&
+            match.results_status !== "all" && (
+              <div
+                role="status"
+                className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
+              >
+                Live scores published by the organizer. Final standings appear once the match completes.
+              </div>
+            )}
           {compareQuery.isLoading && (
             <div className="rounded-lg border p-4 space-y-3">
               <Skeleton className="h-5 w-28" />

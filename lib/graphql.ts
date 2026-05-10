@@ -243,6 +243,7 @@ export const MATCH_QUERY = `
         scoring_completed
         visibility
         get_visibility_display
+        is_live_scores_accessible
         region
         sub_rule
         get_full_rule_display
@@ -334,6 +335,7 @@ export const MATCH_UPDATED_PROBE_QUERY = `
       results
       ... on IpscMatchNode {
         updated
+        is_live_scores_accessible
       }
     }
   }
@@ -344,6 +346,7 @@ interface MatchUpdatedProbeData {
     updated?: string | null;
     status?: string | null;
     results?: string | null;
+    is_live_scores_accessible?: boolean | null;
   } | null;
 }
 
@@ -358,10 +361,16 @@ interface ProbeState {
   updated: string | null;
   status: string | null;
   results: string | null;
+  isLiveScoresAccessible: boolean | null;
 }
 
 function probesEqual(a: ProbeState, b: ProbeState): boolean {
-  return a.updated === b.updated && a.status === b.status && a.results === b.results;
+  return (
+    a.updated === b.updated &&
+    a.status === b.status &&
+    a.results === b.results &&
+    a.isLiveScoresAccessible === b.isLiveScoresAccessible
+  );
 }
 
 /** Kill switch: when set to "off", the probe-aware refresh degrades to the
@@ -557,6 +566,7 @@ export async function refreshCachedMatchQuery<T>(
       updated: ev.updated ?? null,
       status: ev.status ?? null,
       results: ev.results ?? null,
+      isLiveScoresAccessible: ev.is_live_scores_accessible ?? null,
     };
     upstreamUpdatedIso = currentState.updated;
     prevUpstreamUpdatedIso = prevState?.updated ?? null;

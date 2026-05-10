@@ -113,6 +113,8 @@ export interface RawMatchData {
     visibility?: string | null;
     /** SSI's human-readable visibility label, e.g. "Public, searchable and details/names for all". */
     get_visibility_display?: string | null;
+    /** Per-requester permission for live scorecards. Added in cache schema v17. */
+    is_live_scores_accessible?: boolean | null;
     region?: string | null;
     sub_rule?: string | null;
     get_full_rule_display?: string | null;
@@ -393,6 +395,7 @@ export async function fetchMatchData(
     is_squadding_possible: ev.is_squadding_possible ?? false,
     ssi_url: `https://shootnscoreit.com/event/${ct}/${id}/`,
     visibility,
+    is_live_scores_accessible: ev.is_live_scores_accessible ?? false,
     stages,
     competitors,
     squads,

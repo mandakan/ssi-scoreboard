@@ -43,5 +43,10 @@ export const MAX_COMPETITORS = 12;
  *  16 → added visibility, get_visibility_display to IpscMatchNode in
  *       MATCH_QUERY; `visibility: { class, rawCode, displayName }` on
  *       MatchResponse (issue #426 — organizer-published private matches).
+ *  17 → added is_live_scores_accessible to IpscMatchNode in MATCH_QUERY and
+ *       MATCH_UPDATED_PROBE_QUERY; `is_live_scores_accessible: boolean` on
+ *       MatchResponse. Drives the live scorecards short-circuit so matches
+ *       whose organizer enables the SSI "Resultat" setting (or where our
+ *       bot has Staff bypass) once again surface live per-stage data.
  */
-export const CACHE_SCHEMA_VERSION = 16;
+export const CACHE_SCHEMA_VERSION = 17;

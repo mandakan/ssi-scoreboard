@@ -67,14 +67,43 @@ function typeRef(t: RawType): string {
   return t.name ?? t.kind;
 }
 
-async function introspectType(typeName: string, endpoint: string, token: string): Promise<FieldEntry[]> {
+// SSI requires JWT on every resolver as of #425, including __type. Acquire a
+// short-lived JWT via the token_auth mutation; same flow as lib/ssi-auth.ts
+// but standalone (no Redis) since this is a CLI script.
+async function loginForJwt(endpoint: string, apiKey: string, email: string, password: string): Promise<string> {
+  const query = "mutation Login($email: String!, $pwd: String!) { token_auth(email: $email, password: $pwd) { success errors token { token } } }";
+  const r = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-api-key": apiKey },
+    body: JSON.stringify({ query, variables: { email, pwd: password } }),
+  });
+  if (!r.ok) throw new Error(`token_auth HTTP ${r.status}`);
+  const json = (await r.json()) as {
+    data?: { token_auth?: { success?: boolean; errors?: unknown; token?: { token?: string } | null } | null };
+    errors?: { message: string }[];
+  };
+  if (json.errors?.length) throw new Error(`token_auth GraphQL error: ${json.errors.map((e) => e.message).join("; ")}`);
+  const tok = json.data?.token_auth?.token?.token;
+  if (!tok) throw new Error(`token_auth rejected: ${JSON.stringify(json.data?.token_auth?.errors ?? "unknown")}`);
+  return tok;
+}
+
+async function introspectType(typeName: string, endpoint: string, apiKey: string, jwt: string): Promise<FieldEntry[]> {
   // Five levels of `ofType` lets us name types like `[ChronoCardNode!]!`
   // (NON_NULL → LIST → NON_NULL → ChronoCardNode), which the previous
   // three-level walk reduced to the placeholder `[NON_NULL]!`.
-  const query = `{ __type(name: "${typeName}") { fields { name type { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind } } } } } args { name type { name kind ofType { name kind ofType { name kind ofType { name kind } } } } } } } }`;
+  //
+  // `includeDeprecated: true` is critical: SSI hides deprecated fields from
+  // default introspection (e.g. `IpscMatchNode.scoring_completed` is marked
+  // deprecated as of 2026-05 with reason "Always returns 0. Use
+  // scoring_progress / squad_scoring_progress on stages instead."). Without
+  // this flag, deprecated-but-still-resolvable fields show up as removed and
+  // produce false-positive drift reports for queries that still reference
+  // them legitimately.
+  const query = `{ __type(name: "${typeName}") { fields(includeDeprecated: true) { name isDeprecated deprecationReason type { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind } } } } } args { name type { name kind ofType { name kind ofType { name kind ofType { name kind } } } } } } } }`;
   const r = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Token ${token}`, "x-api-key": token },
+    headers: { "Content-Type": "application/json", Authorization: `JWT ${jwt}`, "x-api-key": apiKey },
     body: JSON.stringify({ query }),
   });
   if (!r.ok) throw new Error(`SSI HTTP ${r.status}`);
@@ -125,17 +154,23 @@ function saveSnapshot(s: Snapshot): void {
 
 async function main() {
   const apiKey = process.env.SSI_API_KEY;
-  if (!apiKey) {
-    console.error("[check-ssi-schema] SSI_API_KEY not set");
+  const email = process.env.SSI_SERVICE_EMAIL;
+  const password = process.env.SSI_SERVICE_PASSWORD;
+  if (!apiKey || !email || !password) {
+    console.error(
+      "[check-ssi-schema] SSI_API_KEY, SSI_SERVICE_EMAIL, and SSI_SERVICE_PASSWORD must be set. " +
+        "Schema introspection requires JWT auth (see #425).",
+    );
     process.exit(2);
   }
   const endpoint = "https://shootnscoreit.com/graphql/";
   const update = process.argv.includes("--update");
   const jsonMode = process.argv.includes("--json");
 
+  const jwt = await loginForJwt(endpoint, apiKey, email, password);
   const live: Snapshot = {};
   for (const t of TRACKED_TYPES) {
-    live[t] = await introspectType(t, endpoint, apiKey);
+    live[t] = await introspectType(t, endpoint, apiKey, jwt);
   }
 
   const previous = loadSnapshot();
