@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import db from "@/lib/db-impl";
 import { getMatchDataWithFallback } from "@/lib/match-data-store";
 import { maybeTagAsMcp } from "@/lib/telemetry-context";
+import { isPublicMatchData } from "@/lib/visibility";
 import type { PopularMatch } from "@/lib/types";
 
 /** Maximum age (seconds) a match access must be within to qualify. */
@@ -15,6 +16,8 @@ interface RawMatchEvent {
   venue?: string | null;
   starts?: string | null;
   scoring_completed?: string | number | null;
+  /** Raw SSI visibility code: "pub" | "lim" | "res" | "csd" | "clb". */
+  visibility?: string | null;
 }
 
 interface MatchCacheEntry {
@@ -54,6 +57,12 @@ export async function GET(req: Request) {
 
         const entry = JSON.parse(raw) as MatchCacheEntry;
         if (!entry.data?.event) continue;
+
+        // Visibility gate: never surface unlisted / organizer-published
+        // matches even if their popularity rows pre-date the write-time
+        // filter in lib/graphql.ts. See feedback memory
+        // `feedback_popular_matches_visibility.md`.
+        if (!isPublicMatchData(entry.data)) continue;
 
         // Key format: gql:GetMatch:{"ct":22,"id":"26547"}
         const vars = JSON.parse(key.slice("gql:GetMatch:".length)) as {
