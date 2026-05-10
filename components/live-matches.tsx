@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Progress } from "@/components/ui/progress";
 import { useLiveMatchesQuery } from "@/lib/queries";
 import type { EventSummary } from "@/lib/types";
 
@@ -62,27 +61,19 @@ function LiveDot() {
 export function LiveMatchCard({ match }: { match: EventSummary }) {
   const router = useRouter();
   const startedAgo = formatStartedAgo(match.date);
-  const pct = Math.round(match.scoring_completed);
 
-  // SSI's match-level `scoring_completed` aggregate has been observed
-  // returning 0 for live matches whose stages are 20-30% scored
-  // (SPSK Open 2026, match 22/27190). PR #391 derives the right value
-  // for the match page from per-stage scoring_completed, but EVENTS_QUERY
-  // doesn't fetch stages (50x slowdown — see PR #373). On the homepage
-  // we therefore can't reliably show a percentage when SSI reports 0.
-  // Render an honest "live" indicator instead of a misleading "0%".
-  const hasReliableProgress = pct > 0;
-
+  // SSI's events list does not expose per-match scoring progress (the
+  // `scoring_completed` aggregate they once exposed always returns 0 and is
+  // deprecated; per-stage `scoring_progress` would multiply this query by
+  // stage count for the entire result set, which we measured at 10+ seconds
+  // worldwide). The card surfaces a "live" indicator only — the per-match
+  // progress is shown on the match page itself, where stages are loaded.
   return (
     <button
       type="button"
       className="text-left rounded-lg border bg-card p-4 hover:bg-muted/30 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       onClick={() => router.push(`/match/${match.content_type}/${match.id}`)}
-      aria-label={
-        hasReliableProgress
-          ? `Open ${match.name}, scoring ${pct}% complete, started ${startedAgo}`
-          : `Open ${match.name}, live, started ${startedAgo}`
-      }
+      aria-label={`Open ${match.name}, live, started ${startedAgo}`}
     >
       <div className="flex items-start justify-between gap-2">
         <span className="font-semibold leading-snug">{match.name}</span>
@@ -90,7 +81,7 @@ export function LiveMatchCard({ match }: { match: EventSummary }) {
           className="text-sm font-medium text-muted-foreground shrink-0 tabular-nums"
           aria-hidden="true"
         >
-          {hasReliableProgress ? `${pct}%` : "live"}
+          live
         </span>
       </div>
 
@@ -98,20 +89,12 @@ export function LiveMatchCard({ match }: { match: EventSummary }) {
         {[match.venue, startedAgo].filter(Boolean).join(" · ")}
       </p>
 
-      {hasReliableProgress ? (
-        <Progress
-          value={match.scoring_completed}
-          className="mt-3 h-1.5"
-          aria-hidden="true"
-        />
-      ) : (
-        <div
-          className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"
-          aria-hidden="true"
-        >
-          <div className="h-full w-1/3 animate-pulse rounded-full bg-green-500/50" />
-        </div>
-      )}
+      <div
+        className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"
+        aria-hidden="true"
+      >
+        <div className="h-full w-1/3 animate-pulse rounded-full bg-green-500/50" />
+      </div>
     </button>
   );
 }

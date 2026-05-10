@@ -3,12 +3,12 @@ import { MAX_COMPETITORS } from "@/lib/constants";
 import { reportError } from "@/lib/error-telemetry";
 import { usageTelemetry } from "@/lib/usage-telemetry";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { cachedExecuteQuery, gqlCacheKey, SCORECARDS_QUERY, MATCH_QUERY, refreshCachedMatchQuery } from "@/lib/graphql";
-import { cachedWholeMatchArchive } from "@/lib/scorecards-archive";
+import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY, refreshCachedMatchQuery } from "@/lib/graphql";
+import { getMatchScorecards } from "@/lib/scorecards-archive";
 import cache from "@/lib/cache-impl";
 import { computeMatchFreshness, computeMatchSwrTtl, isMatchComplete } from "@/lib/match-ttl";
 import { persistToMatchStore } from "@/lib/match-data-store";
-import { effectiveMatchScoringPct } from "@/lib/match-data";
+import { computeMatchScoringPct } from "@/lib/match-data";
 import { isUpstreamDegraded } from "@/lib/upstream-status";
 import { afterResponse } from "@/lib/background-impl";
 
@@ -43,7 +43,6 @@ interface RawCompetitor {
 interface RawMatchData {
   event: {
     starts?: string | null;
-    scoring_completed?: string | number | null;
     status?: string | null;
     results?: string | null;
     is_live_scores_accessible?: boolean | null;
@@ -65,7 +64,7 @@ interface RawMatchData {
       get_course_display?: string | null;
       procedure?: string | null;
       firearm_condition?: string | null;
-      scoring_completed?: string | number | null;
+      scoring_progress?: { scored?: number | null; total?: number | null } | null;
     }[];
     competitors_approved_w_wo_results_not_dnf?: RawCompetitor[];
   } | null;
@@ -130,7 +129,7 @@ export async function GET(req: Request) {
   }
 
   // Determine match state and compute TTL
-  const scoringPct = effectiveMatchScoringPct(matchData.event);
+  const scoringPct = computeMatchScoringPct(matchData.event);
   const matchDate = matchData.event?.starts ? new Date(matchData.event.starts) : null;
   const daysSince = matchDate ? (Date.now() - matchDate.getTime()) / 86_400_000 : 0;
   const signals = {
@@ -211,76 +210,29 @@ export async function GET(req: Request) {
     return NextResponse.json(payload);
   }
 
-  // Step 2 — fetch scorecards.
-  //
-  // Post-match: per-stage archival fan-out (#410). Permanent cache, no SWR
-  // refresh needed (results are immutable once results=all).
-  //
-  // Live: legacy whole-match SCORECARDS_QUERY path. Reachable only when
-  // `is_live_scores_accessible` is true (organizer enabled live publication
-  // or our bot is Staff). Falls through to a 502 with SSI's
-  // "User must be authenticated" message if SSI rejects the fetch despite
-  // the flag — the next request will see the cached error and the SWR
-  // refresh will pick up any subsequent flag flip.
-  const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
+  // Step 2 — fetch scorecards via the per-stage archival fan-out. Same code
+  // path for post-match (permanent cache, ttl=null) and live (TTL'd cache +
+  // SWR refresh). When `is_live_scores_accessible` is false on a live match
+  // the route already short-circuited above; reaching here means SSI either
+  // returns the data or 502s, in which case the next request retries.
+  const stageRefs = (matchData.event?.stages ?? []).map((s) => ({
+    ct: 24,
+    id: s.id,
+  }));
   let scorecardsData: RawScorecardsData;
   let scorecardsCachedAt: string | null;
-  if (isComplete) {
-    const stageRefs = (matchData.event?.stages ?? []).map((s) => ({
-      ct: 24,
-      id: s.id,
-    }));
-    try {
-      ({ data: scorecardsData, cachedAt: scorecardsCachedAt } =
-        await cachedWholeMatchArchive(ctNum, id, stageRefs));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Upstream error";
-      return NextResponse.json({ error: message }, { status: 502 });
-    }
-    // Archive entries are permanent by construction; no TTL upgrade or SWR
-    // refresh applies. The cache wrapper already mirrors to D1.
-  } else {
-    try {
-      ({ data: scorecardsData, cachedAt: scorecardsCachedAt } =
-        await cachedExecuteQuery<RawScorecardsData>(
-          scorecardsKey,
-          SCORECARDS_QUERY,
-          { ct: ctNum, id },
-          dataTtl,
-        ));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Upstream error";
-      return NextResponse.json({ error: message }, { status: 502 });
-    }
-    // Upgrade scorecards cache entry TTL based on match state
-    try {
-      if (dataTtl === null) {
-        const raw = await cache.get(scorecardsKey);
-        if (raw) {
-          await cache.persist(scorecardsKey);
-          afterResponse(persistToMatchStore(scorecardsKey, raw));
-        }
-      } else if (!scorecardsCachedAt) {
-        await cache.expire(scorecardsKey, dataTtl);
-      }
-    } catch (err) {
-      reportError("compare.scorecards-ttl-apply", err, { matchKey: scorecardsKey });
-    }
-    // SWR for scorecards on live matches — same single-flight pattern.
-    if (scorecardsCachedAt && dataTtl != null && matchFreshness != null) {
-      const age = (Date.now() - new Date(scorecardsCachedAt).getTime()) / 1000;
-      if (age > matchFreshness) {
-        afterResponse(
-          refreshCachedMatchQuery<RawScorecardsData>(
-            scorecardsKey,
-            SCORECARDS_QUERY,
-            { ct: ctNum, id },
-            dataTtl,
-            { ct: ctNum, id },
-          ),
-        );
-      }
-    }
+  try {
+    ({ data: scorecardsData, cachedAt: scorecardsCachedAt } =
+      await getMatchScorecards({
+        ct: ctNum,
+        matchId: id,
+        stages: stageRefs,
+        ttlSeconds: isComplete ? null : dataTtl,
+        freshnessSeconds: isComplete ? null : matchFreshness,
+      }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Upstream error";
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 
   // Start match-global cache read early so the Redis round-trip can resolve

@@ -3,6 +3,7 @@ import db from "@/lib/db-impl";
 import { getMatchDataWithFallback } from "@/lib/match-data-store";
 import { maybeTagAsMcp } from "@/lib/telemetry-context";
 import { isPublicMatchData } from "@/lib/visibility";
+import { computeMatchScoringPct } from "@/lib/match-data";
 import type { PopularMatch } from "@/lib/types";
 
 /** Maximum age (seconds) a match access must be within to qualify. */
@@ -15,7 +16,7 @@ interface RawMatchEvent {
   name: string;
   venue?: string | null;
   starts?: string | null;
-  scoring_completed?: string | number | null;
+  stages?: Array<{ scoring_progress?: { scored?: number | null; total?: number | null } | null }> | null;
   /** Raw SSI visibility code: "pub" | "lim" | "res" | "csd" | "clb". */
   visibility?: string | null;
 }
@@ -77,10 +78,7 @@ export async function GET(req: Request) {
           name: ev.name,
           venue: ev.venue ?? null,
           date: ev.starts ?? null,
-          scoring_completed:
-            ev.scoring_completed != null
-              ? Math.round(parseFloat(String(ev.scoring_completed)))
-              : 0,
+          scoring_completed: Math.round(computeMatchScoringPct(ev)),
         });
       } catch {
         // Skip malformed entries.

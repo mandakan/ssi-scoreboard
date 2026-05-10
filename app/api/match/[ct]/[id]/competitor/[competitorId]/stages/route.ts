@@ -6,13 +6,8 @@
 // the public, bearer-token-gated surface for this data.
 
 import { NextResponse } from "next/server";
-import { afterResponse } from "@/lib/background-impl";
-import cache from "@/lib/cache-impl";
-import { reportError } from "@/lib/error-telemetry";
-import { cachedExecuteQuery, gqlCacheKey, refreshCachedMatchQuery, SCORECARDS_QUERY } from "@/lib/graphql";
-import { cachedWholeMatchArchive } from "@/lib/scorecards-archive";
+import { getMatchScorecards } from "@/lib/scorecards-archive";
 import { fetchMatchData } from "@/lib/match-data";
-import { persistToMatchStore } from "@/lib/match-data-store";
 import {
   computeMatchFreshness,
   computeMatchSwrTtl,
@@ -126,73 +121,26 @@ export async function GET(
     return NextResponse.json(response);
   }
 
-  const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
+  // Fetch scorecards via the per-stage archival fan-out. Same call shape for
+  // post-match (permanent cache) and live (TTL'd cache + SWR).
+  const stageRefs = match.stages.map((s) => ({ ct: 24, id: String(s.id) }));
+  const matchFreshness = isComplete
+    ? null
+    : computeMatchFreshness(match.scoring_completed, daysSince, match.date, signals);
   let scorecardsData: RawScorecardsData;
   let scorecardsCachedAt: string | null;
-  if (isComplete) {
-    // Post-match: per-stage archival fan-out (#410). Permanent cache.
-    const stageRefs = match.stages.map((s) => ({ ct: 24, id: String(s.id) }));
-    try {
-      ({ data: scorecardsData, cachedAt: scorecardsCachedAt } =
-        await cachedWholeMatchArchive(ctNum, id, stageRefs));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Upstream error";
-      return NextResponse.json({ error: message }, { status: 502 });
-    }
-    // Archive entries are permanent; no TTL upgrade or SWR refresh needed.
-  } else {
-    // Live: legacy whole-match SCORECARDS_QUERY path. Reachable when
-    // `is_live_scores_accessible` is true (organizer-enabled live publication
-    // or bot-Staff bypass).
-    try {
-      ({ data: scorecardsData, cachedAt: scorecardsCachedAt } =
-        await cachedExecuteQuery<RawScorecardsData>(
-          scorecardsKey,
-          SCORECARDS_QUERY,
-          { ct: ctNum, id },
-          dataTtl,
-        ));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Upstream error";
-      return NextResponse.json({ error: message }, { status: 502 });
-    }
-    try {
-      if (dataTtl === null) {
-        const raw = await cache.get(scorecardsKey);
-        if (raw) {
-          await cache.persist(scorecardsKey);
-          afterResponse(persistToMatchStore(scorecardsKey, raw));
-        }
-      } else if (!scorecardsCachedAt) {
-        await cache.expire(scorecardsKey, dataTtl);
-      }
-    } catch (err) {
-      reportError("competitor-stages.scorecards-ttl-apply", err, {
-        matchKey: scorecardsKey,
-      });
-    }
-    // SWR for scorecards on live — single-flighted inside refreshCachedMatchQuery.
-    const matchFreshness = computeMatchFreshness(
-      match.scoring_completed,
-      daysSince,
-      match.date,
-      signals,
-    );
-    if (scorecardsCachedAt && dataTtl != null && matchFreshness != null) {
-      const age =
-        (Date.now() - new Date(scorecardsCachedAt).getTime()) / 1000;
-      if (age > matchFreshness) {
-        afterResponse(
-          refreshCachedMatchQuery<RawScorecardsData>(
-            scorecardsKey,
-            SCORECARDS_QUERY,
-            { ct: ctNum, id },
-            dataTtl,
-            { ct: ctNum, id },
-          ),
-        );
-      }
-    }
+  try {
+    ({ data: scorecardsData, cachedAt: scorecardsCachedAt } =
+      await getMatchScorecards({
+        ct: ctNum,
+        matchId: id,
+        stages: stageRefs,
+        ttlSeconds: isComplete ? null : dataTtl,
+        freshnessSeconds: matchFreshness,
+      }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Upstream error";
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 
   const rawScorecards = parseRawScorecards(scorecardsData);

@@ -48,5 +48,12 @@ export const MAX_COMPETITORS = 12;
  *       MatchResponse. Drives the live scorecards short-circuit so matches
  *       whose organizer enables the SSI "Resultat" setting (or where our
  *       bot has Staff bypass) once again surface live per-stage data.
+ *  18 → replaced deprecated `IpscStageNode.scoring_completed` (always 0) with
+ *       `scoring_progress { scored total }` in MATCH_QUERY; removed the
+ *       always-0 match-level `IpscMatchNode.scoring_completed`. Match-level
+ *       percentage now derives from the per-stage progress counts via
+ *       `computeMatchScoringPct`. Also dropped the unused `scoring_completed`
+ *       field from EVENTS_QUERY (and EventSummary), so cached event-list
+ *       entries from older deploys reload once.
  */
-export const CACHE_SCHEMA_VERSION = 17;
+export const CACHE_SCHEMA_VERSION = 18;

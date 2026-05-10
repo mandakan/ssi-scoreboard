@@ -174,19 +174,26 @@ or any other type that is serialised into the **match cache** (Redis/D1) via `ca
 This does **not** apply to AppDatabase schema changes -- those are managed independently by
 the SQLite/D1 adapters via `CREATE TABLE IF NOT EXISTS`.
 
-## Match cache refresh contract (CRITICAL) -> `docs/delta-merge.md`
+## Match cache refresh contract (CRITICAL)
 
 `refreshCachedMatchQuery` is split by cache key:
 
 - **`GetMatch` (match overview)** — uses the if-modified-since probe (#361) on
   `IpscMatchNode.updated`. Probe-skip extends TTL; `MATCH_PROBE_MAX_SKIP_AGE_SECONDS`
-  (default 300s) caps worst-case staleness.
+  (default 300s) caps worst-case staleness. The probe state also tracks
+  `is_live_scores_accessible` so an organizer flipping the SSI "Resultat" setting
+  forces a fresh fetch.
 - **`GetMatchScorecards`** — bypasses the probe entirely. SSI's `IpscMatchNode.updated`
   does NOT tick on scorecard saves (verified live during SPSK Open 2026, match 22/27190),
-  so probe-skip on scorecards strands the cache. Every SWR fire does a full refetch,
-  single-flighted via the inflight lock. The PR #366 incremental delta merge has been
-  removed; the merge helper (`lib/scorecard-merge.ts`) and `SCORECARDS_DELTA_QUERY` are
-  preserved for future revival should SSI expose a usable scorecard-mutation timestamp.
+  so probe-skip on scorecards strands the cache. Every SWR fire does a full refetch
+  via the per-stage fan-out in `lib/scorecards-archive.ts` (`getMatchScorecards`),
+  single-flighted via the inflight lock.
+
+Scorecards are read via the per-stage `STAGE_SCORECARDS_QUERY` only. The legacy
+whole-match `event { stages { scorecards } }` query and its incremental-delta
+variant were removed in 2026-05 — SSI deprecated `EventInterface.scorecards`,
+and the delta variant depended on `IpscMatchNode.updated` ticking on scorecard
+saves, which it does not.
 
 Schema drift can silently corrupt cached snapshots, so changes to scorecard fields must touch
 **all** of: `SCORECARD_NODE_FIELDS`, `RawScCard`, `parseRawScorecards()`, `CACHE_SCHEMA_VERSION`,
@@ -198,8 +205,6 @@ Levers and overrides:
   always-refetch as well. Set via `wrangler secret put` for instant prod recovery without
   a code deploy.
 - `POST /api/admin/cache/force-refresh?ct=&id=` -- one-shot full refetch for both keys.
-
-Full details and recovery commands live in `docs/delta-merge.md`.
 
 ## Telemetry -> `docs/telemetry.md`
 
