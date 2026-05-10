@@ -30,6 +30,7 @@ export const MOCK_MATCH: MatchResponse = {
   scoring_completed: 100,
   match_status: "cp",
   results_status: "all",
+  is_live_scores_accessible: true,
   registration_status: "cl",
   registration_starts: null,
   registration_closes: null,

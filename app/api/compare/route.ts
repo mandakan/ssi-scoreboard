@@ -46,6 +46,7 @@ interface RawMatchData {
     scoring_completed?: string | number | null;
     status?: string | null;
     results?: string | null;
+    is_live_scores_accessible?: boolean | null;
     has_geopos?: boolean | null;
     lat?: number | string | null;
     lng?: number | string | null;
@@ -177,12 +178,16 @@ export async function GET(req: Request) {
     }
   }
 
-  // Short-circuit for live matches (#416 / PR-3): SSI does not publish
-  // per-stage scorecards while results visibility is "org". Skip the scorecards
-  // fetch entirely and return a minimal response with scorecardsRestricted=true.
-  // The live branch below is preserved so the route can be re-enabled by removing
-  // this guard if SSI reinstates live scorecard access.
-  if (!isComplete) {
+  // Short-circuit for live matches whose organizer has not enabled live
+  // scorecard access. SSI's `is_live_scores_accessible` is a per-requester
+  // permission flag — true when the bot can fetch per-stage scorecards
+  // (organizer flipped the "Resultat" setting to one of the public options
+  // OR our bot is invited as Staff). When false during an active match,
+  // return a minimal response with scorecardsRestricted=true so the UI shows
+  // the "Match in progress" empty state. Originally added in #416/PR-3 as
+  // an unconditional !isComplete guard; gated on the field in #432.
+  const isLiveScoresAccessible = matchData.event?.is_live_scores_accessible === true;
+  if (!isComplete && !isLiveScoresAccessible) {
     const payload: CompareResponse = {
       match_id: parseInt(id, 10),
       mode,
@@ -211,9 +216,12 @@ export async function GET(req: Request) {
   // Post-match: per-stage archival fan-out (#410). Permanent cache, no SWR
   // refresh needed (results are immutable once results=all).
   //
-  // Live: legacy whole-match path — kept as fallback if SSI reinstates live
-  // scorecard access. Currently unreachable because the short-circuit above
-  // returns early for all non-complete matches (#416).
+  // Live: legacy whole-match SCORECARDS_QUERY path. Reachable only when
+  // `is_live_scores_accessible` is true (organizer enabled live publication
+  // or our bot is Staff). Falls through to a 502 with SSI's
+  // "User must be authenticated" message if SSI rejects the fetch despite
+  // the flag — the next request will see the cached error and the SWR
+  // refresh will pick up any subsequent flag flip.
   const scorecardsKey = gqlCacheKey("GetMatchScorecards", { ct: ctNum, id });
   let scorecardsData: RawScorecardsData;
   let scorecardsCachedAt: string | null;

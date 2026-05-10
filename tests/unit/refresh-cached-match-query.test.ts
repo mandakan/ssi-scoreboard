@@ -52,7 +52,16 @@ const VARS = { ct: 22, id: "26547" };
 const MATCH = { ct: 22, id: "26547" };
 const SIDECAR = "probe:match-state:22:26547";
 
-function probeResponse(body: { updated?: string | null; status?: string | null; results?: string | null } | null) {
+function probeResponse(
+  body:
+    | {
+        updated?: string | null;
+        status?: string | null;
+        results?: string | null;
+        is_live_scores_accessible?: boolean | null;
+      }
+    | null,
+) {
   return new Response(JSON.stringify({ data: { event: body } }), {
     status: 200,
     headers: { "content-type": "application/json" },
@@ -97,7 +106,7 @@ describe("refreshCachedMatchQuery — probe-aware refresh", () => {
     const freshCachedAt = new Date(Date.now() - 5_000).toISOString(); // 5s ago
     cacheMock.get.mockImplementation(async (k) => {
       if (k === SIDECAR) {
-        return JSON.stringify({ updated: "2026-04-28T10:00:00Z", status: "on", results: "org" });
+        return JSON.stringify({ updated: "2026-04-28T10:00:00Z", status: "on", results: "org", isLiveScoresAccessible: false });
       }
       if (k === KEY) {
         return JSON.stringify({ data: {}, cachedAt: freshCachedAt, v: 1 });
@@ -105,7 +114,7 @@ describe("refreshCachedMatchQuery — probe-aware refresh", () => {
       return null;
     });
     fetchSpy.mockResolvedValue(
-      probeResponse({ updated: "2026-04-28T10:00:00Z", status: "on", results: "org" }),
+      probeResponse({ updated: "2026-04-28T10:00:00Z", status: "on", results: "org", is_live_scores_accessible: false }),
     );
 
     await refreshCachedMatchQuery(KEY, QUERY, VARS, 90, MATCH);
@@ -121,7 +130,7 @@ describe("refreshCachedMatchQuery — probe-aware refresh", () => {
     const staleCachedAt = new Date(Date.now() - 10 * 60_000).toISOString(); // 10 min ago
     cacheMock.get.mockImplementation(async (k) => {
       if (k === SIDECAR) {
-        return JSON.stringify({ updated: "2026-04-28T10:00:00Z", status: "on", results: "org" });
+        return JSON.stringify({ updated: "2026-04-28T10:00:00Z", status: "on", results: "org", isLiveScoresAccessible: false });
       }
       if (k === KEY) {
         return JSON.stringify({ data: {}, cachedAt: staleCachedAt, v: 1 });
@@ -131,7 +140,7 @@ describe("refreshCachedMatchQuery — probe-aware refresh", () => {
     // Probe says nothing changed, but the cached entry is older than the
     // 5-minute safety ceiling — we must refetch anyway.
     fetchSpy
-      .mockResolvedValueOnce(probeResponse({ updated: "2026-04-28T10:00:00Z", status: "on", results: "org" }))
+      .mockResolvedValueOnce(probeResponse({ updated: "2026-04-28T10:00:00Z", status: "on", results: "org", is_live_scores_accessible: false }))
       .mockResolvedValueOnce(fullResponse());
 
     await refreshCachedMatchQuery(KEY, QUERY, VARS, 90, MATCH);
@@ -163,12 +172,12 @@ describe("refreshCachedMatchQuery — probe-aware refresh", () => {
     const { refreshCachedMatchQuery } = await import("@/lib/graphql");
     cacheMock.get.mockImplementation(async (k) => {
       if (k === SIDECAR) {
-        return JSON.stringify({ updated: "2026-04-28T10:00:00Z", status: "on", results: "org" });
+        return JSON.stringify({ updated: "2026-04-28T10:00:00Z", status: "on", results: "org", isLiveScoresAccessible: false });
       }
       return null;
     });
     fetchSpy
-      .mockResolvedValueOnce(probeResponse({ updated: "2026-04-28T10:05:00Z", status: "on", results: "org" }))
+      .mockResolvedValueOnce(probeResponse({ updated: "2026-04-28T10:05:00Z", status: "on", results: "org", is_live_scores_accessible: false }))
       .mockResolvedValueOnce(fullResponse());
 
     await refreshCachedMatchQuery(KEY, QUERY, VARS, 90, MATCH);
@@ -187,7 +196,7 @@ describe("refreshCachedMatchQuery — probe-aware refresh", () => {
     const { refreshCachedMatchQuery } = await import("@/lib/graphql");
     cacheMock.get.mockResolvedValue(null);
     fetchSpy
-      .mockResolvedValueOnce(probeResponse({ updated: "2026-04-28T10:00:00Z", status: "on", results: "org" }))
+      .mockResolvedValueOnce(probeResponse({ updated: "2026-04-28T10:00:00Z", status: "on", results: "org", is_live_scores_accessible: false }))
       .mockResolvedValueOnce(fullResponse());
 
     await refreshCachedMatchQuery(KEY, QUERY, VARS, 90, MATCH);
@@ -237,12 +246,12 @@ describe("refreshCachedMatchQuery — probe-aware refresh", () => {
     const { refreshCachedMatchQuery } = await import("@/lib/graphql");
     cacheMock.get.mockImplementation(async (k) => {
       if (k === SIDECAR) {
-        return JSON.stringify({ updated: "2026-04-28T10:00:00Z", status: "on", results: "org" });
+        return JSON.stringify({ updated: "2026-04-28T10:00:00Z", status: "on", results: "org", isLiveScoresAccessible: false });
       }
       return null;
     });
     fetchSpy.mockResolvedValue(
-      probeResponse({ updated: "2026-04-28T10:00:00Z", status: "on", results: "org" }),
+      probeResponse({ updated: "2026-04-28T10:00:00Z", status: "on", results: "org", is_live_scores_accessible: false }),
     );
 
     await refreshCachedMatchQuery(KEY, QUERY, VARS, null, MATCH);

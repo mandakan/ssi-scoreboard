@@ -106,6 +106,13 @@ export interface MatchResponse {
   match_status: string;
   /** SSI results visibility: "org" organizers-only | "stg" scores-public | "cmp" participants-only | "all" publicly published */
   results_status: string;
+  /** SSI's per-requester permission flag for live scorecards. True when our
+   *  bot can fetch per-stage scorecard data while the match is active —
+   *  driven by the organizer's `results` setting AND the bot's role on the
+   *  match. Used as the short-circuit gate in compare/route.ts and
+   *  stages/route.ts: when false during an active match we render the
+   *  "Match in progress" empty state instead of attempting the fetch. */
+  is_live_scores_accessible: boolean;
   /** Registration status code: "op" open | "cl" closed | "ax" auto-approve on payment | "ox" waiting list + auto-approve | etc. */
   registration_status: string;
   /** When registration opens (ISO timestamp); null if not set. */

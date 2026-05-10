@@ -11,11 +11,33 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-05-04-post-match-only";
+export const LATEST_RELEASE_ID = "2026-05-10-organizer-live-scores";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "May 10, 2026",
+    title: "Live scores are back -- when the organizer says so",
+    screenshotScenes: ["comparison-table"],
+    sections: [
+      {
+        heading: "What changed",
+        items: [
+          "Live per-stage scores are available again for matches whose organizer has enabled live publication on ShootNScoreIt (the \"Resultat\" setting in the SSI match admin). The comparison table, hit-factor chart, and stage breakdowns refresh every 30 seconds while you watch.",
+          "Matches whose organizer has not enabled live publication still show the \"Match in progress\" notice with current scoring percentage -- once scoring completes, full analysis appears as before.",
+          "Coaching analysis (style fingerprint, archetype, simulator) still unlocks only after the match is complete. Live mode shows the lighter table + chart view.",
+        ],
+      },
+      {
+        heading: "Organizers",
+        items: [
+          "If you run a match and want to share live scores, set Resultat to \"Resultat och poäng visas för alla\" (or \"...endast för arrangörer, men poäng visas för alla\") in the SSI match admin.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-05-04-post-match-only",
     date: "May 4, 2026",
     title: "Post-match analysis, reimagined",
     screenshotScenes: ["comparison-table"],
@@ -23,8 +45,8 @@ export const RELEASES: Release[] = [
       {
         heading: "What changed",
         items: [
-          "ShootNScoreIt stopped publishing per-stage scorecards for active matches. Stage results, hit zones, and coaching analysis are now only available once scoring is complete.",
-          "While a match is in progress, the app shows a notice with the current scoring percentage and a link to follow live on ShootNScoreIt.",
+          "ShootNScoreIt changed how per-stage scorecards are exposed during active matches. Stage results, hit zones, and coaching analysis are now gated on a per-match \"Resultat\" setting that the organizer controls (see the May 10 release for the full reopening).",
+          "While a match is in progress without that setting enabled, the app shows a notice with the current scoring percentage and a link to follow live on ShootNScoreIt.",
           "For completed matches, nothing changes -- all analysis is still there and loads faster thanks to a new per-stage archival cache that replaces the old whole-match query.",
         ],
       },

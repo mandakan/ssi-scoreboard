@@ -84,9 +84,11 @@ export default function LegalPage() {
               <h3 className="font-medium">5. Disclaimer of warranties</h3>
               <p className="text-muted-foreground">
                 SSI Scoreboard is provided &quot;as is&quot; without warranties of any
-                kind. Match data is fetched in real time and may be incomplete,
-                delayed, or inaccurate. Do not use this application for
-                official scoring or results disputes.
+                kind. Match data is fetched from ShootNScoreIt and cached for
+                short periods; live per-stage data is only available for
+                matches whose organizer has enabled live publication. Anything
+                shown here may be incomplete, delayed, or inaccurate. Do not
+                use this application for official scoring or results disputes.
               </p>
             </div>
           </div>
