@@ -51,6 +51,9 @@ interface FieldEntry {
   name: string;
   type: string;
   args: FieldArg[];
+  /** Only persisted when SSI marks the field deprecated. Drives the
+   *  validate-ssi-queries deprecation check. */
+  deprecationReason?: string;
 }
 
 type Snapshot = Record<string, FieldEntry[]>;
@@ -107,14 +110,22 @@ async function introspectType(typeName: string, endpoint: string, apiKey: string
     body: JSON.stringify({ query }),
   });
   if (!r.ok) throw new Error(`SSI HTTP ${r.status}`);
-  const json = (await r.json()) as { data?: { __type?: { fields?: { name: string; type: RawType; args: { name: string; type: RawType }[] }[] | null } | null } };
+  const json = (await r.json()) as { data?: { __type?: { fields?: { name: string; isDeprecated?: boolean; deprecationReason?: string | null; type: RawType; args: { name: string; type: RawType }[] }[] | null } | null } };
   const fields = json.data?.__type?.fields ?? [];
   return fields
-    .map((f): FieldEntry => ({
-      name: f.name,
-      type: typeRef(f.type),
-      args: (f.args ?? []).map((a): FieldArg => ({ name: a.name, type: typeRef(a.type) })),
-    }))
+    .map((f): FieldEntry => {
+      const entry: FieldEntry = {
+        name: f.name,
+        type: typeRef(f.type),
+        args: (f.args ?? []).map((a): FieldArg => ({ name: a.name, type: typeRef(a.type) })),
+      };
+      if (f.isDeprecated) {
+        // Persist only the reason — the boolean is implicit in its presence.
+        // Keeps the snapshot diff small (only deprecated fields gain a key).
+        entry.deprecationReason = f.deprecationReason ?? "(no reason given)";
+      }
+      return entry;
+    })
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 

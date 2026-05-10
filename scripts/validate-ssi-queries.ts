@@ -62,6 +62,9 @@ interface FieldEntry {
   name: string;
   type: string;
   args: FieldArg[];
+  /** Present only when SSI marks the field deprecated; the value is the
+   *  reason string from the upstream schema. */
+  deprecationReason?: string;
 }
 
 type Snapshot = Record<string, FieldEntry[]>;
@@ -150,6 +153,15 @@ function validateField(
         message: `field \`${fieldName}\` not found on type \`${parentType}\``,
       });
       return;
+    }
+
+    // Flag deprecated fields. SSI's deprecation reason often points at the
+    // replacement field, so surfacing it inline saves a trip to the docs.
+    if (entry.deprecationReason !== undefined) {
+      errors.push({
+        path: fieldPath.join("."),
+        message: `field \`${parentType}.${fieldName}\` is deprecated: ${entry.deprecationReason}`,
+      });
     }
 
     // Validate provided arguments exist on the field signature. We do not
