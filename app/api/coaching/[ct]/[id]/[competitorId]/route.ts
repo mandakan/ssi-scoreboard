@@ -8,7 +8,7 @@ import {
 } from "@/lib/coaching-prompt";
 import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
-import { cachedWholeMatchArchive } from "@/lib/scorecards-archive";
+import { getMatchScorecards } from "@/lib/scorecards-archive";
 import {
   computeGroupRankings,
   computePenaltyStats,
@@ -24,7 +24,7 @@ import {
   type RawScorecard,
 } from "@/app/api/compare/logic";
 import { isMatchComplete } from "@/lib/match-ttl";
-import { effectiveMatchScoringPct } from "@/lib/match-data";
+import { computeMatchScoringPct } from "@/lib/match-data";
 import { extractDivision } from "@/lib/divisions";
 import { decodeShooterId } from "@/lib/shooter-index";
 import cache from "@/lib/cache-impl";
@@ -128,7 +128,6 @@ interface RawMatchData {
   event: {
     name?: string | null;
     starts?: string | null;
-    scoring_completed?: string | number | null;
     status?: string | null;
     results?: string | null;
     has_geopos?: boolean | null;
@@ -139,7 +138,7 @@ interface RawMatchData {
       number: number;
       name: string;
       max_points: number;
-      scoring_completed?: string | number | null;
+      scoring_progress?: { scored?: number | null; total?: number | null } | null;
     }[];
     competitors_approved_w_wo_results_not_dnf?: RawCompetitor[];
   } | null;
@@ -202,7 +201,7 @@ export async function GET(
   }
 
   // Determine match state
-  const scoringPct = Math.round(effectiveMatchScoringPct(matchData.event));
+  const scoringPct = Math.round(computeMatchScoringPct(matchData.event));
   const matchDate = matchData.event.starts
     ? new Date(matchData.event.starts)
     : null;
@@ -239,7 +238,12 @@ export async function GET(
   }));
   let scorecardsData: RawScorecardsData;
   try {
-    ({ data: scorecardsData } = await cachedWholeMatchArchive(ctNum, id, stageRefs));
+    ({ data: scorecardsData } = await getMatchScorecards({
+      ct: ctNum,
+      matchId: id,
+      stages: stageRefs,
+      ttlSeconds: null,
+    }));
   } catch (err) {
     const message = err instanceof Error ? err.message : "Upstream error";
     return NextResponse.json({ error: message }, { status: 502 });

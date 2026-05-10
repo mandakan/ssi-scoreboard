@@ -206,18 +206,11 @@ async function executeQueryOnce<T>(
 // `stages_count`, `competitors_count`, and the nested lists require
 // `... on IpscMatchNode`.
 //
-// `scoring_completed` is requested inside the IpscMatchNode fragment for
-// consistency with EVENTS_QUERY (PR #368). It is returned as a decimal string
-// (e.g. "56.31067961165048"), not a number — parse with parseFloat().
-//
-// IMPORTANT: the match-level `scoring_completed` aggregate is unreliable
-// upstream. Observed during SPSK Open 2026 (match 22/27190): every stage
-// reported 21-29% scored but the match-level field returned "0". A 0 here
-// froze the cache TTL on the 5-min "started, no scoring yet" tier and made
-// live matches feel stuck. We therefore also request `scoring_completed` on
-// each IpscStageNode and derive an effective match-level percentage from the
-// per-stage values whenever the match-level value looks broken (see
-// `effectiveMatchScoringPct` in lib/match-data.ts).
+// Match-level scoring percentage is derived from per-stage `scoring_progress`
+// (the SSI replacement for the now-deprecated `scoring_completed` field —
+// SSI marks the latter as "Always returns 0" and points at scoring_progress
+// in the deprecation reason). See `computeMatchScoringPct` in
+// lib/match-data.ts for the aggregation.
 //
 // `competitor(content_type, id)` at the top level returns 404 in practice.
 // All competitor/scorecard data is fetched via the event node.
@@ -240,7 +233,6 @@ export const MATCH_QUERY = `
       status
       results
       ... on IpscMatchNode {
-        scoring_completed
         visibility
         get_visibility_display
         is_live_scores_accessible
@@ -282,7 +274,10 @@ export const MATCH_QUERY = `
             get_course_display
             procedure
             firearm_condition
-            scoring_completed
+            scoring_progress {
+              scored
+              total
+            }
           }
         }
         competitors_approved_w_wo_results_not_dnf {
@@ -436,15 +431,6 @@ async function clearForceRefresh(ct: number, id: string): Promise<void> {
   } catch { /* best-effort */ }
 }
 
-// Note: the previous PR #366 incremental scorecards delta merge has been
-// removed. It depended on `IpscMatchNode.updated` ticking when scorecards
-// landed, but that field only reflects match-level admin edits — see the
-// comment at the top of `refreshCachedMatchQuery`. The merge helper
-// (`mergeScorecardDelta` in `lib/scorecard-merge.ts`) and the delta query
-// (`SCORECARDS_DELTA_QUERY` below) are kept around since they are correct
-// in isolation and could be revived if SSI ever exposes a usable
-// scorecard-mutation timestamp.
-
 /**
  * Probe-aware single-flight refresh of a cached match-level GraphQL query.
  *
@@ -470,6 +456,7 @@ export async function refreshCachedMatchQuery<T>(
   ttlSeconds: number | null,
   match: { ct: number; id: string },
   lockTtlSeconds = 90,
+  options: RefreshCachedQueryOptions<T> = {},
 ): Promise<void> {
   const parsed = parseMatchCacheKey(cacheKey);
   const keyType: "match" | "scorecards" | "other" =
@@ -482,7 +469,7 @@ export async function refreshCachedMatchQuery<T>(
   // — if the match-overview probe path is itself observed misbehaving, this
   // disables it without a code deploy.
   if (!isMatchProbeEnabled()) {
-    return refreshCachedQuery<T>(cacheKey, query, variables, ttlSeconds, lockTtlSeconds);
+    return refreshCachedQuery<T>(cacheKey, query, variables, ttlSeconds, lockTtlSeconds, options);
   }
 
   // Force-refresh sentinel: any code path (admin endpoint, recovery script)
@@ -491,7 +478,7 @@ export async function refreshCachedMatchQuery<T>(
   // refresh the sentinel is cleared. Applies to both keytypes so the admin
   // lever flushes match overview AND scorecards in the same gesture.
   if (await isForceRefreshRequested(match.ct, match.id)) {
-    await refreshCachedQuery<T>(cacheKey, query, variables, ttlSeconds, lockTtlSeconds);
+    await refreshCachedQuery<T>(cacheKey, query, variables, ttlSeconds, lockTtlSeconds, options);
     await clearForceRefresh(match.ct, match.id);
     cacheTelemetry({
       op: "match-probe",
@@ -516,7 +503,7 @@ export async function refreshCachedMatchQuery<T>(
   // maintained by the match-key path so the overview optimization is
   // unaffected.
   if (keyType === "scorecards") {
-    return refreshCachedQuery<T>(cacheKey, query, variables, ttlSeconds, lockTtlSeconds);
+    return refreshCachedQuery<T>(cacheKey, query, variables, ttlSeconds, lockTtlSeconds, options);
   }
 
   const lockKey = `inflight:${cacheKey}`;
@@ -683,15 +670,17 @@ async function fullRefresh<T>(
 // "FIN"). Country filtering is done server-side in the route handler after
 // the GraphQL response is received — the SSI API has no region filter param.
 //
-// `scoring_completed` is gated behind a $includeScoring variable + @include
-// directive — it is a server-computed aggregate (scans every scorecard for
-// every match in the result set) that adds 10+ seconds to the worldwide
-// browse query. Live mode passes `includeScoring: true` because it needs the
-// progress percentage to filter active matches; browse and search pass false
-// because they only display name/date/venue/level. Empirically: same query,
-// same window, against SSI: 0.25s without scoring_completed, 11-13s with it.
+// Per-match scoring percentage is no longer fetched here. The previous
+// implementation toggled a `scoring_completed @include(if: $includeScoring)`
+// on/off because that aggregate scanned every scorecard server-side and
+// added 10+ seconds to the worldwide browse query. SSI has since deprecated
+// `scoring_completed` (always returns 0); the replacement is per-stage
+// `scoring_progress`, which would multiply this query by stage count for
+// the entire result set. The events list filters live matches purely on
+// `status` + temporal window (see `filterLiveEvents`), so progress is no
+// longer needed at the list level.
 export const EVENTS_QUERY = `
-  query GetEvents($search: String, $starts_after: String, $starts_before: String, $firearms: String, $includeScoring: Boolean!) {
+  query GetEvents($search: String, $starts_after: String, $starts_before: String, $firearms: String) {
     events(rule: "ip", firearms: $firearms, search: $search, starts_after: $starts_after, starts_before: $starts_before) {
       id
       get_content_type_key
@@ -704,7 +693,6 @@ export const EVENTS_QUERY = `
       get_full_rule_display
       get_full_level_display
       ... on IpscMatchNode {
-        scoring_completed @include(if: $includeScoring)
         registration_starts
         registration_closes
         squadding_starts
@@ -776,7 +764,16 @@ interface CacheEntry<T> {
  * Use from a caller that has just served a stale cache hit (typically
  * cachedAt + freshness window exceeded). The caller decides the TTL because
  * TTL often depends on the response payload (e.g. match scoring %).
+ *
+ * Pass `options.fetcher` to override the upstream call (used by
+ * `lib/scorecards-archive.ts` to refresh via the per-stage fan-out instead of
+ * a single GraphQL query). The `query` and `variables` arguments are still
+ * used for diagnostics / cache-key shape.
  */
+export interface RefreshCachedQueryOptions<T> {
+  fetcher?: () => Promise<T>;
+}
+
 export async function refreshCachedQuery<T>(
   cacheKey: string,
   query: string,
@@ -786,6 +783,7 @@ export async function refreshCachedQuery<T>(
   // expire its own lock and let a second refresh sneak in. GRAPHQL_TIMEOUT_MS
   // is 60s, so allow generous slack on top of that.
   lockTtlSeconds = 90,
+  options: RefreshCachedQueryOptions<T> = {},
 ): Promise<void> {
   const lockKey = `inflight:${cacheKey}`;
   let acquired = false;
@@ -797,7 +795,9 @@ export async function refreshCachedQuery<T>(
   if (!acquired) return;
 
   try {
-    const data = await executeQuery<T>(query, variables);
+    const data = options.fetcher
+      ? await options.fetcher()
+      : await executeQuery<T>(query, variables);
     const entry: CacheEntry<T> = {
       data,
       cachedAt: new Date().toISOString(),
@@ -946,25 +946,15 @@ export async function cachedExecuteQuery<T>(
 }
 
 // ─── Shared scorecard field set ──────────────────────────────────────────────
-// CRITICAL: SCORECARDS_QUERY, SCORECARDS_DELTA_QUERY, and STAGE_SCORECARDS_QUERY
-// MUST request the same scorecard fields. The delta merge (#362,
-// lib/scorecard-merge.ts) writes delta entries into the cached full snapshot —
-// if the delta is missing fields the full query has, the merge silently
-// corrupts the cached entry. The per-stage archival fan-out
-// (lib/scorecards-archive.ts) reassembles per-stage responses into the same
-// RawScorecardsData shape, so it must project the same field set too.
+// Interpolated into STAGE_SCORECARDS_QUERY so any future per-stage variant
+// stays in sync without copy-paste drift. Exported so the archive module's
+// raw response shape stays aligned with what's projected on the wire.
 //
-// This shared constant is interpolated into all three queries so they CANNOT
-// drift. Exported so the archive module can reuse it without copying.
-//
-// When adding a scorecard field, see CLAUDE.md → "Delta-merge contract" for
-// the full list of files that must be updated together. In short:
+// When adding a scorecard field:
 //   1. Add to SCORECARD_NODE_FIELDS (here)
 //   2. Add to RawScCard (lib/scorecard-data.ts)
-//   3. Add to ScorecardDeltaEntry (this file)
-//   4. Copy in deltaToCacheCard() (lib/scorecard-merge.ts)
-//   5. Bump CACHE_SCHEMA_VERSION (lib/constants.ts)
-//   6. Run `pnpm check:ssi-schema --update` and commit the snapshot diff
+//   3. Bump CACHE_SCHEMA_VERSION (lib/constants.ts)
+//   4. Run `pnpm check:ssi-schema --update` and commit the snapshot diff
 export const SCORECARD_NODE_FIELDS = `
   ... on IpscScoreCardNode {
     created
@@ -1002,58 +992,27 @@ export const SCORECARD_NODE_FIELDS = `
   }
 `;
 
-// ─── Query: all stage scorecards for a match ─────────────────────────────────
-// Returns raw scorecard data for every competitor on every stage.
+// ─── Query: per-stage scorecards (the only scorecards path) ──────────────────
+// SSI's blessed path: fetch one stage at a time via the root
+// `stage(content_type, id)` query. The whole-match
+// `event { stages { scorecards } }` shape was deprecated by SSI on
+// 2026-05-04 and removed from this codebase along with the parallel
+// "incremental delta" path that targeted it.
 //
-// **DEPRECATION NOTICE:** SSI announced 2026-05-04 that
-// `EventInterface.scorecards` is being deprecated in favour of
-// `StageInterface.scorecards`. The replacement runtime path is the per-stage
-// archival fan-out via root `stage(content_type, id) { scorecards }` —
-// implemented in `lib/scorecards-archive.ts`. This query is kept as a
-// fallback so callers can switch back if SSI re-exposes live data, and as
-// the canonical reference for the scorecard field set, but new runtime
-// paths must NOT call it.
-//
-// Current status (2026-05-04): all callers that previously ran this on live
-// matches have been short-circuited (#416 / PR-3) and now return early. The
-// live else-branch in compare/route.ts and stages/route.ts is preserved for
-// revival but is currently unreachable code. Only `cachedWholeMatchArchive`
-// (post-match path, `isMatchCompleteFromEvent === true`) reaches SSI now.
-export const SCORECARDS_QUERY = `
-  query GetMatchScorecards($ct: Int!, $id: String!) {
-    event(content_type: $ct, id: $id) {
-      ... on IpscMatchNode {
-        stages {
-          id
-          number
-          name
-          ... on IpscStageNode {
-            max_points
-          }
-          scorecards {
-            ${SCORECARD_NODE_FIELDS}
-          }
-        }
-      }
-    }
-  }
-`;
-
-// ─── Query: per-stage scorecards ─────────────────────────────────────────────
-// SSI's blessed path post-2026-05-04: fetch one stage at a time via the root
-// `stage(content_type, id)` query. Compared to the legacy whole-match query
-// it is empirically 2-5× faster on cold loads for completed matches because
-// SSI parallelizes 8-10 small per-stage queries instead of one big blocking
-// one (verified against matches 26193, 27046, 27704 on 2026-05-04).
+// Compared to the deprecated whole-match query, the per-stage fan-out
+// (orchestrated in `lib/scorecards-archive.ts`) is empirically 2-5× faster
+// on cold loads for completed matches because SSI parallelizes 8-10 small
+// per-stage queries instead of one big blocking one (verified against
+// matches 26193, 27046, 27704 on 2026-05-04).
 //
 // Variables:
 //   $ct  - IpscStageNode content_type (24)
 //   $id  - the stage's primary key (NOT the match's id)
 //
-// Used by `lib/scorecards-archive.ts` for the post-match archival fetch.
-// Like the deprecated SCORECARDS_QUERY, returns `scorecards: []` for live
-// matches with `results=org` because the gate is on the match's results
-// visibility, not the query shape.
+// Returns `scorecards: []` for matches whose
+// `IpscMatchNode.is_live_scores_accessible` is false during scoring; the
+// short-circuit in compare/route.ts and stages/route.ts avoids reaching this
+// query in that case.
 export const STAGE_SCORECARDS_QUERY = `
   query GetStageScorecards($ct: Int!, $id: String!) {
     stage(content_type: $ct, id: $id) {
@@ -1069,70 +1028,3 @@ export const STAGE_SCORECARDS_QUERY = `
     }
   }
 `;
-
-// ─── Query: incremental scorecard delta ──────────────────────────────────────
-// Fetches only scorecards whose `updated` timestamp is strictly after `since`.
-// Single match-level round-trip (not per-stage) — each scorecard returns its
-// `stage.id` so the merge step can re-bucket into the cached per-stage shape.
-//
-// Validated empirically: SSI accepts ISO 8601 with timezone (the format
-// `IpscMatchNode.updated` itself returns), so we just pass that value back
-// as the `since` parameter.
-//
-// The scorecard field set MUST stay in sync with SCORECARDS_QUERY — the merge
-// produces the same on-disk shape as a full fetch, so the cache schema version
-// covers both. Any field added to SCORECARDS_QUERY must be added here too.
-export const SCORECARDS_DELTA_QUERY = `
-  query GetMatchScorecardsDelta($ct: Int!, $id: String!, $since: String!) {
-    event(content_type: $ct, id: $id) {
-      ... on IpscMatchNode {
-        scorecards(updated_after: $since) {
-          ... on IpscScoreCardNode {
-            stage { id }
-          }
-          ${SCORECARD_NODE_FIELDS}
-        }
-      }
-    }
-  }
-`;
-
-export interface ScorecardDeltaEntry {
-  stage: { id: string };
-  created?: string | null;
-  points?: number | string | null;
-  hitfactor?: number | string | null;
-  time?: number | string | null;
-  disqualified?: boolean | null;
-  zeroed?: boolean | null;
-  stage_not_fired?: boolean | null;
-  incomplete?: boolean | null;
-  ascore?: number | string | null;
-  bscore?: number | string | null;
-  cscore?: number | string | null;
-  dscore?: number | string | null;
-  miss?: number | string | null;
-  penalty?: number | string | null;
-  procedural?: number | string | null;
-  competitor?: {
-    id: string;
-    first_name?: string;
-    last_name?: string;
-    number?: string;
-    club?: string | null;
-    get_division_display?: string | null;
-    handgun_div?: string | null;
-    get_handgun_div_display?: string | null;
-    region?: string | null;
-    get_region_display?: string | null;
-    category?: string | null;
-    ics_alias?: string | null;
-    license?: string | null;
-  } | null;
-}
-
-export interface ScorecardDeltaData {
-  event: {
-    scorecards?: ScorecardDeltaEntry[];
-  } | null;
-}

@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 import { fetchOgMatchData, type OgMatchData } from "@/lib/og-data";
 import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
 import { parseRawScorecards } from "@/lib/scorecard-data";
-import { cachedWholeMatchArchive, type StageRef } from "@/lib/scorecards-archive";
+import { getMatchScorecards, type StageRef } from "@/lib/scorecards-archive";
 import {
   computeGroupRankings,
   computeConsistencyStats,
@@ -207,7 +207,12 @@ async function fetchOgCompareStatsImpl(
       ct: 24,
       id: s.id,
     }));
-    const { data } = await cachedWholeMatchArchive(ctNum, id, stageRefs);
+    const { data } = await getMatchScorecards({
+      ct: ctNum,
+      matchId: id,
+      stages: stageRefs,
+      ttlSeconds: null,
+    });
 
     if (!data.event) return null;
 

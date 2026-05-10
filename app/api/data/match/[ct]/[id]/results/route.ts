@@ -6,10 +6,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
-import { cachedWholeMatchArchive } from "@/lib/scorecards-archive";
+import { getMatchScorecards } from "@/lib/scorecards-archive";
 import { computeFullFieldRankings } from "@/app/api/compare/logic";
 import { decodeShooterId } from "@/lib/shooter-index";
-import { effectiveMatchScoringPct } from "@/lib/match-data";
+import { computeMatchScoringPct } from "@/lib/match-data";
 import { isMatchCompleteFromEvent } from "@/lib/match-ttl";
 
 interface RawMatchData {
@@ -21,13 +21,12 @@ interface RawMatchData {
     level?: string | null;
     region?: string | null;
     get_full_rule_display?: string | null;
-    scoring_completed?: string | number | null;
     stages?: Array<{
       id: string;
       number: number;
       name: string;
       max_points?: number | null;
-      scoring_completed?: string | number | null;
+      scoring_progress?: { scored?: number | null; total?: number | null } | null;
     }>;
     competitors_approved_w_wo_results_not_dnf?: Array<{
       id: string;
@@ -81,7 +80,7 @@ export async function GET(
   // only). Match metadata is small and almost always cache-hit, so this is
   // a cheap pre-check that saves the heavy scorecards fetch on live calls.
   const isComplete = isMatchCompleteFromEvent({
-    scoringPct: effectiveMatchScoringPct(matchData.event),
+    scoringPct: computeMatchScoringPct(matchData.event),
     startDate: matchData.event.starts ?? null,
     status: matchData.event.status,
     resultsStatus: matchData.event.results,
@@ -105,7 +104,12 @@ export async function GET(
   }));
   let scorecardsData: RawScorecardsData;
   try {
-    ({ data: scorecardsData } = await cachedWholeMatchArchive(ctNum, id, stageRefs));
+    ({ data: scorecardsData } = await getMatchScorecards({
+      ct: ctNum,
+      matchId: id,
+      stages: stageRefs,
+      ttlSeconds: null,
+    }));
   } catch {
     return NextResponse.json({ error: "Failed to fetch scorecards" }, { status: 502 });
   }
@@ -173,7 +177,7 @@ export async function GET(
       level: ev.level ?? null,
       region: ev.region ?? null,
       discipline: ev.get_full_rule_display ?? null,
-      scoringCompleted: Math.round(effectiveMatchScoringPct(ev)),
+      scoringCompleted: Math.round(computeMatchScoringPct(ev)),
     },
     stages,
     competitors,

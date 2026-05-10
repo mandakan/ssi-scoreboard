@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
-import { cachedWholeMatchArchive } from "@/lib/scorecards-archive";
+import { getMatchScorecards } from "@/lib/scorecards-archive";
 import { applyAdjustmentsToScorecards } from "@/lib/simulate-apply";
-import { effectiveMatchScoringPct } from "@/lib/match-data";
+import { computeMatchScoringPct } from "@/lib/match-data";
 import { isMatchCompleteFromEvent } from "@/lib/match-ttl";
 import type { WhatIfSimulationRequest, WhatIfSimulationResponse } from "@/lib/types";
 
@@ -22,8 +22,7 @@ interface MatchEventForGate {
     starts?: string | null;
     status?: string | null;
     results?: string | null;
-    scoring_completed?: string | number | null;
-    stages?: Array<{ id: string; scoring_completed?: string | number | null }>;
+    stages?: Array<{ id: string; scoring_progress?: { scored?: number | null; total?: number | null } | null }>;
   } | null;
 }
 
@@ -96,7 +95,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Match not found" }, { status: 404 });
   }
   const isComplete = isMatchCompleteFromEvent({
-    scoringPct: effectiveMatchScoringPct(matchData.event),
+    scoringPct: computeMatchScoringPct(matchData.event),
     startDate: matchData.event.starts ?? null,
     status: matchData.event.status,
     resultsStatus: matchData.event.results,
@@ -118,7 +117,12 @@ export async function POST(req: Request) {
   }));
   let scorecardsData: RawScorecardsData;
   try {
-    ({ data: scorecardsData } = await cachedWholeMatchArchive(ctNum, id, stageRefs));
+    ({ data: scorecardsData } = await getMatchScorecards({
+      ct: ctNum,
+      matchId: id,
+      stages: stageRefs,
+      ttlSeconds: null,
+    }));
   } catch (err) {
     const message = err instanceof Error ? err.message : "Upstream error";
     return NextResponse.json({ error: message }, { status: 502 });

@@ -17,37 +17,33 @@ import { classifyVisibility } from "@/lib/visibility";
 import { visibilityTelemetry } from "@/lib/visibility-telemetry";
 import type { MatchResponse, StageInfo, CompetitorInfo, SquadInfo, Visibility } from "@/lib/types";
 
-// ── Effective match-level scoring percentage ────────────────────────────────
+// ── Match-level scoring percentage ──────────────────────────────────────────
 //
-// SSI's match-level `event.scoring_completed` aggregate is unreliable: it can
-// return "0" while every stage independently reports 20-30% scored (observed
-// during SPSK Open 2026, match 22/27190). A 0 here cascades into the
-// "match started, no scoring yet" TTL tier (5 min freshness) and freezes the
-// scoreboard for users courtside.
+// SSI exposes scoring progress as integer counts on each `IpscStageNode` via
+// `scoring_progress { scored, total }`. The match-level percentage is the
+// weighted ratio across all stages — i.e. the share of (competitor × stage)
+// pairs that have been scored. This matches SSI's own match-page progress
+// indicator and stays meaningful when stages have unequal squad sizes.
 //
-// `effectiveMatchScoringPct` trusts the match-level value when it is plausible
-// and falls back to the unweighted mean of per-stage `scoring_completed`
-// values whenever it is materially lower than the stage average. This catches
-// the bug without changing behaviour for healthy matches.
+// (The legacy `IpscMatchNode.scoring_completed` field was deprecated by SSI
+// with the note "Always returns 0. Use scoring_progress / squad_scoring_progress
+// on stages instead." We do exactly that.)
 
 interface MatchEventForScoring {
-  scoring_completed?: string | number | null;
-  stages?: Array<{ scoring_completed?: string | number | null }> | null;
+  stages?: Array<{ scoring_progress?: { scored?: number | null; total?: number | null } | null }> | null;
 }
 
-export function effectiveMatchScoringPct(event: MatchEventForScoring | null | undefined): number {
-  if (!event) return 0;
-  const matchPct = event.scoring_completed != null
-    ? parseFloat(String(event.scoring_completed))
-    : 0;
-  const stagePcts = (event.stages ?? [])
-    .map((s) => (s?.scoring_completed != null ? parseFloat(String(s.scoring_completed)) : NaN))
-    .filter((n) => Number.isFinite(n)) as number[];
-  if (stagePcts.length === 0) return matchPct;
-  const stageMean = stagePcts.reduce((a, b) => a + b, 0) / stagePcts.length;
-  // 1 percentage point of slack absorbs rounding while still catching the
-  // "match=0, stages=29%" failure mode.
-  return stageMean > matchPct + 1 ? stageMean : matchPct;
+export function computeMatchScoringPct(event: MatchEventForScoring | null | undefined): number {
+  if (!event?.stages?.length) return 0;
+  let scored = 0;
+  let total = 0;
+  for (const s of event.stages) {
+    const sp = s?.scoring_progress;
+    if (!sp) continue;
+    if (typeof sp.scored === "number") scored += sp.scored;
+    if (typeof sp.total === "number") total += sp.total;
+  }
+  return total > 0 ? (scored / total) * 100 : 0;
 }
 
 // ── Raw GraphQL response shapes ─────────────────────────────────────────────
@@ -66,10 +62,10 @@ interface RawStage {
   get_course_display?: string | null;
   procedure?: string | null;
   firearm_condition?: string | null;
-  /** Per-stage scoring percentage as a decimal string (e.g. "29.487179487179485").
-   *  Added in cache schema v15 — used to derive a match-level percentage when
-   *  SSI's own `event.scoring_completed` aggregate is broken. */
-  scoring_completed?: string | number | null;
+  /** Per-stage scoring progress (counts, not percentage). Used to derive the
+   *  match-level percentage in `computeMatchScoringPct`. Cache schema v18
+   *  replaced the deprecated string `scoring_completed` field with this. */
+  scoring_progress?: { scored?: number | null; total?: number | null } | null;
 }
 
 interface RawCompetitor {
@@ -108,7 +104,6 @@ export interface RawMatchData {
     venue?: string | null;
     status?: string | null;
     results?: string | null;
-    scoring_completed?: string | number | null;
     /** SSI visibility short code: "pub" | "lim" | "res" | "csd" | "clb". Added in cache schema v16 (issue #426). */
     visibility?: string | null;
     /** SSI's human-readable visibility label, e.g. "Public, searchable and details/names for all". */
@@ -192,7 +187,7 @@ export async function fetchMatchData(
 
   const ev = raw.event;
 
-  const scoringPct = effectiveMatchScoringPct(ev);
+  const scoringPct = computeMatchScoringPct(ev);
   const matchDate = ev.starts ? new Date(ev.starts) : null;
   const daysSince = matchDate ? (Date.now() - matchDate.getTime()) / 86_400_000 : 0;
   const resultsPublished = ev.results === "all";
@@ -383,7 +378,7 @@ export async function fetchMatchData(
     stages_count: ev.stages_count ?? stages.length,
     competitors_count: ev.competitors_count ?? competitors.length,
     max_competitors: ev.max_competitors ?? null,
-    scoring_completed: effectiveMatchScoringPct(ev),
+    scoring_completed: scoringPct,
     match_status: ev.status ?? "on",
     results_status: ev.results ?? "org",
     registration_status: ev.registration ?? "cl",

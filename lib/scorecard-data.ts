@@ -53,9 +53,8 @@ export interface RawScorecardsData {
  * Parse a raw GraphQL scorecard response into normalised RawScorecard[].
  * B-zone and C-zone hits are combined into a single c_hits field.
  *
- * This is the canonical parsing step shared by the compare route and the OG
- * image route. Both call cachedExecuteQuery(SCORECARDS_QUERY) themselves (they
- * have different TTL management), then delegate here for the parse step.
+ * This is the canonical parsing step shared by every caller that reads
+ * scorecards via `getMatchScorecards` in lib/scorecards-archive.ts.
  */
 export function parseRawScorecards(data: RawScorecardsData): RawScorecard[] {
   const rawScorecards: RawScorecard[] = [];

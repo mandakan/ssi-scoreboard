@@ -1,28 +1,28 @@
-// Server-only — post-match scorecards archive via SSI's per-stage root query.
+// Server-only — match-scorecards fetch via SSI's per-stage root query.
 //
-// Why a separate module:
-//   SSI deprecated the whole-match `event { stages { scorecards } }` path on
-//   2026-05-04 (see lib/graphql.ts:SCORECARDS_QUERY). The new SSI-blessed path
-//   is `stage(content_type, id) { scorecards }`, fetched per stage. We
-//   parallel-fetch all stages for a match and reassemble them into the same
-//   `RawScorecardsData` shape downstream parsers consume — no caller-side
-//   refactor needed.
+// SSI deprecated the whole-match `event { stages { scorecards } }` path on
+// 2026-05-04. The blessed replacement is `stage(content_type, id) { scorecards }`,
+// fetched per stage. We parallel-fetch all stages for a match and reassemble
+// them into the `RawScorecardsData` shape downstream parsers consume — no
+// caller-side refactor needed.
 //
-// Cold-load latency vs the deprecated path (matches 26193, 27046, 27704,
-// measured 2026-05-04):
+// Cold-load latency vs the deprecated whole-match path (matches 26193, 27046,
+// 27704, measured 2026-05-04):
 //   legacy whole-match:           8-17s wall-clock
 //   per-stage parallel fan-out:   2.6-3.5s wall-clock
 //
-// **Post-match only.** Live matches return `scorecards: []` from every API
-// path (results=org gate is on the match's visibility setting, not the query
-// shape). Callers MUST check `isMatchCompleteFromEvent` before calling into
-// this module, otherwise the archive would be cached as empty and never
-// refresh once the match flips to results=all.
+// `getMatchScorecards` is the single read path used by both the post-match
+// archive (permanent cache, ttl=null) and the live courtside view (TTL'd
+// cache + stale-while-revalidate refresh). The cache key matches the legacy
+// `gql:GetMatchScorecards:{...}` shape so existing infrastructure (D1 mirror,
+// force-refresh sentinel, popular-match indexer) keeps working.
 
+import { afterResponse } from "@/lib/background-impl";
 import {
   cachedExecuteQuery,
   executeQuery,
   gqlCacheKey,
+  refreshCachedMatchQuery,
   STAGE_SCORECARDS_QUERY,
 } from "@/lib/graphql";
 import type {
@@ -53,49 +53,84 @@ export interface StageRef {
   id: string;
 }
 
-/**
- * Permanent-cache wrapper around the per-stage archival fetch.
- *
- * On cache hit returns the assembled `RawScorecardsData` directly. On miss,
- * fan-outs across `stages` (concurrency-limited), reassembles into the legacy
- * shape, and writes the entry with `ttl=null` (permanent). Subsequent reads
- * are pure cache hits.
- *
- * The cache key intentionally matches the legacy SCORECARDS_QUERY key
- * (`gql:GetMatchScorecards:{...}`) so existing match-cache infrastructure
- * (D1 mirror via `match_data_cache`, force-refresh sentinel, etc.) keeps
- * working without churn. Callers don't see a difference.
- */
-export async function cachedWholeMatchArchive(
-  matchCt: number,
-  matchId: string,
-  stages: StageRef[],
-): Promise<{ data: RawScorecardsData; cachedAt: string | null }> {
-  const cacheKey = gqlCacheKey("GetMatchScorecards", { ct: matchCt, id: matchId });
-  return cachedExecuteQuery<RawScorecardsData>(
-    cacheKey,
-    // The query string is a no-op for the cache layer (it's the cache value
-    // we care about), but `cachedExecuteQuery` will use it on a cache miss
-    // for diagnostics/telemetry. Hand it the per-stage query as a hint of
-    // what shape lives behind this key. If the cache misses, our custom
-    // fetcher below replaces the would-be GraphQL call.
-    STAGE_SCORECARDS_QUERY,
-    { ct: matchCt, id: matchId },
-    null,
-    {
-      // Override the upstream fetcher: instead of executing
-      // STAGE_SCORECARDS_QUERY once with the match's (ct, id) — which would
-      // be wrong, those args belong to the stage — fan out per-stage and
-      // assemble.
-      fetcher: () => fetchWholeMatchArchive(stages),
-    },
-  );
+export interface GetMatchScorecardsArgs {
+  /** IpscMatchNode content_type (22 for all IPSC disciplines). */
+  ct: number;
+  /** Match primary key as a string. */
+  matchId: string;
+  /** Stages to fan-out across on a cache miss. */
+  stages: StageRef[];
+  /**
+   * Cache TTL (seconds). `null` = permanent — use for completed matches.
+   * A positive number caps freshness during live matches; the SWR refresh
+   * below keeps the cache warm within that window.
+   */
+  ttlSeconds: number | null;
+  /**
+   * Optional stale-while-revalidate window (seconds). When the cached entry
+   * is older than this, an in-flight refresh is scheduled (single-flighted
+   * via Redis NX lock) using the same per-stage fan-out. Ignored when
+   * `ttlSeconds` is null (permanent entries don't refresh).
+   */
+  freshnessSeconds?: number | null;
 }
 
 /**
- * Uncached parallel per-stage fetch + assembly. Use this only when you
- * intentionally want to bypass the cache (e.g. force-refresh path). Most
- * callers should use `cachedWholeMatchArchive` instead.
+ * Read-or-fetch match scorecards. Single entry point for both post-match
+ * (permanent cache) and live (TTL + SWR) modes — the only difference is the
+ * `ttlSeconds` / `freshnessSeconds` pair.
+ */
+export async function getMatchScorecards(
+  args: GetMatchScorecardsArgs,
+): Promise<{ data: RawScorecardsData; cachedAt: string | null }> {
+  const { ct, matchId, stages, ttlSeconds, freshnessSeconds } = args;
+  const cacheKey = gqlCacheKey("GetMatchScorecards", { ct, id: matchId });
+  const variables = { ct, id: matchId };
+
+  const result = await cachedExecuteQuery<RawScorecardsData>(
+    cacheKey,
+    // STAGE_SCORECARDS_QUERY is passed for diagnostics / cache-key shape; the
+    // fetcher below replaces the actual upstream call (the single-stage
+    // variables would be wrong otherwise).
+    STAGE_SCORECARDS_QUERY,
+    variables,
+    ttlSeconds,
+    { fetcher: () => fetchWholeMatchArchive(stages) },
+  );
+
+  // SWR: when the cached entry is older than freshnessSeconds, kick off a
+  // single-flighted background refresh using the same per-stage fan-out.
+  // Permanent entries (ttl=null) don't refresh — completed matches are
+  // immutable.
+  if (
+    result.cachedAt !== null &&
+    ttlSeconds !== null &&
+    freshnessSeconds != null
+  ) {
+    const ageSeconds =
+      (Date.now() - new Date(result.cachedAt).getTime()) / 1000;
+    if (ageSeconds > freshnessSeconds) {
+      afterResponse(
+        refreshCachedMatchQuery<RawScorecardsData>(
+          cacheKey,
+          STAGE_SCORECARDS_QUERY,
+          variables,
+          ttlSeconds,
+          { ct, id: matchId },
+          90,
+          { fetcher: () => fetchWholeMatchArchive(stages) },
+        ),
+      );
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Uncached parallel per-stage fetch + assembly. Use only when you need to
+ * bypass the cache (e.g. the cache layer's miss path); most callers should
+ * use `getMatchScorecards` instead.
  */
 export async function fetchWholeMatchArchive(
   stages: StageRef[],

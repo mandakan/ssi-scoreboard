@@ -24,7 +24,6 @@ function event(overrides: Partial<EventSummary>): EventSummary {
     squadding_closes: null,
     is_squadding_possible: false,
     max_competitors: null,
-    scoring_completed: 0,
     ...overrides,
   };
 }
@@ -34,33 +33,14 @@ describe("filterLiveEvents", () => {
   // moment when this regression was reported.
   const NOW = new Date("2026-05-02T07:40:00Z").getTime();
 
-  it("includes active matches with scoring_completed > 0", () => {
-    const out = filterLiveEvents([event({ scoring_completed: 25 })], NOW);
+  it("includes active matches that started within the window", () => {
+    const out = filterLiveEvents([event({})], NOW);
     expect(out).toHaveLength(1);
-  });
-
-  it("excludes matches at 100% scoring (already finished)", () => {
-    const out = filterLiveEvents([event({ scoring_completed: 100 })], NOW);
-    expect(out).toHaveLength(0);
   });
 
   it("excludes matches not in 'on' status", () => {
-    const out = filterLiveEvents(
-      [event({ status: "cp", scoring_completed: 50 })],
-      NOW,
-    );
+    const out = filterLiveEvents([event({ status: "cp" })], NOW);
     expect(out).toHaveLength(0);
-  });
-
-  it("includes status='on' matches with scoring_completed=0 if they started within the window (SPSK Open regression)", () => {
-    // SSI's match-level scoring_completed aggregate returned "0" for
-    // match 22/27190 while every stage independently reported 21-29%.
-    // The home page's Live Now section must still surface this match.
-    const out = filterLiveEvents(
-      [event({ scoring_completed: 0, status: "on" })],
-      NOW,
-    );
-    expect(out).toHaveLength(1);
   });
 
   it("excludes status='on' matches that started >6h after their declared end (lingering 'on')", () => {
@@ -69,7 +49,7 @@ describe("filterLiveEvents", () => {
     const startedSevenDaysAgo = new Date(NOW - 7 * 24 * HOUR_MS).toISOString();
     const endedSixDaysAgo = new Date(NOW - 6 * 24 * HOUR_MS).toISOString();
     const out = filterLiveEvents(
-      [event({ scoring_completed: 0, date: startedSevenDaysAgo, ends: endedSixDaysAgo })],
+      [event({ date: startedSevenDaysAgo, ends: endedSixDaysAgo })],
       NOW,
     );
     expect(out).toHaveLength(0);
@@ -78,7 +58,7 @@ describe("filterLiveEvents", () => {
   it("excludes future matches that haven't started yet", () => {
     const startsTomorrow = new Date(NOW + 24 * HOUR_MS).toISOString();
     const out = filterLiveEvents(
-      [event({ scoring_completed: 0, date: startsTomorrow, ends: null })],
+      [event({ date: startsTomorrow, ends: null })],
       NOW,
     );
     expect(out).toHaveLength(0);
@@ -87,25 +67,22 @@ describe("filterLiveEvents", () => {
   it("includes single-day matches with no `ends` if started in the last 24h", () => {
     const startedTwoHoursAgo = new Date(NOW - 2 * HOUR_MS).toISOString();
     const out = filterLiveEvents(
-      [event({ scoring_completed: 0, date: startedTwoHoursAgo, ends: null })],
+      [event({ date: startedTwoHoursAgo, ends: null })],
       NOW,
     );
     expect(out).toHaveLength(1);
   });
 
   it("preserves order across the input list", () => {
-    const a = event({ id: 1, scoring_completed: 30 });
-    const b = event({ id: 2, scoring_completed: 0 });
-    const c = event({ id: 3, scoring_completed: 80 });
+    const a = event({ id: 1 });
+    const b = event({ id: 2 });
+    const c = event({ id: 3 });
     const out = filterLiveEvents([a, b, c], NOW);
     expect(out.map((e) => e.id)).toEqual([1, 2, 3]);
   });
 
-  it("excludes events with unparseable date when scoring_completed is 0", () => {
-    const out = filterLiveEvents(
-      [event({ scoring_completed: 0, date: "not-a-date" })],
-      NOW,
-    );
+  it("excludes events with unparseable date", () => {
+    const out = filterLiveEvents([event({ date: "not-a-date" })], NOW);
     expect(out).toHaveLength(0);
   });
 });

@@ -30,30 +30,25 @@ function event(overrides: Partial<EventSummary>): EventSummary {
     squadding_closes: null,
     is_squadding_possible: false,
     max_competitors: null,
-    scoring_completed: 0,
     ...overrides,
   };
 }
 
-describe("LiveMatches card progress display", () => {
-  it("shows the percentage and a real progress bar when scoring_completed > 0", () => {
-    render(<LiveMatchCard match={event({ id: 1, scoring_completed: 42 })} />);
-    expect(screen.getByText("42%")).toBeTruthy();
-    // The shadcn Progress component renders an indicator with role=progressbar
-    // and aria-valuenow on the parent. We assert the shown number is 42.
-  });
-
-  it("falls back to a 'live' indicator when scoring_completed is 0 (SSI aggregate broken)", () => {
-    // SPSK Open 2026 scenario: match is live, stages are 25% scored, but
-    // SSI's match-level scoring_completed aggregate returns 0. We should
-    // not render "0%" — that's misleading. Show a live signal instead.
-    render(<LiveMatchCard match={event({ id: 2, scoring_completed: 0 })} />);
+describe("LiveMatches card", () => {
+  it("renders a 'live' indicator (the events list does not carry per-match progress)", () => {
+    // SSI deprecated `IpscMatchNode.scoring_completed` (always returns 0)
+    // and the replacement `scoring_progress` is per-stage, which would
+    // multiply the events list query cost by stage count. The card
+    // therefore surfaces only a live indicator; the actual percentage is
+    // shown on the match page once stages load.
+    render(<LiveMatchCard match={event({ id: 1 })} />);
     expect(screen.getByText(/live/i)).toBeTruthy();
     expect(screen.queryByText("0%")).toBeNull();
   });
 
-  it("rounds the displayed percentage", () => {
-    render(<LiveMatchCard match={event({ id: 3, scoring_completed: 33.71 })} />);
-    expect(screen.getByText("34%")).toBeTruthy();
+  it("renders the match name and venue", () => {
+    render(<LiveMatchCard match={event({ id: 2, name: "Hello Cup", venue: "Range B" })} />);
+    expect(screen.getByText("Hello Cup")).toBeTruthy();
+    expect(screen.getByText(/Range B/)).toBeTruthy();
   });
 });

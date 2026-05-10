@@ -1,7 +1,7 @@
 // Server-only — fetches match/shooter metadata for OG images and page metadata.
 // Uses cached data (GraphQL cache for matches, Redis index for shooters).
 
-import { effectiveMatchScoringPct, fetchRawMatchData } from "@/lib/match-data";
+import { computeMatchScoringPct, fetchRawMatchData } from "@/lib/match-data";
 import { extractDivision } from "@/lib/divisions";
 import { decodeShooterId } from "@/lib/shooter-index";
 import cache from "@/lib/cache-impl";
@@ -114,7 +114,7 @@ async function fetchOgMatchDataImpl(
       imageUrl,
       imageWidth,
       imageHeight,
-      scoringCompleted: Math.round(effectiveMatchScoringPct(ev)),
+      scoringCompleted: Math.round(computeMatchScoringPct(ev)),
       matchStatus: ev.status ?? null,
       resultsStatus: ev.results ?? null,
       competitors,

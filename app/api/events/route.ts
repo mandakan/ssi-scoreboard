@@ -16,7 +16,6 @@ interface RawEvent {
   ends: string | null;
   status: string;
   region: string;
-  scoring_completed: string | number | null;
   get_full_rule_display: string;
   get_full_level_display: string;
   registration_starts: string | null;
@@ -75,13 +74,11 @@ const SUB_WINDOW_DAYS = 7;
 /**
  * Filter the event list down to matches that are clearly happening right now.
  *
- * Primary signal is `scoring_completed > 0` (active scoring). SSI's
- * match-level aggregate has been observed reporting 0 while individual stages
- * were 21-29% scored — see SPSK Open 2026 (match 22/27190). Relying on that
- * field alone would hide the live section for the entire day, so we accept
- * any `status="on"` match whose start window is now as a fallback. The upper
- * time bound prevents matches that linger in `status="on"` for days
- * (organizers slow to flip to "cp") from hanging around.
+ * SSI's `scoring_completed` aggregate is deprecated and always returns 0
+ * (the events list previously used it as an early-accept signal). Liveness
+ * is now purely `status="on"` plus a temporal window bracketing the match
+ * day, with a 6-hour tail for matches that linger in "on" before organizers
+ * flip them to "cp".
  *
  * Pure / unit-testable. Order is preserved; no slicing here — callers cap.
  */
@@ -92,9 +89,6 @@ export function filterLiveEvents(
   const HOUR_MS = 3_600_000;
   return events.filter((e) => {
     if (e.status !== "on") return false;
-    if (e.scoring_completed >= 100) return false;
-    if (e.scoring_completed > 0) return true;
-    // SSI scoring_completed === 0 fallback: temporal liveness.
     if (!e.date) return false;
     const startMs = new Date(e.date).getTime();
     if (!Number.isFinite(startMs)) return false;
@@ -225,12 +219,9 @@ export async function GET(req: Request) {
       // fetch cache for that window — we accept that trade so the user
       // doesn't wait a full minute for one stuck call.
       const windows = buildSubWindows(startsAfter, startsBefore, firearms ? { firearms } : {});
-      // Only live mode actually displays the % progress; browse skips the
-      // server-side scoring_completed aggregate (saves ~10s per sub-window).
-      const includeScoring = liveMode;
       const settled = await Promise.allSettled(
         windows.map((vars) =>
-          executeQuery<RawEventsData>(EVENTS_QUERY, { ...vars, includeScoring }, 3600, { timeoutMs: 8_000 }),
+          executeQuery<RawEventsData>(EVENTS_QUERY, vars, 3600, { timeoutMs: 8_000 }),
         ),
       );
       const failures: string[] = [];
@@ -336,8 +327,6 @@ export async function GET(req: Request) {
       squadding_closes: e.squadding_closes ?? null,
       is_squadding_possible: e.is_squadding_possible ?? false,
       max_competitors: e.max_competitors ?? null,
-      scoring_completed:
-        e.scoring_completed != null ? parseFloat(String(e.scoring_completed)) : 0,
     }));
 
   const finalEvents: EventSummary[] = liveMode

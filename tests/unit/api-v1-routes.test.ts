@@ -101,7 +101,6 @@ describe("/api/v1/events", () => {
         squadding_closes: null,
         is_squadding_possible: false,
         max_competitors: 240,
-        scoring_completed: 42.5,
       },
     ] satisfies EventSummary[];
     innerEvents.mockResolvedValue(

@@ -4,6 +4,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import db from "@/lib/db-impl";
 import { CACHE_SCHEMA_VERSION } from "@/lib/constants";
+import { computeMatchScoringPct } from "@/lib/match-data";
 
 interface MatchMeta {
   ct: number;
@@ -60,7 +61,7 @@ export async function GET(req: NextRequest) {
             region?: string | null;
             competitors_count?: number;
             stages_count?: number;
-            scoring_completed?: string | number | null;
+            stages?: Array<{ scoring_progress?: { scored?: number | null; total?: number | null } | null }> | null;
           } | null;
         };
       };
@@ -80,9 +81,7 @@ export async function GET(req: NextRequest) {
         region: ev.region ?? null,
         competitorCount: ev.competitors_count ?? 0,
         stageCount: ev.stages_count ?? 0,
-        scoringCompleted: Math.round(
-          parseFloat(String(ev.scoring_completed ?? 0)),
-        ),
+        scoringCompleted: Math.round(computeMatchScoringPct(ev)),
         storedAt: entry.storedAt,
         hasScorecards,
       });
