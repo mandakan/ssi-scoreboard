@@ -1,0 +1,81 @@
+name: Update Running Costs
+
+on:
+  schedule:
+    # First day of each month at 03:00 UTC
+    - cron: '0 3 1 * *'
+  workflow_dispatch:
+    inputs:
+      period_days:
+        description: 'Window size in days (default 30)'
+        required: false
+        default: '30'
+      dry_run:
+        description: 'Print only, do not commit'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    # Use the production environment so the same Cloudflare + Upstash secrets
+    # that prod deploys use are available here. Upstash returns every DB on
+    # the account, so staging usage is included automatically.
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Get pnpm store path
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - uses: actions/cache@v5
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Estimate costs
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          UPSTASH_EMAIL: ${{ secrets.UPSTASH_EMAIL }}
+          UPSTASH_API_KEY: ${{ secrets.UPSTASH_API_KEY }}
+          DOMAIN_ANNUAL_EUR: ${{ vars.DOMAIN_ANNUAL_EUR }}
+          USD_EUR_RATE: ${{ vars.USD_EUR_RATE }}
+        run: |
+          ARGS="--period ${{ inputs.period_days || '30' }} --skip-cc"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          pnpm tsx scripts/estimate-costs.ts $ARGS
+
+      - name: Open PR if running-costs.json changed
+        if: inputs.dry_run != 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "chore(costs): refresh running-costs.json"
+          title: "chore(costs): refresh running-costs.json"
+          body: |
+            Monthly refresh of `app/about/running-costs.json` from
+            Cloudflare GraphQL Analytics + Upstash REST API.
+
+            See `scripts/estimate-costs.ts` for the data sources.
+          branch: chore/refresh-running-costs
+          delete-branch: true
+          add-paths: app/about/running-costs.json

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Github, Crosshair, Coffee } from "lucide-react";
 import { McpEndpoint } from "@/components/mcp-endpoint";
 import { InstallInstructions } from "@/components/install-instructions";
+import runningCosts from "./running-costs.json";
 
 export const metadata: Metadata = {
   title: "About – SSI Scoreboard",
@@ -277,6 +278,50 @@ export default function AboutPage() {
               Step-by-step instructions
             </Link>
             .
+          </p>
+        </section>
+
+        <section aria-labelledby="about-costs-heading" className="space-y-4">
+          <h2
+            id="about-costs-heading"
+            className="text-xl font-semibold border-b border-border pb-2"
+          >
+            Running costs
+          </h2>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            SSI Scoreboard runs on a small set of paid services. Here is what
+            the last {runningCosts.period_days} days cost, refreshed
+            automatically each month.
+          </p>
+          <dl className="text-sm border border-border rounded-lg divide-y divide-border">
+            {runningCosts.lines.map((line) => (
+              <div
+                key={line.label}
+                className="flex items-baseline justify-between gap-4 px-4 py-3"
+              >
+                <dt className="text-muted-foreground">
+                  {line.label}
+                  {line.note ? (
+                    <span className="block text-xs text-muted-foreground/70">
+                      {line.note}
+                    </span>
+                  ) : null}
+                </dt>
+                <dd className="font-medium tabular-nums">
+                  €{line.amount.toFixed(2)}
+                </dd>
+              </div>
+            ))}
+            <div className="flex items-baseline justify-between gap-4 px-4 py-3 bg-muted/40">
+              <dt className="font-medium">Total</dt>
+              <dd className="font-semibold tabular-nums">
+                €{runningCosts.total.toFixed(2)} / mo
+              </dd>
+            </div>
+          </dl>
+          <p className="text-xs text-muted-foreground">
+            Updated {runningCosts.updated}. If the tool is useful to you,
+            there&apos;s a coffee link in the section below.
           </p>
         </section>
 

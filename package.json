@@ -28,6 +28,7 @@
     "setup": "cp -n .env.local.example .env.local || true",
     "icons": "bash scripts/generate-icons.sh",
     "warm-cache": "tsx scripts/warm-cache.ts",
+    "costs": "tsx scripts/estimate-costs.ts",
     "release:post": "tsx scripts/generate-release-post.ts",
     "release:screenshots": "tsx scripts/screenshot-match.ts",
     "check:ssi-schema": "tsx scripts/check-ssi-schema.ts",
