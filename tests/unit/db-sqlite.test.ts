@@ -205,6 +205,8 @@ describe("AppDatabase (SQLite)", () => {
       isRegistrationPossible: true,
       isSquaddingPossible: false,
       maxCompetitors: 200,
+      organizerId: "2",
+      organizerName: "S:t Eskils Skyttar, Eskilstuna",
     };
 
     it("inserts and retrieves a match", async () => {
@@ -274,6 +276,8 @@ describe("AppDatabase (SQLite)", () => {
         isRegistrationPossible: false,
         isSquaddingPossible: false,
         maxCompetitors: null,
+        organizerId: null,
+        organizerName: null,
       };
       await db.upsertMatch(minimal);
       const result = await db.getMatchesByRefs(["22:2001"]);

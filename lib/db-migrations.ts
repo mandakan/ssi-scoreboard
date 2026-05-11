@@ -178,6 +178,37 @@ export const MIGRATIONS: Migration[] = [
       `DELETE FROM shooter_achievements WHERE achievement_id = 'sharpshooter'`,
     ],
   },
+
+  // ── 0009_match_data_cache_last_accessed.sql ────────────────────────────
+  // Tracks when a cached match was most recently *served* to a client,
+  // distinct from `stored_at` (the first cache fill). Powers the admin
+  // access overview's "authorized + cached vs uncached" split: we can
+  // tell which authorized matches have actually been consumed through
+  // the app vs merely sitting in cache. Writes are debounced to one per
+  // ~60s per cache key to keep this near-free even for hot matches.
+  {
+    version: 9,
+    label: "match_data_cache: last_accessed_at column",
+    statements: [
+      `ALTER TABLE match_data_cache ADD COLUMN last_accessed_at TEXT`,
+      `CREATE INDEX IF NOT EXISTS idx_mdc_last_accessed ON match_data_cache(last_accessed_at)`,
+    ],
+  },
+
+  // ── 0010_matches_organizer.sql ─────────────────────────────────────────
+  // Host club / organization for each match, captured from
+  // `IpscMatchNode.organizer` (cache schema v19). Lets the access
+  // overview group cached matches by organizing club without re-parsing
+  // every cached MatchResponse blob.
+  {
+    version: 10,
+    label: "matches: organizer_id + organizer_name columns",
+    statements: [
+      `ALTER TABLE matches ADD COLUMN organizer_id TEXT`,
+      `ALTER TABLE matches ADD COLUMN organizer_name TEXT`,
+      `CREATE INDEX IF NOT EXISTS idx_matches_organizer ON matches(organizer_id)`,
+    ],
+  },
 ];
 
 /** The latest schema version — used by adapters to skip the runner when already current. */
