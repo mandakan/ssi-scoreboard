@@ -84,6 +84,12 @@ export interface AppDatabase {
    *  Used by throttled writers to skip redundant updates. */
   getMatchDataCacheStoredAt(cacheKey: string): Promise<string | null>;
 
+  /** Bump the `last_accessed_at` timestamp on a cache row to mark it as
+   *  recently served. No-op when the row does not exist. Callers are
+   *  expected to debounce in-process (see `lib/match-data-store.ts`) so
+   *  this fires at most ~once per minute per key. */
+  touchMatchDataCache(cacheKey: string, when: string): Promise<void>;
+
   /** Store a match data entry. Upserts on cache_key. */
   setMatchDataCache(
     cacheKey: string,

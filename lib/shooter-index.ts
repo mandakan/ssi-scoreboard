@@ -74,6 +74,10 @@ export interface MatchMetadata {
   isRegistrationPossible: boolean;
   isSquaddingPossible: boolean;
   maxCompetitors: number | null;
+  /** Host club / organization id (from IpscMatchNode.organizer). Captured in
+   *  cache schema v19; null for older snapshots until they re-fetch. */
+  organizerId: string | null;
+  organizerName: string | null;
 }
 
 /**
@@ -175,6 +179,8 @@ export async function indexMatchShooters(
       isRegistrationPossible: matchMeta.isRegistrationPossible,
       isSquaddingPossible: matchMeta.isSquaddingPossible,
       maxCompetitors: matchMeta.maxCompetitors,
+      organizerId: matchMeta.organizerId,
+      organizerName: matchMeta.organizerName,
     };
     writes.push(db.upsertMatch(record).catch(() => {}));
   }

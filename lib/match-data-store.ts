@@ -20,6 +20,17 @@ const REDIS_DRAIN_TTL = 86_400;
 /** Default minimum age (seconds) before re-writing an active-match D1 row. */
 const ACTIVE_MATCH_D1_THROTTLE_SECONDS = 120;
 
+/** Minimum interval (ms) between `last_accessed_at` bumps for the same cache
+ *  key, debounced in-process. Keeps the audit signal coarsely accurate while
+ *  bounding the D1 UPDATE rate on hot matches. Cold starts re-bump once,
+ *  which is fine — the column tracks "recently served", not exact hit count. */
+const TOUCH_DEBOUNCE_MS = 60_000;
+
+/** In-memory per-cache-key last-touch timestamps. Process-local; not shared
+ *  across CF Worker isolates or Docker replicas. Each isolate independently
+ *  debounces — duplicate writes are harmless since touch is idempotent. */
+const lastTouchedAt = new Map<string, number>();
+
 interface CacheEntryMeta {
   v?: number;
 }
@@ -28,28 +39,49 @@ interface CacheEntryMeta {
  * Read match data from Redis, falling back to D1/SQLite if not in Redis.
  * Returns the raw JSON string or null if not found in either layer.
  * Only returns D1 data if its schema_version matches the current version.
+ *
+ * Side-effect: when we serve a cached entry (from either layer) the D1
+ * row's `last_accessed_at` is bumped, debounced per-process to ~once per
+ * minute per cache key. Errors on the bump are swallowed — the read path
+ * must never fail because of an audit-bookkeeping write.
  */
 export async function getMatchDataWithFallback(
   cacheKey: string,
 ): Promise<string | null> {
+  let raw: string | null = null;
+
   // Try Redis first
   try {
-    const raw = await cache.get(cacheKey);
-    if (raw) return raw;
+    raw = await cache.get(cacheKey);
   } catch (err) {
     reportError("match-data-store.redis-read", err, { matchKey: cacheKey });
   }
 
   // Fall back to D1/SQLite — return whatever is stored; callers are responsible
   // for deciding whether a given schema version is acceptable for their use case.
-  try {
-    const raw = await db.getMatchDataCache(cacheKey);
-    if (raw) return raw;
-  } catch (err) {
-    reportError("match-data-store.d1-read", err, { matchKey: cacheKey });
+  if (!raw) {
+    try {
+      raw = await db.getMatchDataCache(cacheKey);
+    } catch (err) {
+      reportError("match-data-store.d1-read", err, { matchKey: cacheKey });
+    }
   }
 
-  return null;
+  if (raw) maybeTouchMatchDataCache(cacheKey);
+  return raw;
+}
+
+/** Bump `last_accessed_at` on the D1 row, debounced per cache key. */
+function maybeTouchMatchDataCache(cacheKey: string): void {
+  if (!parseMatchCacheKey(cacheKey)) return; // only match-tagged keys get audited
+  const now = Date.now();
+  const last = lastTouchedAt.get(cacheKey);
+  if (last !== undefined && now - last < TOUCH_DEBOUNCE_MS) return;
+  lastTouchedAt.set(cacheKey, now);
+  // Fire-and-forget — never block the read path on the audit write.
+  void db
+    .touchMatchDataCache(cacheKey, new Date(now).toISOString())
+    .catch((err) => reportError("match-data-store.touch", err, { matchKey: cacheKey }));
 }
 
 /**

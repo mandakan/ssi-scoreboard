@@ -337,6 +337,8 @@ export async function fetchMatchData(
     isRegistrationPossible: ev.is_registration_possible ?? false,
     isSquaddingPossible: ev.is_squadding_possible ?? false,
     maxCompetitors: ev.max_competitors ?? null,
+    organizerId: ev.organizer?.id ?? null,
+    organizerName: ev.organizer?.name ?? null,
   }));
 
   const visibilityRaw = ev.visibility ?? "";

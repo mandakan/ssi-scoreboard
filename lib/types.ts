@@ -782,6 +782,12 @@ export interface MatchRecord {
   isRegistrationPossible: boolean;
   isSquaddingPossible: boolean;
   maxCompetitors: number | null;
+  /** Host club / organization id (`OrganizationNode.id`). Captured from
+   *  IpscMatchNode.organizer when available; null for matches we haven't
+   *  re-fetched since cache schema v19. Powers the access-overview's
+   *  "matches by club" grouping. */
+  organizerId: string | null;
+  organizerName: string | null;
 }
 
 // ── Upcoming Matches ──────────────────────────────────────────────────────────

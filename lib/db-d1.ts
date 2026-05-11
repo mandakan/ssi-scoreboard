@@ -281,6 +281,14 @@ const db: AppDatabase = {
     return row?.stored_at ?? null;
   },
 
+  async touchMatchDataCache(cacheKey, when) {
+    const db = getDb();
+    await db
+      .prepare(`UPDATE match_data_cache SET last_accessed_at = ? WHERE cache_key = ?`)
+      .bind(when, cacheKey)
+      .run();
+  },
+
   async setMatchDataCache(cacheKey, data, meta) {
     const db = getDb();
     await db
@@ -357,8 +365,8 @@ const db: AppDatabase = {
     const db = getDb();
     await db
       .prepare(
-        `INSERT INTO matches (match_ref, ct, match_id, name, venue, date, level, region, sub_rule, discipline, status, results_status, scoring_completed, competitors_count, stages_count, lat, lng, data, updated_at, registration_starts, registration_closes, registration_status, squadding_starts, squadding_closes, is_registration_possible, is_squadding_possible, max_competitors)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO matches (match_ref, ct, match_id, name, venue, date, level, region, sub_rule, discipline, status, results_status, scoring_completed, competitors_count, stages_count, lat, lng, data, updated_at, registration_starts, registration_closes, registration_status, squadding_starts, squadding_closes, is_registration_possible, is_squadding_possible, max_competitors, organizer_id, organizer_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(match_ref)
          DO UPDATE SET name = excluded.name,
                        venue = excluded.venue,
@@ -383,7 +391,9 @@ const db: AppDatabase = {
                        squadding_closes = excluded.squadding_closes,
                        is_registration_possible = excluded.is_registration_possible,
                        is_squadding_possible = excluded.is_squadding_possible,
-                       max_competitors = excluded.max_competitors`,
+                       max_competitors = excluded.max_competitors,
+                       organizer_id = excluded.organizer_id,
+                       organizer_name = excluded.organizer_name`,
       )
       .bind(
         match.matchRef, match.ct, match.matchId, match.name,
@@ -395,6 +405,7 @@ const db: AppDatabase = {
         match.squaddingStarts, match.squaddingCloses,
         match.isRegistrationPossible ? 1 : 0, match.isSquaddingPossible ? 1 : 0,
         match.maxCompetitors,
+        match.organizerId, match.organizerName,
       )
       .run();
   },
@@ -416,6 +427,7 @@ const db: AppDatabase = {
       squadding_starts: string | null; squadding_closes: string | null;
       is_registration_possible: number | null; is_squadding_possible: number | null;
       max_competitors: number | null;
+      organizer_id: string | null; organizer_name: string | null;
     };
     const result = await db
       .prepare(
@@ -424,7 +436,8 @@ const db: AppDatabase = {
                 lat, lng, data, updated_at,
                 registration_starts, registration_closes, registration_status,
                 squadding_starts, squadding_closes,
-                is_registration_possible, is_squadding_possible, max_competitors
+                is_registration_possible, is_squadding_possible, max_competitors,
+                organizer_id, organizer_name
          FROM matches WHERE match_ref IN (${placeholders})`,
       )
       .bind(...matchRefs)
@@ -444,6 +457,8 @@ const db: AppDatabase = {
         isRegistrationPossible: !!(r.is_registration_possible),
         isSquaddingPossible: !!(r.is_squadding_possible),
         maxCompetitors: r.max_competitors,
+        organizerId: r.organizer_id,
+        organizerName: r.organizer_name,
       });
     }
     return map;
