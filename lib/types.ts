@@ -172,6 +172,64 @@ export interface MatchOrganizer {
   org_type: string | null;
 }
 
+// ── Service account access catalog ───────────────────────────────────────
+// Captures the union of clubs, organization memberships, and per-match roles
+// the bot account holds at any point in time. Powers the /admin/access audit
+// overview and the `unauthorized_unexpected` access-reason canary.
+
+export type ServiceAccountAccessKind =
+  /** Loose `me.clubs` association — SSI lists the bot here without a
+   *  membership record. May or may not grant access on its own; the
+   *  unauthorized_unexpected telemetry signal answers that empirically. */
+  | "club_loose"
+  /** `me.organizer_clubs` — bot is an organizer of this club. */
+  | "organizer_club"
+  /** `me.organization_members` row — formal membership with status, role,
+   *  validity dates. */
+  | "organization_member"
+  /** A specific match (any discipline) where the bot has a per-match role. */
+  | "match_role";
+
+export interface ServiceAccountAccessRow {
+  id: number;
+  kind: ServiceAccountAccessKind;
+  /** SSI id — `OrganizationNode.id` for org rows; match `id` for match_role rows. */
+  ssiId: string;
+  /** SSI content-type key. Set only for match_role rows (e.g. 22 for IPSC matches). */
+  ssiContentType: number | null;
+  name: string;
+  shortName: string | null;
+  orgType: string | null;
+  /** `EventInterface.get_full_rule_display` for match rows; null for orgs. */
+  discipline: string | null;
+  /** JSON-decoded role list for match rows. Empty for orgs. */
+  roleNames: string[];
+  /** organization_member fields — populated when kind === "organization_member". */
+  memberType: string | null;
+  memberStatus: string | null;
+  memberStartDate: string | null;
+  memberEndDate: string | null;
+  isMembershipValid: boolean | null;
+  /** Match-specific fields — populated when kind === "match_role". */
+  matchVisibility: string | null;
+  matchStarts: string | null;
+  /** ISO timestamps of the first time we saw this access grant and the most
+   *  recent sync that confirmed it still exists. */
+  firstSeenAt: string;
+  lastVerifiedAt: string;
+  /** Set when a sync ran and this grant was not present in the response.
+   *  Null while the grant is still active. */
+  revokedAt: string | null;
+  revokedReason: string | null;
+}
+
+/** Upsert input — same shape as ServiceAccountAccessRow minus `id` and
+ *  audit timestamps (the adapter manages those). */
+export type ServiceAccountAccessUpsert = Omit<
+  ServiceAccountAccessRow,
+  "id" | "firstSeenAt" | "lastVerifiedAt" | "revokedAt" | "revokedReason"
+>;
+
 export type VisibilityClass = "public" | "unlisted" | "organizer-published";
 
 export interface Visibility {

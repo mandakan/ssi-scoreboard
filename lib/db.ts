@@ -10,7 +10,12 @@
 
 import type { ShooterProfile } from "@/lib/shooter-index";
 import type { StoredAchievement } from "@/lib/achievements/types";
-import type { MatchRecord, ShooterSearchResult } from "@/lib/types";
+import type {
+  MatchRecord,
+  ServiceAccountAccessRow,
+  ServiceAccountAccessUpsert,
+  ShooterSearchResult,
+} from "@/lib/types";
 
 export interface AppDatabase {
   // ── Shooter cross-match index ────────────────────────────────────────────
@@ -115,7 +120,15 @@ export interface AppDatabase {
     since?: string;
     includeData?: boolean;
   }): Promise<
-    Array<{ cacheKey: string; keyType: string; ct: number; matchId: string; storedAt: string; data?: string }>
+    Array<{
+      cacheKey: string;
+      keyType: string;
+      ct: number;
+      matchId: string;
+      storedAt: string;
+      lastAccessedAt: string | null;
+      data?: string;
+    }>
   >;
 
   // ── Matches domain index ─────────────────────────────────────────────────
@@ -159,4 +172,33 @@ export interface AppDatabase {
    * intentionally.
    */
   purgeInactiveShooters(olderThan: string): Promise<number>;
+
+  // ── Service account access catalog ──────────────────────────────────────
+  // Powers the /admin/access audit overview. See lib/service-account-access.ts
+  // for the sync routine and `ServiceAccountAccessRow` in lib/types.ts for the
+  // row shape.
+
+  /** Upsert a single access row. Re-activates a previously revoked row by
+   *  clearing `revoked_at` / `revoked_reason` and bumping `last_verified_at`. */
+  upsertServiceAccountAccess(
+    row: ServiceAccountAccessUpsert,
+    now: string,
+  ): Promise<void>;
+
+  /** Mark every active access row whose `last_verified_at` is older than
+   *  `cutoff` as revoked, with the given reason. Returns the number of rows
+   *  revoked. Used at the end of a sync run to soft-delete entries the
+   *  current sync didn't see. */
+  markStaleServiceAccountAccessRevoked(
+    cutoff: string,
+    reason: string,
+    revokedAt: string,
+  ): Promise<number>;
+
+  /** List access catalog rows. Pass `kind` to filter; `includeRevoked: false`
+   *  to hide soft-deleted entries (default: include them). */
+  listServiceAccountAccess(options?: {
+    kind?: string;
+    includeRevoked?: boolean;
+  }): Promise<ServiceAccountAccessRow[]>;
 }
