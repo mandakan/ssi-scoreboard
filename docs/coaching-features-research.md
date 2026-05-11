@@ -46,11 +46,26 @@ Variety / Recurring categories, persisted in `shooter_achievements`).
 
 **Already-shipped coaching surfaces:**
 
-- AI **coaching tip** per competitor on the match page (`coaching-tip.tsx`) —
-  Coach / Roast modes, gated on consent dialog
-- AI **pre-match brief** (`app/api/pre-match/brief/route.ts`)
-- **Stage Simulator** what-if (≥80% scoring)
-- **Achievements** with tier ladders and progress indicators
+- AI **coaching tip** per competitor on the match page (`components/coaching-tip.tsx`) —
+  Coach / Roast modes, gated on consent dialog. Prompt is built in
+  `lib/coaching-prompt.ts` (versioned at `COACHING_PROMPT_VERSION = 3`).
+  Route at `app/api/coaching/[ct]/[id]/[competitorId]/route.ts` is
+  match-complete-gated (needs field stats to give grounded advice).
+- AI **pre-match brief** (`app/api/pre-match/brief/[ct]/[id]/route.ts`) —
+  uses a *different* gate from the coaching tip; available pre-scoring.
+- An **availability pre-flight** at `app/api/coaching/availability/route.ts`
+  returns `{ available: isAIConfigured() }` so the UI can hide AI surfaces
+  when the binding is missing. Reuse this pattern for new AI features.
+- **Stage Simulator** what-if (≥80% scoring) — `components/stage-simulator.tsx`,
+  calls `/api/simulate`, persists adjustments to **sessionStorage** per
+  match/competitor.
+- **Achievements** with tier ladders and progress indicators.
+- **"My Shooter" identity + tracked-shooter list** — `lib/shooter-identity.ts`
+  is a fully-formed client-side identity layer: `useSyncExternalStore`
+  subscriptions, cross-tab sync via `storage` events, same-tab sync via
+  custom events, snapshot caching. Keys: `ssi-my-shooter`,
+  `ssi-tracked-shooters`. This is the foundation new coaching artifacts
+  can sit on without building anything new — see §5.
 
 **Raw data per stage we can compute over:** `hit_factor`, `points`, `time`,
 `a_hits / c_hits / d_hits / miss_count / no_shoots / procedurals`, `dq`,
@@ -172,13 +187,20 @@ would let us own the rest.
 
 Most of the proposals below require **persistent, shooter-scoped storage**.
 Today the app is unauthenticated and shooter dashboards are keyed by the
-global shooter ID encoded in the URL. There is no concept of "this is *my*
-dashboard." Three viable paths, with increasing investment:
+global shooter ID encoded in the URL. There *is* however a fully-formed
+**localStorage "My Shooter" identity layer** (`lib/shooter-identity.ts`) —
+the "this is *my* dashboard" question is already answered for personal
+use. Three viable paths, with increasing investment:
 
-- **A. localStorage only** (zero backend). Goals, notes, and journal entries
-  live on one device, keyed by shooter ID. Pros: ships in days, no auth,
-  no privacy review. Cons: no cross-device, no coach sharing, lost on
-  cache clear. Good enough for v0 self-coaching.
+- **A. localStorage only** (zero backend, **foundation already exists**).
+  Goals, notes, AAR responses, and journal entries live on one device,
+  keyed by `MyShooterIdentity.shooterId`. The `lib/shooter-identity.ts`
+  module already gives us snapshot caching, cross-tab sync, and a
+  `useSyncExternalStore` pattern — new artifacts (e.g. `ssi-match-goals`,
+  `ssi-match-aar`) plug into the same shape with ~30 lines of helper
+  code per artifact type. Pros: ships in days, no auth, no privacy
+  review, no DB migration. Cons: no cross-device, no coach sharing,
+  lost on cache clear. Good enough for v0 self-coaching.
 
 - **B. Magic-link claim + AppDatabase.** Shooter "claims" their dashboard
   via email magic-link, claim is stored in a new `shooter_claims` table.
@@ -384,6 +406,16 @@ deterministic — the AI is not in the loop. AI optionally generates the
 prose around the deterministic output (cf. coaching-tip's existing
 pattern).
 
+**Implementation note.** The `CompareResponse` shape in `lib/types.ts`
+already exposes every input the rules above need: `penaltyStats`,
+`constraintPerformance`, `courseLengthPerformance`, `archetypePerformance`,
+`stageDegradationData`, `styleFingerprintStats`, `consistencyStats`,
+`lossBreakdownStats`. No new API call, no new query — the focus-area
+generator is a pure function over the existing `CompareResponse`. It
+belongs in a new `lib/coaching-rules.ts` next to `lib/match-ttl.ts` so
+the same unit-test pattern applies (input fixtures → expected focus
+areas, no I/O).
+
 ### 7.3 Drill library
 
 **What.** A curated set of 15–30 drills, each tagged with what skill
@@ -548,6 +580,11 @@ informed by §5 (storage path) and §1 (existing surfaces).
    prior weaknesses. Needs §6.1 to be most valuable.
 
 ### Tier 2 — needs localStorage / path A (no auth, but new state)
+
+Path A's foundation (`lib/shooter-identity.ts`) is already in place, so
+the cost of "new state" is much lower than it would be in a greenfield
+project. Each artifact below is roughly a `lib/<artifact>-storage.ts`
+module modelled on the existing identity module + a React hook.
 
 6. **§6.1 Goal-setting wizard** + **§7.1 Guided AAR** — together they
    form the SRL forethought→reflection loop. Build them together
