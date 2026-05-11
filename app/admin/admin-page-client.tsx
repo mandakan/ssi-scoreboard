@@ -12,6 +12,7 @@ import {
   UserX,
   UserCheck,
   Activity,
+  KeyRound,
   LogOut,
   ExternalLink,
 } from "lucide-react";
@@ -500,7 +501,19 @@ export function AdminPageClient() {
                 aria-label="Open health dashboard in new tab"
               >
                 <Activity className="h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">Dashboard</span>
+                <span className="hidden sm:inline">Health</span>
+                <ExternalLink className="ml-1 hidden h-3 w-3 sm:inline" />
+              </a>
+            </Button>
+            <Button asChild size="sm" variant="ghost" className="min-h-11">
+              <a
+                href={`/admin/access?token=${encodeURIComponent(token)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Open service-account access overview in new tab"
+              >
+                <KeyRound className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Access</span>
                 <ExternalLink className="ml-1 hidden h-3 w-3 sm:inline" />
               </a>
             </Button>
