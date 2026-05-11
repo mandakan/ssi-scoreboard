@@ -139,103 +139,31 @@ function overage(used: number, included: number): number {
 
 // ---------- Cloudflare provider ----------
 //
-// Single GraphQL call to https://api.cloudflare.com/client/v4/graphql.
-// Account-scoped — both staging and production workers/D1/R2 live under one
-// account, so a per-worker / per-bucket / per-DB breakdown comes back in the
-// same response. Pipelines billing isn't surfaced here; it's flat-rate low.
+// Four independent GraphQL calls to https://api.cloudflare.com/client/v4/graphql,
+// one per data source (workers, D1, R2 ops, R2 storage). A bad field name in
+// one source can't poison the others. Workers AI usage is not currently
+// queried — the public GraphQL Analytics schema doesn't expose a stable AI
+// inference table; revisit when one exists. Account-scoped, so both prod and
+// staging workers / DBs / buckets surface in the per-dimension breakdown.
 
-async function cloudflareProvider(): Promise<ProviderReport> {
-  const lines: CostLine[] = [];
-  const token = process.env.CLOUDFLARE_API_TOKEN;
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-
-  if (!token || !accountId) {
-    return {
-      provider: "Cloudflare",
-      lines: [{ label: "Hosting (Cloudflare)", cost_usd: PRICES.cloudflare.workersBase, note: "base only — CLOUDFLARE_API_TOKEN/ACCOUNT_ID not set" }],
-      total_usd: PRICES.cloudflare.workersBase,
-      error: "missing CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID",
-    };
-  }
-
+async function cfQuery<T>(
+  token: string,
+  accountId: string,
+  table: string,
+  selection: string,
+): Promise<{ data: T[]; error?: string }> {
   const query = /* GraphQL */ `
-    query Costs($accountTag: String!, $start: Time!, $end: Time!) {
+    query ($accountTag: String!, $start: Time!, $end: Time!) {
       viewer {
         accounts(filter: { accountTag: $accountTag }) {
-          workers: workersInvocationsAdaptive(
-            filter: { datetime_geq: $start, datetime_leq: $end }
-            limit: 100
-          ) {
-            dimensions { scriptName }
-            sum { requests subrequests errors }
-            quantiles { cpuTimeP50 cpuTimeP99 }
-          }
-          d1: d1AnalyticsAdaptiveGroups(
-            filter: { datetime_geq: $start, datetime_leq: $end }
-            limit: 100
-          ) {
-            dimensions { databaseId }
-            sum { readQueries writeQueries rowsRead rowsWritten }
-          }
-          r2Ops: r2OperationsAdaptiveGroups(
+          rows: ${table}(
             filter: { datetime_geq: $start, datetime_leq: $end }
             limit: 200
-          ) {
-            dimensions { bucketName actionType }
-            sum { requests }
-          }
-          r2Storage: r2StorageAdaptiveGroups(
-            filter: { datetime_geq: $start, datetime_leq: $end }
-            limit: 100
-            orderBy: [datetime_DESC]
-          ) {
-            dimensions { bucketName }
-            max { payloadSize metadataSize objectCount }
-          }
-          ai: workersAIInferenceAdaptiveGroups(
-            filter: { datetime_geq: $start, datetime_leq: $end }
-            limit: 100
-          ) {
-            dimensions { modelName }
-            sum { requests }
-          }
+          ) ${selection}
         }
       }
     }
   `;
-
-  type CfResp = {
-    data?: {
-      viewer?: {
-        accounts?: Array<{
-          workers?: Array<{
-            dimensions: { scriptName: string };
-            sum: { requests: number; subrequests?: number; errors?: number };
-            quantiles?: { cpuTimeP50?: number; cpuTimeP99?: number };
-          }>;
-          d1?: Array<{
-            dimensions: { databaseId: string };
-            sum: { readQueries: number; writeQueries: number; rowsRead?: number; rowsWritten?: number };
-          }>;
-          r2Ops?: Array<{
-            dimensions: { bucketName: string; actionType: string };
-            sum: { requests: number };
-          }>;
-          r2Storage?: Array<{
-            dimensions: { bucketName: string };
-            max: { payloadSize?: number; metadataSize?: number; objectCount?: number };
-          }>;
-          ai?: Array<{
-            dimensions: { modelName: string };
-            sum: { requests: number };
-          }>;
-        }>;
-      };
-    };
-    errors?: Array<{ message: string }>;
-  };
-
-  let payload: CfResp;
   try {
     const res = await fetch("https://api.cloudflare.com/client/v4/graphql", {
       method: "POST",
@@ -252,32 +180,62 @@ async function cloudflareProvider(): Promise<ProviderReport> {
         },
       }),
     });
-    payload = (await res.json()) as CfResp;
+    const payload = (await res.json()) as {
+      data?: { viewer?: { accounts?: Array<{ rows?: T[] }> } };
+      errors?: Array<{ message: string }>;
+    };
+    if (payload.errors?.length) {
+      return { data: [], error: payload.errors.map((e) => e.message).join("; ") };
+    }
+    return { data: payload.data?.viewer?.accounts?.[0]?.rows ?? [] };
   } catch (e) {
+    return { data: [], error: (e as Error).message };
+  }
+}
+
+async function cloudflareProvider(): Promise<ProviderReport> {
+  const lines: CostLine[] = [];
+  const errors: string[] = [];
+  const token = process.env.CLOUDFLARE_API_TOKEN;
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+
+  if (!token || !accountId) {
     return {
       provider: "Cloudflare",
-      lines: [{ label: "Hosting (Cloudflare)", cost_usd: PRICES.cloudflare.workersBase, note: "base only — Analytics API unreachable" }],
+      lines: [
+        {
+          label: "Hosting (Cloudflare)",
+          cost_usd: PRICES.cloudflare.workersBase,
+          note: "base only — CLOUDFLARE_API_TOKEN/ACCOUNT_ID not set",
+        },
+      ],
       total_usd: PRICES.cloudflare.workersBase,
-      error: `fetch failed: ${(e as Error).message}`,
+      error: "missing CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID",
     };
   }
-
-  if (payload.errors?.length) {
-    return {
-      provider: "Cloudflare",
-      lines: [{ label: "Hosting (Cloudflare)", cost_usd: PRICES.cloudflare.workersBase, note: "base only — Analytics query errored" }],
-      total_usd: PRICES.cloudflare.workersBase,
-      error: payload.errors.map((e) => e.message).join("; "),
-    };
-  }
-
-  const account = payload.data?.viewer?.accounts?.[0];
 
   // Workers ----------------------------------------------------------------
+  type WorkerRow = {
+    dimensions: { scriptName: string };
+    sum: { requests: number; subrequests?: number; errors?: number };
+    quantiles?: { cpuTimeP50?: number };
+  };
+  const workersRes = await cfQuery<WorkerRow>(
+    token,
+    accountId,
+    "workersInvocationsAdaptive",
+    `{
+      dimensions { scriptName }
+      sum { requests subrequests errors }
+      quantiles { cpuTimeP50 }
+    }`,
+  );
+  if (workersRes.error) errors.push(`workers: ${workersRes.error}`);
+
   let totalRequests = 0;
   let totalCpuMs = 0;
   const workerBreakdown: string[] = [];
-  for (const w of account?.workers ?? []) {
+  for (const w of workersRes.data) {
     const req = w.sum.requests ?? 0;
     // P50 CPU x requests is a rough proxy for total CPU time (Analytics
     // exposes percentiles, not a sum). Treat as estimate, not invoice.
@@ -286,25 +244,38 @@ async function cloudflareProvider(): Promise<ProviderReport> {
     totalCpuMs += cpuMs;
     workerBreakdown.push(`${w.dimensions.scriptName}: ${fmtBig(req)} req`);
   }
-
   const reqOverM = overage(totalRequests / 1_000_000, PRICES.cloudflare.workersIncludedReqM);
   const cpuOverM = overage(totalCpuMs / 1_000_000, PRICES.cloudflare.workersIncludedCpuMsM);
   const workersCost =
     PRICES.cloudflare.workersBase +
     reqOverM * PRICES.cloudflare.workersOverReqPerM +
     cpuOverM * PRICES.cloudflare.workersOverCpuPerM;
-
   lines.push({
     label: "Workers (Paid plan + requests/CPU)",
-    usage: workerBreakdown.length ? workerBreakdown.join(", ") : "no traffic",
+    usage: workerBreakdown.length ? workerBreakdown.join(", ") : workersRes.error ? "n/a" : "no traffic",
     cost_usd: workersCost,
     note: reqOverM === 0 && cpuOverM === 0 ? "below included quota" : undefined,
   });
 
   // D1 --------------------------------------------------------------------
+  type D1Row = {
+    dimensions: { databaseId: string };
+    sum: { readQueries: number; writeQueries: number; rowsRead?: number; rowsWritten?: number };
+  };
+  const d1Res = await cfQuery<D1Row>(
+    token,
+    accountId,
+    "d1AnalyticsAdaptiveGroups",
+    `{
+      dimensions { databaseId }
+      sum { readQueries writeQueries rowsRead rowsWritten }
+    }`,
+  );
+  if (d1Res.error) errors.push(`d1: ${d1Res.error}`);
+
   let totalReads = 0;
   let totalWrites = 0;
-  for (const d of account?.d1 ?? []) {
+  for (const d of d1Res.data) {
     totalReads += d.sum.rowsRead ?? d.sum.readQueries ?? 0;
     totalWrites += d.sum.rowsWritten ?? d.sum.writeQueries ?? 0;
   }
@@ -322,22 +293,54 @@ async function cloudflareProvider(): Promise<ProviderReport> {
     });
   }
 
-  // R2 storage + ops ------------------------------------------------------
-  let r2StorageBytes = 0;
-  for (const s of account?.r2Storage ?? []) {
-    r2StorageBytes += (s.max.payloadSize ?? 0) + (s.max.metadataSize ?? 0);
-  }
-  const r2Gb = r2StorageBytes / (1024 ** 3);
+  // R2 ops ----------------------------------------------------------------
+  type R2OpRow = {
+    dimensions: { bucketName: string; actionType: string };
+    sum: { requests: number };
+  };
+  const r2OpsRes = await cfQuery<R2OpRow>(
+    token,
+    accountId,
+    "r2OperationsAdaptiveGroups",
+    `{
+      dimensions { bucketName actionType }
+      sum { requests }
+    }`,
+  );
+  if (r2OpsRes.error) errors.push(`r2 ops: ${r2OpsRes.error}`);
+
   let classA = 0;
   let classB = 0;
-  for (const op of account?.r2Ops ?? []) {
+  for (const op of r2OpsRes.data) {
     // Action types: ListBuckets/PutObject/DeleteObject = Class A,
-    // GetObject/HeadObject = Class B. We use a conservative split: anything
-    // not explicitly read-shaped counts as Class A.
+    // GetObject/HeadObject = Class B. Conservative split: anything not
+    // explicitly read-shaped counts as Class A.
     const isClassB = /Get|Head/.test(op.dimensions.actionType);
     if (isClassB) classB += op.sum.requests ?? 0;
     else classA += op.sum.requests ?? 0;
   }
+
+  // R2 storage ------------------------------------------------------------
+  type R2StorageRow = {
+    dimensions: { bucketName: string };
+    max: { payloadSize?: number; metadataSize?: number };
+  };
+  const r2StorageRes = await cfQuery<R2StorageRow>(
+    token,
+    accountId,
+    "r2StorageAdaptiveGroups",
+    `{
+      dimensions { bucketName }
+      max { payloadSize metadataSize }
+    }`,
+  );
+  if (r2StorageRes.error) errors.push(`r2 storage: ${r2StorageRes.error}`);
+
+  let r2StorageBytes = 0;
+  for (const s of r2StorageRes.data) {
+    r2StorageBytes += (s.max.payloadSize ?? 0) + (s.max.metadataSize ?? 0);
+  }
+  const r2Gb = r2StorageBytes / 1024 ** 3;
   const r2StorageOver = overage(r2Gb, PRICES.cloudflare.r2IncludedStorageGB);
   const classAOver = overage(classA / 1_000_000, PRICES.cloudflare.r2IncludedClassAM);
   const classBOver = overage(classB / 1_000_000, PRICES.cloudflare.r2IncludedClassBM);
@@ -354,25 +357,13 @@ async function cloudflareProvider(): Promise<ProviderReport> {
     });
   }
 
-  // Workers AI ------------------------------------------------------------
-  // The Analytics schema exposes `requests` but not neurons directly. We
-  // approximate at 1,000 neurons / request (Llama 3.1 8B is roughly this
-  // ballpark for the short prompts used by the coaching tip feature).
-  let aiRequests = 0;
-  for (const a of account?.ai ?? []) aiRequests += a.sum.requests ?? 0;
-  const aiNeurons = aiRequests * 1000;
-  const aiCost = (aiNeurons / 1000) * PRICES.cloudflare.aiPer1kNeurons;
-  if (aiRequests > 0) {
-    lines.push({
-      label: "Workers AI (Llama 3.1 8B)",
-      usage: `${fmtBig(aiRequests)} inferences (≈${fmtBig(aiNeurons)} neurons est.)`,
-      cost_usd: aiCost,
-      note: "neuron count is an estimate",
-    });
-  }
-
   const total = lines.reduce((s, l) => s + l.cost_usd, 0);
-  return { provider: "Cloudflare", lines, total_usd: total };
+  return {
+    provider: "Cloudflare",
+    lines,
+    total_usd: total,
+    error: errors.length ? errors.join(" · ") : undefined,
+  };
 }
 
 // ---------- Upstash provider ----------
