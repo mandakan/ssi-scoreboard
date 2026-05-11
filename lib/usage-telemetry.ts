@@ -20,6 +20,7 @@
 // grows ~10x or R2 PUT volume nears the free-tier cap.
 
 import { telemetry } from "@/lib/telemetry";
+import type { AccessReasonKind } from "@/lib/access-reason";
 
 /** Bucket a count into a small set of cardinality-bounded labels. */
 export function bucketCount(n: number): "0" | "1-9" | "10-99" | "100+" {
@@ -53,6 +54,10 @@ export type UsageEvent =
       region: string | null;
       scoringBucket: "pre" | "active" | "complete";
       cacheHit: boolean;
+      /** Why SSI returned us data on this match (added with cache schema v19).
+       *  Optional so old call sites compile during rollout — the new emit
+       *  site in app/match/[ct]/[id]/page.tsx always populates it. */
+      accessReason?: AccessReasonKind;
     }
   | {
       op: "comparison";

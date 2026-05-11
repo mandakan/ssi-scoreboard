@@ -8,6 +8,8 @@ Lives in `lib/telemetry.ts` (transport) + per-domain typed wrappers:
 - `lib/error-telemetry.ts` -- `reportError(site, err, extra)` for swallowed-catch sites; records error class + truncated message (no stack -- avoids PII)
 - `lib/usage-telemetry.ts` -- server-side product analytics (match views, comparisons, searches, OG renders, dashboard views)
 - `lib/mcp-telemetry.ts` -- MCP-server-boundary events (JSON-RPC requests, tool calls, auth fails) emitted from `/api/mcp`.
+- `lib/visibility-telemetry.ts` -- per-match `visibility-decision` events (SSI visibility code -> 3-class projection).
+- `lib/access-reason-telemetry.ts` -- per-match `access-reason-decision` events explaining *why* SSI returned us data on a given match (`public` | `service_admin_match` | `service_assistant_match` | `service_staff_match` | `service_role_match` | `unknown_visibility` | `unauthorized_unexpected`). Emits a debounced `access-reason-anomaly` event on the audit-canary buckets so the alert signal stays low-volume even when the decision stream is hot. Aggregated onto `usage.match-view` as the optional `accessReason` field for fast request-level slicing.
 
 ## via:"mcp" enrichment
 

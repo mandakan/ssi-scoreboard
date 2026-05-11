@@ -30,6 +30,9 @@ const MOCK_MATCH: MatchResponse = {
   ends: null,
   ssi_url: "https://shootnscoreit.com/event/22/99999999/",
   visibility: { class: "public", rawCode: "pub", displayName: "Public, searchable and details/names for all" },
+  access_reason: { kind: "public", rawVisibility: "pub", role: null },
+  role_names: [],
+  organizer: null,
   stages: [
     { id: 1, name: "Stage 1", stage_number: 1, max_points: 80, min_rounds: 16, paper_targets: 8, steel_targets: 0, ssi_url: "https://shootnscoreit.com/event/stage/24/1/", course_display: "Medium", procedure: null, firearm_condition: null },
     { id: 2, name: "Stage 2", stage_number: 2, max_points: 60, min_rounds: 12, paper_targets: 6, steel_targets: 0, ssi_url: "https://shootnscoreit.com/event/stage/24/2/", course_display: "Short", procedure: null, firearm_condition: null },

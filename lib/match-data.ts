@@ -15,7 +15,9 @@ import { cacheTelemetry } from "@/lib/cache-telemetry";
 import { reportError } from "@/lib/error-telemetry";
 import { classifyVisibility } from "@/lib/visibility";
 import { visibilityTelemetry } from "@/lib/visibility-telemetry";
-import type { MatchResponse, StageInfo, CompetitorInfo, SquadInfo, Visibility } from "@/lib/types";
+import { computeAccessReason } from "@/lib/access-reason";
+import { accessReasonTelemetry } from "@/lib/access-reason-telemetry";
+import type { MatchResponse, MatchOrganizer, StageInfo, CompetitorInfo, SquadInfo, Visibility } from "@/lib/types";
 
 // `computeMatchScoringPct` lives in lib/match-ttl.ts (alongside the other
 // scoring-state helpers); re-exported here for back-compat with existing
@@ -86,6 +88,18 @@ export interface RawMatchData {
     get_visibility_display?: string | null;
     /** Per-requester permission for live scorecards. Added in cache schema v17. */
     is_live_scores_accessible?: boolean | null;
+    /** Per-requester role strings on this match (cache schema v19). */
+    role_names?: string[] | null;
+    is_current_role_admin?: boolean | null;
+    is_current_role_assistant?: boolean | null;
+    is_current_role_staff?: boolean | null;
+    /** Host organization for this match (cache schema v19). */
+    organizer?: {
+      id?: string | null;
+      name?: string | null;
+      short_name?: string | null;
+      org_type?: string | null;
+    } | null;
     region?: string | null;
     sub_rule?: string | null;
     get_full_rule_display?: string | null;
@@ -340,6 +354,33 @@ export async function fetchMatchData(
     class: visibility.class,
   });
 
+  const roleNames: string[] = Array.isArray(ev.role_names) ? ev.role_names : [];
+  const accessReason = computeAccessReason({
+    visibility: ev.visibility,
+    role_names: roleNames,
+    is_current_role_admin: ev.is_current_role_admin,
+    is_current_role_assistant: ev.is_current_role_assistant,
+    is_current_role_staff: ev.is_current_role_staff,
+  });
+  accessReasonTelemetry({
+    op: "access-reason-decision",
+    matchKey,
+    ct: ctNum,
+    id,
+    kind: accessReason.kind,
+    rawVisibility: accessReason.rawVisibility,
+    role: accessReason.role,
+  });
+
+  const organizer: MatchOrganizer | null = ev.organizer && ev.organizer.id
+    ? {
+        id: ev.organizer.id,
+        name: ev.organizer.name ?? "",
+        short_name: ev.organizer.short_name ?? null,
+        org_type: ev.organizer.org_type ?? null,
+      }
+    : null;
+
   const response: MatchResponse = {
     name: ev.name,
     venue: ev.venue ?? null,
@@ -366,6 +407,9 @@ export async function fetchMatchData(
     is_squadding_possible: ev.is_squadding_possible ?? false,
     ssi_url: `https://shootnscoreit.com/event/${ct}/${id}/`,
     visibility,
+    access_reason: accessReason,
+    role_names: roleNames,
+    organizer,
     is_live_scores_accessible: ev.is_live_scores_accessible ?? false,
     stages,
     competitors,
