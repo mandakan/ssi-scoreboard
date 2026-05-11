@@ -209,6 +209,45 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS idx_matches_organizer ON matches(organizer_id)`,
     ],
   },
+
+  // ── 0011_service_account_access.sql ────────────────────────────────────
+  // Audit catalog of every club, organization membership, and match the
+  // service account holds a role on. Refreshed by a sync job that queries
+  // `me { clubs organizer_clubs organization_members }` and
+  // `events(has_role: true)`. Rows not present in a given sync are
+  // soft-deleted by setting `revoked_at` and `revoked_reason` so the audit
+  // log retains "had access between X and Y" history.
+  {
+    version: 11,
+    label: "service_account_access: audit catalog of clubs/memberships/match-roles",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS service_account_access (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        kind                TEXT NOT NULL,
+        ssi_id              TEXT NOT NULL,
+        ssi_content_type    INTEGER,
+        name                TEXT NOT NULL,
+        short_name          TEXT,
+        org_type            TEXT,
+        discipline          TEXT,
+        role_names          TEXT,
+        member_type         TEXT,
+        member_status       TEXT,
+        member_start_date   TEXT,
+        member_end_date     TEXT,
+        is_membership_valid INTEGER,
+        match_visibility    TEXT,
+        match_starts        TEXT,
+        first_seen_at       TEXT NOT NULL,
+        last_verified_at    TEXT NOT NULL,
+        revoked_at          TEXT,
+        revoked_reason      TEXT
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS uniq_saa_natural ON service_account_access(kind, ssi_id, COALESCE(ssi_content_type, -1))`,
+      `CREATE INDEX IF NOT EXISTS idx_saa_kind ON service_account_access(kind)`,
+      `CREATE INDEX IF NOT EXISTS idx_saa_revoked ON service_account_access(revoked_at)`,
+    ],
+  },
 ];
 
 /** The latest schema version — used by adapters to skip the runner when already current. */

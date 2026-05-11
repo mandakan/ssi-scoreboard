@@ -4,7 +4,7 @@
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AppDatabase } from "@/lib/db";
-import type { MatchRecord } from "@/lib/types";
+import type { MatchRecord, ServiceAccountAccessRow } from "@/lib/types";
 
 // Minimal D1Database type for the binding. The full type comes from
 // @cloudflare/workers-types which is a devDep of the opennextjs package.
@@ -331,7 +331,15 @@ const db: AppDatabase = {
 
   async listMatchCacheEntries(options) {
     const d = getDb();
-    type Row = { cache_key: string; key_type: string; ct: number; match_id: string; stored_at: string; data?: string };
+    type Row = {
+      cache_key: string;
+      key_type: string;
+      ct: number;
+      match_id: string;
+      stored_at: string;
+      last_accessed_at: string | null;
+      data?: string;
+    };
     const conditions: string[] = [];
     const binds: unknown[] = [];
     if (options?.keyType) {
@@ -343,8 +351,8 @@ const db: AppDatabase = {
       binds.push(options.since);
     }
     const cols = options?.includeData
-      ? "cache_key, key_type, ct, match_id, stored_at, data"
-      : "cache_key, key_type, ct, match_id, stored_at";
+      ? "cache_key, key_type, ct, match_id, stored_at, last_accessed_at, data"
+      : "cache_key, key_type, ct, match_id, stored_at, last_accessed_at";
     const where = conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : "";
     let stmt = d.prepare(`SELECT ${cols} FROM match_data_cache${where} ORDER BY stored_at DESC`);
     if (binds.length > 0) stmt = stmt.bind(...binds);
@@ -355,6 +363,7 @@ const db: AppDatabase = {
       ct: r.ct,
       matchId: r.match_id,
       storedAt: r.stored_at,
+      lastAccessedAt: r.last_accessed_at,
       ...(r.data != null ? { data: r.data } : {}),
     }));
   },
@@ -536,6 +545,152 @@ const db: AppDatabase = {
     await db.batch(stmts);
     return ids.length;
   },
+
+  // ── Service account access catalog ───────────────────────────────────────
+
+  async upsertServiceAccountAccess(row, now) {
+    const roleNamesJson = JSON.stringify(row.roleNames ?? []);
+    const isValid = row.isMembershipValid == null ? null : row.isMembershipValid ? 1 : 0;
+    const db = getDb();
+    await db
+      .prepare(
+        `INSERT INTO service_account_access (
+           kind, ssi_id, ssi_content_type, name, short_name, org_type, discipline,
+           role_names, member_type, member_status, member_start_date, member_end_date,
+           is_membership_valid, match_visibility, match_starts,
+           first_seen_at, last_verified_at, revoked_at, revoked_reason
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)
+         ON CONFLICT(kind, ssi_id, COALESCE(ssi_content_type, -1))
+         DO UPDATE SET
+           name = excluded.name,
+           short_name = excluded.short_name,
+           org_type = excluded.org_type,
+           discipline = excluded.discipline,
+           role_names = excluded.role_names,
+           member_type = excluded.member_type,
+           member_status = excluded.member_status,
+           member_start_date = excluded.member_start_date,
+           member_end_date = excluded.member_end_date,
+           is_membership_valid = excluded.is_membership_valid,
+           match_visibility = excluded.match_visibility,
+           match_starts = excluded.match_starts,
+           last_verified_at = excluded.last_verified_at,
+           revoked_at = NULL,
+           revoked_reason = NULL`,
+      )
+      .bind(
+        row.kind, row.ssiId, row.ssiContentType, row.name, row.shortName, row.orgType, row.discipline,
+        roleNamesJson, row.memberType, row.memberStatus, row.memberStartDate, row.memberEndDate,
+        isValid, row.matchVisibility, row.matchStarts,
+        now, now,
+      )
+      .run();
+  },
+
+  async markStaleServiceAccountAccessRevoked(cutoff, reason, revokedAt) {
+    const db = getDb();
+    const result = await db
+      .prepare(
+        `UPDATE service_account_access
+            SET revoked_at = ?, revoked_reason = ?
+            WHERE last_verified_at < ? AND revoked_at IS NULL`,
+      )
+      .bind(revokedAt, reason, cutoff)
+      .run();
+    // D1 reports affected row count via meta.changes
+    const meta = (result as { meta?: { changes?: number } }).meta;
+    return meta?.changes ?? 0;
+  },
+
+  async listServiceAccountAccess(options) {
+    const includeRevoked = options?.includeRevoked ?? true;
+    const kindFilter = options?.kind;
+    const conditions: string[] = [];
+    const params: (string | number)[] = [];
+    if (!includeRevoked) conditions.push("revoked_at IS NULL");
+    if (kindFilter) {
+      conditions.push("kind = ?");
+      params.push(kindFilter);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    const db = getDb();
+    type Row = {
+      id: number; kind: string; ssi_id: string; ssi_content_type: number | null;
+      name: string; short_name: string | null; org_type: string | null; discipline: string | null;
+      role_names: string | null; member_type: string | null; member_status: string | null;
+      member_start_date: string | null; member_end_date: string | null;
+      is_membership_valid: number | null; match_visibility: string | null;
+      match_starts: string | null; first_seen_at: string; last_verified_at: string;
+      revoked_at: string | null; revoked_reason: string | null;
+    };
+    const result = await db
+      .prepare(
+        `SELECT id, kind, ssi_id, ssi_content_type, name, short_name, org_type, discipline,
+                role_names, member_type, member_status, member_start_date, member_end_date,
+                is_membership_valid, match_visibility, match_starts,
+                first_seen_at, last_verified_at, revoked_at, revoked_reason
+         FROM service_account_access
+         ${where}
+         ORDER BY revoked_at IS NULL DESC, last_verified_at DESC`,
+      )
+      .bind(...params)
+      .all<Row>();
+    return result.results.map((r) => decodeServiceAccountAccessRow(r));
+  },
 };
+
+function decodeServiceAccountAccessRow(r: {
+  id: number;
+  kind: string;
+  ssi_id: string;
+  ssi_content_type: number | null;
+  name: string;
+  short_name: string | null;
+  org_type: string | null;
+  discipline: string | null;
+  role_names: string | null;
+  member_type: string | null;
+  member_status: string | null;
+  member_start_date: string | null;
+  member_end_date: string | null;
+  is_membership_valid: number | null;
+  match_visibility: string | null;
+  match_starts: string | null;
+  first_seen_at: string;
+  last_verified_at: string;
+  revoked_at: string | null;
+  revoked_reason: string | null;
+}): ServiceAccountAccessRow {
+  let roleNames: string[] = [];
+  if (r.role_names) {
+    try {
+      const parsed: unknown = JSON.parse(r.role_names);
+      if (Array.isArray(parsed)) roleNames = parsed.filter((v): v is string => typeof v === "string");
+    } catch { /* malformed JSON — treat as empty */ }
+  }
+  return {
+    id: r.id,
+    kind: r.kind as ServiceAccountAccessRow["kind"],
+    ssiId: r.ssi_id,
+    ssiContentType: r.ssi_content_type,
+    name: r.name,
+    shortName: r.short_name,
+    orgType: r.org_type,
+    discipline: r.discipline,
+    roleNames,
+    memberType: r.member_type,
+    memberStatus: r.member_status,
+    memberStartDate: r.member_start_date,
+    memberEndDate: r.member_end_date,
+    isMembershipValid: r.is_membership_valid == null ? null : !!r.is_membership_valid,
+    matchVisibility: r.match_visibility,
+    matchStarts: r.match_starts,
+    firstSeenAt: r.first_seen_at,
+    lastVerifiedAt: r.last_verified_at,
+    revokedAt: r.revoked_at,
+    revokedReason: r.revoked_reason,
+  };
+}
 
 export default db;
