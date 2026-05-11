@@ -27,6 +27,11 @@ jobs:
     # the account, so staging usage is included automatically.
     environment: production
     timeout-minutes: 10
+    env:
+      # Opt JavaScript actions (e.g. peter-evans/create-pull-request) into
+      # Node 24 ahead of the June 2026 default switch — silences the Node 20
+      # deprecation warning until the action ships a Node 24 release.
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     steps:
       - uses: actions/checkout@v6
 
