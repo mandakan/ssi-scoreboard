@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { ServiceAccountAccessRow } from "@/lib/types";
+import { RefreshButton } from "./refresh-button";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -96,6 +97,7 @@ export default async function AdminAccessPage({ searchParams }: PageProps) {
     <main className="mx-auto flex max-w-md flex-col gap-3 p-3 pb-24">
       <header className="flex items-center justify-between gap-2 px-1">
         <h1 className="text-xl font-semibold">Service account access</h1>
+        <RefreshButton token={provided as string} />
       </header>
 
       <Card>
