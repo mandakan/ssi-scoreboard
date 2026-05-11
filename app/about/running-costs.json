@@ -2,26 +2,34 @@
   "updated": "2026-05-11",
   "period_days": 30,
   "currency": "EUR",
-  "usd_to_eur_rate": 0.92,
+  "usd_to_eur_rate": 0.85,
   "lines": [
     {
       "label": "Workers (Paid plan + requests/CPU)",
-      "amount": 4.60,
+      "amount": 22.73
+    },
+    {
+      "label": "D1 (reads + writes, both DBs)",
+      "amount": 0,
+      "note": "below included quota"
+    },
+    {
+      "label": "R2 (telemetry buckets)",
+      "amount": 0,
       "note": "below included quota"
     },
     {
       "label": "Redis (Upstash)",
-      "amount": 0.00,
-      "note": "placeholder — run `pnpm costs` to populate"
+      "amount": 0
     },
     {
       "label": "Domain registration",
-      "amount": 0.92,
-      "note": "€11/yr ÷ 12"
+      "amount": 1.5,
+      "note": "€18/yr ÷ 12"
     }
   ],
-  "total": 5.52,
+  "total": 24.23,
   "notes": [
-    "Initial placeholder values. Run `pnpm costs` with the Cloudflare and Upstash credentials in your environment to refresh."
+    "Upstash: unexpected response: {\"error\":\"Unauthorized\"}"
   ]
 }
