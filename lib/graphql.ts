@@ -10,6 +10,7 @@ import { parseMatchCacheKey, persistActiveMatchToD1 } from "@/lib/match-data-sto
 import { markUpstreamDegraded } from "@/lib/upstream-status";
 import { upstreamTelemetry, hashVariables, type UpstreamOutcome } from "@/lib/upstream-telemetry";
 import { cacheTelemetry } from "@/lib/cache-telemetry";
+import { reportError } from "@/lib/error-telemetry";
 import { isPublicMatchData } from "@/lib/visibility";
 import { getJwt, JWT_EXPIRED_ERROR_PATTERNS } from "@/lib/ssi-auth";
 
@@ -188,6 +189,7 @@ async function executeQueryOnce<T>(
     const msg = result.errors.map((e) => e.message).join("; ");
     console.error(`[ssi-api] ${operationName} GraphQL error | vars=${JSON.stringify(variables ?? {})} | ${msg}`);
     emit("graphql-error", { bytes: bodyText.length });
+    reportError(`ssi-graphql-error:${operationName}`, new Error(msg));
     throw new Error(msg);
   }
 
