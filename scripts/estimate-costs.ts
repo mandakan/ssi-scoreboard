@@ -237,9 +237,11 @@ async function cloudflareProvider(): Promise<ProviderReport> {
   const workerBreakdown: string[] = [];
   for (const w of workersRes.data) {
     const req = w.sum.requests ?? 0;
-    // P50 CPU x requests is a rough proxy for total CPU time (Analytics
-    // exposes percentiles, not a sum). Treat as estimate, not invoice.
-    const cpuMs = (w.quantiles?.cpuTimeP50 ?? 0) * req;
+    // cpuTimeP50 comes back in microseconds — divide by 1000 for ms. P50 ×
+    // requests is a rough proxy for total CPU (Analytics exposes percentiles,
+    // not a sum) and biases low for right-skewed distributions; the result
+    // is an estimate, not an invoice.
+    const cpuMs = ((w.quantiles?.cpuTimeP50 ?? 0) / 1000) * req;
     totalRequests += req;
     totalCpuMs += cpuMs;
     workerBreakdown.push(`${w.dimensions.scriptName}: ${fmtBig(req)} req`);
@@ -373,8 +375,11 @@ async function cloudflareProvider(): Promise<ProviderReport> {
 // separate DBs, which gives us the per-env breakdown for free.
 
 async function upstashProvider(): Promise<ProviderReport> {
-  const email = process.env.UPSTASH_EMAIL;
-  const apiKey = process.env.UPSTASH_API_KEY;
+  // Secrets pasted via GitHub's UI sometimes carry trailing whitespace
+  // (especially copies from a phone). Trim before base64-encoding to avoid
+  // 401s that look identical to a bad key.
+  const email = process.env.UPSTASH_EMAIL?.trim();
+  const apiKey = process.env.UPSTASH_API_KEY?.trim();
   if (!email || !apiKey) {
     return {
       provider: "Upstash",
@@ -388,17 +393,29 @@ async function upstashProvider(): Promise<ProviderReport> {
 
   type Db = { database_id: string; database_name: string; db_disk_threshold?: number };
   let dbs: Db[];
+  let status = 0;
+  let rawBody = "";
   try {
     const res = await fetch("https://api.upstash.com/v2/redis/databases", {
       headers: { Authorization: auth },
     });
-    dbs = (await res.json()) as Db[];
+    status = res.status;
+    rawBody = await res.text();
+    if (!res.ok) {
+      return {
+        provider: "Upstash",
+        lines: [{ label: "Redis (Upstash)", cost_usd: 0 }],
+        total_usd: 0,
+        error: `HTTP ${status} from /v2/redis/databases — body: ${rawBody.slice(0, 200)}`,
+      };
+    }
+    dbs = JSON.parse(rawBody) as Db[];
   } catch (e) {
     return {
       provider: "Upstash",
       lines: [{ label: "Redis (Upstash)", cost_usd: 0 }],
       total_usd: 0,
-      error: `fetch failed: ${(e as Error).message}`,
+      error: `fetch failed (HTTP ${status}): ${(e as Error).message} — body: ${rawBody.slice(0, 200)}`,
     };
   }
 
@@ -407,7 +424,7 @@ async function upstashProvider(): Promise<ProviderReport> {
       provider: "Upstash",
       lines: [{ label: "Redis (Upstash)", cost_usd: 0 }],
       total_usd: 0,
-      error: `unexpected response: ${JSON.stringify(dbs).slice(0, 200)}`,
+      error: `unexpected response shape: ${rawBody.slice(0, 200)}`,
     };
   }
 
