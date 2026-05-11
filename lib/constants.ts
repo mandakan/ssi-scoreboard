@@ -55,5 +55,10 @@ export const MAX_COMPETITORS = 12;
  *       `computeMatchScoringPct`. Also dropped the unused `scoring_completed`
  *       field from EVENTS_QUERY (and EventSummary), so cached event-list
  *       entries from older deploys reload once.
+ *  19 → added role_names, is_current_role_admin/assistant/staff, and
+ *       organizer { id name short_name org_type } to IpscMatchNode in
+ *       MATCH_QUERY. Embedded `access_reason`, `role_names`, and
+ *       `organizer` on MatchResponse via `computeAccessReason` so per-
+ *       request telemetry can answer "why was this match accessible".
  */
-export const CACHE_SCHEMA_VERSION = 18;
+export const CACHE_SCHEMA_VERSION = 19;

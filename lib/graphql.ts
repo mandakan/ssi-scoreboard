@@ -236,6 +236,16 @@ export const MATCH_QUERY = `
         visibility
         get_visibility_display
         is_live_scores_accessible
+        role_names
+        is_current_role_admin
+        is_current_role_assistant
+        is_current_role_staff
+        organizer {
+          id
+          name
+          short_name
+          org_type
+        }
         region
         sub_rule
         get_full_rule_display

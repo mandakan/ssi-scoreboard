@@ -100,6 +100,7 @@ export default async function MatchPage({ params }: PageProps) {
           region: result.data.region ?? null,
           scoringBucket: bucketScoring(result.data.scoring_pct ?? 0),
           cacheHit: result.cachedAt !== null,
+          accessReason: result.data.access_reason.kind,
         });
       }
       return result.data;

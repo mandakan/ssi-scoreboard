@@ -4,6 +4,12 @@
 // Achievement types — imported here and re-exported at the bottom for convenience.
 import type { AchievementProgress as _AchievementProgress } from "@/lib/achievements/types";
 
+// AccessReason lives in lib/access-reason.ts (with the resolver). Re-exported
+// from here so MatchResponse consumers can import it from the central types
+// barrel without grabbing the resolver implementation.
+export type { AccessReason, AccessReasonKind } from "@/lib/access-reason";
+import type { AccessReason } from "@/lib/access-reason";
+
 export interface MyShooterIdentity {
   shooterId: number;
   name: string;
@@ -139,10 +145,31 @@ export interface MatchResponse {
    *  preserve the upstream values verbatim so tooltips can show the exact SSI
    *  description without us hard-coding it. */
   visibility: Visibility;
+  /** Resolver output explaining *why* SSI returned us data on this match.
+   *  Distinct from `visibility` (which describes how the match is published).
+   *  See `lib/access-reason.ts` for the decision precedence. Added in v19. */
+  access_reason: AccessReason;
+  /** Raw role strings SSI reports for the service account on this match
+   *  (`IpscMatchNode.role_names`). Empty for matches we accessed as a public
+   *  reader. Surfaced verbatim so audit views and future-role detection don't
+   *  depend on the booleans (which only cover admin/assistant/staff). */
+  role_names: string[];
+  /** Host club / organization. Null when SSI doesn't expose an organizer
+   *  for this match (e.g. component / abstract matches). */
+  organizer: MatchOrganizer | null;
   stages: StageInfo[];
   competitors: CompetitorInfo[];
   squads: SquadInfo[];
   cacheInfo: CacheInfo;
+}
+
+export interface MatchOrganizer {
+  /** SSI `OrganizationNode.id` — stable identifier for joins. */
+  id: string;
+  name: string;
+  short_name: string | null;
+  /** SSI org_type, e.g. "club". */
+  org_type: string | null;
 }
 
 export type VisibilityClass = "public" | "unlisted" | "organizer-published";

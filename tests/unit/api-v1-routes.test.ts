@@ -181,6 +181,9 @@ describe("/api/v1/match/[ct]/[id]", () => {
       is_squadding_possible: false,
       ssi_url: "https://shootnscoreit.com/event/22/27190/",
       visibility: { class: "public", rawCode: "pub", displayName: "Public, searchable and details/names for all" },
+      access_reason: { kind: "public", rawVisibility: "pub", role: null },
+      role_names: [],
+      organizer: { id: "2", name: "S:t Eskils Skyttar, Eskilstuna", short_name: null, org_type: "club" },
       stages: [
         {
           id: 1,

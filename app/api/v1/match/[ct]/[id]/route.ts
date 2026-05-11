@@ -31,11 +31,33 @@ export async function GET(
   if (
     body &&
     typeof body === "object" &&
-    !Array.isArray(body) &&
-    "scoring_pct" in body
+    !Array.isArray(body)
   ) {
-    const { scoring_pct, ...rest } = body as { scoring_pct: number } & Record<string, unknown>;
-    const remapped = { ...rest, scoring_completed: scoring_pct };
+    // Service-account authorization metadata is internal-only: it answers
+    // "why did SSI return us data on this match" and only makes sense in
+    // the context of our bot account. Strip from the v1 surface so external
+    // consumers (e.g. splitsmith) aren't coupled to our auth model. If a
+    // future consumer needs `organizer`, expose it as an optional v1 field
+    // in a follow-up rather than leaking the whole envelope.
+    const {
+      scoring_pct,
+      access_reason: _accessReason,
+      role_names: _roleNames,
+      organizer: _organizer,
+      ...rest
+    } = body as {
+      scoring_pct?: number;
+      access_reason?: unknown;
+      role_names?: unknown;
+      organizer?: unknown;
+    } & Record<string, unknown>;
+    void _accessReason;
+    void _roleNames;
+    void _organizer;
+    const remapped: Record<string, unknown> =
+      typeof scoring_pct === "number"
+        ? { ...rest, scoring_completed: scoring_pct }
+        : rest;
     const headers = new Headers(mapped.headers);
     headers.delete("Content-Length");
     return new Response(JSON.stringify(remapped), {
