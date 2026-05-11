@@ -189,7 +189,15 @@ async function executeQueryOnce<T>(
     const msg = result.errors.map((e) => e.message).join("; ");
     console.error(`[ssi-api] ${operationName} GraphQL error | vars=${JSON.stringify(variables ?? {})} | ${msg}`);
     emit("graphql-error", { bytes: bodyText.length });
-    reportError(`ssi-graphql-error:${operationName}`, new Error(msg));
+    // Skip error-domain telemetry for JWT-expiry messages: the outer
+    // `executeQuery` wrapper force-refreshes the JWT and retries once, and
+    // the retry almost always succeeds. Surfacing these in the error feed
+    // produces false-alarm noise in the admin dashboard. The upstream
+    // `graphql-error` outcome above still records the first-attempt failure
+    // for operational debugging.
+    if (!JWT_EXPIRED_ERROR_PATTERNS.some((p) => msg.includes(p))) {
+      reportError(`ssi-graphql-error:${operationName}`, new Error(msg));
+    }
     throw new Error(msg);
   }
 
