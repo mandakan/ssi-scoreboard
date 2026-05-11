@@ -428,29 +428,63 @@ async function upstashProvider(): Promise<ProviderReport> {
     };
   }
 
+  // Per the developer-api docs the stats response uses run-together field
+  // names like `dailybilling` / `dailyrequests` (no underscore). The earlier
+  // version of this code looked for `daily_billing` and silently got 0.
+  // We now compute the rolling 30-day bill ourselves from the request count
+  // + current storage at public PAYG rates, which reproduces the invoice
+  // exactly and works regardless of where we are in the month.
+  type TimePoint = { x: string; y: number };
   type Stats = {
-    daily_billing?: { x: string; y: number }[];
-    monthly_billing?: number;
+    dailybilling?: TimePoint[];
+    dailyrequests?: TimePoint[];
     total_monthly_billing?: number;
+    total_monthly_requests?: number;
+    current_storage?: number;
   };
+  const sumLast30 = (series?: TimePoint[]): number => {
+    if (!series?.length) return 0;
+    const sorted = [...series].sort((a, b) => a.x.localeCompare(b.x));
+    return sorted.slice(-30).reduce((s, p) => s + (p.y ?? 0), 0);
+  };
+
   const lines: CostLine[] = [];
   let total = 0;
   for (const db of dbs) {
     try {
-      const res = await fetch(
-        `https://api.upstash.com/v2/redis/stats/${db.database_id}?period=30d`,
+      const sRes = await fetch(
+        `https://api.upstash.com/v2/redis/stats/${db.database_id}`,
         { headers: { Authorization: auth } },
       );
-      const stats = (await res.json()) as Stats;
-      // The stats endpoint returns the rolling monthly bill if Upstash has
-      // computed it. Fall back to the daily series if not.
-      const billed =
-        stats.total_monthly_billing ??
-        stats.monthly_billing ??
-        (stats.daily_billing?.reduce((s, p) => s + (p.y ?? 0), 0) ?? 0);
+      if (!sRes.ok) {
+        const body = await sRes.text();
+        lines.push({
+          label: `Redis (${db.database_name})`,
+          cost_usd: 0,
+          note: `stats HTTP ${sRes.status}: ${body.slice(0, 120)}`,
+        });
+        continue;
+      }
+      const stats = (await sRes.json()) as Stats;
+
+      // Primary: compute from rolling 30d usage at public pay-as-you-go rates.
+      const rollingRequests =
+        sumLast30(stats.dailyrequests) || (stats.total_monthly_requests ?? 0);
+      const storageGB = (stats.current_storage ?? 0) / 1024 ** 3;
+      const requestCost = (rollingRequests / 100_000) * PRICES.upstash.per100kCommands;
+      const storageCost = storageGB * PRICES.upstash.storageGB;
+      let billed = requestCost + storageCost;
+
+      // Fallback: trust Upstash's own running totals if we somehow computed 0.
+      if (billed === 0) {
+        billed = sumLast30(stats.dailybilling) || (stats.total_monthly_billing ?? 0);
+      }
+
       lines.push({
         label: `Redis (${db.database_name})`,
+        usage: `${fmtBig(rollingRequests)} cmd, ${storageGB.toFixed(3)} GB`,
         cost_usd: billed,
+        note: billed === 0 ? `no usage data — keys: ${Object.keys(stats).slice(0, 8).join(",")}` : undefined,
       });
       total += billed;
     } catch (e) {
