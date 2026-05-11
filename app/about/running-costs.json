@@ -1,0 +1,27 @@
+{
+  "updated": "2026-05-11",
+  "period_days": 30,
+  "currency": "EUR",
+  "usd_to_eur_rate": 0.92,
+  "lines": [
+    {
+      "label": "Workers (Paid plan + requests/CPU)",
+      "amount": 4.60,
+      "note": "below included quota"
+    },
+    {
+      "label": "Redis (Upstash)",
+      "amount": 0.00,
+      "note": "placeholder — run `pnpm costs` to populate"
+    },
+    {
+      "label": "Domain registration",
+      "amount": 0.92,
+      "note": "€11/yr ÷ 12"
+    }
+  ],
+  "total": 5.52,
+  "notes": [
+    "Initial placeholder values. Run `pnpm costs` with the Cloudflare and Upstash credentials in your environment to refresh."
+  ]
+}
