@@ -46,12 +46,14 @@ describe("reportError", () => {
       shooterId: 12345,
       ct: 22,
       matchId: "67890",
+      varsHash: "abc12345",
     });
     const line = JSON.parse(infoSpy.mock.calls[0][0] as string);
     expect(line.matchKey).toBe("gql:GetMatch:foo");
     expect(line.shooterId).toBe(12345);
     expect(line.ct).toBe(22);
     expect(line.matchId).toBe("67890");
+    expect(line.varsHash).toBe("abc12345");
   });
 
   it("does not include a stack trace", () => {

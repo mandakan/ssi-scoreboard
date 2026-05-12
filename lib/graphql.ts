@@ -196,7 +196,9 @@ async function executeQueryOnce<T>(
     // `graphql-error` outcome above still records the first-attempt failure
     // for operational debugging.
     if (!JWT_EXPIRED_ERROR_PATTERNS.some((p) => msg.includes(p))) {
-      reportError(`ssi-graphql-error:${operationName}`, new Error(msg));
+      const ct = typeof variables?.ct === "number" || typeof variables?.ct === "string" ? variables.ct : null;
+      const matchId = typeof variables?.id === "string" ? variables.id : null;
+      reportError(`ssi-graphql-error:${operationName}`, new Error(msg), { ct, matchId, varsHash });
     }
     throw new Error(msg);
   }
