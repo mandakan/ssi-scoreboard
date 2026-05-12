@@ -1,13 +1,13 @@
 // Pure functions — no I/O, no side effects.
 // Builds the AI prompt for a pre-match coaching brief.
 
-import type { StageInfo, ShooterDashboardResponse } from "@/lib/types";
+import type { StageInfo, ShooterDashboardResponse, BriefHook } from "@/lib/types";
 
 /**
  * Bump when the prompt structure changes enough that cached briefs should
  * be regenerated. Embedded in the cache key alongside the model ID.
  */
-export const PRE_MATCH_PROMPT_VERSION = 3;
+export const PRE_MATCH_PROMPT_VERSION = 4;
 
 /**
  * Within-squad starting-order context for one shooter.
@@ -54,6 +54,12 @@ export interface PreMatchBriefInput {
   dashboard: ShooterDashboardResponse | null;
   /** Within-squad starting context. Null when squad is unknown or not yet assigned. */
   squadContext: SquadContext | null;
+  /**
+   * Personalised coaching signals derived from the shooter's career history
+   * cross-referenced with this match's stage shape. Empty when the viewer is
+   * anonymous or has insufficient match history.
+   */
+  hooks?: BriefHook[];
 }
 
 /** Summarise stage breakdown by course length. */
@@ -95,7 +101,7 @@ function listConstraints(stages: StageInfo[]): string[] {
  * Pure function — no network calls.
  */
 export function buildPreMatchBriefPrompt(input: PreMatchBriefInput): string {
-  const { matchName, matchLevel, stages, shooterName, dashboard, squadContext } = input;
+  const { matchName, matchLevel, stages, shooterName, dashboard, squadContext, hooks } = input;
 
   const levelStr = matchLevel ?? "IPSC match";
   const courseBreakdown = summariseStageCourses(stages);
@@ -198,12 +204,17 @@ CONSISTENCY: ${consistencyStr}
 PENALTY RATE: ${penaltyStr}`;
   }
 
+  const hooksSection =
+    hooks && hooks.length > 0
+      ? `\nPERSONAL FOCUS HOOKS (highest priority first -- weave these into your brief):\n${hooks.map((h) => `- ${h.signal}`).join("\n")}`
+      : "";
+
   return `You are an IPSC performance coach preparing a competitor for a match.
 Write a concise 2–3 sentence coaching brief (max 55 words). Be direct, specific to this match and competitor. No lists, no bullet points, no markdown. Focus on the most actionable preparation tip.
 
 ${matchSection}
 
-${competitorSection}
+${competitorSection}${hooksSection}
 
 PRE-MATCH BRIEF:`;
 }
