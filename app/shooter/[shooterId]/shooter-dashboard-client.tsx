@@ -90,6 +90,7 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { AnchorStageCard } from "@/components/anchor-stage-card";
+import { computeNearAchievements } from "@/lib/achievements/near";
 import type {
   ShooterMatchSummary,
   BackfillProgress,
@@ -1491,6 +1492,143 @@ function AchievementCard({ achievement }: { achievement: AchievementProgress }) 
   );
 }
 
+// ─── Near-achievement nudge section ──────────────────────────────────────────
+
+function NearAchievementsSection({
+  achievements,
+}: {
+  achievements: AchievementProgress[];
+}) {
+  const near = computeNearAchievements(achievements);
+  if (near.length === 0) return null;
+
+  return (
+    <section aria-labelledby="near-achievements-heading">
+      <div className="flex items-center gap-1 mb-3">
+        <h2
+          id="near-achievements-heading"
+          className="text-sm font-semibold text-muted-foreground uppercase tracking-wide"
+        >
+          Close to unlocking
+        </h2>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              aria-label="About close to unlocking"
+              className="ml-1 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="max-w-xs text-sm space-y-2" side="top">
+            <p className="font-medium">Close to unlocking</p>
+            <p className="text-muted-foreground">
+              These are the achievement tiers you are closest to earning right
+              now, sorted by how far through the current step you are. Tap a
+              card to see the full ladder.
+            </p>
+            <p className="text-muted-foreground">
+              Only achievements where you have covered at least a quarter of the
+              way toward the next tier are shown here.
+            </p>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {near.map(({ progress, remaining, nudge }) => {
+          const { definition, nextTier, progressToNext, unlockedTiers } = progress;
+          const Icon = ACHIEVEMENT_ICONS[definition.icon] ?? HelpCircle;
+          const highestTier =
+            unlockedTiers.length > 0 ? unlockedTiers[unlockedTiers.length - 1] : null;
+          const colorClass = highestTier
+            ? (TIER_COLORS[highestTier.level] ?? TIER_COLORS[1])
+            : "bg-muted/40 text-muted-foreground";
+
+          return (
+            <Popover key={definition.id}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3 text-left w-full transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={`${definition.name}: ${nudge} until ${nextTier?.name ?? "next tier"}. ${Math.round(progressToNext * 100)}% complete. Tap to see full ladder.`}
+                >
+                  <span
+                    className={cn(
+                      "mt-0.5 w-8 h-8 rounded-full flex-none flex items-center justify-center",
+                      colorClass,
+                    )}
+                    aria-hidden="true"
+                  >
+                    <Icon className="w-4 h-4" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-semibold truncate">
+                      {definition.name}
+                      <span className="ml-1.5 font-normal text-muted-foreground">
+                        {nextTier?.name}
+                      </span>
+                    </span>
+                    <span className="block text-xs text-muted-foreground mt-0.5 truncate">
+                      {nudge}
+                    </span>
+                    <Progress
+                      value={progressToNext * 100}
+                      className="h-1 mt-1.5"
+                      aria-label={`${Math.round(progressToNext * 100)}% to ${nextTier?.name}`}
+                    />
+                  </span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="max-w-xs text-sm space-y-2" side="top">
+                <p className="font-medium flex items-center gap-1.5">
+                  <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  {definition.name}
+                </p>
+                <p className="text-muted-foreground">{definition.description}</p>
+                <div className="space-y-1">
+                  {definition.tiers.map((tier) => {
+                    const unlocked = unlockedTiers.some((u) => u.level === tier.level);
+                    return (
+                      <div
+                        key={tier.level}
+                        className={cn(
+                          "flex items-center gap-2 text-xs",
+                          unlocked ? "text-foreground" : "text-muted-foreground",
+                        )}
+                      >
+                        <span aria-hidden="true">{unlocked ? "✓" : "○"}</span>
+                        <span className="font-medium">{tier.name}</span>
+                        <span className="text-muted-foreground">{tier.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {nextTier && (
+                  <div className="pt-1">
+                    <Progress
+                      value={progressToNext * 100}
+                      className="h-1.5"
+                      aria-label={`${Math.round(progressToNext * 100)}% to ${nextTier.name}`}
+                    />
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {Math.round(progressToNext * 100)}% to {nextTier.name} —{" "}
+                      {remaining} more {nextTier.label.replace(/^\d+\s*/, "").trim()}
+                    </p>
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+// ─── Achievements section ────────────────────────────────────────────────────
+
 function AchievementsSection({
   achievements,
 }: {
@@ -1912,6 +2050,11 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
       {/* ── Anchor stage (peak stage card) ────────────────────────── */}
       {data.anchorStage && (
         <AnchorStageCard anchorStage={data.anchorStage} />
+      )}
+
+      {/* ── Near achievements (close-to-unlock nudges) ────────────── */}
+      {data.achievements && data.achievements.length > 0 && (
+        <NearAchievementsSection achievements={data.achievements} />
       )}
 
       {/* ── Trend charts (collapsed by default) ────────────────────── */}
