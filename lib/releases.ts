@@ -11,11 +11,39 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-05-10-organizer-live-scores";
+export const LATEST_RELEASE_ID = "2026-05-12-coaching-features";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "May 12, 2026",
+    title: "Coaching features: peak stage, near achievements, self-comparison, and personalised brief",
+    screenshotScenes: ["shooter-dashboard", "comparison-table"],
+    sections: [
+      {
+        heading: "Shooter dashboard",
+        items: [
+          "Peak stage card: your best-ever stage result (by division %) is pinned near the top of your dashboard -- a quick confidence reference before any match.",
+          "Close to unlocking: up to 3 achievement nudges appear between your peak stage and the trend charts, showing which tiers you are closest to earning and how far you have left to go.",
+          "Performance trends heading now shows an Improving / Stable / Declining badge when you are viewing your own dashboard.",
+        ],
+      },
+      {
+        heading: "Match page",
+        items: [
+          "Career baseline overlay: when you have set a 'My Shooter' identity and you are one of the selected competitors, your career median hit factor and career median match % appear as amber dashed reference lines on the hit-factor-by-stage and HF%-vs-stage-winner charts. Requires at least 5 prior matches in your history.",
+        ],
+      },
+      {
+        heading: "Pre-match brief",
+        items: [
+          "The AI brief is now personalised when a shooter identity is set: it cross-references your career patterns (recent DQ, penalty rate, consistency, constrained-stage history) with this match's specific stage shape and your squad position to produce more targeted preparation advice.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-05-10-organizer-live-scores",
     date: "May 10, 2026",
     title: "Live scores are back -- when the organizer says so",
     screenshotScenes: ["comparison-table"],
