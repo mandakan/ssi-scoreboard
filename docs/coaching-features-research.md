@@ -64,8 +64,10 @@ Variety / Recurring categories, persisted in `shooter_achievements`).
   is a fully-formed client-side identity layer: `useSyncExternalStore`
   subscriptions, cross-tab sync via `storage` events, same-tab sync via
   custom events, snapshot caching. Keys: `ssi-my-shooter`,
-  `ssi-tracked-shooters`. This is the foundation new coaching artifacts
-  can sit on without building anything new — see §5.
+  `ssi-tracked-shooters`. Holds no PII (just the shooter's chosen
+  identity from public data). See §5 for the architectural reasoning
+  about what other shooter-scoped state should and shouldn't sit on
+  top of this.
 
 **Raw data per stage we can compute over:** `hit_factor`, `points`, `time`,
 `a_hits / c_hits / d_hits / miss_count / no_shoots / procedurals`, `dq`,
@@ -183,49 +185,118 @@ would let us own the rest.
 
 ---
 
-## 5. Constraint: identity & persistence
+## 5. Architectural scope: what belongs here, what doesn't
 
-Most of the proposals below require **persistent, shooter-scoped storage**.
-Today the app is unauthenticated and shooter dashboards are keyed by the
-global shooter ID encoded in the URL. There *is* however a fully-formed
-**localStorage "My Shooter" identity layer** (`lib/shooter-identity.ts`) —
-the "this is *my* dashboard" question is already answered for personal
-use. Three viable paths, with increasing investment:
+The proposals below split cleanly into two groups: features that are
+**pure synthesis over SSI data** (focus areas, compare-to-self, achievement
+nudges, anchor-stage card, a personalised brief) and features that
+require **persistent, shooter-scoped personal artifacts** (goals, AAR,
+notes, stage plans, journals, drill logs, coach-of-many). Earlier drafts
+of this doc treated the second group as in-scope for this app via a
+localStorage / database staircase. After working the constraints through,
+the recommendation is different: **the second group should not live in
+this app**, and the reasons are architectural, not just engineering.
 
-- **A. localStorage only** (zero backend, **foundation already exists**).
-  Goals, notes, AAR responses, and journal entries live on one device,
-  keyed by `MyShooterIdentity.shooterId`. The `lib/shooter-identity.ts`
-  module already gives us snapshot caching, cross-tab sync, and a
-  `useSyncExternalStore` pattern — new artifacts (e.g. `ssi-match-goals`,
-  `ssi-match-aar`) plug into the same shape with ~30 lines of helper
-  code per artifact type. Pros: ships in days, no auth, no privacy
-  review, no DB migration. Cons: no cross-device, no coach sharing,
-  lost on cache clear. Good enough for v0 self-coaching.
+### 5.1 Two structural risks that decide the scope
 
-- **B. Magic-link claim + AppDatabase.** Shooter "claims" their dashboard
-  via email magic-link, claim is stored in a new `shooter_claims` table.
-  Server-side notes and goals tied to claim. Enables cross-device and is
-  the prerequisite for any coach-shooter link. Pros: lightweight, fits
-  the existing SQLite/D1 model. Cons: introduces auth surface, deliverability
-  hassle, claim disputes (what if someone claims a shooter that isn't them).
+**Risk 1 — third-party API dependency.** This app is a derived-analytics
+client of an external GraphQL API governed by an external developer
+agreement. That agreement is terminable at any time, at the API owner's
+sole discretion. The more coaching value we put behind the SSI-dependent
+surface, the more fragile that value is. A shooter who pours reflection
+work into goals, AAR entries, and a personal journal does not want that
+work to evaporate because of a third-party business decision. Coaching
+artifacts that *might disappear* are coaching artifacts that *don't get
+written*. Anything personal-and-durable should be reachable by the user
+even if this app goes dark.
 
-- **C. SSO via SSI account.** Lets users log in with the same credentials
-  they use on shootnscoreit.com, identity verified by SSI. Pros: high trust.
-  Cons: requires SSI cooperation; the bot account we use today is a service
-  account, not an OAuth provider.
+**Risk 2 — the server-side personal-data line.** Today the server holds
+public-ish SSI data and aggregates of it: match results, shooter
+profiles built from public-ish data, achievements derived from that
+data, popularity counters. There is no PII beyond what's already
+public on SSI itself. That gives the project a clean compliance posture:
+no consent flows, no DPAs with subprocessors, no breach-notification
+obligations, no right-to-erasure machinery beyond the existing
+suppression list, no DPO question. Crossing into goals/AAR/journal text
+*on the server* is a one-way door — every future feature has to pay the
+compliance tax forever, and the maintenance budget for this project does
+not have that headroom.
 
-Path **A → B** is the natural progression. Any feature below that needs
-storage should be designed so it can start on **A** and graduate to **B**
-without a data migration nightmare (i.e., the localStorage and DB schemas
-should be the same shape).
+Even **client-side** personal storage drifts toward server eventually:
+users will ask for sync, backup, cross-device access, "I lost my phone."
+That drift is harder to resist if the local storage is sitting inside
+the app the user already trusts for analytics. Better to not start the
+drift on this side at all.
 
-**Privacy note.** `CLAUDE.md` commits us to "never log shooter IDs / specific
-competitor IDs / raw search text" in telemetry. Coaching artifacts
-(notes, goals) are by nature personal. They go in AppDatabase, not in
-telemetry. The coaching-tip and pre-match-brief AI endpoints already accept
-this and we should extend the same posture: AI prompt bodies for coaching
-features must not be logged with raw user text, only with bucketed
-metadata.
+### 5.2 Where the line lands
+
+The recommendation that follows from those two risks:
+
+| Scope | Lives here (this app) | Lives elsewhere |
+|---|---|---|
+| **Data shape** | Public-ish SSI data + aggregates | Personal artifacts (text, goals, notes) |
+| **Storage** | Existing AppDatabase + cache | A separate tool the user runs / owns |
+| **Identity** | Anonymous + the existing localStorage `MyShooterIdentity` (no PII) | Whatever the external tool chooses |
+| **API dependency** | Hard-coupled to SSI (accepted risk for comparison features) | None — survives SSI API revocation |
+| **Compliance posture** | Stays at today's "no PII" tier | Owned by the external tool |
+
+What this means concretely for the proposals: §7.2, §7.4, §8.2, §8.3,
+and the prior-weaknesses half of §6.5 stay here as scoreboard features.
+Everything else (§6.1, §6.2, §6.3, §6.4, §7.1, §7.3, §7.5, §7.6, §8.1
+season-summary's personal half, §8.4) is **recommended to live in a
+separate tool**. Those proposals are kept in the doc below because the
+shape of each feature, the inputs it needs, and the scientific basis
+are unchanged — only its home is different.
+
+### 5.3 Risks and benefits of "somewhere else"
+
+**Benefits.** Personal coaching artifacts survive any change in SSI
+relationship. The compliance line on this app stays where it is.
+Heavier per-shooter data (video, splits, multi-camera notes, longer
+journal text) doesn't pressure-test our cache or our D1 quotas.
+The companion tool can grow its own data sources — manual entry,
+imported CSVs, video — without being gated on what SSI exposes.
+It can be installed locally, which neatly answers "what if a shooter
+wants to keep their training notes private from any cloud."
+
+**Costs.** Discoverability drops: people stumble into this app from
+a match URL, nobody stumbles into a companion analysis tool. The
+forethought→reflection loop (§6.1 ↔ §7.1) becomes harder to close
+across a tool boundary — goal-setting and AAR are exactly the
+features that benefit most from being one click apart. Mobile-first
+courtside use of personal coaching is lost; this app's strength is
+"open it on your phone between stages," which a desktop companion
+tool can't replicate. The visualization timer and arousal check-in
+particularly lose by not being phone-reachable.
+
+**Mitigations the scoreboard can offer without crossing the line.**
+A subtle "you can keep training notes elsewhere" hint on the post-match
+view (no link to anything specific, no implementation here). A clean
+JSON payload available from `/api/v1/*` so any external tool can pull
+match context. A "send this match's focus areas as JSON" button. None
+of these involve storing personal data here; all of them make the
+two-tool split less painful for users who do want the personal layer.
+
+### 5.4 If personal artifacts ever do live here
+
+Kept for reference in case the architectural decision is revisited.
+Three storage paths, in increasing investment:
+
+- **A. localStorage only.** Foundation already exists in
+  `lib/shooter-identity.ts` (`useSyncExternalStore`, snapshot caching,
+  cross-tab sync). New artifacts plug in with ~30 lines per type.
+  Cons: no cross-device, no coach sharing, lost on cache clear.
+- **B. Magic-link claim + AppDatabase.** Crosses the server-side PII
+  line described in §5.1. Compliance becomes a real ongoing cost.
+- **C. SSO via SSI account.** Requires SSI cooperation; the service
+  account we use today is not an OAuth provider.
+
+**Privacy note.** `CLAUDE.md` commits us to "never log shooter IDs /
+specific competitor IDs / raw search text" in telemetry. The
+recommendation above keeps that commitment intact by construction —
+no raw user text reaches the server. The existing coaching-tip and
+pre-match-brief AI endpoints already follow this posture and should
+keep doing so.
 
 ---
 
@@ -546,15 +617,24 @@ already happens at the range.
 A research doc has to be willing to say no. Things that look like
 coaching features but probably aren't worth it for this app:
 
+- **Server-side personal coaching artifacts** (goal text, AAR free
+  text, journal entries, stage-plan notes). See §5.1 — crossing this
+  line is a one-way door into permanent compliance overhead, and it
+  conflicts with the recommendation that personal artifacts should
+  survive any change in SSI relationship. Even client-side personal
+  storage that lives inside this app drifts toward the server over
+  time; the cleaner architectural answer is to keep this app
+  SSI-data-only.
 - **Per-shot / split analysis.** We don't have the data. Building
-  it would require Mantis/Bluetooth-timer integration on a phone the
-  shooter holds, which is a different product. Defer indefinitely.
+  it would require timer / video integration that doesn't belong in
+  a web app gated on a third-party GraphQL API. Belongs in a
+  separate tool that owns its own data sources.
 - **Video analysis.** Same reason. Plus storage and bandwidth costs
   are prohibitive on Cloudflare Pages.
 - **Outcome goal tracking.** "Make GM by Christmas." Research is clear
   that outcome goals correlate weakly with performance and strongly
-  with anxiety. We can let users write them in free text but we
-  shouldn't surface them as a first-class object.
+  with anxiety. Even if process-goal tracking ends up in a companion
+  tool, outcome goals shouldn't be a first-class object.
 - **Generic motivational content / quotes.** Adds noise. Distracts
   from the data-driven coaching the app uniquely provides.
 - **Heart rate / HRV / "readiness" import.** Too far from our domain;
@@ -565,9 +645,19 @@ coaching features but probably aren't worth it for this app:
 ## 10. Prioritization
 
 Ranked by `(impact_on_user × likelihood_of_adoption) / build_cost`,
-informed by §5 (storage path) and §1 (existing surfaces).
+informed by §5 (scope decision) and §1 (existing surfaces).
 
-### Tier 1 — ship next (high impact, low cost, no auth required)
+Per §5, Tier 1 is what's recommended to ship **in this app**. Tiers 2–4
+are kept here because the feature shapes, inputs, and scientific basis
+are still correct — but the recommendation is that they live in a
+**separate tool** rather than here. The annotations on each tier explain
+the tradeoff in one line.
+
+### Tier 1 — ship next, in this app (high impact, low cost, no PII)
+
+All five are pure synthesis over data we already have. No new persistent
+state, no PII, no compliance change, no new dependency on continued SSI
+access beyond what we already have.
 
 1. **§7.2 Prioritized focus areas** — pure synthesis over existing data.
    Deterministic core + optional AI prose. Probably the most
@@ -576,59 +666,92 @@ informed by §5 (storage path) and §1 (existing surfaces).
    No new data. High signal-to-noise.
 3. **§8.2 Achievement nudges** — pure UI on existing data.
 4. **§8.3 Anchor stage card** — pure UI on existing data.
-5. **§6.5 Brief evolution** — extend existing AI brief with goals +
-   prior weaknesses. Needs §6.1 to be most valuable.
+5. **§6.5 Brief evolution** — extend existing AI brief with the
+   prior-weaknesses half only (no personal goal text). The full
+   personalised version that uses a goal list belongs alongside the
+   goal-setting feature, wherever that ends up living.
 
-### Tier 2 — needs localStorage / path A (no auth, but new state)
+### Tier 2 — better off elsewhere (forethought ↔ reflection loop, requires personal text)
 
-Path A's foundation (`lib/shooter-identity.ts`) is already in place, so
-the cost of "new state" is much lower than it would be in a greenfield
-project. Each artifact below is roughly a `lib/<artifact>-storage.ts`
-module modelled on the existing identity module + a React hook.
+Recommended home: a companion tool. Reason: each artifact below stores
+free-form personal text scoped to a shooter. Per §5.1 risks (1) and (2),
+that text should not depend on continued SSI API access and should not
+sit on this app's server.
+
+If for some reason these end up here after all, see §5.4 for the
+storage paths and §5.3 for the loop-across-tool-boundary cost.
 
 6. **§6.1 Goal-setting wizard** + **§7.1 Guided AAR** — together they
-   form the SRL forethought→reflection loop. Build them together
-   or neither works.
+   form the SRL forethought→reflection loop. Highest coaching value
+   in the whole doc; also the artifacts most worth protecting from
+   SSI-access loss, which is why they belong elsewhere.
 7. **§6.2 Stage plan workspace** — most-asked-for from shooters in
-   adjacent products; cheap if scoped to free-text + checklist.
+   adjacent products; free-text personal artifact.
 8. **§6.4 Arousal check-in** — one slider, large longitudinal payoff
-   once N is high.
-9. **§6.3 Visualization timer** — small, well-bounded, evidence-backed.
-10. **§7.5 Practice journal** — useful with §7.3 below; either is
-    weak without the other.
+   once N is high. Belongs with the rest of the personal logs.
+9. **§6.3 Visualization timer** — small and well-bounded, but loses
+   its value without the stage plan and goals it rehearses.
+10. **§7.5 Practice journal** — between-match practice tracking;
+    longest-lived personal artifact in the doc.
 
-### Tier 3 — needs storage + drill content (path A is OK; coach view needs path B)
+### Tier 3 — better off elsewhere (drill content + season summary)
 
-11. **§7.3 Drill library** — moderate content-curation cost. High
-    payoff once §7.2 is shipping.
-12. **§8.1 Year-end review** — annual cadence; ship in November.
-13. **§8.4 Squad / club comparison** — opt-in; small scope.
+Recommended home: same companion tool as Tier 2. Reason: §7.3 is
+content curation that wants to attach to personal practice logs;
+§8.4 needs opt-in personal pairing.
 
-### Tier 4 — requires identity (path B)
+11. **§7.3 Drill library** — content-curation effort. The drill
+    catalogue itself is not personal data; the *log of which drills
+    you've done* is. Cleaner to keep the catalogue with the log.
+12. **§8.1 Year-end review** — partly in-scope here (the analytics
+    half is pure synthesis), partly out (the personal-goals retrospective
+    half). Could be split, or wait until the companion tool ships.
+13. **§8.4 Squad / club comparison** — opt-in personal pairing of
+    shooter IDs; small scope but personal-state.
 
-14. **§7.6 Coach-shooter view** — biggest feature, biggest unlock for
-    the "coach" half of the audience. Designed last in this doc
-    because it builds on everything above.
+### Tier 4 — explicitly out of scope for this app (requires identity + multi-user)
+
+Recommended home: not here. Reason: a coach-of-many view requires
+authenticated users, an authorization model, a notifications channel,
+and durable per-coach data — every one of which crosses §5.1's
+server-side personal-data line. Both §5.1 risks (1 — third-party
+dependency) and (2 — compliance) compound here.
+
+14. **§7.6 Coach-shooter view** — the biggest single coaching feature
+    in the doc and the biggest single liability cliff. If it gets
+    built, it should be a separate product with its own identity,
+    its own ToS, its own compliance posture, and ideally its own
+    funding model.
 
 ---
 
 ## 11. Open questions for the next session
 
-- Do we want to commit to identity (path B) or keep the self-coach
-  features local-only for now? This decision gates §7.6 and shapes
-  the §6.1/§7.1 schema.
 - Tier 1's focus-area generator — should the rules live in
   `lib/coaching-rules.ts` as pure deterministic logic (so we can
-  unit-test like `lib/match-ttl.ts`) and let AI only narrate? My
-  strong recommendation is yes; the same split keeps `lib/compare/logic.ts`
+  unit-test like `lib/match-ttl.ts`) and let AI only narrate? Strong
+  recommendation: yes; the same split keeps `lib/compare/logic.ts`
   fully testable.
-- Drill library content: do we license / partner (e.g., Stoeger,
-  Anderson, Pistol-Mastery) or curate from public-domain USPSA
-  classifiers + our own descriptions?
+- §8.1 year-end review is the one Tier 3 item that *might* still fit
+  here, if scoped to the analytics half only (no personal-goal
+  retrospective). Worth deciding whether the analytics half alone is
+  worth shipping standalone, or whether splitting it makes the feature
+  less coherent.
 - Does any of this conflict with the planned MCP surface? The MCP
   tools (`get_shooter_dashboard`, `compare_competitors`) could trivially
   be extended with a `get_focus_areas` once §7.2 ships — worth
-  considering when designing the rule output shape.
+  considering when designing the rule output shape so a downstream
+  consumer (an external companion tool, an AI agent, etc.) can pull
+  focus areas without re-implementing the rules.
+- §5.3 mentions a clean JSON payload from `/api/v1/*` so a separate
+  tool could pull match context. Worth deciding whether that's a v1
+  contract addition or a separate "export" route — see `docs/api-v1.md`
+  for the additive-only constraint.
+- Re-open the scope decision in §5 if the SSI relationship changes
+  shape (e.g., a formal partnership, or a federation deal that
+  changes the dependency calculus). The architectural recommendation
+  is contingent on the current "third-party API on a revocable
+  agreement" footing.
 
 ---
 
