@@ -10,7 +10,8 @@ import type { ShooterProfile } from "@/lib/shooter-index";
 import { parseRawScorecards } from "@/lib/scorecard-data";
 import { extractDivision } from "@/lib/divisions";
 import { computeAggregateStats } from "@/lib/shooter-stats";
-import { computeMatchStats } from "@/lib/match-stats";
+import { computeMatchStats, computeStagePercentages, type StagePercentRecord } from "@/lib/match-stats";
+import { computeAnchorStage, type StagePctRecord } from "@/lib/anchor-stage";
 import { evaluateAchievements } from "@/lib/achievements/evaluate";
 import { maybeTagAsMcp } from "@/lib/telemetry-context";
 import type {
@@ -231,6 +232,7 @@ export async function GET(
   // Load match + scorecard cache entries in parallel (batched to avoid flood)
   const BATCH = 10;
   const matchSummaries: ShooterMatchSummary[] = [];
+  const allStagePctRecords: StagePctRecord[] = [];
 
   for (let i = 0; i < recentRefs.length; i += BATCH) {
     const batch = recentRefs.slice(i, i + BATCH);
@@ -343,6 +345,7 @@ export async function GET(
           let wasDQ = false;
           let perfectStagesCount = 0;
           let consistencyIndexValue: number | null = null;
+          let stagePcts: StagePercentRecord[] = [];
 
           if (scorecardsRaw) {
             try {
@@ -369,6 +372,7 @@ export async function GET(
               wasDQ = mStats.dq;
               perfectStagesCount = mStats.perfectStages;
               consistencyIndexValue = mStats.consistencyIndex;
+              stagePcts = computeStagePercentages(competitorId, division, rawScorecards);
             } catch { /* skip scorecard stats on parse error */ }
           }
 
@@ -399,13 +403,27 @@ export async function GET(
             squadmateShooterIds,
             squadAllSameClub,
           };
-          return summary;
+          return { summary, stagePcts, matchDate: ev.starts ?? null, matchName: ev.name };
         } catch { return null; }
       }),
     );
 
     for (const result of batchResults) {
-      if (result) matchSummaries.push(result);
+      if (result) {
+        matchSummaries.push(result.summary);
+        for (const sp of result.stagePcts) {
+          allStagePctRecords.push({
+            stagePct: sp.stagePct,
+            stageName: sp.stageName,
+            stageNumber: sp.stageNumber,
+            matchName: result.matchName,
+            ct: result.summary.ct,
+            matchId: result.summary.matchId,
+            date: result.matchDate,
+            division: result.summary.division,
+          });
+        }
+      }
     }
   }
 
@@ -494,8 +512,9 @@ export async function GET(
     }
   }
 
-  // ── 4. Compute cross-match aggregates ─────────────────────────────────────
+  // ── 4. Compute cross-match aggregates and anchor stage ───────────────────
   const stats = computeAggregateStats(matchSummaries);
+  const anchorStage = computeAnchorStage(allStagePctRecords);
 
   // ── 5. Evaluate achievements ───────────────────────────────────────────────
   let storedAchievements: import("@/lib/achievements/types").StoredAchievement[] = [];
@@ -522,6 +541,7 @@ export async function GET(
     matches: matchSummaries,
     stats,
     achievements,
+    anchorStage,
     ...(upcomingMatches.length > 0 ? { upcomingMatches } : {}),
   };
 

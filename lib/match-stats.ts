@@ -2,6 +2,60 @@
 
 import type { RawScorecard } from "@/app/api/compare/logic";
 
+export interface StagePercentRecord {
+  stageId: number;
+  stageName: string;
+  stageNumber: number;
+  /** HF as a percentage of the division stage winner's HF (0-100). */
+  stagePct: number;
+}
+
+/**
+ * Returns per-stage division percentages for one competitor.
+ * Excludes DNF / DQ / zeroed stages and stages where the division winner HF is unknown.
+ * Returns [] when division is null or no valid stages exist.
+ */
+export function computeStagePercentages(
+  competitorId: number,
+  division: string | null,
+  rawScorecards: RawScorecard[],
+): StagePercentRecord[] {
+  if (!division) return [];
+
+  const myCards = rawScorecards.filter(
+    (sc) =>
+      sc.competitor_id === competitorId &&
+      !sc.dnf &&
+      !sc.dq &&
+      !sc.zeroed &&
+      sc.hit_factor != null &&
+      sc.hit_factor > 0,
+  );
+  if (myCards.length === 0) return [];
+
+  const stageWinnerHF = new Map<number, number>();
+  for (const sc of rawScorecards) {
+    if (sc.competitor_division !== division) continue;
+    if (sc.dnf || sc.dq || sc.zeroed) continue;
+    if (sc.hit_factor == null || sc.hit_factor <= 0) continue;
+    const cur = stageWinnerHF.get(sc.stage_id) ?? 0;
+    if (sc.hit_factor > cur) stageWinnerHF.set(sc.stage_id, sc.hit_factor);
+  }
+
+  const result: StagePercentRecord[] = [];
+  for (const sc of myCards) {
+    const winnerHF = stageWinnerHF.get(sc.stage_id) ?? 0;
+    if (winnerHF <= 0 || sc.hit_factor == null) continue;
+    result.push({
+      stageId: sc.stage_id,
+      stageName: sc.stage_name,
+      stageNumber: sc.stage_number,
+      stagePct: (sc.hit_factor / winnerHF) * 100,
+    });
+  }
+  return result;
+}
+
 export interface MatchStats {
   stageCount: number;
   avgHF: number | null;

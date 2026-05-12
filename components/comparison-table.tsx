@@ -1479,7 +1479,7 @@ export function ComparisonTable({ data, scoringCompleted, onRemove, aiAvailable,
           </thead>
           <tbody>
             {sortedStages.map((stage) => (
-              <tr key={stage.stage_id} className="border-b hover:bg-muted/30">
+              <tr key={stage.stage_id} id={`stage-${stage.stage_num}`} className="border-b hover:bg-muted/30 target:bg-amber-500/10">
                 <td className="sticky left-0 z-10 bg-background py-2 pr-2 font-medium shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.4)]">
                   {/* Mobile: compact "S{n}" label + info popover; icons stacked below */}
                   <div className="flex flex-col items-start gap-0.5 sm:hidden">
