@@ -5,6 +5,7 @@ import {
   ComposedChart,
   Bar,
   Line,
+  ReferenceLine,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -19,9 +20,11 @@ interface ComparisonChartProps {
   data: CompareResponse;
   stages?: StageComparison[];
   showBenchmark?: boolean;
+  /** Career median hit factor -- shown as a dashed reference line when provided. */
+  careerBaselineHF?: number | null;
 }
 
-export function ComparisonChart({ data, stages: stagesProp, showBenchmark = false }: ComparisonChartProps) {
+export function ComparisonChart({ data, stages: stagesProp, showBenchmark = false, careerBaselineHF }: ComparisonChartProps) {
   const stages = stagesProp ?? data.stages;
   const { competitors } = data;
   const colorMap = buildColorMap(competitors.map((c) => c.id));
@@ -145,6 +148,20 @@ export function ComparisonChart({ data, stages: stagesProp, showBenchmark = fals
               connectNulls={false}
             />
           )}
+          {careerBaselineHF != null && (
+            <ReferenceLine
+              y={careerBaselineHF}
+              stroke="var(--color-amber-500)"
+              strokeDasharray="6 3"
+              strokeWidth={1.5}
+              strokeOpacity={0.8}
+              label={{
+                value: "My career avg",
+                position: "insideTopRight",
+                style: { fontSize: 9, fill: "var(--color-amber-500)", opacity: 0.9 },
+              }}
+            />
+          )}
           {competitors.map((comp) => {
             if (hiddenIds.has(comp.id)) return null;
             const key = `${comp.competitor_number}_${comp.id}`;
@@ -165,6 +182,19 @@ export function ComparisonChart({ data, stages: stagesProp, showBenchmark = fals
         aria-label="Chart legend"
         className="flex flex-wrap justify-center gap-2 pt-2"
       >
+        {careerBaselineHF != null && (
+          <span
+            className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400"
+            aria-label={`Your career average: ${careerBaselineHF.toFixed(2)} HF`}
+          >
+            <span
+              className="inline-block w-4"
+              style={{ borderTop: "2px dashed var(--color-amber-500)" }}
+              aria-hidden="true"
+            />
+            My career avg
+          </span>
+        )}
         {hasBenchmark && (
           <button
             type="button"

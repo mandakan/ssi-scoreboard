@@ -13,7 +13,8 @@ import { SquadPicker } from "@/components/squad-picker";
 import { BenchmarkPicker } from "@/components/benchmark-picker";
 import { ComparisonTable } from "@/components/comparison-table";
 import { ModeToggle } from "@/components/mode-toggle";
-import { useMatchQuery, useCompareQuery, useCoachingAvailability } from "@/lib/queries";
+import { useMatchQuery, useCompareQuery, useCoachingAvailability, useShooterDashboardQuery } from "@/lib/queries";
+import { computeCareerBaseline } from "@/lib/career-baseline";
 import { detectMatchView, isPreMatchEligible } from "@/lib/mode";
 import type { CompareMode } from "@/lib/types";
 import { CacheInfoBadge } from "@/components/cache-info-badge";
@@ -202,6 +203,13 @@ export default function MatchPageClient() {
   const { identity, setIdentity } = useMyIdentity();
   const { tracked: trackedShooters, trackedIds, add: addTracked, remove: removeTracked } =
     useTrackedShooters();
+
+  // Career baseline: fetch the identity's dashboard only when they are one
+  // of the selected competitors. The query is disabled when shooterId is null
+  // (anonymous viewer) or when match data hasn't loaded yet.
+  const shooterDashQuery = useShooterDashboardQuery(identity?.shooterId ?? null);
+  const careerBaseline =
+    shooterDashQuery.data ? computeCareerBaseline(shooterDashQuery.data.matches) : null;
 
   // Capture mount timestamp once to avoid impure Date.now() in render path.
   const [mountMs] = useState(() => Date.now());
@@ -1001,7 +1009,11 @@ export default function MatchPageClient() {
                     </PopoverContent>
                   </Popover>
                 </div>
-                <ComparisonChart data={compareQuery.data} stages={sortedStages} />
+                <ComparisonChart
+                  data={compareQuery.data}
+                  stages={sortedStages}
+                  careerBaselineHF={myCompetitorId != null ? careerBaseline?.medianHF : null}
+                />
               </div>
 
               <div className="rounded-lg border p-4 space-y-3">
@@ -1035,7 +1047,11 @@ export default function MatchPageClient() {
                     </PopoverContent>
                   </Popover>
                 </div>
-                <HfPercentChart data={compareQuery.data} stages={sortedStages} />
+                <HfPercentChart
+                  data={compareQuery.data}
+                  stages={sortedStages}
+                  careerBaselinePct={myCompetitorId != null ? careerBaseline?.medianMatchPct : null}
+                />
               </div>
 
               {compareQuery.data.stages.some(
