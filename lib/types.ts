@@ -956,6 +956,19 @@ export interface ShooterAggregateStats {
   avgConsistencyIndex?: number | null;
 }
 
+/** The shooter's single best-ever stage, by division HF% of stage winner. */
+export interface AnchorStage {
+  stageName: string;
+  stageNumber: number;
+  matchName: string;
+  ct: string;
+  matchId: string;
+  date: string | null;
+  division: string | null;
+  /** HF as a percentage of the division stage winner's HF (0-100). */
+  stagePct: number;
+}
+
 // Response from GET /api/shooter/{shooterId}.
 export interface ShooterDashboardResponse {
   shooterId: number;
@@ -980,6 +993,8 @@ export interface ShooterDashboardResponse {
   upcomingMatches?: UpcomingMatch[];
   /** Achievement progress (preview feature). */
   achievements?: _AchievementProgress[];
+  /** The shooter's best-ever stage (N >= 10 valid stages required). Null when not enough data. */
+  anchorStage?: AnchorStage | null;
 }
 
 // Response from GET /api/shooter/search.

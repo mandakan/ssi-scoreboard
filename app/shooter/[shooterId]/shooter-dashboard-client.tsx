@@ -89,6 +89,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { AnchorStageCard } from "@/components/anchor-stage-card";
 import type {
   ShooterMatchSummary,
   BackfillProgress,
@@ -1906,6 +1907,11 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
             </div>
           )}
         </section>
+      )}
+
+      {/* ── Anchor stage (peak stage card) ────────────────────────── */}
+      {data.anchorStage && (
+        <AnchorStageCard anchorStage={data.anchorStage} />
       )}
 
       {/* ── Trend charts (collapsed by default) ────────────────────── */}
