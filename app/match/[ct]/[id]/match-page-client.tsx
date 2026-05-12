@@ -46,6 +46,7 @@ import { useTrackedShooters } from "@/lib/hooks/use-tracked-shooters";
 import { MAX_COMPETITORS } from "@/lib/constants";
 import { PreMatchView } from "@/components/pre-match-view";
 import { StageTimesExport } from "@/components/stage-times-export";
+import { computeFocusAreas } from "@/lib/coaching-rules";
 
 // Stable empty array for useSyncExternalStore server snapshot — must be a
 // constant reference so React's referential equality check doesn't loop.
@@ -121,6 +122,13 @@ const DivisionDistributionChart = dynamic(
       (m) => m.DivisionDistributionChart,
     ),
   { ssr: false, loading: ChartSkeleton },
+);
+const FocusAreasSection = dynamic(
+  () =>
+    import("@/components/focus-areas-section").then(
+      (m) => m.FocusAreasSection,
+    ),
+  { ssr: false },
 );
 
 export default function MatchPageClient() {
@@ -503,6 +511,11 @@ export default function MatchPageClient() {
   }
 
   const match = matchQuery.data;
+
+  // Resolve the identity's per-match competitor ID (null when not in this match).
+  const myCompetitorId = identity?.shooterId != null
+    ? (match.competitors.find((c) => c.shooterId === identity.shooterId)?.id ?? null)
+    : null;
 
   // results_status === "all" is the definitive "published" signal from SSI.
   const isMatchComplete = match.results_status === "all" || effectiveMode === "coaching";
@@ -914,7 +927,23 @@ export default function MatchPageClient() {
 
           {compareQuery.data && !compareQuery.data.scorecardsRestricted && (
             <>
-              <div className="rounded-lg border p-4 space-y-3">
+              {/* Focus areas -- identity-gated; coaching mode only */}
+              {effectiveMode === "coaching" &&
+                myCompetitorId != null &&
+                selectedIds.includes(myCompetitorId) && (() => {
+                  const competitorName =
+                    match.competitors.find((c) => c.id === myCompetitorId)?.name ?? "You";
+                  const focusAreas = computeFocusAreas(compareQuery.data, myCompetitorId);
+                  if (focusAreas.length === 0) return null;
+                  return (
+                    <FocusAreasSection
+                      focusAreas={focusAreas}
+                      competitorName={competitorName}
+                    />
+                  );
+                })()}
+
+              <div id="chart-stage-results" className="rounded-lg border p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <h2 className="font-semibold">Stage results</h2>
                   {compareQuery.isFetching && (
@@ -1049,7 +1078,7 @@ export default function MatchPageClient() {
                 </div>
               )}
 
-              <div className="rounded-lg border p-4 space-y-3">
+              <div id="chart-speed-accuracy" className="rounded-lg border p-4 space-y-3">
                 <div className="flex items-center gap-1.5">
                   <h2 className="font-semibold">Speed vs. accuracy</h2>
                   <Popover>
@@ -1109,7 +1138,7 @@ export default function MatchPageClient() {
               {effectiveMode === "coaching" && (
                 <>
                   {/* Coaching / analysis view — hidden by default */}
-                  <Collapsible open={showCoachingView} onOpenChange={setShowCoachingView} className="rounded-lg border p-4 space-y-3">
+                  <Collapsible id="coaching-analysis" open={showCoachingView} onOpenChange={setShowCoachingView} className="rounded-lg border p-4 space-y-3">
                     {/* WAI-ARIA accordion pattern: heading wraps the disclosure button */}
                     <h2 className="font-semibold text-base m-0 leading-none">
                       <CollapsibleTrigger asChild>
@@ -1144,7 +1173,7 @@ export default function MatchPageClient() {
                         <ConstraintSummary data={compareQuery.data} />
                         <ArchetypePerformanceSummary data={compareQuery.data} />
 
-                        <div className="space-y-2">
+                        <div id="chart-style-fingerprint" className="space-y-2">
                           <div className="flex items-center gap-1.5">
                             <h3 className="text-sm font-semibold">Shooter style fingerprint</h3>
                             <Popover>

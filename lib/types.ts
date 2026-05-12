@@ -1091,6 +1091,31 @@ export interface SyncStats {
   selectionsCount: number;
 }
 
+// ── Coaching focus areas ─────────────────────────────────────────────────────
+
+export type FocusAreaCategory =
+  | "safety"
+  | "mistake-reduction"
+  | "weak-hand"
+  | "long-stages"
+  | "tempo"
+  | "sight-discipline"
+  | "match-nerves"
+  | "stamina";
+
+export type FocusAreaConfidence = "low" | "medium" | "high";
+
+export interface FocusArea {
+  category: FocusAreaCategory;
+  title: string;
+  evidence: string;
+  /** Element ID on the match page to scroll to. */
+  chartAnchor: string;
+  confidence: FocusAreaConfidence;
+  /** Rough estimate of match % recoverable if this area improves. Null when unmeasurable. */
+  estimatedRecoverableMatchPct: number | null;
+}
+
 export interface ReleaseSection {
   heading: string;
   items: string[];
