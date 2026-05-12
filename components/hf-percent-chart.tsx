@@ -23,9 +23,11 @@ import { computeHfPct, type RefMode } from "@/lib/hf-percent-utils";
 interface HfPercentChartProps {
   data: CompareResponse;
   stages?: StageComparison[];
+  /** Career median match % (0–100) -- shown as a dashed reference line when provided. */
+  careerBaselinePct?: number | null;
 }
 
-export function HfPercentChart({ data, stages: stagesProp }: HfPercentChartProps) {
+export function HfPercentChart({ data, stages: stagesProp, careerBaselinePct }: HfPercentChartProps) {
   const stages = stagesProp ?? data.stages;
   const { competitors } = data;
   const colorMap = buildColorMap(competitors.map((c) => c.id));
@@ -164,6 +166,20 @@ export function HfPercentChart({ data, stages: stagesProp }: HfPercentChartProps
               style: { fontSize: 10, fill: "var(--muted-foreground)" },
             }}
           />
+          {careerBaselinePct != null && (
+            <ReferenceLine
+              y={careerBaselinePct}
+              stroke="var(--color-amber-500)"
+              strokeDasharray="6 3"
+              strokeWidth={1.5}
+              strokeOpacity={0.8}
+              label={{
+                value: "My career avg",
+                position: "insideTopRight",
+                style: { fontSize: 9, fill: "var(--color-amber-500)", opacity: 0.9 },
+              }}
+            />
+          )}
           {competitors.map((comp) => {
             if (hiddenIds.has(comp.id)) return null;
             const color = colorMap[comp.id];
@@ -240,6 +256,22 @@ export function HfPercentChart({ data, stages: stagesProp }: HfPercentChartProps
           <span aria-hidden="true">■</span> &lt;85% leak
         </span>
       </div>
+
+      {careerBaselinePct != null && (
+        <div className="flex justify-center pt-1">
+          <span
+            className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400"
+            aria-label={`Your career average: ${careerBaselinePct.toFixed(1)}%`}
+          >
+            <span
+              className="inline-block w-4"
+              style={{ borderTop: "2px dashed var(--color-amber-500)" }}
+              aria-hidden="true"
+            />
+            My career avg ({careerBaselinePct.toFixed(1)}%)
+          </span>
+        </div>
+      )}
 
       {/* Series visibility legend */}
       <div

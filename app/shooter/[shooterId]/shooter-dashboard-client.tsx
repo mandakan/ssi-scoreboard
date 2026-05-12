@@ -73,6 +73,7 @@ import {
 } from "@/components/ui/popover";
 import { ShareDrawer } from "@/components/share-drawer";
 import { useTrackedShooters } from "@/lib/hooks/use-tracked-shooters";
+import { useMyIdentity } from "@/lib/hooks/use-my-identity";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useShooterDashboardQuery } from "@/lib/queries";
 import { triggerBackfill, addMatchToShooter } from "@/lib/api";
@@ -1748,6 +1749,8 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
     shooterId,
   );
   const { trackedIds, add: addTracked, remove: removeTracked } = useTrackedShooters();
+  const { identity } = useMyIdentity();
+  const isOwnDashboard = identity?.shooterId != null && identity.shooterId === shooterId;
   const [historyOpen, setHistoryOpen] = useState(true);
   const [upcomingOpen, setUpcomingOpen] = useState(true);
   const [trendsOpen, setTrendsOpen] = useState(false);
@@ -2068,8 +2071,13 @@ export function ShooterDashboardClient({ shooterId, from }: Props) {
                   id="trends-heading"
                   className="flex w-full items-center justify-between text-left gap-2 min-h-[2.75rem]"
                 >
-                  <span className="text-muted-foreground uppercase tracking-wide">
-                    Performance trends
+                  <span className="flex items-center gap-2">
+                    <span className="text-muted-foreground uppercase tracking-wide">
+                      Performance trends
+                    </span>
+                    {isOwnDashboard && displayStats.hfTrendSlope != null && (
+                      <TrendIndicator slope={displayStats.hfTrendSlope} />
+                    )}
                   </span>
                   {trendsOpen ? (
                     <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
