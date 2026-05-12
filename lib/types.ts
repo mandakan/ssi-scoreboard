@@ -997,6 +997,19 @@ export interface ShooterDashboardResponse {
   anchorStage?: AnchorStage | null;
 }
 
+/**
+ * A single personalised coaching signal injected into the pre-match brief prompt.
+ * Computed from the shooter's career history cross-referenced with this match's stages.
+ */
+export interface BriefHook {
+  /** Stable category tag (used for deduplication and logging). */
+  tag: string;
+  /** One-sentence signal for the AI to weave into the brief. */
+  signal: string;
+  /** Sort key -- higher is more important. Top MAX_HOOKS hooks are kept. */
+  priority: number;
+}
+
 // Response from GET /api/shooter/search.
 export interface ShooterSearchResult {
   shooterId: number;

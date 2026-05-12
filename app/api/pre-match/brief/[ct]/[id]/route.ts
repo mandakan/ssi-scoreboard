@@ -8,6 +8,7 @@
 import { NextResponse } from "next/server";
 import { createAIProvider } from "@/lib/ai-provider";
 import { buildPreMatchBriefPrompt, computeSquadContext, PRE_MATCH_PROMPT_VERSION } from "@/lib/pre-match-prompt";
+import { computeBriefHooks } from "@/lib/pre-match-brief-hooks";
 import { fetchMatchData } from "@/lib/match-data";
 import { getShooterDashboard } from "@/lib/api-data";
 import { isPreMatchEligible } from "@/lib/mode";
@@ -112,6 +113,8 @@ export async function GET(
     }
   }
 
+  const hooks = dashboard ? computeBriefHooks(match.stages, dashboard, squadContext) : [];
+
   const prompt = buildPreMatchBriefPrompt({
     matchName: match.name,
     matchLevel: match.level,
@@ -119,6 +122,7 @@ export async function GET(
     shooterName,
     dashboard,
     squadContext,
+    hooks,
   });
 
   let tip: string;
