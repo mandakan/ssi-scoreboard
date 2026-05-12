@@ -27,6 +27,8 @@ export interface ErrorEvent {
   /** Content-type discriminator. Stored as-is — callers pass either number or string. */
   ct?: number | string | null;
   matchId?: string | null;
+  /** Same hash used by upstream-domain events; lets you correlate an error with the failing request. */
+  varsHash?: string | null;
 }
 
 export function reportError(
