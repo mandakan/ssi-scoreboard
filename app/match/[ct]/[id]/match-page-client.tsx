@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useSyncExternalStore, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -16,7 +17,7 @@ import { ModeToggle } from "@/components/mode-toggle";
 import { useMatchQuery, useCompareQuery, useCoachingAvailability, useShooterDashboardQuery } from "@/lib/queries";
 import { computeCareerBaseline } from "@/lib/career-baseline";
 import { detectMatchView, isPreMatchEligible } from "@/lib/mode";
-import type { CompareMode } from "@/lib/types";
+import type { CompareMode, EventSummary, Visibility } from "@/lib/types";
 import { CacheInfoBadge } from "@/components/cache-info-badge";
 import { UpstreamDegradedBanner } from "@/components/upstream-degraded-banner";
 import { LoadingBar } from "@/components/loading-bar";
@@ -198,6 +199,33 @@ export default function MatchPageClient() {
   );
 
   const matchQuery = useMatchQuery(ct, id);
+
+  // When match data fails to load, look up the match's visibility from any
+  // events list we already have cached. If the user got here from the home
+  // page or a search result, the events query carries `visibility`, so we
+  // can tell them precisely *why* the match isn't viewable (private vs
+  // missing) instead of giving the generic copy.
+  const queryClient = useQueryClient();
+  const knownVisibility: Visibility | null = useMemo(() => {
+    if (!matchQuery.isError) return null;
+    const ctNum = Number(ct);
+    const idNum = Number(id);
+    const matchEntry = (list: unknown): EventSummary | undefined => {
+      if (!Array.isArray(list)) return undefined;
+      return (list as EventSummary[]).find(
+        (e) => e.id === idNum && e.content_type === ctNum,
+      );
+    };
+    const candidates = [
+      ...queryClient.getQueriesData<EventSummary[]>({ queryKey: ["live-matches"] }),
+      ...queryClient.getQueriesData<EventSummary[]>({ queryKey: ["events"] }),
+    ];
+    for (const [, data] of candidates) {
+      const hit = matchEntry(data);
+      if (hit?.visibility) return hit.visibility;
+    }
+    return null;
+  }, [matchQuery.isError, queryClient, ct, id]);
 
   // Identity and tracked shooters (localStorage-backed, reactive).
   const { identity, setIdentity } = useMyIdentity();
@@ -502,18 +530,91 @@ export default function MatchPageClient() {
   }
 
   if (matchQuery.isError || !matchQuery.data) {
+    // SSI returns null for the match node when the requesting account isn't
+    // allowed to read it — most often a non-public match where the bot hasn't
+    // been invited as Staff. When the user reached this page from a list that
+    // carries visibility info, we can say so explicitly (`knownVisibility`).
+    // Otherwise we hedge between "private" and "removed" so the copy is
+    // accurate either way.
+    const errMsg = matchQuery.error?.message ?? "";
+    // fetchMatch() throws `Match fetch failed (404): ...` when the API returns
+    // 404. Any non-404 (e.g. 502 from a degraded upstream) renders the
+    // generic failure copy instead of the "private" explainer.
+    const isNotFound = !matchQuery.isError || /\(404\)/.test(errMsg);
+    const confirmedPrivate =
+      isNotFound && knownVisibility?.class === "organizer-published";
     return (
-      <main id="main-content" tabIndex={-1} className="min-h-screen flex flex-col items-center justify-center gap-4 p-8">
-        <AlertCircle className="w-8 h-8 text-destructive" />
-        <p className="text-destructive font-medium" role="alert">
-          {matchQuery.error?.message ?? "Failed to load match"}
-        </p>
-        <Button variant="outline" asChild>
-          <Link href="/">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
-          </Link>
-        </Button>
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="min-h-screen flex flex-col items-center justify-center gap-4 p-8"
+      >
+        <div className="w-full max-w-md rounded-lg border bg-card p-6 text-center space-y-4">
+          <AlertCircle className="w-8 h-8 text-muted-foreground mx-auto" aria-hidden="true" />
+          {isNotFound && confirmedPrivate ? (
+            <>
+              <h1 className="text-lg font-semibold">This match is private</h1>
+              <div className="text-sm text-muted-foreground space-y-2 text-left" role="alert">
+                <p>
+                  The organizer marked this match as{" "}
+                  <em>{knownVisibility?.displayName || "non-public"}</em> on
+                  ShootNScoreIt and hasn{"’"}t published it to the scoreboard,
+                  so we can{"’"}t show its details here.
+                </p>
+                <p>
+                  If you organize this match and want to make it viewable, see{" "}
+                  <Link
+                    href="/about/organizer-published"
+                    className="text-primary hover:underline underline-offset-2"
+                  >
+                    how to publish a private match
+                  </Link>
+                  .
+                </p>
+              </div>
+            </>
+          ) : isNotFound ? (
+            <>
+              <h1 className="text-lg font-semibold">Match not viewable</h1>
+              <div className="text-sm text-muted-foreground space-y-2 text-left" role="alert">
+                <p>
+                  We couldn{"’"}t load this match. There are two common reasons:
+                </p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>
+                    It{"’"}s a <strong>private match</strong> on ShootNScoreIt
+                    and the organizer hasn{"’"}t published it to the scoreboard.
+                  </li>
+                  <li>The match has been removed or doesn{"’"}t exist.</li>
+                </ul>
+                <p>
+                  If you organize a private match and want to make it viewable
+                  here, see{" "}
+                  <Link
+                    href="/about/organizer-published"
+                    className="text-primary hover:underline underline-offset-2"
+                  >
+                    how to publish a private match
+                  </Link>
+                  .
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <h1 className="text-lg font-semibold">Failed to load match</h1>
+              <p className="text-sm text-muted-foreground" role="alert">
+                {errMsg || "Something went wrong."}
+              </p>
+            </>
+          )}
+          <Button variant="outline" asChild>
+            <Link href="/">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back
+            </Link>
+          </Button>
+        </div>
       </main>
     );
   }

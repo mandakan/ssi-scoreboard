@@ -732,6 +732,11 @@ export interface EventSummary {
   is_squadding_possible: boolean;
   /** Maximum number of competitors allowed; null if not set. */
   max_competitors: number | null;
+  /** SSI visibility classification (issue #426). Optional because the field
+   *  was added later and non-IpscMatch nodes don't expose it. When present,
+   *  list-card UIs render a badge for `organizer-published` so users know
+   *  the match isn't fully public on SSI (and may not be viewable here). */
+  visibility?: Visibility | null;
 }
 
 // ── Stage Simulator ──────────────────────────────────────────────────────────

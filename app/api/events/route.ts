@@ -4,6 +4,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { usageTelemetry, bucketCount } from "@/lib/usage-telemetry";
 import { markUpstreamDegraded } from "@/lib/upstream-status";
 import { maybeTagAsMcp } from "@/lib/telemetry-context";
+import { classifyVisibility } from "@/lib/visibility";
 
 import type { EventSummary } from "@/lib/types";
 
@@ -26,6 +27,10 @@ interface RawEvent {
   is_squadding_possible: boolean;
   max_competitors: number | null;
   registration: string;
+  /** SSI visibility code (only present on IpscMatchNode). One of pub/lim/res/csd/clb. */
+  visibility?: string;
+  /** Human-readable visibility description, e.g. "Public, searchable and details/names for all". */
+  get_visibility_display?: string;
 }
 
 interface RawEventsData {
@@ -327,6 +332,13 @@ export async function GET(req: Request) {
       squadding_closes: e.squadding_closes ?? null,
       is_squadding_possible: e.is_squadding_possible ?? false,
       max_competitors: e.max_competitors ?? null,
+      visibility: e.visibility
+        ? {
+            class: classifyVisibility(e.visibility),
+            rawCode: e.visibility,
+            displayName: e.get_visibility_display ?? "",
+          }
+        : null,
     }));
 
   const finalEvents: EventSummary[] = liveMode

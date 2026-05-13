@@ -51,4 +51,39 @@ describe("LiveMatches card", () => {
     expect(screen.getByText("Hello Cup")).toBeTruthy();
     expect(screen.getByText(/Range B/)).toBeTruthy();
   });
+
+  it("renders a Private pill for organizer-published matches", () => {
+    // SSI's events list surfaces matches with non-public visibility (res/csd/clb)
+    // even though their details may not be accessible. The pill warns the user
+    // before they tap into a match that might 404.
+    render(
+      <LiveMatchCard
+        match={event({
+          id: 3,
+          visibility: {
+            class: "organizer-published",
+            rawCode: "res",
+            displayName: "Restricted, searchable but details/names only participants",
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText("Private")).toBeTruthy();
+  });
+
+  it("does not render a Private pill for public matches", () => {
+    render(
+      <LiveMatchCard
+        match={event({
+          id: 4,
+          visibility: {
+            class: "public",
+            rawCode: "pub",
+            displayName: "Public, searchable and details/names for all",
+          },
+        })}
+      />,
+    );
+    expect(screen.queryByText("Private")).toBeNull();
+  });
 });

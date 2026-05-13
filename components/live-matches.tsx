@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useLiveMatchesQuery } from "@/lib/queries";
+import { PrivateMatchPill } from "@/components/private-match-pill";
 import type { EventSummary } from "@/lib/types";
 
 /**
@@ -76,7 +77,10 @@ export function LiveMatchCard({ match }: { match: EventSummary }) {
       aria-label={`Open ${match.name}, live, started ${startedAgo}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="font-semibold leading-snug">{match.name}</span>
+        <span className="font-semibold leading-snug">
+          {match.name}
+          <PrivateMatchPill visibility={match.visibility} className="ml-2 align-middle" />
+        </span>
         <span
           className="text-sm font-medium text-muted-foreground shrink-0 tabular-nums"
           aria-hidden="true"

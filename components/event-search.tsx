@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/command";
 import { useEventsQuery } from "@/lib/queries";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { PrivateMatchPill } from "@/components/private-match-pill";
 import type { EventSummary } from "@/lib/types";
 import { parseMatchUrl, cn } from "@/lib/utils";
 
@@ -444,7 +445,10 @@ export function EventSearch() {
                   onSelect={() => handleSelect(event)}
                   className="flex flex-col items-start gap-0.5 py-2.5"
                 >
-                  <span className="font-medium leading-snug">{event.name}</span>
+                  <span className="font-medium leading-snug">
+                    {event.name}
+                    <PrivateMatchPill visibility={event.visibility} className="ml-2 align-middle" />
+                  </span>
                   <span className="text-xs text-muted-foreground leading-snug">
                     {formatEventDate(event.date)}
                     {" · "}

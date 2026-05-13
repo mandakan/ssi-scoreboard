@@ -51,6 +51,14 @@ export type V1ErrorEnvelope = z.infer<typeof v1ErrorEnvelopeSchema>;
 
 // ─── /api/v1/events ──────────────────────────────────────────────────────────
 
+const v1VisibilitySchema = z
+  .object({
+    class: z.enum(["public", "unlisted", "organizer-published"]),
+    rawCode: z.string(),
+    displayName: z.string(),
+  })
+  .strict();
+
 export const v1EventSchema = z
   .object({
     id: z.number(),
@@ -79,6 +87,9 @@ export const v1EventSchema = z
     squadding_closes: z.string().nullable(),
     is_squadding_possible: z.boolean(),
     max_competitors: z.number().nullable(),
+    // Optional / additive — present on IpscMatchNode rows, omitted for other
+    // event kinds. Mirrors the shape on /api/v1/match/{ct}/{id}.
+    visibility: v1VisibilitySchema.nullable().optional(),
   })
   .strict();
 export type V1Event = z.infer<typeof v1EventSchema>;
@@ -126,14 +137,6 @@ const v1SquadSchema = z
     number: z.number(),
     name: z.string(),
     competitorIds: z.array(z.number()),
-  })
-  .strict();
-
-const v1VisibilitySchema = z
-  .object({
-    class: z.enum(["public", "unlisted", "organizer-published"]),
-    rawCode: z.string(),
-    displayName: z.string(),
   })
   .strict();
 
