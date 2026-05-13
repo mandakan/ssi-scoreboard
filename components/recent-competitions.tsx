@@ -10,6 +10,8 @@ import {
   removeRecentCompetition,
   type StoredCompetition,
 } from "@/lib/competition-store";
+import { PrivateMatchPill } from "@/components/private-match-pill";
+import type { Visibility } from "@/lib/types";
 
 /** Minimum data needed to render a CompetitionCard. */
 export interface CompetitionCardData {
@@ -19,6 +21,7 @@ export interface CompetitionCardData {
   venue: string | null;
   date: string | null;
   scoring_completed: number;
+  visibility?: Visibility | null;
 }
 
 export function CompetitionCard({
@@ -59,7 +62,10 @@ export function CompetitionCard({
         aria-label={`Open ${comp.name}`}
       >
         <div className="flex items-start justify-between gap-2 pr-6">
-          <span className="font-semibold leading-snug">{comp.name}</span>
+          <span className="font-semibold leading-snug">
+            {comp.name}
+            <PrivateMatchPill visibility={comp.visibility} className="ml-2 align-middle" />
+          </span>
           <span className="text-sm font-medium text-muted-foreground shrink-0">
             {Math.round(comp.scoring_completed)}%
           </span>
