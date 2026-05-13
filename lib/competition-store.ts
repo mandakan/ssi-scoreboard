@@ -1,4 +1,4 @@
-import type { MatchResponse, MatchView } from "@/lib/types";
+import type { MatchResponse, MatchView, Visibility } from "@/lib/types";
 
 export interface StoredCompetition {
   ct: string;
@@ -8,6 +8,11 @@ export interface StoredCompetition {
   date: string | null;
   scoring_completed: number;
   last_visited: number;
+  /** SSI visibility classification at the time of the last visit. Optional
+   *  so older localStorage entries (before this field existed) still parse;
+   *  they get re-populated on the next visit. The recents card uses it to
+   *  badge non-public matches without re-fetching. */
+  visibility?: Visibility | null;
 }
 
 const RECENT_KEY = "ssi_recent_competitions";
@@ -51,6 +56,7 @@ export function saveRecentCompetition(
       // localStorage entries don't lose the field on read.
       scoring_completed: match.scoring_pct,
       last_visited: Date.now(),
+      visibility: match.visibility ?? null,
     };
     const updated = [entry, ...existing].slice(0, MAX_RECENT);
     localStorage.setItem(RECENT_KEY, JSON.stringify(updated));

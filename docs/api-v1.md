@@ -72,6 +72,7 @@ directly). The array is sorted by start date descending.
 | `is_squadding_possible` | boolean | |
 | `max_competitors` | number \| null | Cap configured by the organizer. |
 | `scoring_completed` | number | Percent 0-100. `0` for upcoming or empty matches. |
+| `visibility` | `Visibility` \| null | SSI visibility classification (same shape as on `/api/v1/match/{ct}/{id}`). Optional -- present only for IPSC match rows. Use it to badge non-public matches in client UIs. Added 2026-05. |
 
 There is no pagination -- v1 returns the full result set for the given window.
 For broad browse queries, narrow the window or add filters rather than relying

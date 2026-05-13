@@ -723,6 +723,8 @@ export const EVENTS_QUERY = `
         is_squadding_possible
         max_competitors
         registration
+        visibility
+        get_visibility_display
       }
     }
   }
