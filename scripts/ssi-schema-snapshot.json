@@ -1158,7 +1158,7 @@
     },
     {
       "name": "get_abstract_chronocard",
-      "type": "ChronoCardInterface!",
+      "type": "ChronoCardInterface",
       "args": []
     },
     {
@@ -1173,7 +1173,7 @@
     },
     {
       "name": "get_abstract_stage",
-      "type": "StageInterface!",
+      "type": "StageInterface",
       "args": []
     },
     {
@@ -1858,6 +1858,11 @@
       "args": []
     },
     {
+      "name": "supports_live_scores",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
       "name": "supports_rating",
       "type": "Boolean!",
       "args": []
@@ -2283,7 +2288,7 @@
     },
     {
       "name": "get_abstract_chronocard",
-      "type": "ChronoCardInterface!",
+      "type": "ChronoCardInterface",
       "args": []
     },
     {
@@ -2298,7 +2303,7 @@
     },
     {
       "name": "get_abstract_stage",
-      "type": "StageInterface!",
+      "type": "StageInterface",
       "args": []
     },
     {
@@ -3187,6 +3192,11 @@
     },
     {
       "name": "supports_bulk_scoring",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "supports_live_scores",
       "type": "Boolean!",
       "args": []
     },
