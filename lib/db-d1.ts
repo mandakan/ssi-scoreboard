@@ -12,6 +12,16 @@ interface D1Database {
   prepare(query: string): D1PreparedStatement;
   exec(query: string): Promise<unknown>;
   batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]>;
+  withSession(constraintOrBookmark?: string): D1DatabaseSession;
+}
+
+// A D1 session opened via withSession(). Queries issued through it may be
+// served by a read replica (see readDb()). Exposes the same prepare() surface
+// as the binding; we never thread bookmarks across requests so getBookmark()
+// is unused here.
+interface D1DatabaseSession {
+  prepare(query: string): D1PreparedStatement;
+  getBookmark(): string | null;
 }
 
 interface D1PreparedStatement {
@@ -33,6 +43,28 @@ interface D1Result<T> {
 function getDb(): D1Database {
   const { env } = getCloudflareContext() as unknown as { env: { APP_DB: D1Database } };
   return env.APP_DB;
+}
+
+/**
+ * Read-only D1 handle that may be served by a read replica.
+ *
+ * D1 read replication (enabled via `read_replication.mode = "auto"` on the
+ * database) only routes queries to replicas when they go through the Sessions
+ * API — a plain binding query always hits the primary. We open a fresh
+ * `first-unconstrained` session per read call, so the query may land on any
+ * replica (or the primary), trading a few seconds of possible staleness for
+ * primary-offloading headroom during traffic bursts. This is what keeps the
+ * primary from queue-overloading ("D1 DB is overloaded") on live-match days.
+ *
+ * ONLY use this for pure reads where bounded staleness is acceptable. Writes,
+ * any read that must observe a write made earlier in the same call (e.g.
+ * getPopularKeys prunes then selects), and freshness-critical GDPR/auth reads
+ * (suppressions, service-account access) must use getDb() so they hit the
+ * primary. When replication is disabled, withSession() still works and every
+ * query goes to the primary — so this is safe to ship before flipping the mode.
+ */
+function readDb(): D1DatabaseSession {
+  return getDb().withSession("first-unconstrained");
 }
 
 const db: AppDatabase = {
@@ -82,7 +114,7 @@ const db: AppDatabase = {
   },
 
   async getShooterMatches(shooterId) {
-    const db = getDb();
+    const db = readDb();
     const result = await db
       .prepare(
         `SELECT match_ref FROM shooter_matches
@@ -96,7 +128,7 @@ const db: AppDatabase = {
 
   async getUpcomingMatches(shooterId) {
     const now = Math.floor(Date.now() / 1000);
-    const db = getDb();
+    const db = readDb();
     const result = await db
       .prepare(
         `SELECT match_ref FROM shooter_matches
@@ -109,7 +141,7 @@ const db: AppDatabase = {
   },
 
   async getShooterProfile(shooterId) {
-    const db = getDb();
+    const db = readDb();
     const row = await db
       .prepare(
         `SELECT name, club, division, last_seen, region, region_display, category, ics_alias, license
@@ -142,7 +174,7 @@ const db: AppDatabase = {
   },
 
   async hasShooterProfile(shooterId) {
-    const db = getDb();
+    const db = readDb();
     const row = await db
       .prepare(`SELECT 1 AS found FROM shooter_profiles WHERE shooter_id = ?`)
       .bind(shooterId)
@@ -151,7 +183,7 @@ const db: AppDatabase = {
   },
 
   async getShooterAchievements(shooterId) {
-    const db = getDb();
+    const db = readDb();
     const result = await db
       .prepare(
         `SELECT achievement_id, tier, unlocked_at, match_ref, value
@@ -200,7 +232,7 @@ const db: AppDatabase = {
 
   async searchShooterProfiles(query, options) {
     const limit = Math.min(options?.limit ?? 20, 100);
-    const db = getDb();
+    const db = readDb();
     type Row = { shooter_id: number; name: string; club: string | null; division: string | null; last_seen: string };
     const toResult = (r: Row) => ({ shooterId: r.shooter_id, name: r.name, club: r.club, division: r.division, lastSeen: r.last_seen });
     const notSuppressed = `AND shooter_id NOT IN (SELECT shooter_id FROM shooter_suppressions)`;
@@ -264,7 +296,7 @@ const db: AppDatabase = {
   // ── Match data cache ──────────────────────────────────────────────────
 
   async getMatchDataCache(cacheKey) {
-    const db = getDb();
+    const db = readDb();
     const row = await db
       .prepare(`SELECT data FROM match_data_cache WHERE cache_key = ?`)
       .bind(cacheKey)
@@ -273,7 +305,7 @@ const db: AppDatabase = {
   },
 
   async getMatchDataCacheStoredAt(cacheKey) {
-    const db = getDb();
+    const db = readDb();
     const row = await db
       .prepare(`SELECT stored_at FROM match_data_cache WHERE cache_key = ?`)
       .bind(cacheKey)
@@ -315,7 +347,7 @@ const db: AppDatabase = {
   },
 
   async scanMatchDataCacheKeys(keyType?) {
-    const db = getDb();
+    const db = readDb();
     if (keyType) {
       const result = await db
         .prepare(`SELECT cache_key FROM match_data_cache WHERE key_type = ?`)
@@ -330,7 +362,7 @@ const db: AppDatabase = {
   },
 
   async listMatchCacheEntries(options) {
-    const d = getDb();
+    const d = readDb();
     type Row = {
       cache_key: string;
       key_type: string;
@@ -421,7 +453,7 @@ const db: AppDatabase = {
 
   async getMatchesByRefs(matchRefs) {
     if (matchRefs.length === 0) return new Map<string, MatchRecord>();
-    const db = getDb();
+    const db = readDb();
     const placeholders = matchRefs.map(() => "?").join(",");
     type MatchRow = {
       match_ref: string; ct: number; match_id: string; name: string;

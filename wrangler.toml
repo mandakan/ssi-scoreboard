@@ -65,6 +65,14 @@ AI_MODEL = "@cf/meta/llama-3.1-8b-instruct"
 
 # D1 database for persistent app data (shooter profiles, match indices, popularity).
 # Run `pnpm tsx scripts/setup-d1.ts` to create and patch this ID automatically.
+#
+# Read replication is enabled (read_replication.mode = "auto") on this database.
+# It is a *database-level* property set via the CF API/dashboard, NOT a
+# wrangler.toml field, so it persists independent of deploys. The read paths in
+# lib/db-d1.ts route through the Sessions API (readDb()/withSession) so reads
+# can be served by replicas; without that, replicas exist but receive no
+# traffic. To re-enable after re-provisioning:
+#   PUT /accounts/{account}/d1/database/{id}  {"read_replication":{"mode":"auto"}}
 [[d1_databases]]
 binding = "APP_DB"
 database_name = "ssi-scoreboard-app-db-eu"
