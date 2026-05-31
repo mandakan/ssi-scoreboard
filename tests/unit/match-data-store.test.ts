@@ -12,9 +12,13 @@ const dbMock = vi.hoisted(() => ({
       meta: { keyType: string; ct: number; matchId: string; schemaVersion: number },
     ) => Promise<void>
   >(),
+  getMatchDataCache: vi.fn<(k: string) => Promise<string | null>>(),
+  touchMatchDataCache: vi.fn<(k: string, when: string) => Promise<void>>(),
 }));
 const cacheMock = vi.hoisted(() => ({
   expire: vi.fn<(k: string, ttl: number) => Promise<void>>(),
+  get: vi.fn<(k: string) => Promise<string | null>>(),
+  setIfAbsent: vi.fn<(k: string, v: string, ttl: number) => Promise<boolean>>(),
 }));
 
 vi.mock("@/lib/db-impl", () => ({
@@ -149,5 +153,77 @@ describe("persistActiveMatchToD1", () => {
     dbMock.setMatchDataCache.mockRejectedValue(new Error("d1 down"));
 
     await expect(persistActiveMatchToD1(KEY, PAYLOAD)).resolves.toBeUndefined();
+  });
+});
+
+describe("getMatchDataWithFallback — last_accessed_at touch", () => {
+  // Each test uses a distinct match id so the process-local per-isolate
+  // debounce (lastTouchedAt map, module state) never suppresses the touch.
+  beforeEach(() => {
+    cacheMock.get.mockReset();
+    cacheMock.setIfAbsent.mockReset();
+    dbMock.getMatchDataCache.mockReset();
+    dbMock.touchMatchDataCache.mockReset();
+  });
+
+  it("touches D1 only after acquiring the cross-isolate single-flight lock", async () => {
+    const { getMatchDataWithFallback } = await import("@/lib/match-data-store");
+    const KEY = 'gql:GetMatch:{"ct":22,"id":"1001"}';
+    cacheMock.get.mockResolvedValue("cached-value");
+    cacheMock.setIfAbsent.mockResolvedValue(true);
+    dbMock.touchMatchDataCache.mockResolvedValue(undefined);
+
+    const raw = await getMatchDataWithFallback(KEY);
+    expect(raw).toBe("cached-value");
+
+    await vi.waitFor(() => {
+      expect(cacheMock.setIfAbsent).toHaveBeenCalledWith(`touchlock:${KEY}`, "1", 3600);
+      expect(dbMock.touchMatchDataCache).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("skips the D1 touch when another isolate already holds the lock", async () => {
+    const { getMatchDataWithFallback } = await import("@/lib/match-data-store");
+    const KEY = 'gql:GetMatch:{"ct":22,"id":"1002"}';
+    cacheMock.get.mockResolvedValue("cached-value");
+    cacheMock.setIfAbsent.mockResolvedValue(false);
+
+    await getMatchDataWithFallback(KEY);
+
+    await vi.waitFor(() => expect(cacheMock.setIfAbsent).toHaveBeenCalledTimes(1));
+    expect(dbMock.touchMatchDataCache).not.toHaveBeenCalled();
+  });
+
+  it("does not attempt a touch for non-match cache keys", async () => {
+    const { getMatchDataWithFallback } = await import("@/lib/match-data-store");
+    cacheMock.get.mockResolvedValue("v");
+
+    await getMatchDataWithFallback("computed:shooter:123:dashboard");
+    await Promise.resolve();
+
+    expect(cacheMock.setIfAbsent).not.toHaveBeenCalled();
+    expect(dbMock.touchMatchDataCache).not.toHaveBeenCalled();
+  });
+
+  it("does not touch when neither cache layer has the entry", async () => {
+    const { getMatchDataWithFallback } = await import("@/lib/match-data-store");
+    const KEY = 'gql:GetMatch:{"ct":22,"id":"1004"}';
+    cacheMock.get.mockResolvedValue(null);
+    dbMock.getMatchDataCache.mockResolvedValue(null);
+
+    const raw = await getMatchDataWithFallback(KEY);
+    await Promise.resolve();
+
+    expect(raw).toBeNull();
+    expect(cacheMock.setIfAbsent).not.toHaveBeenCalled();
+  });
+
+  it("swallows touch errors so the read path never fails", async () => {
+    const { getMatchDataWithFallback } = await import("@/lib/match-data-store");
+    const KEY = 'gql:GetMatch:{"ct":22,"id":"1003"}';
+    cacheMock.get.mockResolvedValue("cached-value");
+    cacheMock.setIfAbsent.mockRejectedValue(new Error("redis down"));
+
+    await expect(getMatchDataWithFallback(KEY)).resolves.toBe("cached-value");
   });
 });
