@@ -58,6 +58,11 @@ jobs:
     needs: changes
     if: needs.changes.outputs.scoreboard == 'true'
     runs-on: ubuntu-latest
+    # A healthy run is 3-7 min; this is a backstop so a hung step fails fast
+    # instead of running to GitHub's 6h job default. The e2e steps below carry
+    # tighter per-step limits since the Playwright install / test:e2e step is
+    # the one that occasionally hangs on the runner.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
 
@@ -103,8 +108,10 @@ jobs:
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 6
 
       - run: pnpm test:e2e
+        timeout-minutes: 10
         env:
           SSI_API_KEY: dummy_key_for_e2e
 
