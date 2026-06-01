@@ -1,12 +1,12 @@
 {
-  "updated": "2026-05-11",
+  "updated": "2026-06-01",
   "period_days": 30,
   "currency": "EUR",
-  "usd_to_eur_rate": 0.85,
+  "usd_to_eur_rate": 0.8588,
   "lines": [
     {
       "label": "Workers (Paid plan + requests/CPU)",
-      "amount": 4.25,
+      "amount": 4.29,
       "note": "below included quota"
     },
     {
@@ -21,7 +21,7 @@
     },
     {
       "label": "Redis (ssi-scoreboard-prod)",
-      "amount": 0.03
+      "amount": 0.02
     },
     {
       "label": "Domain registration",
@@ -29,6 +29,6 @@
       "note": "€18/yr ÷ 12"
     }
   ],
-  "total": 5.78,
+  "total": 5.82,
   "notes": []
 }
