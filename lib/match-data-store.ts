@@ -31,6 +31,20 @@ const TOUCH_DEBOUNCE_MS = 60_000;
  *  debounces — duplicate writes are harmless since touch is idempotent. */
 const lastTouchedAt = new Map<string, number>();
 
+/** Redis key prefix for the cross-isolate touch single-flight lock. */
+const TOUCH_LOCK_PREFIX = "touchlock:";
+
+/** Global (cross-isolate) debounce window for `last_accessed_at` bumps, in
+ *  seconds. The per-process `lastTouchedAt` map only debounces within one
+ *  Worker isolate; during a traffic burst Cloudflare spins up many fresh
+ *  isolates that each fire their own UPDATE, which is what overloaded D1
+ *  ("D1 DB is overloaded"). This Redis-backed single-flight bounds the touch
+ *  to ~one UPDATE per cache key per window across ALL isolates. The window is
+ *  deliberately generous: the only consumer of `last_accessed_at` is the admin
+ *  "served in the last 30 days" diagnostic (app/admin/access), so hour-level
+ *  freshness is plenty. */
+const TOUCH_GLOBAL_DEBOUNCE_SECONDS = 3_600;
+
 interface CacheEntryMeta {
   v?: number;
 }
@@ -78,10 +92,24 @@ function maybeTouchMatchDataCache(cacheKey: string): void {
   const last = lastTouchedAt.get(cacheKey);
   if (last !== undefined && now - last < TOUCH_DEBOUNCE_MS) return;
   lastTouchedAt.set(cacheKey, now);
-  // Fire-and-forget — never block the read path on the audit write.
-  void db
-    .touchMatchDataCache(cacheKey, new Date(now).toISOString())
-    .catch((err) => reportError("match-data-store.touch", err, { matchKey: cacheKey }));
+  // Fire-and-forget — never block the read path on the audit write. A
+  // Redis-backed single-flight (SET NX EX) gates the D1 UPDATE so a traffic
+  // burst's many cold isolates don't storm the primary with redundant touches:
+  // only the first caller per key per window actually writes. A benign race
+  // (two isolates both acquiring) is harmless since the UPDATE is idempotent.
+  void (async () => {
+    try {
+      const acquired = await cache.setIfAbsent(
+        `${TOUCH_LOCK_PREFIX}${cacheKey}`,
+        "1",
+        TOUCH_GLOBAL_DEBOUNCE_SECONDS,
+      );
+      if (!acquired) return; // another isolate touched this key recently
+      await db.touchMatchDataCache(cacheKey, new Date(now).toISOString());
+    } catch (err) {
+      reportError("match-data-store.touch", err, { matchKey: cacheKey });
+    }
+  })();
 }
 
 /**
