@@ -44,6 +44,9 @@ jobs:
               - 'eslint.config.*'
               - 'vitest.config.*'
               - 'playwright.config.*'
+              # Run the full pipeline when CI itself changes, so workflow edits
+              # (e.g. the Playwright install steps) are exercised on their own PR.
+              - '.github/workflows/ci.yml'
             discord:
               - 'discord/**'
               - 'pnpm-lock.yaml'
@@ -58,10 +61,19 @@ jobs:
     needs: changes
     if: needs.changes.outputs.scoreboard == 'true'
     runs-on: ubuntu-latest
+    # Run inside the official Playwright image so the browsers are pre-baked and
+    # we never hit cdn.playwright.dev at CI time. The download-at-runtime step
+    # was hanging in end-of-transfer finalization on the hosted runner (started
+    # ~2026-06-01, deterministic across re-runs) and failing CI with no code
+    # fault. The image tag MUST track the @playwright/test version in
+    # package.json (currently 1.58.2) -- a mismatch makes Playwright try to
+    # download the matching browser at runtime, reintroducing the failure.
+    # --user 1001 is the image's pwuser, per Playwright's CI guidance.
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --user 1001
     # A healthy run is 3-7 min; this is a backstop so a hung step fails fast
-    # instead of running to GitHub's 6h job default. The e2e steps below carry
-    # tighter per-step limits since the Playwright install / test:e2e step is
-    # the one that occasionally hangs on the runner.
+    # instead of running to GitHub's 6h job default.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
@@ -106,9 +118,20 @@ jobs:
           cp -r .next/static .next/standalone/.next/static
           cp -r public .next/standalone/public
 
-      - name: Install Playwright browsers
-        run: pnpm exec playwright install --with-deps chromium
-        timeout-minutes: 6
+      # No "playwright install" step: the container image already ships the
+      # browsers matching @playwright/test 1.58.2 (see the container tag above).
+      # Guard against drift -- if package.json's Playwright is bumped without
+      # bumping the container tag, e2e would silently fall back to the broken
+      # runtime download. Fail fast with a clear message instead.
+      - name: Verify Playwright version matches container image
+        run: |
+          want=1.58.2
+          got=$(pnpm exec playwright --version | cut -d' ' -f2)
+          if [ "$got" != "$want" ]; then
+            echo "::error::@playwright/test is $got but the CI container is pinned to v$want." \
+                 "Bump the 'mcr.microsoft.com/playwright:v...' image tag in this workflow to match." >&2
+            exit 1
+          fi
 
       - run: pnpm test:e2e
         timeout-minutes: 10
