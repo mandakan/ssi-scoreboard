@@ -61,10 +61,19 @@ jobs:
     needs: changes
     if: needs.changes.outputs.scoreboard == 'true'
     runs-on: ubuntu-latest
+    # Run inside the official Playwright image so the browsers are pre-baked and
+    # we never hit cdn.playwright.dev at CI time. The download-at-runtime step
+    # was hanging in end-of-transfer finalization on the hosted runner (started
+    # ~2026-06-01, deterministic across re-runs) and failing CI with no code
+    # fault. The image tag MUST track the @playwright/test version in
+    # package.json (currently 1.58.2) -- a mismatch makes Playwright try to
+    # download the matching browser at runtime, reintroducing the failure.
+    # --user 1001 is the image's pwuser, per Playwright's CI guidance.
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --user 1001
     # A healthy run is 3-7 min; this is a backstop so a hung step fails fast
-    # instead of running to GitHub's 6h job default. The e2e steps below carry
-    # tighter per-step limits since the Playwright install / test:e2e step is
-    # the one that occasionally hangs on the runner.
+    # instead of running to GitHub's 6h job default.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
@@ -109,51 +118,20 @@ jobs:
           cp -r .next/static .next/standalone/.next/static
           cp -r public .next/standalone/public
 
-      # The Chromium binary download (~150MB) has been hanging to the 6-min
-      # step timeout on the GitHub-hosted runner (reliably, across re-runs),
-      # failing CI with no code fault. Two defences:
-      #   1. Cache ~/.cache/ms-playwright keyed on the Playwright version, so
-      #      steady-state runs restore the binary and skip the download.
-      #   2. On a cache miss, retry the download with a PER-ATTEMPT timeout, so
-      #      one stalled attempt is killed at 3 min and retried instead of
-      #      eating the whole step budget. Cache is saved only after the binary
-      #      install succeeds (split restore/save), so a partial/hung download
-      #      is never cached.
-      # OS-level apt deps are not in the cache, so install-deps always runs
-      # (it's quick).
-      - name: Get Playwright version
-        id: playwright-version
-        run: echo "version=$(pnpm exec playwright --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
-
-      - name: Restore Playwright browser cache
-        id: playwright-cache
-        uses: actions/cache/restore@v5
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
-
-      - name: Install Playwright browser binary (cache miss, retried)
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
+      # No "playwright install" step: the container image already ships the
+      # browsers matching @playwright/test 1.58.2 (see the container tag above).
+      # Guard against drift -- if package.json's Playwright is bumped without
+      # bumping the container tag, e2e would silently fall back to the broken
+      # runtime download. Fail fast with a clear message instead.
+      - name: Verify Playwright version matches container image
         run: |
-          ok=
-          for i in 1 2 3; do
-            if timeout 180 pnpm exec playwright install chromium; then ok=1; break; fi
-            echo "playwright install attempt $i failed or stalled; retrying in 10s..." >&2
-            sleep 10
-          done
-          [ -n "$ok" ]
-        timeout-minutes: 12
-
-      - name: Save Playwright browser cache
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
-
-      - name: Install Playwright OS deps
-        run: pnpm exec playwright install-deps chromium
-        timeout-minutes: 5
+          want=1.58.2
+          got=$(pnpm exec playwright --version | cut -d' ' -f2)
+          if [ "$got" != "$want" ]; then
+            echo "::error::@playwright/test is $got but the CI container is pinned to v$want." \
+                 "Bump the 'mcr.microsoft.com/playwright:v...' image tag in this workflow to match." >&2
+            exit 1
+          fi
 
       - run: pnpm test:e2e
         timeout-minutes: 10
