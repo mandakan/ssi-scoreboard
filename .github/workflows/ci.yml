@@ -44,6 +44,9 @@ jobs:
               - 'eslint.config.*'
               - 'vitest.config.*'
               - 'playwright.config.*'
+              # Run the full pipeline when CI itself changes, so workflow edits
+              # (e.g. the Playwright install steps) are exercised on their own PR.
+              - '.github/workflows/ci.yml'
             discord:
               - 'discord/**'
               - 'pnpm-lock.yaml'
@@ -106,30 +109,51 @@ jobs:
           cp -r .next/static .next/standalone/.next/static
           cp -r public .next/standalone/public
 
-      # Cache the Chromium binary (~150MB) keyed on the Playwright version so
-      # the slow download isn't repeated every run -- the uncached download is
-      # what occasionally stalls past the 6-min timeout. OS-level apt deps are
-      # NOT in this cache, so install-deps still runs on a cache hit (it's fast).
+      # The Chromium binary download (~150MB) has been hanging to the 6-min
+      # step timeout on the GitHub-hosted runner (reliably, across re-runs),
+      # failing CI with no code fault. Two defences:
+      #   1. Cache ~/.cache/ms-playwright keyed on the Playwright version, so
+      #      steady-state runs restore the binary and skip the download.
+      #   2. On a cache miss, retry the download with a PER-ATTEMPT timeout, so
+      #      one stalled attempt is killed at 3 min and retried instead of
+      #      eating the whole step budget. Cache is saved only after the binary
+      #      install succeeds (split restore/save), so a partial/hung download
+      #      is never cached.
+      # OS-level apt deps are not in the cache, so install-deps always runs
+      # (it's quick).
       - name: Get Playwright version
         id: playwright-version
         run: echo "version=$(pnpm exec playwright --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
 
-      - name: Cache Playwright browsers
+      - name: Restore Playwright browser cache
         id: playwright-cache
-        uses: actions/cache@v5
+        uses: actions/cache/restore@v5
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
 
-      - name: Install Playwright browsers (cache miss)
+      - name: Install Playwright browser binary (cache miss, retried)
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: pnpm exec playwright install --with-deps chromium
-        timeout-minutes: 6
+        run: |
+          ok=
+          for i in 1 2 3; do
+            if timeout 180 pnpm exec playwright install chromium; then ok=1; break; fi
+            echo "playwright install attempt $i failed or stalled; retrying in 10s..." >&2
+            sleep 10
+          done
+          [ -n "$ok" ]
+        timeout-minutes: 12
 
-      - name: Install Playwright OS deps (cache hit)
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
+      - name: Save Playwright browser cache
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+
+      - name: Install Playwright OS deps
         run: pnpm exec playwright install-deps chromium
-        timeout-minutes: 6
+        timeout-minutes: 5
 
       - run: pnpm test:e2e
         timeout-minutes: 10
