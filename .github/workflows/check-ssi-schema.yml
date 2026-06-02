@@ -8,7 +8,9 @@ name: Check SSI Schema Drift
 # job status (visible in the Actions tab); pair with branch protection or a
 # manual review cadence.
 #
-# Setup: requires `SSI_API_KEY` as a repo secret.
+# Setup: requires `SSI_API_KEY`, `SSI_SERVICE_EMAIL`, and `SSI_SERVICE_PASSWORD`
+# as repo secrets. Schema introspection needs JWT auth (see #425), so the bot
+# account credentials are required in addition to the API key.
 
 on:
   workflow_dispatch:
@@ -35,6 +37,8 @@ jobs:
       - name: Compare snapshot vs live SSI schema
         env:
           SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
+          SSI_SERVICE_EMAIL: ${{ secrets.SSI_SERVICE_EMAIL }}
+          SSI_SERVICE_PASSWORD: ${{ secrets.SSI_SERVICE_PASSWORD }}
         run: pnpm check:ssi-schema
 
       # Belt-and-braces: even when drift detection passes, re-run the static
