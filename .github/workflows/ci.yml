@@ -106,8 +106,29 @@ jobs:
           cp -r .next/static .next/standalone/.next/static
           cp -r public .next/standalone/public
 
-      - name: Install Playwright browsers
+      # Cache the Chromium binary (~150MB) keyed on the Playwright version so
+      # the slow download isn't repeated every run -- the uncached download is
+      # what occasionally stalls past the 6-min timeout. OS-level apt deps are
+      # NOT in this cache, so install-deps still runs on a cache hit (it's fast).
+      - name: Get Playwright version
+        id: playwright-version
+        run: echo "version=$(pnpm exec playwright --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+
+      - name: Install Playwright browsers (cache miss)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 6
+
+      - name: Install Playwright OS deps (cache hit)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
         timeout-minutes: 6
 
       - run: pnpm test:e2e
