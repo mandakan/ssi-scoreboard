@@ -159,7 +159,8 @@ async function createRedisClient(): Promise<RedisClient> {
       });
     },
     async zrangeWithScores(key, start, stop) {
-      const raw = await redis.zrange(pk(key), start, stop, "WITHSCORES");
+      // ioredis 6 types zrange bounds as string | Buffer
+      const raw = await redis.zrange(pk(key), String(start), String(stop), "WITHSCORES");
       const results: Array<{ member: string; score: number }> = [];
       for (let i = 0; i < raw.length; i += 2) {
         results.push({ member: raw[i], score: Number(raw[i + 1]) });
@@ -167,7 +168,7 @@ async function createRedisClient(): Promise<RedisClient> {
       return results;
     },
     async zrange(key, start, stop) {
-      return redis.zrange(pk(key), start, stop);
+      return redis.zrange(pk(key), String(start), String(stop));
     },
     async zscore(key, member) {
       const score = await redis.zscore(pk(key), member);
