@@ -90,3 +90,4 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           NEXT_PUBLIC_BUILD_ID: ${{ env.SHORT_SHA }}
           NEXT_PUBLIC_BUILD_DATE: ${{ env.BUILD_DATE }}
+          NEXT_PUBLIC_APP_URL: https://ssi-scoreboard-staging.long-sun-fac0.workers.dev
