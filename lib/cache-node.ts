@@ -7,6 +7,11 @@ const redis = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
   maxRetriesPerRequest: 1,
   enableReadyCheck: false,
   lazyConnect: true,
+  // Cap reconnect back-off at 500ms (ioredis 6 default grows to 2s). With
+  // maxRetriesPerRequest: 1 a command waits for the next reconnect attempt,
+  // so an unreachable Redis must degrade to a fast cache miss, not a
+  // multi-second stall per read.
+  retryStrategy: (times) => Math.min(times * 50, 500),
 });
 
 redis.on("error", (err: Error) => {
