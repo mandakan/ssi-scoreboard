@@ -14,6 +14,9 @@ const geistSans = GeistSans;
 const geistMono = GeistMono;
 
 export const metadata: Metadata = {
+  // NEXT_PUBLIC_APP_URL is inlined at build time (set in the deploy workflows);
+  // without it Next.js falls back to localhost and warns during `next build`.
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
   title: "SSI Scoreboard",
   description: "Live stage-by-stage IPSC competitor comparison",
   manifest: "/manifest.json",
