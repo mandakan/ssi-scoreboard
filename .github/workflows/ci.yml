@@ -138,7 +138,7 @@ jobs:
         env:
           SSI_API_KEY: dummy_key_for_e2e
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
