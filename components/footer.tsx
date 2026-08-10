@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Coffee, Crosshair, Github } from "lucide-react";
+import { Coffee, Crosshair } from "lucide-react";
+import { GithubIcon } from "@/components/icons/github-icon";
 import { useWhatsNew } from "@/components/whats-new-provider";
 import { RELEASES } from "@/lib/releases";
 
@@ -39,7 +40,7 @@ export function Footer() {
           className="inline-flex items-center hover:text-foreground transition-colors"
           aria-label="Source code on GitHub (opens in new tab)"
         >
-          <Github className="w-4 h-4" aria-hidden="true" />
+          <GithubIcon className="w-4 h-4" aria-hidden="true" />
         </a>
         {/* Coffee icon link – mobile only (hidden on sm+) */}
         <a
