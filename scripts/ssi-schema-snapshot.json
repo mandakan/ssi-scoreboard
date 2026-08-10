@@ -1077,9 +1077,19 @@
       "args": []
     },
     {
-      "name": "does_current_user_get_result",
+      "name": "does_current_user_get_results",
       "type": "Boolean!",
       "args": []
+    },
+    {
+      "name": "does_shooter_get_results",
+      "type": "Boolean!",
+      "args": [
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
     },
     {
       "name": "ends",
@@ -2207,9 +2217,19 @@
       "args": []
     },
     {
-      "name": "does_current_user_get_result",
+      "name": "does_current_user_get_results",
       "type": "Boolean!",
       "args": []
+    },
+    {
+      "name": "does_shooter_get_results",
+      "type": "Boolean!",
+      "args": [
+        {
+          "name": "id",
+          "type": "String!"
+        }
+      ]
     },
     {
       "name": "ends",
