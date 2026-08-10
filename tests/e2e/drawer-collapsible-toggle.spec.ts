@@ -349,9 +349,9 @@ test.describe("ToggleGroup — event search filters", () => {
     await filterBtn.click();
 
     // Each filter category should have a radio group
-    await expect(page.getByRole("group", { name: "Discipline" })).toBeVisible();
-    await expect(page.getByRole("group", { name: "Country" })).toBeVisible();
-    await expect(page.getByRole("group", { name: "Level" })).toBeVisible();
+    await expect(page.getByRole("radiogroup", { name: "Discipline" })).toBeVisible();
+    await expect(page.getByRole("radiogroup", { name: "Country" })).toBeVisible();
+    await expect(page.getByRole("radiogroup", { name: "Level" })).toBeVisible();
   });
 
   test("clicking a filter chip selects it", async ({ page }) => {
@@ -368,7 +368,7 @@ test.describe("ToggleGroup — event search filters", () => {
     await expect(l3Radio).toHaveAttribute("aria-checked", "true");
 
     // "All" level should now be unchecked
-    const allLevel = page.getByRole("group", { name: "Level" }).getByRole("radio", { name: "All" });
+    const allLevel = page.getByRole("radiogroup", { name: "Level" }).getByRole("radio", { name: "All" });
     await expect(allLevel).toHaveAttribute("aria-checked", "false");
   });
 });
@@ -386,7 +386,7 @@ test.describe("ToggleGroup — mobile overflow", () => {
   test("filter toggle groups have no horizontal overflow at 390px", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("button", { name: /filters/i }).click();
-    await expect(page.getByRole("group", { name: "Discipline" })).toBeVisible();
+    await expect(page.getByRole("radiogroup", { name: "Discipline" })).toBeVisible();
 
     const hasOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth > window.innerWidth,

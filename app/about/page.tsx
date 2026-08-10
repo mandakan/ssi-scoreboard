@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Github, Crosshair, Coffee } from "lucide-react";
+import { Crosshair, Coffee } from "lucide-react";
+import { GithubIcon } from "@/components/icons/github-icon";
 import { McpEndpoint } from "@/components/mcp-endpoint";
 import { InstallInstructions } from "@/components/install-instructions";
 import runningCosts from "./running-costs.json";
@@ -340,7 +341,7 @@ export default function AboutPage() {
               className="flex items-center gap-3 p-4 rounded-lg border border-border hover:bg-accent hover:text-accent-foreground transition-colors"
               aria-label="Source code on GitHub (opens in new tab)"
             >
-              <Github className="w-5 h-5 shrink-0" aria-hidden="true" />
+              <GithubIcon className="w-5 h-5 shrink-0" aria-hidden="true" />
               <div>
                 <p className="font-medium text-sm">GitHub</p>
                 <p className="text-xs text-muted-foreground">

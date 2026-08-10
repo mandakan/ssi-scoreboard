@@ -12,15 +12,15 @@
     "register": "tsx src/register.ts"
   },
   "dependencies": {
-    "discord-api-types": "0.38.42",
+    "discord-api-types": "0.38.53",
     "discord-interactions": "4.4.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "4.20260316.1",
+    "@cloudflare/workers-types": "5.20260804.1",
     "@types/node": "^22",
-    "tsx": "4.21.0",
+    "tsx": "4.23.10",
     "typescript": "6.0.3",
-    "vitest": "4.1.0",
-    "wrangler": "4.73.0"
+    "vitest": "4.1.10",
+    "wrangler": "4.119.0"
   }
 }

@@ -19,7 +19,7 @@ jobs:
       discord: ${{ steps.filter.outputs.discord }}
       lab: ${{ steps.filter.outputs.lab }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
         id: filter
         with:
@@ -66,19 +66,19 @@ jobs:
     # was hanging in end-of-transfer finalization on the hosted runner (started
     # ~2026-06-01, deterministic across re-runs) and failing CI with no code
     # fault. The image tag MUST track the @playwright/test version in
-    # package.json (currently 1.58.2) -- a mismatch makes Playwright try to
+    # package.json (currently 1.62.1) -- a mismatch makes Playwright try to
     # download the matching browser at runtime, reintroducing the failure.
     # --user 1001 is the image's pwuser, per Playwright's CI guidance.
     container:
-      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
       options: --user 1001
     # A healthy run is 3-7 min; this is a backstop so a hung step fails fast
     # instead of running to GitHub's 6h job default.
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
 
@@ -90,7 +90,7 @@ jobs:
         id: pnpm-cache
         run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
 
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
           key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -119,13 +119,13 @@ jobs:
           cp -r public .next/standalone/public
 
       # No "playwright install" step: the container image already ships the
-      # browsers matching @playwright/test 1.58.2 (see the container tag above).
+      # browsers matching @playwright/test 1.62.1 (see the container tag above).
       # Guard against drift -- if package.json's Playwright is bumped without
       # bumping the container tag, e2e would silently fall back to the broken
       # runtime download. Fail fast with a clear message instead.
       - name: Verify Playwright version matches container image
         run: |
-          want=1.58.2
+          want=1.62.1
           got=$(pnpm exec playwright --version | cut -d' ' -f2)
           if [ "$got" != "$want" ]; then
             echo "::error::@playwright/test is $got but the CI container is pinned to v$want." \
@@ -138,7 +138,7 @@ jobs:
         env:
           SSI_API_KEY: dummy_key_for_e2e
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
@@ -152,9 +152,9 @@ jobs:
     if: needs.changes.outputs.discord == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
 
@@ -166,7 +166,7 @@ jobs:
         id: pnpm-cache
         run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
 
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
           key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -190,9 +190,9 @@ jobs:
     if: needs.changes.outputs.lab == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
 
       - name: Install dependencies
         working-directory: lab
