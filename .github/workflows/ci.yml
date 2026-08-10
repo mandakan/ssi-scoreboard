@@ -66,11 +66,11 @@ jobs:
     # was hanging in end-of-transfer finalization on the hosted runner (started
     # ~2026-06-01, deterministic across re-runs) and failing CI with no code
     # fault. The image tag MUST track the @playwright/test version in
-    # package.json (currently 1.58.2) -- a mismatch makes Playwright try to
+    # package.json (currently 1.62.1) -- a mismatch makes Playwright try to
     # download the matching browser at runtime, reintroducing the failure.
     # --user 1001 is the image's pwuser, per Playwright's CI guidance.
     container:
-      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
       options: --user 1001
     # A healthy run is 3-7 min; this is a backstop so a hung step fails fast
     # instead of running to GitHub's 6h job default.
@@ -119,13 +119,13 @@ jobs:
           cp -r public .next/standalone/public
 
       # No "playwright install" step: the container image already ships the
-      # browsers matching @playwright/test 1.58.2 (see the container tag above).
+      # browsers matching @playwright/test 1.62.1 (see the container tag above).
       # Guard against drift -- if package.json's Playwright is bumped without
       # bumping the container tag, e2e would silently fall back to the broken
       # runtime download. Fail fast with a clear message instead.
       - name: Verify Playwright version matches container image
         run: |
-          want=1.58.2
+          want=1.62.1
           got=$(pnpm exec playwright --version | cut -d' ' -f2)
           if [ "$got" != "$want" ]; then
             echo "::error::@playwright/test is $got but the CI container is pinned to v$want." \

@@ -523,10 +523,10 @@ describe("ComparisonTable — delta view mode", () => {
   it("hides % reference toggle in delta mode", () => {
     renderWithProviders(<ComparisonTable scoringCompleted={100} data={baseData} />);
     // % toggle visible in absolute mode
-    expect(screen.getByRole("group", { name: "Percentage reference" })).toBeInTheDocument();
+    expect(screen.getByRole("radiogroup", { name: "Percentage reference" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("radio", { name: "Delta" }));
     // % toggle hidden in delta mode
-    expect(screen.queryByRole("group", { name: "Percentage reference" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: "Percentage reference" })).not.toBeInTheDocument();
   });
 
   it("tie case: two competitors with equal points both show ±0.0 pts in delta mode", () => {
