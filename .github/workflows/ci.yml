@@ -19,7 +19,7 @@ jobs:
       discord: ${{ steps.filter.outputs.discord }}
       lab: ${{ steps.filter.outputs.lab }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
         id: filter
         with:
@@ -76,7 +76,7 @@ jobs:
     # instead of running to GitHub's 6h job default.
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
         with:
@@ -152,7 +152,7 @@ jobs:
     if: needs.changes.outputs.discord == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
         with:
@@ -190,7 +190,7 @@ jobs:
     if: needs.changes.outputs.lab == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: astral-sh/setup-uv@v7
 
