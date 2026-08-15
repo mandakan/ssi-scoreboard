@@ -72,6 +72,9 @@ export interface CacheInfo {
   /** True when an upstream refresh failed within the last ~60s.
    *  Drives the "live updates paused" banner. Absent on fresh successful fetches. */
   upstreamDegraded?: boolean;
+  /** True while SSI_UPSTREAM_PAUSED deliberately blocks all upstream traffic.
+   *  Switches the banner to honest "we paused" copy instead of blaming SSI. */
+  upstreamPaused?: boolean;
   /** ISO timestamp of the most recent scorecard the upstream knows about
    *  (max `scorecards.created` across the match). Used by the UI to surface
    *  a "data is N minutes old" indicator on ongoing matches even when the

@@ -17,6 +17,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
 import { maybeTagAsMcp } from "@/lib/telemetry-context";
 import { isUpstreamDegraded } from "@/lib/upstream-status";
+import { isSsiUpstreamPaused } from "@/lib/upstream-pause";
 import { computeGroupRankings } from "@/app/api/compare/logic";
 import type {
   CompetitorStageResult,
@@ -207,6 +208,9 @@ export async function GET(
   };
   if (cacheInfo.cachedAt && (await isUpstreamDegraded())) {
     cacheInfo.upstreamDegraded = true;
+  }
+  if (isSsiUpstreamPaused()) {
+    cacheInfo.upstreamPaused = true;
   }
   let lastScorecardTs: string | null = null;
   for (const sc of rawScorecards) {

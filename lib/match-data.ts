@@ -11,6 +11,7 @@ import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
 import { afterResponse } from "@/lib/background-impl";
 import { persistToMatchStore } from "@/lib/match-data-store";
 import { isUpstreamDegraded } from "@/lib/upstream-status";
+import { isSsiUpstreamPaused } from "@/lib/upstream-pause";
 import { cacheTelemetry } from "@/lib/cache-telemetry";
 import { reportError } from "@/lib/error-telemetry";
 import { classifyVisibility } from "@/lib/visibility";
@@ -424,6 +425,9 @@ export async function fetchMatchData(
   // just succeeded for this caller.
   if (cachedAt && (await isUpstreamDegraded())) {
     response.cacheInfo.upstreamDegraded = true;
+  }
+  if (isSsiUpstreamPaused()) {
+    response.cacheInfo.upstreamPaused = true;
   }
 
   return { data: response, cachedAt, isComplete, msFetch };

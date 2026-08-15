@@ -8,6 +8,11 @@ const COPY = {
   body: "Match data comes from shootnscoreit.com, which isn't responding right now. Search and the live list may be empty or out of date until it's back. This isn't a problem with the scoreboard.",
 } as const;
 
+const PAUSED_COPY = {
+  heading: "Live updates temporarily paused",
+  body: "We've paused our connection to shootnscoreit.com while we work with them on service load. Saved match data is still available, but live scores and event search are out of date until updates resume.",
+} as const;
+
 /**
  * Homepage banner that appears when the upstream SSI GraphQL API has failed
  * within the last ~60s. Polls /api/upstream-status every 30s. Self-hides when
@@ -18,7 +23,11 @@ const COPY = {
  */
 export function UpstreamStatusBanner() {
   const { data } = useUpstreamStatusQuery();
-  if (!data?.degraded) return null;
+  if (!data?.degraded && !data?.paused) return null;
+
+  // A deliberate pause on our side wins over the outage copy — while paused
+  // we can't observe SSI's health, and blaming them would be dishonest.
+  const copy = data.paused ? PAUSED_COPY : COPY;
 
   return (
     <div
@@ -32,10 +41,10 @@ export function UpstreamStatusBanner() {
       />
       <div className="min-w-0 flex-1">
         <p className="font-semibold text-amber-900 dark:text-amber-200 leading-tight">
-          {COPY.heading}
+          {copy.heading}
         </p>
         <p className="text-amber-900/90 dark:text-amber-100/90 mt-0.5 leading-snug">
-          {COPY.body}
+          {copy.body}
         </p>
       </div>
     </div>

@@ -670,6 +670,11 @@ export default function MatchPageClient() {
   const upstreamDegraded =
     match.cacheInfo.upstreamDegraded === true ||
     compareQuery.data?.cacheInfo.upstreamDegraded === true;
+  // Deliberate pause (SSI_UPSTREAM_PAUSED) — steadier than the 60s degraded
+  // flag and switches the banner to honest "we paused" copy.
+  const upstreamPaused =
+    match.cacheInfo.upstreamPaused === true ||
+    compareQuery.data?.cacheInfo.upstreamPaused === true;
 
   return (
     <main id="main-content" tabIndex={-1} className="min-h-screen p-4 sm:p-6 max-w-6xl mx-auto space-y-6 animate-fade-in">
@@ -707,9 +712,10 @@ export default function MatchPageClient() {
         </div>
       </div>
 
-      {/* Upstream degraded banner — shown when SSI is failing and we're serving stale data */}
-      {upstreamDegraded && (
-        <UpstreamDegradedBanner cachedAt={stalestCachedAt} />
+      {/* Upstream degraded banner — shown when SSI is failing (or we've
+          deliberately paused upstream traffic) and we're serving stale data */}
+      {(upstreamDegraded || upstreamPaused) && (
+        <UpstreamDegradedBanner cachedAt={stalestCachedAt} paused={upstreamPaused} />
       )}
 
       {/* Match header */}

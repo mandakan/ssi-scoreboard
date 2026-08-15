@@ -10,6 +10,7 @@ import { computeMatchFreshness, computeMatchSwrTtl, isMatchComplete } from "@/li
 import { persistToMatchStore } from "@/lib/match-data-store";
 import { computeMatchScoringPct } from "@/lib/match-data";
 import { isUpstreamDegraded } from "@/lib/upstream-status";
+import { isSsiUpstreamPaused } from "@/lib/upstream-pause";
 import { afterResponse } from "@/lib/background-impl";
 
 import { extractDivision } from "@/lib/divisions";
@@ -263,6 +264,9 @@ export async function GET(req: Request) {
   };
   if (cacheInfo.cachedAt && (await isUpstreamDegraded())) {
     cacheInfo.upstreamDegraded = true;
+  }
+  if (isSsiUpstreamPaused()) {
+    cacheInfo.upstreamPaused = true;
   }
 
   const tFetch = performance.now();

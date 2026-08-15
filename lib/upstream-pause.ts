@@ -14,7 +14,11 @@
 // Added 2026-08-15 after our request volume contributed to an outage of
 // shootnscoreit.com during a live match.
 
-export const UPSTREAM_PAUSED_ERROR = "SSI upstream calls are paused (SSI_UPSTREAM_PAUSED)";
+// This message surfaces verbatim in client-facing 502 bodies (match pages,
+// event search), so it is written for end users. Operators can grep for
+// "temporarily paused" or check the SSI_UPSTREAM_PAUSED secret directly.
+export const UPSTREAM_PAUSED_ERROR =
+  "Live score updates are temporarily paused while we work with ShootNScoreIt. Saved results are still available.";
 
 export function isSsiUpstreamPaused(): boolean {
   const raw = process.env.SSI_UPSTREAM_PAUSED;

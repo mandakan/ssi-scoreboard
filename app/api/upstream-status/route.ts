@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import cache from "@/lib/cache-impl";
 import { UPSTREAM_DEGRADED_KEY } from "@/lib/upstream-status";
 import { upstreamTelemetry } from "@/lib/upstream-telemetry";
+import { isSsiUpstreamPaused } from "@/lib/upstream-pause";
 
 // Always dynamic — must reflect the live degraded flag, not a build-time
 // snapshot. Short response so polling at 60s is cheap.
@@ -9,6 +10,10 @@ export const dynamic = "force-dynamic";
 
 interface UpstreamStatus {
   degraded: boolean;
+  /** True while SSI_UPSTREAM_PAUSED deliberately blocks all upstream calls.
+   *  Unlike `degraded` (60s failure-driven TTL), this reflects the switch
+   *  directly, so the banner holds steady for the whole pause. */
+  paused: boolean;
   /** ISO timestamp of the most recent upstream failure, or null. */
   since: string | null;
 }
@@ -34,7 +39,7 @@ export async function GET() {
   const sinceAgeMs = since != null ? Date.now() - new Date(since).getTime() : null;
   upstreamTelemetry({ op: "status-checked", degraded, sinceAgeMs });
 
-  const body: UpstreamStatus = { degraded, since };
+  const body: UpstreamStatus = { degraded, paused: isSsiUpstreamPaused(), since };
   return NextResponse.json(body, {
     // Don't CDN-cache: responses must reflect the live flag so a degraded
     // signal clears within ~60s of SSI recovering. Per-client polling
