@@ -95,6 +95,9 @@ describe("refreshCachedMatchQuery — probe-aware refresh", () => {
     fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
     process.env.SSI_API_KEY = "test-key";
+    // The sync probe memoizes per (ct,id) for 5s — clear between tests or a
+    // memoized probe from one test leaks into the next.
+    void import("@/lib/graphql").then((m) => m.clearMatchSyncProbeMemo());
   });
 
   afterEach(() => {
@@ -127,7 +130,7 @@ describe("refreshCachedMatchQuery — probe-aware refresh", () => {
 
   it("forces a full refetch when cached age exceeds MATCH_PROBE_MAX_SKIP_AGE_SECONDS", async () => {
     const { refreshCachedMatchQuery } = await import("@/lib/graphql");
-    const staleCachedAt = new Date(Date.now() - 10 * 60_000).toISOString(); // 10 min ago
+    const staleCachedAt = new Date(Date.now() - 20 * 60_000).toISOString(); // 20 min ago (> 900s ceiling)
     cacheMock.get.mockImplementation(async (k) => {
       if (k === SIDECAR) {
         return JSON.stringify({ updated: "2026-04-28T10:00:00Z", status: "on", results: "org", isLiveScoresAccessible: false });
@@ -138,7 +141,7 @@ describe("refreshCachedMatchQuery — probe-aware refresh", () => {
       return null;
     });
     // Probe says nothing changed, but the cached entry is older than the
-    // 5-minute safety ceiling — we must refetch anyway.
+    // 15-minute safety ceiling — we must refetch anyway.
     fetchSpy
       .mockResolvedValueOnce(probeResponse({ updated: "2026-04-28T10:00:00Z", status: "on", results: "org", is_live_scores_accessible: false }))
       .mockResolvedValueOnce(fullResponse());
@@ -290,6 +293,9 @@ describe("refreshCachedMatchQuery — scorecards bypass (regression guard)", () 
     fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
     process.env.SSI_API_KEY = "test-key";
+    // The sync probe memoizes per (ct,id) for 5s — clear between tests or a
+    // memoized probe from one test leaks into the next.
+    void import("@/lib/graphql").then((m) => m.clearMatchSyncProbeMemo());
   });
 
   afterEach(() => {

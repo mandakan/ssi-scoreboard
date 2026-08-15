@@ -26,6 +26,7 @@ const cacheInfoSchema = z
   .object({
     cachedAt: z.string().nullable(),
     upstreamDegraded: z.boolean().optional(),
+    upstreamPaused: z.boolean().optional(),
     lastScorecardAt: z.string().nullable().optional(),
     scorecardsCachedAt: z.string().nullable().optional(),
   })

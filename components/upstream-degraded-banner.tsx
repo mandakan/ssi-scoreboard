@@ -5,6 +5,9 @@ import { AlertTriangle } from "lucide-react";
 interface UpstreamDegradedBannerProps {
   /** ISO timestamp of the cached payload being shown (used for "X minutes ago"). */
   cachedAt: string | null;
+  /** True when we have deliberately paused upstream traffic (maintenance),
+   *  as opposed to SSI failing on its own. Switches to honest pause copy. */
+  paused?: boolean;
 }
 
 // Single source for the wording so future i18n has one place to translate.
@@ -13,6 +16,8 @@ const COPY = {
   // {age} is filled in below; if unknown, we drop the clause entirely.
   bodyWithAge: "ShootNScoreIt isn't responding. Showing the last scores we received {age}. We'll refresh as soon as it's back.",
   bodyWithoutAge: "ShootNScoreIt isn't responding. Showing the last scores we received before the outage. We'll refresh as soon as it's back.",
+  pausedBodyWithAge: "We've temporarily paused live score updates while we work with ShootNScoreIt. Showing the last scores we received {age}.",
+  pausedBodyWithoutAge: "We've temporarily paused live score updates while we work with ShootNScoreIt. Showing the last scores we saved.",
 } as const;
 
 function formatAge(isoString: string): string {
@@ -26,10 +31,12 @@ function formatAge(isoString: string): string {
   return days === 1 ? "1 day ago" : `${days} days ago`;
 }
 
-export function UpstreamDegradedBanner({ cachedAt }: UpstreamDegradedBannerProps) {
+export function UpstreamDegradedBanner({ cachedAt, paused = false }: UpstreamDegradedBannerProps) {
+  const withAge = paused ? COPY.pausedBodyWithAge : COPY.bodyWithAge;
+  const withoutAge = paused ? COPY.pausedBodyWithoutAge : COPY.bodyWithoutAge;
   const body = cachedAt
-    ? COPY.bodyWithAge.replace("{age}", formatAge(cachedAt))
-    : COPY.bodyWithoutAge;
+    ? withAge.replace("{age}", formatAge(cachedAt))
+    : withoutAge;
 
   return (
     <div

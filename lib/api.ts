@@ -92,6 +92,8 @@ export async function fetchCoachingAvailability(): Promise<CoachingAvailability>
 
 export interface UpstreamStatus {
   degraded: boolean;
+  /** True while we have deliberately paused all upstream SSI traffic. */
+  paused: boolean;
   since: string | null;
 }
 
@@ -100,10 +102,10 @@ export async function fetchUpstreamStatus(): Promise<UpstreamStatus> {
   // user-facing "upstream degraded" banner.
   try {
     const res = await fetch("/api/upstream-status", { cache: "no-store" });
-    if (!res.ok) return { degraded: false, since: null };
+    if (!res.ok) return { degraded: false, paused: false, since: null };
     return res.json();
   } catch {
-    return { degraded: false, since: null };
+    return { degraded: false, paused: false, since: null };
   }
 }
 

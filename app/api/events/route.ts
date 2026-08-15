@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { executeQuery, EVENTS_QUERY } from "@/lib/graphql";
+import { buildSubWindows } from "@/lib/events-windows";
+import { allSettledWithLimit } from "@/lib/concurrency";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { usageTelemetry, bucketCount } from "@/lib/usage-telemetry";
 import { markUpstreamDegraded } from "@/lib/upstream-status";
@@ -47,34 +49,15 @@ const ALLOWED_LEVELS: Record<string, Set<string> | null> = {
   l4plus: new Set(["Level IV", "Level V"]),
 };
 
-// ─── DO NOT WIDEN THIS WINDOW WITHOUT MEASURING ─────────────────────────────
-//
-// The SSI API applies an undocumented result cap per query when browsing
-// without a search term, silently dropping events further out in the date
-// window. We work around it by splitting the requested range into 7-day
-// sub-windows so each request stays well under the cap. Each sub-window gets
-// its own Next.js fetch-cache entry (revalidate: 3600), so they cache
-// independently.
-//
-// History — every previous attempt to widen this has caused a user-visible
-// regression. Read these BEFORE changing the value:
-//
-//   #345 (5e9e63b, 2026-04-27) — shrunk from 30 days to 7 after browsing a
-//     month with discipline=All + country=SWE + minLevel=L2+ showed only
-//     the first ~9 days. SSI's cap bites on the unfiltered worldwide IPSC
-//     count, before our post-fetch country/minLevel filters run.
-//   #370 (cb57560, 2026-04-28) — widened back to 30 days when `firearms`
-//     was set, on the assumption SSI's upstream filter cut the count
-//     enough. It does not. Empirical check on staging: a 30-day worldwide
-//     query for firearms=hg returned 1 event; same range as 4× 7-day
-//     chunks returned 139. Reverted in #371.
-//
-// The cap bites on whatever SSI returns, regardless of whether we asked it
-// to filter upstream. The safe value is 7 days. If you want to widen it,
-// measure against the live API for every supported firearms value
-// (hg, rfl, shg, pcc, mr, prr, air) AND the unfiltered case, across a full
-// 30-day month, and confirm none of them get truncated. Don't guess.
-const SUB_WINDOW_DAYS = 7;
+// Sub-window construction (7-day windows, hard cap on window count) lives in
+// lib/events-windows.ts — including the do-not-widen history for
+// SUB_WINDOW_DAYS and the 2026-08-15 incident rationale for MAX_SUB_WINDOWS.
+
+// Cap on concurrent upstream GetEvents fetches for the browse fan-out. Each
+// one is an expensive worldwide search on SSI's side; see the 2026-08-15
+// incident notes in lib/events-windows.ts. 2 matches SSI's required 1-2
+// concurrent request bound (also enforced globally in lib/upstream-limiter.ts).
+const SUB_WINDOW_CONCURRENCY = 2;
 
 /**
  * Filter the event list down to matches that are clearly happening right now.
@@ -100,28 +83,6 @@ export function filterLiveEvents(
     const endMs = e.ends ? new Date(e.ends).getTime() : startMs + 24 * HOUR_MS;
     return nowMs >= startMs && nowMs <= endMs + 6 * HOUR_MS;
   });
-}
-
-function buildSubWindows(
-  startsAfter: string,
-  startsBefore: string,
-  baseVars: Record<string, string>,
-): Array<Record<string, string>> {
-  const windows: Array<Record<string, string>> = [];
-  let cur = new Date(startsAfter);
-  const end = new Date(startsBefore);
-  while (cur < end) {
-    const next = new Date(cur);
-    next.setDate(next.getDate() + SUB_WINDOW_DAYS);
-    if (next > end) next.setTime(end.getTime());
-    windows.push({
-      ...baseVars,
-      starts_after: cur.toISOString().slice(0, 10),
-      starts_before: next.toISOString().slice(0, 10),
-    });
-    cur = new Date(next);
-  }
-  return windows;
 }
 
 export async function GET(req: Request) {
@@ -223,11 +184,29 @@ export async function GET(req: Request) {
       // tank the whole homepage. Cancelled fetches won't populate Next's
       // fetch cache for that window — we accept that trade so the user
       // doesn't wait a full minute for one stuck call.
-      const windows = buildSubWindows(startsAfter, startsBefore, firearms ? { firearms } : {});
-      const settled = await Promise.allSettled(
-        windows.map((vars) =>
+      // The window count is hard-capped (MAX_SUB_WINDOWS) and the fan-out is
+      // concurrency-limited — a caller-supplied multi-year range must never
+      // again translate into 100+ parallel GetEvents queries against SSI
+      // (2026-08-15 incident).
+      const { windows, clamped } = buildSubWindows(
+        startsAfter,
+        startsBefore,
+        firearms ? { firearms } : {},
+      );
+      if (clamped) {
+        console.warn(JSON.stringify({
+          route: "events",
+          range_clamped: true,
+          starts_after: startsAfter,
+          starts_before: startsBefore,
+          windows_used: windows.length,
+        }));
+      }
+      const settled = await allSettledWithLimit(
+        windows.map((vars) => () =>
           executeQuery<RawEventsData>(EVENTS_QUERY, vars, 3600, { timeoutMs: 8_000 }),
         ),
+        SUB_WINDOW_CONCURRENCY,
       );
       const failures: string[] = [];
       const seen = new Set<string>();

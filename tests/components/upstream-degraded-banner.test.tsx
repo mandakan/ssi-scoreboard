@@ -46,4 +46,16 @@ describe("UpstreamDegradedBanner", () => {
     expect(svg).not.toBeNull();
     expect(svg).toHaveAttribute("aria-hidden", "true");
   });
+
+  it("shows deliberate-pause copy instead of outage copy when paused", () => {
+    render(<UpstreamDegradedBanner cachedAt={null} paused />);
+    expect(screen.getByText(/temporarily paused/i)).toBeInTheDocument();
+    expect(screen.queryByText(/isn't responding/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the relative-time clause in paused copy when cachedAt is provided", () => {
+    const tenMinAgo = new Date(Date.now() - 10 * 60_000).toISOString();
+    render(<UpstreamDegradedBanner cachedAt={tenMinAgo} paused />);
+    expect(screen.getByText(/10 minutes ago/)).toBeInTheDocument();
+  });
 });

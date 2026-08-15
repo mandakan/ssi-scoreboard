@@ -176,18 +176,37 @@ the SQLite/D1 adapters via `CREATE TABLE IF NOT EXISTS`.
 
 ## Match cache refresh contract (CRITICAL)
 
-`refreshCachedMatchQuery` is split by cache key:
+Redesigned 2026-08-15 after our refresh volume contributed to an SSI production
+outage (see `docs/postmortem-2026-08-15-ssi-outage.md`). One `MatchSyncProbe`
+per cycle (60s live) drives both cache keys; it returns event-level state PLUS
+per-stage `{updated, scorecards_count, scoring_progress}`.
 
-- **`GetMatch` (match overview)** — uses the if-modified-since probe (#361) on
-  `IpscMatchNode.updated`. Probe-skip extends TTL; `MATCH_PROBE_MAX_SKIP_AGE_SECONDS`
-  (default 300s) caps worst-case staleness. The probe state also tracks
-  `is_live_scores_accessible` so an organizer flipping the SSI "Resultat" setting
-  forces a fresh fetch.
-- **`GetMatchScorecards`** — bypasses the probe entirely. SSI's `IpscMatchNode.updated`
-  does NOT tick on scorecard saves (verified live during SPSK Open 2026, match 22/27190),
-  so probe-skip on scorecards strands the cache. Every SWR fire does a full refetch
-  via the per-stage fan-out in `lib/scorecards-archive.ts` (`getMatchScorecards`),
-  single-flighted via the inflight lock.
+- **`GetMatch` (match overview)** — probe-gated as before (#361). Probe-skip
+  extends TTL AND merges the probe's fresh `scoring_progress` into the cached
+  blob (scoring_pct stays live without a full refetch — `event.updated` does
+  not tick on scorecard saves). Full re-expansion (stages+competitors+squads)
+  runs only on probe change / force-refresh / cache miss / the
+  `MATCH_PROBE_MAX_SKIP_AGE_SECONDS` ceiling (default 900s).
+- **`GetMatchScorecards`** — `refreshScorecardsIncremental()` in
+  `lib/scorecards-archive.ts`: diffs the probe's per-stage state against the
+  `probe:stage-state:{ct}:{id}` sidecar and refetches ONLY changed stages
+  (concurrency 2, 15s per-stage timeout), splicing them into the cached
+  snapshot. Unchanged cycle = 1 probe, 0 stage fetches. Full resync on
+  missing/stale sidecar or snapshot, probe failure, force-refresh, unknown
+  stage id (also sets the GetMatch force-refresh sentinel), or ceiling.
+  Write order is snapshot-then-sidecar — never reverse it.
+- **Permanent pinning** only happens when completion inputs came from a FRESH
+  upstream fetch (`cachedAt === null`); cached inputs trigger a forced fresh
+  confirm first (prevents pinning ceiling-stale scoring_progress).
+- **Throttling**: per-isolate semaphore of `UPSTREAM_MAX_CONCURRENCY` (default
+  2) around every upstream call (`lib/upstream-limiter.ts`), Redis-shared
+  exponential backoff on 429/5xx/timeout (`lib/upstream-backoff.ts`, half-open
+  reset, honors Retry-After), and `SSI_UPSTREAM_PAUSED` as the global kill
+  switch (`lib/upstream-pause.ts`).
+- **`SCORECARDS_DELTA_ENABLED=on`** switches changed-stage refetch to
+  `scorecards(updated_after: <sidecar stage.updated>)` with merge-by-competitor
+  and a scorecards_count sanity fallback. OFF until SSI confirms resolver cost
+  and `updated` semantics.
 
 Scorecards are read via the per-stage `STAGE_SCORECARDS_QUERY` only. The legacy
 whole-match `event { stages { scorecards } }` query and its incremental-delta

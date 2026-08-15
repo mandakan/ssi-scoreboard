@@ -367,6 +367,8 @@ export function registerMcpTools(server: McpServer, arg: string | DataProviders)
     "When searching by name (query param), past events are included automatically — no date filter needed. " +
     "When browsing without a query, only events within ~3 months of today are returned by default; " +
     "pass explicit starts_after/starts_before to widen the window. " +
+    "Browse date ranges wider than 70 days are truncated (anchored at starts_after) — " +
+    "page with multiple narrower requests instead of one wide range. " +
     "`min_level` defaults to l2plus which hides small club matches; pass 'all' only if the user explicitly wants club-level events.",
     {
       query: z.string().optional().describe("Free-text search by event name or venue"),

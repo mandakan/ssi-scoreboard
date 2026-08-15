@@ -13,6 +13,13 @@ import { cacheTelemetry } from "@/lib/cache-telemetry";
 import { reportError } from "@/lib/error-telemetry";
 import { isPublicMatchData } from "@/lib/visibility";
 import { getJwt, JWT_EXPIRED_ERROR_PATTERNS } from "@/lib/ssi-auth";
+import { assertSsiUpstreamAllowed } from "@/lib/upstream-pause";
+import { withUpstreamSlot } from "@/lib/upstream-limiter";
+import {
+  assertNotInBackoff,
+  recordUpstreamFailure,
+  recordUpstreamSuccess,
+} from "@/lib/upstream-backoff";
 
 /**
  * Check if the current request is an admin-authenticated request
@@ -98,6 +105,14 @@ async function executeQueryOnce<T>(
   revalidate: number | false,
   options: ExecuteQueryOptions,
 ): Promise<T> {
+  // Emergency kill switch — throws before any outbound traffic (including the
+  // JWT fetch below). See lib/upstream-pause.ts.
+  assertSsiUpstreamAllowed();
+  // Exponential backoff gate (SSI ask #8): while a hold-off window from
+  // recent 429/5xx/timeouts is active, fail fast — stale-on-error serves
+  // cached data instead of piling onto a struggling upstream.
+  await assertNotInBackoff();
+
   const apiKey = process.env.SSI_API_KEY;
   if (!apiKey) throw new Error("SSI_API_KEY is not configured");
 
@@ -108,7 +123,9 @@ async function executeQueryOnce<T>(
   // Extract the operation name for log context, e.g. "GetMatchScorecards"
   const operationName = query.match(/query\s+(\w+)/)?.[1] ?? "unknown";
   const varsHash = hashVariables(variables);
-  const startedAt = Date.now();
+  // Reset once the semaphore slot is acquired so telemetry `ms` measures the
+  // upstream request, not time spent queueing behind other calls.
+  let startedAt = Date.now();
 
   const emit = (
     outcome: UpstreamOutcome,
@@ -124,59 +141,71 @@ async function executeQueryOnce<T>(
     });
   };
 
-  const timeoutMs = options.timeoutMs ?? GRAPHQL_TIMEOUT_MS;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  // Semaphore: at most UPSTREAM_MAX_CONCURRENCY (default 2) outbound requests
+  // per isolate — an SSI requirement after the 2026-08-15 incident. The whole
+  // network interaction (fetch + body read) happens inside the slot; the
+  // request timeout starts after acquisition so queueing never counts
+  // against it.
+  const { response, bodyText } = await withUpstreamSlot(async () => {
+    startedAt = Date.now();
+    const timeoutMs = options.timeoutMs ?? GRAPHQL_TIMEOUT_MS;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-  let response: Response;
-  try {
-    response = await fetch(GRAPHQL_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `JWT ${jwt}`,
-        "x-api-key": apiKey,
-      },
-      body: JSON.stringify({ query, variables }),
-      cache: revalidate === false ? "no-store" : undefined,
-      next: revalidate !== false ? { revalidate } : undefined,
-      signal: controller.signal,
-    });
-  } catch (err) {
-    clearTimeout(timeout);
-    if (err instanceof DOMException && err.name === "AbortError") {
-      emit("timeout", { errorClass: "AbortError" });
-      console.error(`[ssi-api] ${operationName} timed out after ${timeoutMs}ms | vars=${JSON.stringify(variables ?? {})}`);
-      throw new Error(`Upstream request timed out after ${timeoutMs / 1000}s`);
+    let res: Response;
+    try {
+      res = await fetch(GRAPHQL_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `JWT ${jwt}`,
+          "x-api-key": apiKey,
+        },
+        body: JSON.stringify({ query, variables }),
+        cache: revalidate === false ? "no-store" : undefined,
+        next: revalidate !== false ? { revalidate } : undefined,
+        signal: controller.signal,
+      });
+    } catch (err) {
+      clearTimeout(timeout);
+      if (err instanceof DOMException && err.name === "AbortError") {
+        emit("timeout", { errorClass: "AbortError" });
+        await recordUpstreamFailure(null);
+        console.error(`[ssi-api] ${operationName} timed out after ${timeoutMs}ms | vars=${JSON.stringify(variables ?? {})}`);
+        throw new Error(`Upstream request timed out after ${timeoutMs / 1000}s`);
+      }
+      emit("fetch-error", { errorClass: err instanceof Error ? err.name : "unknown" });
+      throw err;
     }
-    emit("fetch-error", { errorClass: err instanceof Error ? err.name : "unknown" });
-    throw err;
-  }
-  clearTimeout(timeout);
+    clearTimeout(timeout);
 
-  if (!response.ok) {
-    const retryAfter = response.headers.get("Retry-After");
-    let body = "";
-    try { body = (await response.text()).slice(0, 300); } catch { /* ignore */ }
+    if (!res.ok) {
+      const retryAfter = res.headers.get("Retry-After");
+      let body = "";
+      try { body = (await res.text()).slice(0, 300); } catch { /* ignore */ }
 
-    const parts = [
-      `[ssi-api] ${operationName} failed`,
-      `HTTP ${response.status} ${response.statusText}`,
-      `vars=${JSON.stringify(variables ?? {})}`,
-      retryAfter ? `Retry-After=${retryAfter}` : null,
-      body ? `body=${body}` : null,
-    ].filter(Boolean);
-    console.error(parts.join(" | "));
+      const parts = [
+        `[ssi-api] ${operationName} failed`,
+        `HTTP ${res.status} ${res.statusText}`,
+        `vars=${JSON.stringify(variables ?? {})}`,
+        retryAfter ? `Retry-After=${retryAfter}` : null,
+        body ? `body=${body}` : null,
+      ].filter(Boolean);
+      console.error(parts.join(" | "));
 
-    emit("http-error", { httpStatus: response.status, retryAfter });
+      emit("http-error", { httpStatus: res.status, retryAfter });
+      if (res.status === 429 || res.status >= 500) {
+        await recordUpstreamFailure(retryAfter);
+      }
 
-    const clientMsg = retryAfter
-      ? `Upstream HTTP ${response.status}: ${response.statusText} (Retry-After: ${retryAfter}s)`
-      : `Upstream HTTP ${response.status}: ${response.statusText}`;
-    throw new Error(clientMsg);
-  }
+      const clientMsg = retryAfter
+        ? `Upstream HTTP ${res.status}: ${res.statusText} (Retry-After: ${retryAfter}s)`
+        : `Upstream HTTP ${res.status}: ${res.statusText}`;
+      throw new Error(clientMsg);
+    }
 
-  const bodyText = await response.text();
+    return { response: res, bodyText: await res.text() };
+  });
   let result: GraphQLResponse<T>;
   try {
     result = JSON.parse(bodyText) as GraphQLResponse<T>;
@@ -210,6 +239,8 @@ async function executeQueryOnce<T>(
   }
 
   emit("ok", { httpStatus: response.status, bytes: bodyText.length });
+  // Half-open backoff reset — only clears state once a hold-off has elapsed.
+  await recordUpstreamSuccess();
   return result.data;
 }
 
@@ -339,32 +370,78 @@ export const MATCH_QUERY = `
   }
 `;
 
-// ─── Query: match-level "if-modified-since" probe ────────────────────────────
-// Tiny probe that returns only `IpscMatchNode.updated`, `status`, `results`.
-// Used by `refreshCachedMatchQuery` to skip the heavy MATCH_QUERY/SCORECARDS_QUERY
-// refetch when nothing has changed upstream.
+// ─── Query: match-level sync probe ───────────────────────────────────────────
+// One tiny query per refresh cycle drives BOTH cache keys (2026-08-15
+// SSI-load redesign):
+//  - event-level fields (`updated`, `status`, `results`,
+//    `is_live_scores_accessible`) gate the heavy MATCH_QUERY refetch
+//  - per-stage `{updated, scorecards_count, scoring_progress}` lets the
+//    scorecards refresh fetch ONLY stages that actually changed
+//    (lib/scorecards-archive.ts `refreshScorecardsIncremental`), replacing
+//    the old full per-stage fan-out every cycle.
 //
-// Response is ~50 bytes vs. tens-to-hundreds of KB for a full scorecard pull.
-export const MATCH_UPDATED_PROBE_QUERY = `
-  query MatchUpdatedProbe($ct: Int!, $id: String!) {
+// Response is a few hundred bytes vs. tens-to-hundreds of KB for a full pull.
+export const MATCH_SYNC_PROBE_QUERY = `
+  query MatchSyncProbe($ct: Int!, $id: String!) {
     event(content_type: $ct, id: $id) {
       status
       results
       ... on IpscMatchNode {
         updated
         is_live_scores_accessible
+        stages {
+          id
+          ... on IpscStageNode {
+            updated
+            scorecards_count
+            scoring_progress {
+              scored
+              total
+            }
+          }
+        }
       }
     }
   }
 `;
 
-interface MatchUpdatedProbeData {
+export interface ProbeStageData {
+  id: string;
+  updated?: string | null;
+  scorecards_count?: number | null;
+  scoring_progress?: { scored?: number | null; total?: number | null } | null;
+}
+
+export interface MatchSyncProbeData {
   event: {
     updated?: string | null;
     status?: string | null;
     results?: string | null;
     is_live_scores_accessible?: boolean | null;
+    stages?: ProbeStageData[] | null;
   } | null;
+}
+
+// One refresh cycle typically fires both the match-key and scorecards-key
+// refreshes for the same (ct, id) within seconds of each other. Memoize the
+// probe per isolate for a short window so a single upstream probe serves both.
+const PROBE_MEMO_TTL_MS = 5_000;
+const probeMemo = new Map<string, { at: number; promise: Promise<MatchSyncProbeData> }>();
+
+export async function runMatchSyncProbe(ct: number, id: string): Promise<MatchSyncProbeData> {
+  const key = `${ct}:${id}`;
+  const hit = probeMemo.get(key);
+  if (hit && Date.now() - hit.at < PROBE_MEMO_TTL_MS) return hit.promise;
+  const promise = executeQuery<MatchSyncProbeData>(MATCH_SYNC_PROBE_QUERY, { ct, id });
+  probeMemo.set(key, { at: Date.now(), promise });
+  // A failed probe must not poison the memo window for the next cycle.
+  promise.catch(() => probeMemo.delete(key));
+  return promise;
+}
+
+/** Test hook — clears the per-isolate probe memo. */
+export function clearMatchSyncProbeMemo(): void {
+  probeMemo.clear();
 }
 
 /** Sidecar Redis key storing the last-seen probe state for a match. Shared
@@ -392,21 +469,25 @@ function probesEqual(a: ProbeState, b: ProbeState): boolean {
 
 /** Kill switch: when set to "off", the probe-aware refresh degrades to the
  *  pre-#361 behaviour (always do a full refetch). Used to disable the probe
- *  if `IpscMatchNode.updated` turns out to under-report scorecard activity. */
-function isMatchProbeEnabled(): boolean {
+ *  if `IpscMatchNode.updated` turns out to under-report scorecard activity.
+ *  NOTE: "off" INCREASES upstream load — never use it as a load-shedding
+ *  lever; that's what SSI_UPSTREAM_PAUSED and the backoff gate are for. */
+export function isMatchProbeEnabled(): boolean {
   return process.env.MATCH_PROBE_ENABLED !== "off";
 }
 
 /** Belt-and-braces ceiling: even when the probe says "no change", never skip
- *  if the cached entry's *original* `cachedAt` is older than this many seconds.
- *  Caps the worst case if `match.updated` lies — at most we'd serve N-seconds
- *  stale data instead of indefinitely-stale. Default 5 minutes; override via
- *  `MATCH_PROBE_MAX_SKIP_AGE_SECONDS`. */
-function maxProbeSkipAgeSeconds(): number {
+ *  if the last *full* fetch is older than this many seconds. Caps the worst
+ *  case if the probe under-reports — at most we'd serve N-seconds stale data
+ *  instead of indefinitely-stale. Raised 300 -> 900 in the 2026-08-15
+ *  SSI-load redesign: the probe now carries per-stage scoring_progress, so
+ *  the expensive full refetch is only a drift safety net, not the scoring
+ *  freshness mechanism. Override via `MATCH_PROBE_MAX_SKIP_AGE_SECONDS`. */
+export function maxProbeSkipAgeSeconds(): number {
   const raw = process.env.MATCH_PROBE_MAX_SKIP_AGE_SECONDS;
-  if (raw == null) return 300;
+  if (raw == null) return 900;
   const n = parseInt(raw, 10);
-  return Number.isFinite(n) && n > 0 ? n : 300;
+  return Number.isFinite(n) && n > 0 ? n : 900;
 }
 
 /** Read the cached entry's original `cachedAt` (the timestamp of the last
@@ -437,7 +518,7 @@ export function forceRefreshKey(ct: number, id: string): string {
 }
 
 /** Read the force-refresh sentinel; failures default to false (best-effort). */
-async function isForceRefreshRequested(ct: number, id: string): Promise<boolean> {
+export async function isForceRefreshRequested(ct: number, id: string): Promise<boolean> {
   try {
     const raw = await cache.get(forceRefreshKey(ct, id));
     return raw != null;
@@ -447,7 +528,7 @@ async function isForceRefreshRequested(ct: number, id: string): Promise<boolean>
 }
 
 /** Clear the force-refresh sentinel after a successful full refetch. */
-async function clearForceRefresh(ct: number, id: string): Promise<void> {
+export async function clearForceRefresh(ct: number, id: string): Promise<void> {
   try {
     await cache.del(forceRefreshKey(ct, id));
   } catch { /* best-effort */ }
@@ -553,9 +634,9 @@ export async function refreshCachedMatchQuery<T>(
       // Sidecar read failed — proceed as first-seen.
     }
 
-    let probeData: MatchUpdatedProbeData;
+    let probeData: MatchSyncProbeData;
     try {
-      probeData = await executeQuery<MatchUpdatedProbeData>(MATCH_UPDATED_PROBE_QUERY, variables);
+      probeData = await runMatchSyncProbe(match.ct, match.id);
     } catch {
       // Probe itself failed — fall through to a full refetch via refreshCachedQuery.
       probeOutcome = "error";
@@ -600,8 +681,12 @@ export async function refreshCachedMatchQuery<T>(
       }
 
       // Within the safety window — extend the existing cache TTL and skip
-      // the heavy refetch.
+      // the heavy refetch. The probe carries fresh per-stage scoring
+      // progress even when `event.updated` is flat (it does not tick on
+      // scorecard saves), so merge that into the cached blob first —
+      // scoring_pct drives TTL/completion decisions for every consumer.
       probeOutcome = "skip";
+      await mergeProbeScoringIntoMatchEntry(cacheKey, ev.stages ?? null, ttlSeconds);
       if (ttlSeconds !== null) {
         try {
           await cache.expire(cacheKey, ttlSeconds);
@@ -644,6 +729,71 @@ export async function refreshCachedMatchQuery<T>(
     try {
       await cache.del(lockKey);
     } catch { /* lock will expire via TTL */ }
+  }
+}
+
+/**
+ * Merge fresh per-stage scoring_progress from the sync probe into a cached
+ * GetMatch entry, preserving `cachedAt` (the last-full-fetch timestamp that
+ * the max-skip-age ceiling counts against) and the schema version. Shape is
+ * unchanged — only scoring_progress values move — so no version bump.
+ * Best-effort: any failure leaves the cached entry as it was.
+ */
+async function mergeProbeScoringIntoMatchEntry(
+  cacheKey: string,
+  probeStages: ProbeStageData[] | null,
+  ttlSeconds: number | null,
+): Promise<void> {
+  if (!probeStages || probeStages.length === 0) return;
+  try {
+    const raw = await cache.get(cacheKey);
+    if (!raw) return;
+    const entry = JSON.parse(raw) as CacheEntry<{
+      event?: { stages?: Array<{ id: string; scoring_progress?: { scored?: number | null; total?: number | null } | null }> } | null;
+    }>;
+    if (entry.v !== CACHE_SCHEMA_VERSION) return;
+    const stages = entry.data?.event?.stages;
+    if (!stages) return;
+    const byId = new Map(probeStages.map((s) => [s.id, s.scoring_progress ?? null]));
+    let touched = false;
+    for (const stage of stages) {
+      const fresh = byId.get(stage.id);
+      if (fresh !== undefined) {
+        const prev = JSON.stringify(stage.scoring_progress ?? null);
+        if (prev !== JSON.stringify(fresh)) {
+          stage.scoring_progress = fresh;
+          touched = true;
+        }
+      }
+    }
+    if (!touched) return;
+    const payload = JSON.stringify(entry);
+    await cache.set(cacheKey, payload, ttlSeconds);
+    if (parseMatchCacheKey(cacheKey)) {
+      afterResponse(persistActiveMatchToD1(cacheKey, payload));
+    }
+  } catch { /* best-effort — stale scoring self-heals at the ceiling */ }
+}
+
+/**
+ * Write a match-cache entry (Redis + throttled D1 mirror) from data the
+ * caller fetched itself. Exposed for lib/scorecards-archive.ts, whose
+ * incremental refresh assembles snapshots outside `refreshCachedQuery`.
+ */
+export async function writeMatchCacheEntry<T>(
+  cacheKey: string,
+  data: T,
+  ttlSeconds: number | null,
+): Promise<void> {
+  const entry: CacheEntry<T> = {
+    data,
+    cachedAt: new Date().toISOString(),
+    v: CACHE_SCHEMA_VERSION,
+  };
+  const payload = JSON.stringify(entry);
+  await cache.set(cacheKey, payload, ttlSeconds);
+  if (parseMatchCacheKey(cacheKey)) {
+    afterResponse(persistActiveMatchToD1(cacheKey, payload));
   }
 }
 
@@ -1047,6 +1197,37 @@ export const STAGE_SCORECARDS_QUERY = `
         max_points
         scorecards {
           ${SCORECARD_NODE_FIELDS}
+        }
+      }
+    }
+  }
+`;
+
+// ─── Query: per-stage scorecards DELTA (flagged; SSI ask #3 2026-08-15) ──────
+// Same shape as STAGE_SCORECARDS_QUERY but filters server-side to cards whose
+// `updated` is after the watermark — the previous sync cycle's
+// `IpscStageNode.updated` from the probe sidecar. The extra
+// `... on IpscScoreCardNode { updated }` fragment is response-only (merged
+// then stripped before caching), so the cached shape — and therefore
+// CACHE_SCHEMA_VERSION — is unchanged.
+//
+// Enabled via SCORECARDS_DELTA_ENABLED=on, and only after verifying with SSI:
+// resolver cost, `updated_after` timezone/boundary semantics, and that
+// `updated` ticks on card edits (not just creates). Until then, changed
+// stages are refetched whole (still only the CHANGED stages).
+export const STAGE_SCORECARDS_DELTA_QUERY = `
+  query GetStageScorecardsDelta($ct: Int!, $id: String!, $updatedAfter: String!) {
+    stage(content_type: $ct, id: $id) {
+      id
+      number
+      name
+      ... on IpscStageNode {
+        max_points
+        scorecards(updated_after: $updatedAfter) {
+          ${SCORECARD_NODE_FIELDS}
+          ... on IpscScoreCardNode {
+            updated
+          }
         }
       }
     }

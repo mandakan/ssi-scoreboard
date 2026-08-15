@@ -3,7 +3,7 @@
 // in the match page server component.
 
 import { cache } from "react";
-import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY, refreshCachedMatchQuery } from "@/lib/graphql";
+import { cachedExecuteQuery, forceRefreshKey, gqlCacheKey, MATCH_QUERY, refreshCachedMatchQuery } from "@/lib/graphql";
 import cacheAdapter from "@/lib/cache-impl";
 import { computeMatchFreshness, computeMatchScoringPct, computeMatchSwrTtl, isMatchComplete } from "@/lib/match-ttl";
 import { extractDivision } from "@/lib/divisions";
@@ -11,6 +11,7 @@ import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
 import { afterResponse } from "@/lib/background-impl";
 import { persistToMatchStore } from "@/lib/match-data-store";
 import { isUpstreamDegraded } from "@/lib/upstream-status";
+import { isSsiUpstreamPaused } from "@/lib/upstream-pause";
 import { cacheTelemetry } from "@/lib/cache-telemetry";
 import { reportError } from "@/lib/error-telemetry";
 import { classifyVisibility } from "@/lib/visibility";
@@ -208,11 +209,29 @@ export async function fetchMatchData(
 
   try {
     if (ttl === null) {
-      const cached = await cacheAdapter.get(matchKey);
-      if (cached) {
-        await cacheAdapter.persist(matchKey);
-        // Persist completed match data to D1/SQLite for durable storage
-        afterResponse(persistToMatchStore(matchKey, cached));
+      if (!cachedAt) {
+        // Completion inputs came from a fresh upstream fetch — safe to pin.
+        const cached = await cacheAdapter.get(matchKey);
+        if (cached) {
+          await cacheAdapter.persist(matchKey);
+          // Persist completed match data to D1/SQLite for durable storage
+          afterResponse(persistToMatchStore(matchKey, cached));
+        }
+      } else {
+        // Completion inferred from CACHED data. With the probe-driven refresh
+        // that data can be up to the max-skip-age ceiling old — pinning it
+        // would freeze a stale scoring_progress permanently. Force one fresh
+        // full fetch; the next request pins from confirmed-fresh data.
+        await cacheAdapter.set(forceRefreshKey(ctNum, id), "1", 300);
+        afterResponse(
+          refreshCachedMatchQuery<RawMatchData>(
+            matchKey,
+            MATCH_QUERY,
+            { ct: ctNum, id },
+            3600, // holding TTL until the pin lands from fresh data
+            { ct: ctNum, id },
+          ),
+        );
       }
     } else if (!cachedAt) {
       await cacheAdapter.expire(matchKey, ttl);
@@ -225,7 +244,10 @@ export async function fetchMatchData(
   // triggers a single-flight background refresh. The current request returns
   // cached data immediately; the next poll (client polls every 30s while
   // matches are active) sees the refreshed entry.
-  const freshness = computeMatchFreshness(scoringPct, daysSince, ev.starts ?? null);
+  // `signals` must be passed here — omitting it made this path disagree with
+  // the compare route on freshness (SWR kept refreshing cp/results-published
+  // matches that the compare route had already stopped refreshing).
+  const freshness = computeMatchFreshness(scoringPct, daysSince, ev.starts ?? null, signals);
   if (cachedAt && ttl != null && freshness != null) {
     const ageSeconds = (Date.now() - new Date(cachedAt).getTime()) / 1000;
     if (ageSeconds > freshness) {
@@ -424,6 +446,9 @@ export async function fetchMatchData(
   // just succeeded for this caller.
   if (cachedAt && (await isUpstreamDegraded())) {
     response.cacheInfo.upstreamDegraded = true;
+  }
+  if (isSsiUpstreamPaused()) {
+    response.cacheInfo.upstreamPaused = true;
   }
 
   return { data: response, cachedAt, isComplete, msFetch };

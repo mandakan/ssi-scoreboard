@@ -74,12 +74,15 @@ MAX_BACKOFF_SECONDS = 30.0
 
 
 def read_oauth_token() -> str:
-    for path in WRANGLER_CONFIG_CANDIDATES:
-        if path.is_file():
-            for line in path.read_text().splitlines():
-                m = re.match(r'^oauth_token\s*=\s*"([^"]+)"', line)
-                if m:
-                    return m.group(1)
+    # Newest config wins: wrangler versions disagree on the config location,
+    # and a stale file at an earlier candidate path would shadow the token
+    # the user just refreshed via `wrangler login`.
+    existing = [p for p in WRANGLER_CONFIG_CANDIDATES if p.is_file()]
+    for path in sorted(existing, key=lambda p: p.stat().st_mtime, reverse=True):
+        for line in path.read_text().splitlines():
+            m = re.match(r'^oauth_token\s*=\s*"([^"]+)"', line)
+            if m:
+                return m.group(1)
     sys.exit("Could not find oauth_token. Run `wrangler login` first.")
 
 

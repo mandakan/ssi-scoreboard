@@ -242,7 +242,10 @@ export function computeMatchFreshness(
 ): number | null {
   if (isMatchComplete(scoringPct, daysSince, signals)) return null;
 
-  if (scoringPct > 0) return 30; // active scoring
+  // Live tier raised 30 -> 60 after the 2026-08-15 SSI incident: SSI asked
+  // for a controlled refresh interval, and the probe-driven incremental
+  // cycle makes each 60s tick cheap (one probe + only-changed-stage fetches).
+  if (scoringPct > 0) return 60; // active scoring
 
   if (dateStr) {
     const hoursUntil = (new Date(dateStr).getTime() - Date.now()) / 3_600_000;
@@ -250,9 +253,9 @@ export function computeMatchFreshness(
     if (hoursUntil > 2 * 24) return 60 * 60;
     if (hoursUntil > 0) return 30 * 60;
     if (hoursUntil > -12) return 5 * 60;
-    return 30; // fallback
+    return 60; // fallback
   }
-  return 30; // fallback (no date)
+  return 60; // fallback (no date)
 }
 
 export function computeMatchTtl(
@@ -272,13 +275,13 @@ export function computeMatchTtl(
  *
  * SWR needs `Redis TTL > freshness window` so the entry survives past the
  * freshness threshold and a background refresh can land before eviction.
- * `computeMatchTtl()` returns 30s for active matches (same as freshness),
- * which leaves no SWR room. The 90s floor here equals freshness (30s) plus
+ * `computeMatchTtl()` returns 60s for active matches (same as freshness),
+ * which leaves no SWR room. The 120s floor here equals freshness (60s) plus
  * the upstream GraphQL timeout (60s) — enough for the background refresh
  * to complete before the original entry evicts, without keeping idle
  * entries around longer than necessary.
  */
-const SWR_TTL_FLOOR = 90;
+const SWR_TTL_FLOOR = 120;
 
 export function computeMatchSwrTtl(
   scoringPct: number,
