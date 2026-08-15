@@ -20,6 +20,7 @@ import {
   recordUpstreamFailure,
   recordUpstreamSuccess,
 } from "@/lib/upstream-backoff";
+import { shouldProbeNow, recordProbeOutcome } from "@/lib/probe-cadence";
 
 /**
  * Check if the current request is an admin-authenticated request
@@ -626,6 +627,17 @@ export async function refreshCachedMatchQuery<T>(
   let prevUpstreamUpdatedIso: string | null = null;
 
   try {
+    // Adaptive idle cadence (#503): during an idle hold-off, skip the probe
+    // entirely — just keep the cache entry alive.
+    if (!(await shouldProbeNow(match.ct, match.id))) {
+      probeOutcome = "skip";
+      if (ttlSeconds !== null) {
+        try { await cache.expire(cacheKey, ttlSeconds); } catch { /* self-heals */ }
+        try { await cache.expire(sidecarKey, ttlSeconds); } catch { /* harmless */ }
+      }
+      return;
+    }
+
     let prevState: ProbeState | null = null;
     try {
       const raw = await cache.get(sidecarKey);
@@ -686,6 +698,7 @@ export async function refreshCachedMatchQuery<T>(
       // scorecard saves), so merge that into the cached blob first —
       // scoring_pct drives TTL/completion decisions for every consumer.
       probeOutcome = "skip";
+      await recordProbeOutcome(match.ct, match.id, false);
       await mergeProbeScoringIntoMatchEntry(cacheKey, ev.stages ?? null, ttlSeconds);
       if (ttlSeconds !== null) {
         try {
@@ -708,6 +721,7 @@ export async function refreshCachedMatchQuery<T>(
     // does not tick when scorecards land, so probeOutcome was never
     // "changed" for that keyType — and removing it keeps the contract clear.
     probeOutcome = prevState ? "changed" : "first-seen";
+    await recordProbeOutcome(match.ct, match.id, true);
 
     await fullRefresh<T>(cacheKey, query, variables, ttlSeconds);
     try {

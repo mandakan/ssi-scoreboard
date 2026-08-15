@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildSubWindows, MAX_SUB_WINDOWS, SUB_WINDOW_DAYS } from "@/lib/events-windows";
+import { buildSubWindows, windowRevalidateSeconds, MAX_SUB_WINDOWS, SUB_WINDOW_DAYS } from "@/lib/events-windows";
 
 describe("buildSubWindows", () => {
   it("splits a one-month range into 7-day windows", () => {
@@ -43,5 +43,16 @@ describe("buildSubWindows", () => {
   it("returns no windows for an empty or inverted range", () => {
     expect(buildSubWindows("2026-08-10", "2026-08-10", {}).windows).toHaveLength(0);
     expect(buildSubWindows("2026-08-10", "2026-08-01", {}).windows).toHaveLength(0);
+  });
+});
+
+describe("windowRevalidateSeconds", () => {
+  it("caches fully-past windows for 24h", () => {
+    expect(windowRevalidateSeconds("2026-08-01", "2026-08-15")).toBe(86_400);
+  });
+
+  it("keeps 1h cache for windows ending today or later", () => {
+    expect(windowRevalidateSeconds("2026-08-15", "2026-08-15")).toBe(3_600);
+    expect(windowRevalidateSeconds("2026-09-01", "2026-08-15")).toBe(3_600);
   });
 });
