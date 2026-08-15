@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { executeQuery, EVENTS_QUERY } from "@/lib/graphql";
-import { buildSubWindows } from "@/lib/events-windows";
+import { buildSubWindows, windowRevalidateSeconds } from "@/lib/events-windows";
 import { allSettledWithLimit } from "@/lib/concurrency";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { usageTelemetry, bucketCount } from "@/lib/usage-telemetry";
@@ -202,9 +202,16 @@ export async function GET(req: Request) {
           windows_used: windows.length,
         }));
       }
+      const todayYmd = new Date().toISOString().slice(0, 10);
       const settled = await allSettledWithLimit(
         windows.map((vars) => () =>
-          executeQuery<RawEventsData>(EVENTS_QUERY, vars, 3600, { timeoutMs: 8_000 }),
+          executeQuery<RawEventsData>(
+            EVENTS_QUERY,
+            vars,
+            // Fully-past windows are immutable — cache 24h instead of 1h (#504).
+            windowRevalidateSeconds(vars.starts_before, todayYmd),
+            { timeoutMs: 8_000 },
+          ),
         ),
         SUB_WINDOW_CONCURRENCY,
       );

@@ -38,6 +38,7 @@ import {
   type ProbeStageData,
 } from "@/lib/graphql";
 import { markUpstreamDegraded } from "@/lib/upstream-status";
+import { shouldProbeNow, recordProbeOutcome } from "@/lib/probe-cadence";
 import type {
   RawScorecardsData,
   RawStage,
@@ -238,6 +239,17 @@ export async function refreshScorecardsIncremental(
 
     const forced = await isForceRefreshRequested(ct, matchId);
 
+    // Adaptive idle cadence (#503): during a hold-off window from consecutive
+    // quiet cycles, skip even the probe — just keep the cache alive.
+    if (!forced && !(await shouldProbeNow(ct, matchId))) {
+      outcome = "skip";
+      if (ttlSeconds !== null) {
+        try { await cache.expire(cacheKey, ttlSeconds); } catch { /* self-heals */ }
+        try { await cache.expire(sidecarKey, sidecarTtl(ttlSeconds)); } catch { /* harmless */ }
+      }
+      return;
+    }
+
     let probeStages: ProbeStageData[] | null = null;
     if (!forced) {
       try {
@@ -288,6 +300,7 @@ export async function refreshScorecardsIncremental(
 
     if (changed.length === 0 && removedIds.length === 0) {
       // Nothing moved — extend TTLs only; no rewrite (avoids cachedAt/D1 churn).
+      await recordProbeOutcome(ct, matchId, false);
       outcome = "skip";
       if (ttlSeconds !== null) {
         try { await cache.expire(cacheKey, ttlSeconds); } catch { /* self-heals */ }
@@ -318,6 +331,7 @@ export async function refreshScorecardsIncremental(
       lastFullSyncAt: sidecar.lastFullSyncAt,
     }, ttlSeconds);
 
+    await recordProbeOutcome(ct, matchId, true);
     if (newStageSeen) {
       // The match overview's stage list doesn't know this stage yet — force
       // its next refresh cycle to do a clean full refetch.

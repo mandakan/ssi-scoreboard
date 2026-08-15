@@ -46,6 +46,18 @@ export const SUB_WINDOW_DAYS = 7;
 // multiple requests, which the per-IP/per-token rate limits then bound.
 export const MAX_SUB_WINDOWS = 10;
 
+/** Next fetch-cache revalidate (seconds) for one sub-window. A window whose
+ *  `starts_before` is entirely in the past cannot gain new events — cache it
+ *  24h instead of 1h (#504). Compare on YYYY-MM-DD strings. Edge case: a
+ *  match added retroactively to a past week appears up to a day late in
+ *  browse; text search is unaffected. */
+export const PAST_WINDOW_REVALIDATE_SECONDS = 86_400;
+export const UPCOMING_WINDOW_REVALIDATE_SECONDS = 3_600;
+
+export function windowRevalidateSeconds(startsBefore: string, todayYmd: string): number {
+  return startsBefore < todayYmd ? PAST_WINDOW_REVALIDATE_SECONDS : UPCOMING_WINDOW_REVALIDATE_SECONDS;
+}
+
 export interface SubWindowsResult {
   windows: Array<Record<string, string>>;
   /** True when the requested range exceeded the cap and was truncated. */
