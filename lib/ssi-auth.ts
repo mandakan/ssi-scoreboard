@@ -23,6 +23,7 @@
 //    can see "invalid_credentials" / "account locked" / etc.
 
 import cache from "@/lib/cache-impl";
+import { assertSsiUpstreamAllowed } from "@/lib/upstream-pause";
 
 const GRAPHQL_ENDPOINT = "https://shootnscoreit.com/graphql/";
 const CACHE_KEY = "ssi:jwt:v1";
@@ -168,6 +169,8 @@ async function loginJwt(): Promise<CachedAuth> {
   if (!apiKey) {
     throw new Error("SSI_API_KEY not configured");
   }
+  // Emergency kill switch — belt-and-braces; executeQueryOnce already guards.
+  assertSsiUpstreamAllowed();
 
   const body = JSON.stringify({
     query:
@@ -207,6 +210,8 @@ async function loginJwt(): Promise<CachedAuth> {
 async function refreshJwt(refreshToken: string): Promise<CachedAuth> {
   const apiKey = process.env.SSI_API_KEY;
   if (!apiKey) throw new Error("SSI_API_KEY not configured");
+  // Emergency kill switch — belt-and-braces; executeQueryOnce already guards.
+  assertSsiUpstreamAllowed();
 
   const body = JSON.stringify({
     query:

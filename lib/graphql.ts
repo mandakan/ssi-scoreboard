@@ -13,6 +13,7 @@ import { cacheTelemetry } from "@/lib/cache-telemetry";
 import { reportError } from "@/lib/error-telemetry";
 import { isPublicMatchData } from "@/lib/visibility";
 import { getJwt, JWT_EXPIRED_ERROR_PATTERNS } from "@/lib/ssi-auth";
+import { assertSsiUpstreamAllowed } from "@/lib/upstream-pause";
 
 /**
  * Check if the current request is an admin-authenticated request
@@ -98,6 +99,10 @@ async function executeQueryOnce<T>(
   revalidate: number | false,
   options: ExecuteQueryOptions,
 ): Promise<T> {
+  // Emergency kill switch — throws before any outbound traffic (including the
+  // JWT fetch below). See lib/upstream-pause.ts.
+  assertSsiUpstreamAllowed();
+
   const apiKey = process.env.SSI_API_KEY;
   if (!apiKey) throw new Error("SSI_API_KEY is not configured");
 
