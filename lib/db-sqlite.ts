@@ -415,6 +415,20 @@ export function createSqliteDatabase(
         );
     },
 
+    async searchMatches(query, limit = 20) {
+      const capped = Math.min(limit, 100);
+      const q = query.trim();
+      if (!q) return [];
+      const d = getDb();
+      const escaped = q.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+      const rows = d.prepare(
+        `SELECT ct, match_id FROM matches
+         WHERE (name LIKE ? ESCAPE '\\' OR venue LIKE ? ESCAPE '\\')
+         ORDER BY date DESC LIMIT ?`,
+      ).all(`%${escaped}%`, `%${escaped}%`, capped) as Array<{ ct: number; match_id: string }>;
+      return rows.map((r) => ({ ct: r.ct, matchId: r.match_id }));
+    },
+
     async getMatchesByRefs(matchRefs) {
       if (matchRefs.length === 0) return new Map<string, MatchRecord>();
       const d = getDb();

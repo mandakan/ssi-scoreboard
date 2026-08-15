@@ -146,6 +146,11 @@ export interface AppDatabase {
    */
   getMatchesByRefs(matchRefs: string[]): Promise<Map<string, MatchRecord>>;
 
+  /** Case-insensitive substring search over match name/venue. Returns
+   *  (ct, matchId) refs newest-first — hydration from the match cache and
+   *  visibility filtering happen in lib/local-event-search.ts. */
+  searchMatches(query: string, limit?: number): Promise<Array<{ ct: number; matchId: string }>>;
+
   // ── Shooter suppressions (GDPR) ──────────────────────────────────────
 
   /** Check whether a shooter ID is suppressed (GDPR erasure). */
