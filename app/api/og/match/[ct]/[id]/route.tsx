@@ -1,8 +1,8 @@
 import { ImageResponse } from "next/og";
 import { fetchOgMatchData, type OgMatchData } from "@/lib/og-data";
-import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY } from "@/lib/graphql";
+import { readCachedScorecardsData } from "@/lib/og-read";
+import type { RawScorecardsData } from "@/lib/scorecard-data";
 import { parseRawScorecards } from "@/lib/scorecard-data";
-import { getMatchScorecards, type StageRef } from "@/lib/scorecards-archive";
 import {
   computeGroupRankings,
   computeConsistencyStats,
@@ -197,24 +197,10 @@ async function fetchOgCompareStatsImpl(
     // outer route already warmed it). Then run the per-stage archival fan-out
     // (#410). Caller already gates this whole function on isComplete, so the
     // archive's permanent-cache contract is correct.
-    const matchKey = gqlCacheKey("GetMatch", { ct: ctNum, id });
-    const { data: matchData } = await cachedExecuteQuery<{
-      event: { stages?: { id: string }[] } | null;
-    }>(matchKey, MATCH_QUERY, { ct: ctNum, id }, 30);
-    if (!matchData.event) return null;
-
-    const stageRefs: StageRef[] = (matchData.event.stages ?? []).map((s) => ({
-      ct: 24,
-      id: s.id,
-    }));
-    const { data } = await getMatchScorecards({
-      ct: ctNum,
-      matchId: id,
-      stages: stageRefs,
-      ttlSeconds: null,
-    });
-
-    if (!data.event) return null;
+    // Read-only (#506): the OG path must never fetch upstream or write
+    // permanent cache entries — Redis -> D1 -> null (generic card).
+    const data = await readCachedScorecardsData<RawScorecardsData>(ctNum, id);
+    if (!data?.event) return null;
 
     // Parse full scorecard data using the shared parser (same as compare route)
     const rawScorecards = parseRawScorecards(data);

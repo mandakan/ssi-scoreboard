@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { executeQuery, EVENTS_QUERY } from "@/lib/graphql";
 import { buildSubWindows, windowRevalidateSeconds } from "@/lib/events-windows";
+import { searchLocalEvents } from "@/lib/local-event-search";
 import { allSettledWithLimit } from "@/lib/concurrency";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { usageTelemetry, bucketCount } from "@/lib/usage-telemetry";
@@ -149,8 +150,20 @@ export async function GET(req: Request) {
   const firearms = searchParams.get("firearms") ?? null;
 
   let rawEvents: RawEvent[];
+  let localSearchHit = false;
   try {
     if (q) {
+      // Local-first (#505): resolve the search from the D1 matches table +
+      // cached match blobs when possible — zero upstream. Empty result
+      // (unknown match, non-public, or un-hydratable) falls through to the
+      // upstream search unchanged.
+      const local = await searchLocalEvents(q, 60);
+      if (local.length > 0) {
+        localSearchHit = true;
+        rawEvents = local;
+      }
+    }
+    if (!localSearchHit && q) {
       // Text search: the API's search backend returns good results in one call.
       // 15s cap — search is interactive; no point making the user wait the
       // full 60s default if SSI is having a slow moment.
@@ -334,6 +347,7 @@ export async function GET(req: Request) {
   console.log(JSON.stringify({
     route: "events",
     has_query: q.length > 0,
+    local_search: localSearchHit,
     live_mode: liveMode,
     country: country ?? null,
     min_level: minLevel,

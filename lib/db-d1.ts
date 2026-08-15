@@ -451,6 +451,23 @@ const db: AppDatabase = {
       .run();
   },
 
+  async searchMatches(query, limit = 20) {
+    const capped = Math.min(limit, 100);
+    const q = query.trim();
+    if (!q) return [];
+    const db = readDb();
+    const escaped = q.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+    const result = await db
+      .prepare(
+        `SELECT ct, match_id FROM matches
+         WHERE (name LIKE ? ESCAPE '\\' OR venue LIKE ? ESCAPE '\\')
+         ORDER BY date DESC LIMIT ?`,
+      )
+      .bind(`%${escaped}%`, `%${escaped}%`, capped)
+      .all<{ ct: number; match_id: string }>();
+    return result.results.map((r) => ({ ct: r.ct, matchId: r.match_id }));
+  },
+
   async getMatchesByRefs(matchRefs) {
     if (matchRefs.length === 0) return new Map<string, MatchRecord>();
     const db = readDb();
