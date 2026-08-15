@@ -60,7 +60,7 @@ type CacheTelemetryEvent =
       /** Which downstream query the probe gates — lets us weight skip savings
        *  by payload size (scorecards is much heavier than match metadata). */
       keyType: "match" | "scorecards" | "other";
-      outcome: "skip" | "changed" | "first-seen" | "error" | "forced-refresh";
+      outcome: "skip" | "changed" | "first-seen" | "error" | "forced-refresh" | "incremental";
       probeMs: number;
       /** Age (seconds) of the cached entry's *original* fetch at decision time.
        *  Lets post-match analysis see how long we were trusting the probe before

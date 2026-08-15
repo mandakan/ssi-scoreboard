@@ -44,10 +44,11 @@ import type {
 
 import {
   MATCH_QUERY,
-  MATCH_UPDATED_PROBE_QUERY,
+  MATCH_SYNC_PROBE_QUERY,
   EVENTS_QUERY,
   UPCOMING_STATUS_QUERY,
   STAGE_SCORECARDS_QUERY,
+  STAGE_SCORECARDS_DELTA_QUERY,
 } from "../lib/graphql";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -77,10 +78,11 @@ export interface ValidationError {
 
 const QUERIES: { name: string; src: string }[] = [
   { name: "MATCH_QUERY", src: MATCH_QUERY },
-  { name: "MATCH_UPDATED_PROBE_QUERY", src: MATCH_UPDATED_PROBE_QUERY },
+  { name: "MATCH_SYNC_PROBE_QUERY", src: MATCH_SYNC_PROBE_QUERY },
   { name: "EVENTS_QUERY", src: EVENTS_QUERY },
   { name: "UPCOMING_STATUS_QUERY", src: UPCOMING_STATUS_QUERY },
   { name: "STAGE_SCORECARDS_QUERY", src: STAGE_SCORECARDS_QUERY },
+  { name: "STAGE_SCORECARDS_DELTA_QUERY", src: STAGE_SCORECARDS_DELTA_QUERY },
 ];
 
 export function loadSnapshot(): Snapshot {

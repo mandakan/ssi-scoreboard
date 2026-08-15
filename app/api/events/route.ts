@@ -55,8 +55,9 @@ const ALLOWED_LEVELS: Record<string, Set<string> | null> = {
 
 // Cap on concurrent upstream GetEvents fetches for the browse fan-out. Each
 // one is an expensive worldwide search on SSI's side; see the 2026-08-15
-// incident notes in lib/events-windows.ts.
-const SUB_WINDOW_CONCURRENCY = 4;
+// incident notes in lib/events-windows.ts. 2 matches SSI's required 1-2
+// concurrent request bound (also enforced globally in lib/upstream-limiter.ts).
+const SUB_WINDOW_CONCURRENCY = 2;
 
 /**
  * Filter the event list down to matches that are clearly happening right now.

@@ -43,7 +43,8 @@ export type UpstreamOutcome =
 export type DegradedSite =
   | "events-route-total"
   | "refresh-cached-query"
-  | "refresh-cached-match-query";
+  | "refresh-cached-match-query"
+  | "refresh-scorecards-incremental";
 
 export type UpstreamEvent =
   | {

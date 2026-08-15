@@ -145,11 +145,17 @@ export async function GET(req: Request) {
   // Upgrade match cache entry TTL based on match state
   try {
     if (dataTtl === null) {
-      const raw = await cache.get(matchKey);
-      if (raw) {
-        await cache.persist(matchKey); // remove TTL → permanent
-        // Persist completed match data to D1/SQLite for durable storage
-        afterResponse(persistToMatchStore(matchKey, raw));
+      // Pin only when the completion inputs came from a fresh upstream fetch
+      // (matchCachedAt === null). Cached inputs can be ceiling-stale under
+      // the probe-driven refresh; fetchMatchData's guard forces the fresh
+      // confirm, so here we simply skip pinning on cached inputs.
+      if (!matchCachedAt) {
+        const raw = await cache.get(matchKey);
+        if (raw) {
+          await cache.persist(matchKey); // remove TTL → permanent
+          // Persist completed match data to D1/SQLite for durable storage
+          afterResponse(persistToMatchStore(matchKey, raw));
+        }
       }
     } else if (!matchCachedAt) {
       // Cache miss: correct the initial 30s write TTL

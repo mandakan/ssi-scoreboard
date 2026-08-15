@@ -15,10 +15,24 @@ vi.mock("@/lib/graphql", async () => {
   };
 });
 
+const cacheMock = vi.hoisted(() => ({
+  get: vi.fn(),
+  set: vi.fn(),
+  setIfAbsent: vi.fn(),
+  del: vi.fn(),
+  expire: vi.fn(),
+  persist: vi.fn(),
+  scanCachedMatchKeys: vi.fn(),
+}));
+vi.mock("@/lib/cache-impl", () => ({ default: cacheMock }));
+
 import {
   fetchWholeMatchArchive,
+  coldFetchSingleFlight,
+  computeScorecardsLockTtl,
   type StageRef,
 } from "@/lib/scorecards-archive";
+import { CACHE_SCHEMA_VERSION } from "@/lib/constants";
 import type { RawScCard } from "@/lib/scorecard-data";
 
 beforeEach(() => {
@@ -146,7 +160,7 @@ describe("fetchWholeMatchArchive", () => {
     expect(out.event!.stages!.map((s) => s.id)).toEqual(["100", "102"]);
   });
 
-  it("respects the concurrency cap (≤ 4 in flight at a time)", async () => {
+  it("respects the concurrency cap (≤ 2 in flight at a time)", async () => {
     let inFlight = 0;
     let peakInFlight = 0;
     executeQueryMock.mockImplementation(async (_q, vars) => {
@@ -159,14 +173,14 @@ describe("fetchWholeMatchArchive", () => {
       return makeStageResponse(vars.id as string, parseInt(vars.id as string, 10), [{}]);
     });
 
-    // 10 stages → if concurrency cap works, peak in-flight should be ≤ 4.
+    // 10 stages → if concurrency cap works, peak in-flight should be ≤ 2.
     const refs: StageRef[] = Array.from({ length: 10 }, (_, i) => ({
       ct: 24,
       id: String(i + 1),
     }));
     await fetchWholeMatchArchive(refs);
 
-    expect(peakInFlight).toBeLessThanOrEqual(4);
+    expect(peakInFlight).toBeLessThanOrEqual(2);
     expect(executeQueryMock).toHaveBeenCalledTimes(10);
   });
 
@@ -180,5 +194,78 @@ describe("fetchWholeMatchArchive", () => {
         { ct: 24, id: "101" },
       ]),
     ).rejects.toThrow("Upstream 500");
+  });
+});
+
+describe("computeScorecardsLockTtl", () => {
+  it("floors at 120s for small matches", () => {
+    expect(computeScorecardsLockTtl(1)).toBe(120);
+    expect(computeScorecardsLockTtl(10)).toBe(120);
+  });
+
+  it("scales with stage count for big matches (concurrency 2, 15s per stage, 30s margin)", () => {
+    // 18 stages at concurrency 2 = 9 sequential rounds x 15s + 30s = 165s
+    expect(computeScorecardsLockTtl(18)).toBe(165);
+    expect(computeScorecardsLockTtl(30)).toBe(15 * 15 + 30);
+  });
+});
+
+describe("coldFetchSingleFlight", () => {
+  const KEY = 'gql:GetMatchScorecards:{"ct":22,"id":"999"}';
+
+  beforeEach(() => {
+    Object.values(cacheMock).forEach((fn) => fn.mockReset());
+  });
+
+  it("runs the fetch and releases the lock when the lock is acquired", async () => {
+    cacheMock.setIfAbsent.mockResolvedValue(true);
+    const fetch = vi.fn().mockResolvedValue({ event: { stages: [] } });
+    const out = await coldFetchSingleFlight(KEY, 120, fetch);
+    expect(out).toEqual({ event: { stages: [] } });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(cacheMock.setIfAbsent).toHaveBeenCalledWith(`inflight:${KEY}`, "1", 120);
+    expect(cacheMock.del).toHaveBeenCalledWith(`inflight:${KEY}`);
+  });
+
+  it("releases the lock even when the fetch rejects", async () => {
+    cacheMock.setIfAbsent.mockResolvedValue(true);
+    const fetch = vi.fn().mockRejectedValue(new Error("boom"));
+    await expect(coldFetchSingleFlight(KEY, 120, fetch)).rejects.toThrow("boom");
+    expect(cacheMock.del).toHaveBeenCalledWith(`inflight:${KEY}`);
+  });
+
+  it("waits for the other flight's cache write instead of fetching when the lock is held", async () => {
+    cacheMock.setIfAbsent.mockResolvedValue(false);
+    const entry = {
+      data: { event: { stages: [{ id: "1", number: 1, name: "S1", max_points: 60, scorecards: [] }] } },
+      cachedAt: "2026-08-15T10:00:00Z",
+      v: CACHE_SCHEMA_VERSION,
+    };
+    // First poll: nothing yet; second poll: the other flight's entry landed.
+    cacheMock.get.mockResolvedValueOnce(null).mockResolvedValue(JSON.stringify(entry));
+    const fetch = vi.fn();
+    const out = await coldFetchSingleFlight(KEY, 120, fetch, { pollIntervalMs: 1, maxWaitMs: 500 });
+    expect(out).toEqual(entry.data);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("falls back to fetching when the lock is held but nothing lands within the wait budget", async () => {
+    cacheMock.setIfAbsent.mockResolvedValue(false);
+    cacheMock.get.mockResolvedValue(null);
+    const fetch = vi.fn().mockResolvedValue({ event: { stages: [] } });
+    const out = await coldFetchSingleFlight(KEY, 120, fetch, { pollIntervalMs: 1, maxWaitMs: 10 });
+    expect(out).toEqual({ event: { stages: [] } });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores cache entries with a stale schema version while waiting", async () => {
+    cacheMock.setIfAbsent.mockResolvedValue(false);
+    cacheMock.get.mockResolvedValue(
+      JSON.stringify({ data: { event: { stages: [] } }, cachedAt: "x", v: CACHE_SCHEMA_VERSION - 1 }),
+    );
+    const fetch = vi.fn().mockResolvedValue({ event: { stages: [{ id: "9" }] } });
+    const out = await coldFetchSingleFlight(KEY, 120, fetch, { pollIntervalMs: 1, maxWaitMs: 10 });
+    expect(out).toEqual({ event: { stages: [{ id: "9" }] } });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

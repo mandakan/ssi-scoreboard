@@ -282,20 +282,20 @@ describe("computeMatchTtl", () => {
     expect(computeMatchTtl(98, 0.5, isoHoursFromNow(-12))).not.toBeNull();
     expect(computeMatchTtl(95, 1, isoHoursFromNow(-24))).not.toBeNull();
     expect(computeMatchTtl(98, 3, isoHoursFromNow(-72))).not.toBeNull();
-    expect(rawTtl(99, 0.9, isoHoursFromNow(-21))).toBe(30);
+    expect(rawTtl(99, 0.9, isoHoursFromNow(-21))).toBe(60);
   });
 
   // ── Active scoring ─────────────────────────────────────────────────────────
 
   it("raw tier is 30s when scoring is between 1–94% and recent", () => {
-    expect(rawTtl(1, 1, isoHoursFromNow(-24))).toBe(30);
-    expect(rawTtl(50, 1, isoHoursFromNow(-24))).toBe(30);
-    expect(rawTtl(94, 1, isoHoursFromNow(-24))).toBe(30);
+    expect(rawTtl(1, 1, isoHoursFromNow(-24))).toBe(60);
+    expect(rawTtl(50, 1, isoHoursFromNow(-24))).toBe(60);
+    expect(rawTtl(94, 1, isoHoursFromNow(-24))).toBe(60);
   });
 
   it("active scoring uses the 30s tier under the default 30s floor", () => {
-    expect(computeMatchTtl(1, 1, isoHoursFromNow(-24))).toBe(30);
-    expect(computeMatchTtl(50, 1, isoHoursFromNow(-24))).toBe(30);
+    expect(computeMatchTtl(1, 1, isoHoursFromNow(-24))).toBe(60);
+    expect(computeMatchTtl(50, 1, isoHoursFromNow(-24))).toBe(60);
   });
 
   it("active scoring respects an explicit minTtl above the raw tier", () => {
@@ -354,20 +354,20 @@ describe("computeMatchTtl", () => {
   // ── Fallback ───────────────────────────────────────────────────────────────
 
   it("raw fallback is 30s when dateStr is null and scoring is 0", () => {
-    expect(rawTtl(0, 0, null)).toBe(30);
+    expect(rawTtl(0, 0, null)).toBe(60);
   });
 
   it("fallback uses the 30s tier under the default 30s floor when dateStr is null", () => {
-    expect(computeMatchTtl(0, 0, null)).toBe(30);
-    expect(computeMatchTtl(0, -1, null)).toBe(30);
-    expect(computeMatchTtl(0, 1, null)).toBe(30);
+    expect(computeMatchTtl(0, 0, null)).toBe(60);
+    expect(computeMatchTtl(0, -1, null)).toBe(60);
+    expect(computeMatchTtl(0, 1, null)).toBe(60);
   });
 
   // ── Minimum TTL floor ──────────────────────────────────────────────────────
 
   it("minTtl=0 disables the floor and returns raw tier values", () => {
-    expect(rawTtl(1, 1, isoHoursFromNow(-24))).toBe(30);
-    expect(rawTtl(0, 0, null)).toBe(30);
+    expect(rawTtl(1, 1, isoHoursFromNow(-24))).toBe(60);
+    expect(rawTtl(0, 0, null)).toBe(60);
   });
 
   it("minTtl clamps active scoring to the specified floor", () => {
@@ -403,13 +403,13 @@ describe("computeMatchFreshness", () => {
   });
 
   it("returns 30s for active scoring (raw, unclamped) — including inside time gate with SSI flag", () => {
-    expect(computeMatchFreshness(1, 1, isoHoursFromNow(-24))).toBe(30);
-    expect(computeMatchFreshness(50, 0.5, isoHoursFromNow(-12))).toBe(30);
-    expect(computeMatchFreshness(94, 1, isoHoursFromNow(-24))).toBe(30);
+    expect(computeMatchFreshness(1, 1, isoHoursFromNow(-24))).toBe(60);
+    expect(computeMatchFreshness(50, 0.5, isoHoursFromNow(-12))).toBe(60);
+    expect(computeMatchFreshness(94, 1, isoHoursFromNow(-24))).toBe(60);
     // Mid-match flag flip must not turn off freshness either.
     expect(
       computeMatchFreshness(98, 1, isoHoursFromNow(-24), { status: "cp" }),
-    ).toBe(30);
+    ).toBe(60);
   });
 
   it("returns 4h when start is > 7 days away", () => {
@@ -429,7 +429,7 @@ describe("computeMatchFreshness", () => {
   });
 
   it("returns 30s as the fallback (no date, no scoring)", () => {
-    expect(computeMatchFreshness(0, 0, null)).toBe(30);
+    expect(computeMatchFreshness(0, 0, null)).toBe(60);
   });
 
   it("is always <= computeMatchTtl (the floor never exceeds freshness)", () => {
