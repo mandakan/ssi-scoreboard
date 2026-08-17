@@ -885,17 +885,17 @@
       "args": []
     },
     {
+      "name": "allow_spotter_shooter_teams",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
       "name": "allow_team_self_management",
       "type": "Boolean!",
       "args": []
     },
     {
       "name": "allow_teams",
-      "type": "Boolean!",
-      "args": []
-    },
-    {
-      "name": "allows_spotter_shooter_teams",
       "type": "Boolean!",
       "args": []
     },
@@ -2015,17 +2015,17 @@
       "args": []
     },
     {
+      "name": "allow_spotter_shooter_teams",
+      "type": "Boolean!",
+      "args": []
+    },
+    {
       "name": "allow_team_self_management",
       "type": "Boolean!",
       "args": []
     },
     {
       "name": "allow_teams",
-      "type": "Boolean!",
-      "args": []
-    },
-    {
-      "name": "allows_spotter_shooter_teams",
       "type": "Boolean!",
       "args": []
     },
@@ -4665,7 +4665,7 @@
       "args": []
     },
     {
-      "name": "is_alread_logged",
+      "name": "is_already_logged",
       "type": "Boolean!",
       "args": []
     },
