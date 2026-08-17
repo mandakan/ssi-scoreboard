@@ -14,9 +14,9 @@ dependencies = [
   "matplotlib>=3.10",
   "rich>=14.0",
   "fastapi>=0.135",
-  "uvicorn>=0.41",
+  "uvicorn>=0.52.3",
   "apscheduler>=3.11,<4",
-  "pyarrow>=23.0.1",
+  "pyarrow>=25.0.1",
 ]
 
 [project.scripts]
@@ -25,13 +25,13 @@ rating = "src.cli:app"
 [project.optional-dependencies]
 dev = [
   "pytest>=9.0",
-  "ruff>=0.15",
+  "ruff>=0.16.3",
   "mypy>=1.19",
-  "jupyterlab>=4.5",
+  "jupyterlab>=4.6.3",
   "pandas-stubs>=2.2",
 ]
 storage = [
-  "boto3>=1.38",
+  "boto3>=1.43.71",
 ]
 
 [tool.ruff]
