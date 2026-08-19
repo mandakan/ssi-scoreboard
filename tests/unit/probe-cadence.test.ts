@@ -64,24 +64,24 @@ describe("recordProbeOutcome", () => {
     expect(written.notBeforeIso).toBeNull();
   });
 
-  it("the 5th quiet cycle starts a ~120s hold-off", async () => {
+  it("the 5th quiet cycle starts a 120-150s (jittered) hold-off", async () => {
     cacheMock.get.mockResolvedValue(state(4, 60_000, null));
     await recordProbeOutcome(22, "26547", false);
     const written = JSON.parse(cacheMock.set.mock.calls[0][1] as string);
     expect(written.streak).toBe(5);
     const holdMs = new Date(written.notBeforeIso).getTime() - Date.now();
-    expect(holdMs).toBeGreaterThan(100_000);
-    expect(holdMs).toBeLessThan(130_000);
+    expect(holdMs).toBeGreaterThan(115_000);
+    expect(holdMs).toBeLessThan(155_000); // 120s + up to 25% jitter
   });
 
-  it("the 8th quiet cycle deepens the hold-off to ~300s", async () => {
+  it("the 8th quiet cycle deepens the hold-off to 300-375s (jittered)", async () => {
     cacheMock.get.mockResolvedValue(state(7, 200_000, null));
     await recordProbeOutcome(22, "26547", false);
     const written = JSON.parse(cacheMock.set.mock.calls[0][1] as string);
     expect(written.streak).toBe(8);
     const holdMs = new Date(written.notBeforeIso).getTime() - Date.now();
-    expect(holdMs).toBeGreaterThan(280_000);
-    expect(holdMs).toBeLessThan(320_000);
+    expect(holdMs).toBeGreaterThan(295_000);
+    expect(holdMs).toBeLessThan(380_000); // 300s + up to 25% jitter
   });
 
   it("does not double-count when both cache keys report within one cycle", async () => {

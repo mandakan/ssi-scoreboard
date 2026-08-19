@@ -50,18 +50,22 @@ const LOCK_KEY = `inflight:${SNAPSHOT_KEY}`;
 
 interface ProbeStage {
   id: string;
-  updated?: string;
+  latest_scorecard_update?: string;
   scorecards_count?: number;
   scoring_progress?: { scored: number; total: number };
 }
 
+// The `updated` option feeds the stage's latest_scorecard_update marker
+// (probe) / scUpdated (sidecar) — the change signal since the 2026-08-18
+// SSI marker adoption.
 function stageState(id: string, over: Partial<{ updated: string; count: number; scored: number; total: number }> = {}) {
-  return { updated: "2026-08-15T08:00:00Z", count: 5, scored: 5, total: 30, ...over };
+  const { updated = "2026-08-15T08:00:00Z", count = 5, scored = 5, total = 30 } = over;
+  return { scUpdated: updated, count, scored, total };
 }
 
 function probeStage(id: string, over: Partial<{ updated: string; count: number; scored: number; total: number }> = {}): ProbeStage {
   const s = stageState(id, over);
-  return { id, updated: s.updated, scorecards_count: s.count, scoring_progress: { scored: s.scored, total: s.total } };
+  return { id, latest_scorecard_update: s.scUpdated, scorecards_count: s.count, scoring_progress: { scored: s.scored, total: s.total } };
 }
 
 function snapshotStage(id: string, number: number) {
@@ -286,8 +290,9 @@ describe("refreshScorecardsIncremental", () => {
       .map((c) => JSON.parse(String(c[1]?.body)) as { query: string; variables: Record<string, unknown> })
       .filter((b) => b.query.includes("GetStageScorecardsDelta"));
     expect(deltaCalls).toHaveLength(1);
-    // Watermark = the sidecar's previous IpscStageNode.updated for stage 101.
-    expect(deltaCalls[0].variables.updatedAfter).toBe("2026-08-15T08:00:00Z");
+    // Watermark = the sidecar's previous latest_scorecard_update for stage
+    // 101, minus the 3s overlap window, as UTC-Z.
+    expect(deltaCalls[0].variables.updatedAfter).toBe("2026-08-15T07:59:57.000Z");
     const written = writtenSnapshot();
     const s101 = written!.data.event.stages.find((s) => s.id === "101")!;
     // Merged: old competitor 1 kept, delta competitor 7 added, no `updated` leaked.

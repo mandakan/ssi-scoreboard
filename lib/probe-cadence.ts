@@ -11,6 +11,7 @@
 // refreshes report outcomes each cycle; a 30s bump guard counts them as one.
 
 import cache from "@/lib/cache-impl";
+import { withJitter } from "@/lib/jitter";
 
 const IDLE_STREAK = 5;            // ~5 quiet minutes at the 60s base cadence
 const IDLE_DELAY_SECONDS = 120;
@@ -68,7 +69,8 @@ export async function recordProbeOutcome(ct: number, id: string, changed: boolea
     const state: IdleState = {
       streak,
       lastBumpAtIso: new Date().toISOString(),
-      notBeforeIso: delaySeconds ? new Date(Date.now() + delaySeconds * 1000).toISOString() : null,
+      // 20-30% jitter (SSI ask 2026-08-18) so instances don't re-probe in sync.
+      notBeforeIso: delaySeconds ? new Date(Date.now() + withJitter(delaySeconds) * 1000).toISOString() : null,
     };
     await cache.set(key, JSON.stringify(state), STATE_TTL_SECONDS);
   } catch { /* best-effort */ }

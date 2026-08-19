@@ -1452,6 +1452,11 @@
       "args": []
     },
     {
+      "name": "latest_competitor_update",
+      "type": "DateTime",
+      "args": []
+    },
+    {
       "name": "lng",
       "type": "Decimal",
       "args": []
@@ -2760,6 +2765,11 @@
       "args": []
     },
     {
+      "name": "latest_competitor_update",
+      "type": "DateTime",
+      "args": []
+    },
+    {
       "name": "level",
       "type": "String!",
       "args": []
@@ -3610,6 +3620,11 @@
     {
       "name": "is_third_party_scoring_kongsberg",
       "type": "Boolean!",
+      "args": []
+    },
+    {
+      "name": "latest_scorecard_update",
+      "type": "DateTime",
       "args": []
     },
     {
@@ -4717,6 +4732,11 @@
     {
       "name": "last_name",
       "type": "String!",
+      "args": []
+    },
+    {
+      "name": "latest_scorecard_update",
+      "type": "DateTime",
       "args": []
     },
     {
