@@ -37,6 +37,7 @@ import {
   STAGE_SCORECARDS_DELTA_QUERY,
   type ProbeStageData,
 } from "@/lib/graphql";
+import { withJitter } from "@/lib/jitter";
 import { markUpstreamDegraded } from "@/lib/upstream-status";
 import { shouldProbeNow, recordProbeOutcome } from "@/lib/probe-cadence";
 import type {
@@ -129,7 +130,7 @@ export async function getMatchScorecards(
   ) {
     const ageSeconds =
       (Date.now() - new Date(result.cachedAt).getTime()) / 1000;
-    if (ageSeconds > freshnessSeconds) {
+    if (ageSeconds > withJitter(freshnessSeconds)) {
       afterResponse(
         refreshScorecardsIncremental({ ct, matchId, stages, ttlSeconds }),
       );
@@ -147,7 +148,12 @@ export function stageProbeSidecarKey(ct: number, matchId: string): string {
 }
 
 interface StageProbeState {
-  updated: string | null;
+  /** `IpscStageNode.latest_scorecard_update` — max `updated` across the
+   *  stage's cards. THE change signal per SSI (2026-08-18); `Stage.updated`
+   *  tracks stage-info edits and must not be used for results. Also the
+   *  delta watermark. Sidecars written before the rename lack this key and
+   *  diff as changed once — self-healing. */
+  scUpdated?: string | null;
   count: number | null;
   scored: number | null;
   total: number | null;
@@ -173,7 +179,7 @@ export interface RefreshScorecardsIncrementalArgs {
 
 function toStageProbeState(s: ProbeStageData): StageProbeState {
   return {
-    updated: s.updated ?? null,
+    scUpdated: s.latest_scorecard_update ?? null,
     count: s.scorecards_count ?? null,
     scored: s.scoring_progress?.scored ?? null,
     total: s.scoring_progress?.total ?? null,
@@ -181,7 +187,12 @@ function toStageProbeState(s: ProbeStageData): StageProbeState {
 }
 
 function stageStatesEqual(a: StageProbeState, b: StageProbeState): boolean {
-  return a.updated === b.updated && a.count === b.count && a.scored === b.scored && a.total === b.total;
+  return (
+    (a.scUpdated ?? null) === (b.scUpdated ?? null) &&
+    a.count === b.count &&
+    a.scored === b.scored &&
+    a.total === b.total
+  );
 }
 
 interface SnapshotEntry {
@@ -368,8 +379,9 @@ export async function refreshScorecardsIncremental(
 }
 
 /** Flag: fetch changed stages via `scorecards(updated_after:)` instead of a
- *  whole-stage refetch. Ships OFF until SSI confirms resolver cost and
- *  `updated` semantics (see STAGE_SCORECARDS_DELTA_QUERY notes). */
+ *  whole-stage refetch. SSI confirmed semantics 2026-08-18 (new cards get
+ *  created==updated, so the watermark catches creates AND edits); verified
+ *  live 2026-08-19. Flip on in staging first, then prod. */
 function isScorecardsDeltaEnabled(): boolean {
   return process.env.SCORECARDS_DELTA_ENABLED === "on";
 }
@@ -377,14 +389,23 @@ function isScorecardsDeltaEnabled(): boolean {
 /** Raw delta card: normal RawScCard plus the response-only `updated` field. */
 type DeltaCard = RawScCard & { updated?: string | null };
 
+/** Watermark overlap (SSI recommends 2-5s): re-fetch a small window before
+ *  the last-seen marker so a card that landed the same instant as the probe
+ *  read is never missed. The by-competitor merge is idempotent, so overlap
+ *  duplicates are harmless. */
+const DELTA_OVERLAP_MS = 3_000;
+
 /**
  * Delta-fetch the changed stages. Watermark per stage = the PREVIOUS cycle's
- * `IpscStageNode.updated` from the sidecar. Cards are merged by competitor id
- * into the snapshot's existing stage (one card per competitor per stage);
- * the `updated` field is stripped before the merge so the cached shape stays
- * unchanged. Falls back to a whole-stage refetch when: the stage or its
- * watermark is unknown, or the merged card count disagrees with the probe's
- * `scorecards_count` (deletions / semantics drift).
+ * `latest_scorecard_update` from the sidecar, minus DELTA_OVERLAP_MS, sent
+ * as UTC with Z suffix (verified against the live API 2026-08-19). Cards are
+ * merged by competitor id into the snapshot's existing stage (one card per
+ * competitor per stage — idempotent upsert; a reshoot replacing a card gets
+ * picked up because the new card's `updated` is fresh); the `updated` field
+ * is stripped before the merge so the cached shape stays unchanged. Falls
+ * back to a whole-stage refetch when: the stage or its watermark is unknown,
+ * or the merged card count disagrees with the probe's `scorecards_count`
+ * (deletions / semantics drift).
  */
 async function fetchChangedStagesDelta(
   changed: StageRef[],
@@ -396,7 +417,7 @@ async function fetchChangedStagesDelta(
   return (
     await mapWithConcurrency(changed, MAX_CONCURRENCY, async (ref): Promise<RawStage | null> => {
       const prevStage = snapshotById.get(ref.id);
-      const watermark = sidecar.stages[ref.id]?.updated;
+      const watermark = sidecar.stages[ref.id]?.scUpdated;
       const fullStageFetch = async (): Promise<RawStage | null> => {
         const r = await executeQuery<SingleStageResponse>(
           STAGE_SCORECARDS_QUERY,
@@ -416,9 +437,11 @@ async function fetchChangedStagesDelta(
 
       if (!prevStage || !watermark) return fullStageFetch();
 
+      const watermarkMs = Date.parse(watermark);
+      if (!Number.isFinite(watermarkMs)) return fullStageFetch();
       const r = await executeQuery<SingleStageResponse>(
         STAGE_SCORECARDS_DELTA_QUERY,
-        { ct: ref.ct, id: ref.id, updatedAfter: watermark },
+        { ct: ref.ct, id: ref.id, updatedAfter: new Date(watermarkMs - DELTA_OVERLAP_MS).toISOString() },
         false,
         { timeoutMs: STAGE_FETCH_TIMEOUT_MS },
       );

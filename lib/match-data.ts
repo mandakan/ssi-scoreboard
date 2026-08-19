@@ -9,6 +9,7 @@ import { computeMatchFreshness, computeMatchScoringPct, computeMatchSwrTtl, isMa
 import { extractDivision } from "@/lib/divisions";
 import { decodeShooterId, indexMatchShooters } from "@/lib/shooter-index";
 import { afterResponse } from "@/lib/background-impl";
+import { withJitter } from "@/lib/jitter";
 import { persistToMatchStore } from "@/lib/match-data-store";
 import { isUpstreamDegraded } from "@/lib/upstream-status";
 import { isSsiUpstreamPaused } from "@/lib/upstream-pause";
@@ -250,7 +251,7 @@ export async function fetchMatchData(
   const freshness = computeMatchFreshness(scoringPct, daysSince, ev.starts ?? null, signals);
   if (cachedAt && ttl != null && freshness != null) {
     const ageSeconds = (Date.now() - new Date(cachedAt).getTime()) / 1000;
-    if (ageSeconds > freshness) {
+    if (ageSeconds > withJitter(freshness)) {
       afterResponse(
         refreshCachedMatchQuery<RawMatchData>(
           matchKey,

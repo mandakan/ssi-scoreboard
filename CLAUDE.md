@@ -177,9 +177,14 @@ the SQLite/D1 adapters via `CREATE TABLE IF NOT EXISTS`.
 ## Match cache refresh contract (CRITICAL)
 
 Redesigned 2026-08-15 after our refresh volume contributed to an SSI production
-outage (see `docs/postmortem-2026-08-15-ssi-outage.md`). One `MatchSyncProbe`
-per cycle (60s live) drives both cache keys; it returns event-level state PLUS
-per-stage `{updated, scorecards_count, scoring_progress}`.
+outage (see `docs/postmortem-2026-08-15-ssi-outage.md`); updated 2026-08-19 to
+adopt SSI's change-marker fields (#521). One `MatchSyncProbe` per cycle (60s
+live, all SWR intervals get +0-25% jitter) drives both cache keys; it returns
+event-level state (incl. `latest_competitor_update` + `competitors_count`,
+which catch competitor changes/deletions that don't tick `event.updated`) PLUS
+per-stage `{latest_scorecard_update, scorecards_count, scoring_progress}`.
+NEVER use `Stage.updated` as a results-change signal — it tracks stage-info
+edits only (explicit SSI instruction 2026-08-18).
 
 - **`GetMatch` (match overview)** — probe-gated as before (#361). Probe-skip
   extends TTL AND merges the probe's fresh `scoring_progress` into the cached
@@ -198,15 +203,18 @@ per-stage `{updated, scorecards_count, scoring_progress}`.
 - **Permanent pinning** only happens when completion inputs came from a FRESH
   upstream fetch (`cachedAt === null`); cached inputs trigger a forced fresh
   confirm first (prevents pinning ceiling-stale scoring_progress).
-- **Throttling**: per-isolate semaphore of `UPSTREAM_MAX_CONCURRENCY` (default
-  2) around every upstream call (`lib/upstream-limiter.ts`), Redis-shared
-  exponential backoff on 429/5xx/timeout (`lib/upstream-backoff.ts`, half-open
-  reset, honors Retry-After), and `SSI_UPSTREAM_PAUSED` as the global kill
-  switch (`lib/upstream-pause.ts`).
+- **Throttling**: `UPSTREAM_MAX_CONCURRENCY` (default 2) sizes both a
+  per-isolate semaphore AND best-effort Redis slot leases capping the global
+  total across instances (`lib/upstream-limiter.ts`, fail-open on Redis
+  trouble), Redis-shared exponential backoff on 429/5xx/timeout
+  (`lib/upstream-backoff.ts`, half-open reset, honors Retry-After), and
+  `SSI_UPSTREAM_PAUSED` as the global kill switch (`lib/upstream-pause.ts`).
 - **`SCORECARDS_DELTA_ENABLED=on`** switches changed-stage refetch to
-  `scorecards(updated_after: <sidecar stage.updated>)` with merge-by-competitor
-  and a scorecards_count sanity fallback. OFF until SSI confirms resolver cost
-  and `updated` semantics.
+  `scorecards(updated_after:)` watermarked by the sidecar's previous
+  `latest_scorecard_update` minus a 3s overlap (UTC-Z), with
+  merge-by-competitor (idempotent upsert) and a scorecards_count sanity
+  fallback. SSI confirmed semantics 2026-08-18; verified live 2026-08-19.
+  Flip on in staging first.
 
 Scorecards are read via the per-stage `STAGE_SCORECARDS_QUERY` only. The legacy
 whole-match `event { stages { scorecards } }` query and its incremental-delta

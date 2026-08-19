@@ -7,6 +7,7 @@ import { cachedExecuteQuery, gqlCacheKey, MATCH_QUERY, refreshCachedMatchQuery }
 import { getMatchScorecards } from "@/lib/scorecards-archive";
 import cache from "@/lib/cache-impl";
 import { computeMatchFreshness, computeMatchSwrTtl, isMatchComplete } from "@/lib/match-ttl";
+import { withJitter } from "@/lib/jitter";
 import { persistToMatchStore } from "@/lib/match-data-store";
 import { computeMatchScoringPct } from "@/lib/match-data";
 import { isUpstreamDegraded } from "@/lib/upstream-status";
@@ -171,7 +172,7 @@ export async function GET(req: Request) {
   const matchFreshness = computeMatchFreshness(scoringPct, daysSince, matchData.event?.starts ?? null, signals);
   if (matchCachedAt && dataTtl != null && matchFreshness != null) {
     const age = (Date.now() - new Date(matchCachedAt).getTime()) / 1000;
-    if (age > matchFreshness) {
+    if (age > withJitter(matchFreshness)) {
       afterResponse(
         refreshCachedMatchQuery<RawMatchData>(
           matchKey,

@@ -1,11 +1,24 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
+
+const cacheMock = vi.hoisted(() => ({
+  setIfAbsent: vi.fn<(key: string, val: string, ttl: number) => Promise<boolean>>(),
+  del: vi.fn<(key: string) => Promise<void>>(),
+}));
+vi.mock("@/lib/cache-impl", () => ({ default: cacheMock }));
+
 import { withUpstreamSlot, upstreamLimiterStats } from "@/lib/upstream-limiter";
 
 const ORIGINAL = process.env.UPSTREAM_MAX_CONCURRENCY;
 
+beforeEach(() => {
+  cacheMock.setIfAbsent.mockReset().mockResolvedValue(true);
+  cacheMock.del.mockReset().mockResolvedValue(undefined);
+});
+
 afterEach(() => {
   if (ORIGINAL === undefined) delete process.env.UPSTREAM_MAX_CONCURRENCY;
   else process.env.UPSTREAM_MAX_CONCURRENCY = ORIGINAL;
+  delete process.env.UPSTREAM_GLOBAL_WAIT_MS;
 });
 
 function deferred<T>() {
@@ -84,5 +97,41 @@ describe("withUpstreamSlot", () => {
       });
     await Promise.all([task(), task(), task()]);
     expect(peak).toBe(1);
+  });
+});
+
+describe("global slot leases (cross-isolate cap)", () => {
+  it("claims a Redis slot and releases it after the call", async () => {
+    await withUpstreamSlot(async () => "ok");
+    expect(cacheMock.setIfAbsent).toHaveBeenCalledWith("upstream:slot:0", "1", 90);
+    expect(cacheMock.del).toHaveBeenCalledWith("upstream:slot:0");
+  });
+
+  it("falls through to the next slot key when the first is taken", async () => {
+    cacheMock.setIfAbsent.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    await withUpstreamSlot(async () => "ok");
+    expect(cacheMock.setIfAbsent).toHaveBeenCalledWith("upstream:slot:1", "1", 90);
+    expect(cacheMock.del).toHaveBeenCalledWith("upstream:slot:1");
+  });
+
+  it("fail-open: runs anyway when no slot frees within the wait budget", async () => {
+    process.env.UPSTREAM_GLOBAL_WAIT_MS = "0";
+    cacheMock.setIfAbsent.mockResolvedValue(false);
+    await expect(withUpstreamSlot(async () => 7)).resolves.toBe(7);
+    expect(cacheMock.del).not.toHaveBeenCalled();
+  });
+
+  it("fail-open: runs anyway when Redis errors", async () => {
+    cacheMock.setIfAbsent.mockRejectedValue(new Error("redis down"));
+    await expect(withUpstreamSlot(async () => 7)).resolves.toBe(7);
+    expect(upstreamLimiterStats().inFlight).toBe(0);
+  });
+
+  it("releases the slot even when the wrapped call throws", async () => {
+    await withUpstreamSlot(async () => {
+      throw new Error("boom");
+    }).catch(() => {});
+    expect(cacheMock.del).toHaveBeenCalledWith("upstream:slot:0");
+    expect(upstreamLimiterStats().inFlight).toBe(0);
   });
 });

@@ -375,9 +375,10 @@ export const MATCH_QUERY = `
 // One tiny query per refresh cycle drives BOTH cache keys (2026-08-15
 // SSI-load redesign):
 //  - event-level fields (`updated`, `status`, `results`,
-//    `is_live_scores_accessible`) gate the heavy MATCH_QUERY refetch
-//  - per-stage `{updated, scorecards_count, scoring_progress}` lets the
-//    scorecards refresh fetch ONLY stages that actually changed
+//    `is_live_scores_accessible`, `latest_competitor_update`,
+//    `competitors_count`) gate the heavy MATCH_QUERY refetch
+//  - per-stage `{latest_scorecard_update, scorecards_count, scoring_progress}`
+//    lets the scorecards refresh fetch ONLY stages that actually changed
 //    (lib/scorecards-archive.ts `refreshScorecardsIncremental`), replacing
 //    the old full per-stage fan-out every cycle.
 //
@@ -390,10 +391,12 @@ export const MATCH_SYNC_PROBE_QUERY = `
       ... on IpscMatchNode {
         updated
         is_live_scores_accessible
+        latest_competitor_update
+        competitors_count
         stages {
           id
           ... on IpscStageNode {
-            updated
+            latest_scorecard_update
             scorecards_count
             scoring_progress {
               scored
@@ -408,7 +411,10 @@ export const MATCH_SYNC_PROBE_QUERY = `
 
 export interface ProbeStageData {
   id: string;
-  updated?: string | null;
+  /** Max `updated` across the stage's scorecards (SSI change marker,
+   *  2026-08-18). `IpscStageNode.updated` tracks stage-info edits only and
+   *  must NOT be used as a results-change signal (SSI instruction). */
+  latest_scorecard_update?: string | null;
   scorecards_count?: number | null;
   scoring_progress?: { scored?: number | null; total?: number | null } | null;
 }
@@ -419,6 +425,8 @@ export interface MatchSyncProbeData {
     status?: string | null;
     results?: string | null;
     is_live_scores_accessible?: boolean | null;
+    latest_competitor_update?: string | null;
+    competitors_count?: number | null;
     stages?: ProbeStageData[] | null;
   } | null;
 }
@@ -457,6 +465,12 @@ interface ProbeState {
   status: string | null;
   results: string | null;
   isLiveScoresAccessible: boolean | null;
+  /** Competitor change markers (SSI 2026-08-18): catch registrations/edits
+   *  that don't tick `event.updated`; a count DROP detects deletions (the
+   *  max-date marker can't move backwards). Optional so sidecars written
+   *  before this field existed compare as null, not undefined. */
+  latestCompetitorUpdate?: string | null;
+  competitorsCount?: number | null;
 }
 
 function probesEqual(a: ProbeState, b: ProbeState): boolean {
@@ -464,7 +478,9 @@ function probesEqual(a: ProbeState, b: ProbeState): boolean {
     a.updated === b.updated &&
     a.status === b.status &&
     a.results === b.results &&
-    a.isLiveScoresAccessible === b.isLiveScoresAccessible
+    a.isLiveScoresAccessible === b.isLiveScoresAccessible &&
+    (a.latestCompetitorUpdate ?? null) === (b.latestCompetitorUpdate ?? null) &&
+    (a.competitorsCount ?? null) === (b.competitorsCount ?? null)
   );
 }
 
@@ -669,6 +685,8 @@ export async function refreshCachedMatchQuery<T>(
       status: ev.status ?? null,
       results: ev.results ?? null,
       isLiveScoresAccessible: ev.is_live_scores_accessible ?? null,
+      latestCompetitorUpdate: ev.latest_competitor_update ?? null,
+      competitorsCount: ev.competitors_count ?? null,
     };
     upstreamUpdatedIso = currentState.updated;
     prevUpstreamUpdatedIso = prevState?.updated ?? null;
@@ -1220,15 +1238,16 @@ export const STAGE_SCORECARDS_QUERY = `
 // ─── Query: per-stage scorecards DELTA (flagged; SSI ask #3 2026-08-15) ──────
 // Same shape as STAGE_SCORECARDS_QUERY but filters server-side to cards whose
 // `updated` is after the watermark — the previous sync cycle's
-// `IpscStageNode.updated` from the probe sidecar. The extra
-// `... on IpscScoreCardNode { updated }` fragment is response-only (merged
-// then stripped before caching), so the cached shape — and therefore
-// CACHE_SCHEMA_VERSION — is unchanged.
+// `IpscStageNode.latest_scorecard_update` from the probe sidecar, minus a 3s
+// overlap, sent as UTC-Z. The extra `... on IpscScoreCardNode { updated }`
+// fragment is response-only (merged then stripped before caching), so the
+// cached shape — and therefore CACHE_SCHEMA_VERSION — is unchanged.
 //
-// Enabled via SCORECARDS_DELTA_ENABLED=on, and only after verifying with SSI:
-// resolver cost, `updated_after` timezone/boundary semantics, and that
-// `updated` ticks on card edits (not just creates). Until then, changed
-// stages are refetched whole (still only the CHANGED stages).
+// Enabled via SCORECARDS_DELTA_ENABLED=on. SSI confirmed semantics
+// 2026-08-18 (new cards get created==updated at creation, so the watermark
+// catches both creates and edits); UTC-Z parsing and filtering verified
+// against the live API 2026-08-19. While off, changed stages are refetched
+// whole (still only the CHANGED stages).
 export const STAGE_SCORECARDS_DELTA_QUERY = `
   query GetStageScorecardsDelta($ct: Int!, $id: String!, $updatedAfter: String!) {
     stage(content_type: $ct, id: $id) {
