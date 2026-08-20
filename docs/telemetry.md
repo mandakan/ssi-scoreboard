@@ -33,10 +33,23 @@ that the MCP toolset reaches must add `maybeTagAsMcp(req)` to keep this property
 ## Sinks (registered automatically per deploy target)
 
 - `console.info` -- always on. Picked up by Cloudflare Workers Logs and Docker stdout.
-- R2 NDJSON -- Cloudflare only, when the `TELEMETRY` binding is present (see `lib/telemetry-sinks-cf.ts`).
-  Per-isolate batching, flushed via `ctx.waitUntil()` to one object per request burst at
-  `cache-telemetry/YYYY-MM-DD/HHmmss-NNNN.ndjson`. Lifecycle rule on the bucket auto-deletes
-  after 30 days. Sampling controlled by `TELEMETRY_SAMPLE`.
+- R2 Parquet via Pipelines -- Cloudflare only, when the `TELEMETRY_PIPELINE` binding is present
+  (see `lib/telemetry-sinks-cf.ts`). Per-isolate batching, flushed via `ctx.waitUntil()`. The
+  Pipelines stream coalesces across isolates and writes one Parquet batch every 300s (or 5MB) to
+  `pipelines/cache-telemetry/YYYY-MM-DD/{uuid}.parquet`. Lifecycle rule on the bucket auto-deletes
+  after 30 days. Sampling controlled per domain by `TELEMETRY_SAMPLE_<DOMAIN>`.
+
+  Two things to know when reading this data:
+  - **The stream has no schema**, so each record is wrapped as `{value: <event json>}` -- and the
+    reader sees that wrapper twice. Extract fields with `value->>'$.value.<key>'`.
+  - **Batches land up to ~5 minutes late**, and in practice a query run immediately after
+    generating traffic can miss ~25 minutes of it. Use a wide `--since` when verifying something
+    you just did, or you will conclude the pipeline is broken when it is merely behind.
+
+  A failed `send()` re-queues its batch for the next flush rather than dropping it (#524): the
+  binding belongs to the request context that produced it, and background work can be executing
+  under a different one, which Workers rejects. Dropping would bias upstream counts downward --
+  the wrong direction for numbers we report to SSI.
 
 ## Adding a new domain
 
