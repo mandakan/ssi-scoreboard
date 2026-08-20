@@ -18,6 +18,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { isPinnableFromCache } from "@/lib/match-data";
 import {
   computeMatchTtl,
   computeMatchSwrTtl,
@@ -296,5 +297,49 @@ describe("safety: re-pinning is idempotent", () => {
       expect(pins(98, 4)).toBe(true);
       expect(pins(0, 0, { status: "cs" })).toBe(true);
     }
+  });
+});
+
+// ─── Pin-apply convergence (#526) ────────────────────────────────────────────
+// isMatchComplete decides *whether* a match is done; these cover what the
+// apply branch then does with a CACHED completed match. The original code
+// forced a confirming refetch on every such view and never converged, because
+// a cache read always reports a `cachedAt` — measured against prod
+// 2026-08-20: 126 forced refreshes and 95 upstream GetMatch calls from 127
+// views of 4 completed matches.
+
+describe("pin-apply: cached completed matches must converge", () => {
+  const CEILING = 900;
+  const now = Date.parse("2026-08-20T12:00:00Z");
+  const iso = (secondsAgo: number) => new Date(now - secondsAgo * 1000).toISOString();
+
+  it("pins when the last full fetch is inside the probe ceiling", () => {
+    expect(isPinnableFromCache(iso(60), 1, CEILING, now)).toBe(true);
+    expect(isPinnableFromCache(iso(CEILING - 1), 1, CEILING, now)).toBe(true);
+  });
+
+  it("does NOT pin ceiling-stale data for a recently finished match", () => {
+    // This is the case the confirming refetch exists for: scoring_progress
+    // could still be stale, so pinning would freeze it permanently.
+    expect(isPinnableFromCache(iso(CEILING + 1), 1, CEILING, now)).toBe(false);
+    expect(isPinnableFromCache(iso(6 * 3600), 2, CEILING, now)).toBe(false);
+  });
+
+  it("pins settled matches regardless of cache age", () => {
+    // Past the settle window nothing can change, so an old cachedAt is not a
+    // reason to spend an upstream fetch. This is what stops the loop for the
+    // historical matches that make up most views.
+    expect(isPinnableFromCache(iso(30 * 24 * 3600), 8, CEILING, now)).toBe(true);
+    expect(isPinnableFromCache(iso(365 * 24 * 3600), 200, CEILING, now)).toBe(true);
+  });
+
+  it("holds the 7-day settle boundary", () => {
+    expect(isPinnableFromCache(iso(6 * 3600), 7, CEILING, now)).toBe(false);
+    expect(isPinnableFromCache(iso(6 * 3600), 7.001, CEILING, now)).toBe(true);
+  });
+
+  it("treats an unparseable or future cachedAt as not pinnable", () => {
+    expect(isPinnableFromCache("not-a-date", 1, CEILING, now)).toBe(false);
+    expect(isPinnableFromCache(iso(-60), 1, CEILING, now)).toBe(false);
   });
 });
