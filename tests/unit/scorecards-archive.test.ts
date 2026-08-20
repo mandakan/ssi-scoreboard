@@ -30,6 +30,7 @@ import {
   fetchWholeMatchArchive,
   coldFetchSingleFlight,
   computeScorecardsLockTtl,
+  computeColdWaitMs,
   type StageRef,
 } from "@/lib/scorecards-archive";
 import { CACHE_SCHEMA_VERSION } from "@/lib/constants";
@@ -267,5 +268,23 @@ describe("coldFetchSingleFlight", () => {
     const out = await coldFetchSingleFlight(KEY, 120, fetch, { pollIntervalMs: 1, maxWaitMs: 10 });
     expect(out).toEqual({ event: { stages: [{ id: "9" }] } });
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("computeColdWaitMs", () => {
+  it("never drops below the legacy 10s floor", () => {
+    expect(computeColdWaitMs(0)).toBe(10_000);
+    expect(computeColdWaitMs(1)).toBe(10_000);
+  });
+
+  it("scales with the fan-out a waiter is waiting on", () => {
+    // 14 stages: the case that produced ~2x stage fetches at the fixed 10s
+    // budget (measured against prod 2026-08-20).
+    expect(computeColdWaitMs(14)).toBeGreaterThan(10_000);
+    expect(computeColdWaitMs(18)).toBeGreaterThan(computeColdWaitMs(6));
+  });
+
+  it("caps so a dead winner cannot strand a request", () => {
+    expect(computeColdWaitMs(200)).toBe(45_000);
   });
 });
