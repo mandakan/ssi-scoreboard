@@ -28,6 +28,23 @@
 // buffer. The flush sends the whole buffer in one .send() call so a
 // burst becomes a single ingest call to the Pipelines stream.
 //
+// ── Why the flush re-queues on failure (#524) ────────────────────────
+// The binding is an I/O object owned by the request whose context
+// produced it. Background work (SWR refreshes via afterResponse, and
+// especially promises that missed ctx.waitUntil and run orphaned) can
+// emit telemetry while a *different* request is the active context, and
+// Workers then rejects the send with "Cannot perform I/O on behalf of a
+// different request". Measured against prod 2026-08-20: ~2 failures per
+// 42 events during a concurrent burst, each silently dropping the whole
+// batch.
+//
+// Two mitigations, both here: resolve the binding inside the flush (so
+// it comes from the context actually executing the send, not the one
+// that scheduled it), and put events BACK in the buffer when a send
+// fails so the next flush retries them. Losing telemetry biases our
+// upstream numbers downward, which is the wrong direction when those
+// numbers are what we report to SSI.
+//
 // ── Sampling ─────────────────────────────────────────────────────────
 // Per-domain sample rate, controlled by env vars TELEMETRY_SAMPLE_<DOMAIN>
 // (a number between 0 and 1, e.g. 0.1 = keep 10%). Defaults below favour
@@ -79,19 +96,32 @@ function getDomainRate(domain: string): number {
   return DEFAULT_RATES[domain] ?? FALLBACK_RATE;
 }
 
+/** Cap on the per-isolate buffer. Only reached when sends keep failing;
+ *  trims oldest-first so a persistent outage costs the stalest events
+ *  rather than unbounded isolate memory. */
+const MAX_BUFFERED_EVENTS = 500;
+
 const buffer: EnrichedEvent[] = [];
 let flushScheduled = false;
 
 const pipelineSink: TelemetrySink = (ev) => {
   if (!keepEvent(ev)) return;
-  const pipeline = getPipelineBinding();
-  if (!pipeline) return;
+  // Presence check only — the binding used for the send is resolved inside
+  // the flush, from whichever context actually runs it.
+  if (!getPipelineBinding()) return;
 
   buffer.push(ev);
+  trimBuffer();
   if (flushScheduled) return;
   flushScheduled = true;
-  afterResponse(flushBuffer(pipeline));
+  afterResponse(flushBuffer());
 };
+
+function trimBuffer(): void {
+  if (buffer.length > MAX_BUFFERED_EVENTS) {
+    buffer.splice(0, buffer.length - MAX_BUFFERED_EVENTS);
+  }
+}
 
 function getPipelineBinding(): PipelineBinding | null {
   try {
@@ -102,17 +132,34 @@ function getPipelineBinding(): PipelineBinding | null {
   }
 }
 
-async function flushBuffer(pipeline: PipelineBinding): Promise<void> {
+async function flushBuffer(): Promise<void> {
   const events = buffer.splice(0);
   flushScheduled = false;
   if (events.length === 0) return;
+
+  // Resolve here, not at schedule time: the send must use the binding of
+  // the context that is executing it (#524).
+  const pipeline = getPipelineBinding();
+  if (!pipeline) {
+    requeue(events);
+    return;
+  }
+
   const records = events.map((ev) => ({ value: ev }));
   try {
     await pipeline.send(records);
   } catch (err) {
-    // One warning per flush — telemetry must never break the request path.
-    console.warn("[telemetry] Pipelines send failed:", err);
+    // Re-queue rather than drop; the next flush runs in a fresh context.
+    // Telemetry must never break the request path, so this only warns.
+    requeue(events);
+    console.warn(`[telemetry] Pipelines send failed, re-queued ${events.length} event(s):`, err);
   }
+}
+
+/** Put a failed batch back at the front of the buffer for the next flush. */
+function requeue(events: EnrichedEvent[]): void {
+  buffer.unshift(...events);
+  trimBuffer();
 }
 
 function keepEvent(ev: EnrichedEvent): boolean {
@@ -124,5 +171,14 @@ function keepEvent(ev: EnrichedEvent): boolean {
 
 export const extraSinks: TelemetrySink[] = [pipelineSink];
 
-// Test-only — exported for unit tests of the sampler.
-export const _internal = { keepEvent, getDomainRate, DEFAULT_RATES };
+// Test-only — exported for unit tests of the sampler and the flush/re-queue
+// path. `buffer` is the live array; tests must reset it between cases.
+export const _internal = {
+  keepEvent,
+  getDomainRate,
+  DEFAULT_RATES,
+  buffer,
+  flushBuffer,
+  pipelineSink,
+  MAX_BUFFERED_EVENTS,
+};
