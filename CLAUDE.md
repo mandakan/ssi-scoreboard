@@ -203,16 +203,16 @@ edits only (explicit SSI instruction 2026-08-18).
 - **Permanent pinning** only happens when completion inputs came from a FRESH
   upstream fetch (`cachedAt === null`); cached inputs trigger a forced fresh
   confirm first (prevents pinning ceiling-stale scoring_progress).
-- **Throttling**: `UPSTREAM_MAX_CONCURRENCY` (default 2) sizes both a
-  per-isolate semaphore AND advisory Redis slot leases that damp the global
-  total across instances (`lib/upstream-limiter.ts`, fail-open on Redis
-  trouble). The leases are a damper, NOT a hard cap: the wait budget per call
-  is deliberately short (`UPSTREAM_GLOBAL_WAIT_MS`, default 800ms) because it
-  is paid per upstream call — a 10s budget hung whole requests on multi-stage
-  fan-outs (2026-08-20). Hard bounds come from the semaphore, single-flight
-  locks, and backoff, Redis-shared exponential backoff on 429/5xx/timeout
+- **Throttling**: per-isolate semaphore of `UPSTREAM_MAX_CONCURRENCY` (default
+  2) around every upstream call (`lib/upstream-limiter.ts`), Redis-shared exponential backoff on 429/5xx/timeout
   (`lib/upstream-backoff.ts`, half-open reset, honors Retry-After), and
   `SSI_UPSTREAM_PAUSED` as the global kill switch (`lib/upstream-pause.ts`).
+  Cross-instance bounding comes from the distributed single-flight locks plus
+  probe-gated refresh, NOT from a distributed semaphore: the Redis slot leases
+  behind `UPSTREAM_GLOBAL_LEASES` are off by default after they hung requests
+  twice in production (see the comment in `lib/upstream-limiter.ts` before
+  re-enabling). Measured 2026-08-20 with leases off: 234 client requests over
+  4 large matches produced 25 upstream calls, zero errors.
 - **`SCORECARDS_DELTA_ENABLED=on`** switches changed-stage refetch to
   `scorecards(updated_after:)` watermarked by the sidecar's previous
   `latest_scorecard_update` minus a 3s overlap (UTC-Z), with
