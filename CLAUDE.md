@@ -204,9 +204,13 @@ edits only (explicit SSI instruction 2026-08-18).
   upstream fetch (`cachedAt === null`); cached inputs trigger a forced fresh
   confirm first (prevents pinning ceiling-stale scoring_progress).
 - **Throttling**: `UPSTREAM_MAX_CONCURRENCY` (default 2) sizes both a
-  per-isolate semaphore AND best-effort Redis slot leases capping the global
+  per-isolate semaphore AND advisory Redis slot leases that damp the global
   total across instances (`lib/upstream-limiter.ts`, fail-open on Redis
-  trouble), Redis-shared exponential backoff on 429/5xx/timeout
+  trouble). The leases are a damper, NOT a hard cap: the wait budget per call
+  is deliberately short (`UPSTREAM_GLOBAL_WAIT_MS`, default 800ms) because it
+  is paid per upstream call — a 10s budget hung whole requests on multi-stage
+  fan-outs (2026-08-20). Hard bounds come from the semaphore, single-flight
+  locks, and backoff, Redis-shared exponential backoff on 429/5xx/timeout
   (`lib/upstream-backoff.ts`, half-open reset, honors Retry-After), and
   `SSI_UPSTREAM_PAUSED` as the global kill switch (`lib/upstream-pause.ts`).
 - **`SCORECARDS_DELTA_ENABLED=on`** switches changed-stage refetch to

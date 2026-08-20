@@ -115,7 +115,9 @@ export async function getMatchScorecards(
     ttlSeconds,
     {
       fetcher: () =>
-        coldFetchSingleFlight(cacheKey, lockTtl, () => fetchWholeMatchArchive(stages)),
+        coldFetchSingleFlight(cacheKey, lockTtl, () => fetchWholeMatchArchive(stages), {
+          maxWaitMs: computeColdWaitMs(stages.length),
+        }),
     },
   );
 
@@ -595,6 +597,23 @@ const STAGE_FETCH_TIMEOUT_MS = 15_000;
  */
 export function computeScorecardsLockTtl(stageCount: number): number {
   return Math.max(120, Math.ceil(stageCount / 2) * (STAGE_FETCH_TIMEOUT_MS / 1000) + 30);
+}
+
+/**
+ * How long a cold-miss waiter will wait for the winning flight's cache write
+ * before fetching itself. Must scale with the fan-out it is waiting on: a
+ * fixed 10s budget meant that on a 14-stage match every waiter timed out and
+ * ran its own full fan-out — roughly doubling the upstream calls at exactly
+ * the moment the single-flight exists to prevent that (measured against prod
+ * 2026-08-20: 3 viewers, 14 stages, 30 stage fetches instead of 14).
+ *
+ * Sized to the realistic fan-out (~2.5s per stage at concurrency 2) plus
+ * headroom, and capped so a dead winner can't strand a request. Waiters
+ * return as soon as the winner's entry lands, so this is only the give-up
+ * point, not an added delay in the happy path.
+ */
+export function computeColdWaitMs(stageCount: number): number {
+  return Math.min(45_000, Math.max(10_000, Math.ceil(stageCount / 2) * 2_500 + 5_000));
 }
 
 interface ColdFetchWaitOptions {

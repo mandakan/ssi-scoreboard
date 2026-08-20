@@ -135,3 +135,23 @@ describe("global slot leases (cross-isolate cap)", () => {
     expect(upstreamLimiterStats().inFlight).toBe(0);
   });
 });
+
+describe("global slot wait budget (hang regression, 2026-08-20)", () => {
+  it("gives up quickly when no slot frees, so a fan-out cannot hang the request", async () => {
+    // Shipped at 10s per call: an 18-stage fan-out paid it 18 times and the
+    // Workers runtime cancelled the request. Budget must stay well under a
+    // second by default.
+    cacheMock.setIfAbsent.mockResolvedValue(false);
+    const started = Date.now();
+    await withUpstreamSlot(async () => "ok");
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
+  it("honours UPSTREAM_GLOBAL_WAIT_MS=0 as claim-or-proceed", async () => {
+    process.env.UPSTREAM_GLOBAL_WAIT_MS = "0";
+    cacheMock.setIfAbsent.mockResolvedValue(false);
+    const started = Date.now();
+    await withUpstreamSlot(async () => "ok");
+    expect(Date.now() - started).toBeLessThan(200);
+  });
+});

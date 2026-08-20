@@ -56,12 +56,25 @@ async function acquire(): Promise<void> {
  *  a live slow call never loses its slot mid-flight. */
 const SLOT_TTL_SECONDS = 90;
 
-/** How long a caller polls for a global slot before proceeding anyway.
- *  Local semaphore + single-flight locks still bound the damage; a hard
- *  block here would turn one stuck lease into an outage. */
+/**
+ * How long ONE call may poll for a global slot before proceeding anyway.
+ *
+ * Keep this small. The lease is an advisory damper, NOT a hard cap — the
+ * hard bounds are the per-isolate semaphore, the per-key single-flight
+ * locks, and the shared backoff gate. Blocking long here is actively
+ * dangerous: the budget is per upstream call, so an 18-stage fan-out can
+ * pay it 18 times and blow the whole request's time budget.
+ *
+ * Shipped at 10s and that is exactly what happened — a 3-viewer cold load
+ * of a 14-stage match hung until the Workers runtime cancelled the request
+ * ("your Worker's code had hung"), returning 500s and, because waiters gave
+ * up on the cold-fetch single-flight, ~2x the stage fetches. Measured
+ * 2026-08-20 against prod. Do not raise this without re-running
+ * `pnpm load-test --matches <big cold match> --viewers 3 --compare`.
+ */
 function globalWaitMs(): number {
   const n = parseInt(process.env.UPSTREAM_GLOBAL_WAIT_MS ?? "", 10);
-  return Number.isFinite(n) && n >= 0 ? n : 10_000;
+  return Number.isFinite(n) && n >= 0 ? n : 800;
 }
 
 /** Try each slot key once; the lease is the key we managed to claim. */
@@ -81,13 +94,14 @@ async function acquireGlobalSlot(): Promise<string | null> {
   try {
     let slot = await tryClaimSlot(n);
     while (slot === null && Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 200 + Math.random() * 300));
+      // Short, jittered retry. The sleep is capped by the remaining budget so
+      // we never overshoot the deadline by a whole poll interval.
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) break;
+      await new Promise((r) => setTimeout(r, Math.min(remaining, 80 + Math.random() * 120)));
       slot = await tryClaimSlot(n);
     }
-    if (slot === null) {
-      console.warn("[upstream-limiter] no global slot within budget — proceeding (fail-open)");
-    }
-    return slot;
+    return slot; // null => proceed uncapped; local semaphore still governs.
   } catch {
     return null; // Redis down — local semaphore still governs.
   }
