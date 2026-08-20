@@ -3,7 +3,7 @@
 // in the match page server component.
 
 import { cache } from "react";
-import { cachedExecuteQuery, forceRefreshKey, gqlCacheKey, MATCH_QUERY, refreshCachedMatchQuery } from "@/lib/graphql";
+import { cachedExecuteQuery, forceRefreshKey, gqlCacheKey, MATCH_QUERY, maxProbeSkipAgeSeconds, refreshCachedMatchQuery } from "@/lib/graphql";
 import cacheAdapter from "@/lib/cache-impl";
 import { computeMatchFreshness, computeMatchScoringPct, computeMatchSwrTtl, isMatchComplete } from "@/lib/match-ttl";
 import { extractDivision } from "@/lib/divisions";
@@ -20,6 +20,47 @@ import { visibilityTelemetry } from "@/lib/visibility-telemetry";
 import { computeAccessReason } from "@/lib/access-reason";
 import { accessReasonTelemetry } from "@/lib/access-reason-telemetry";
 import type { MatchResponse, MatchOrganizer, StageInfo, CompetitorInfo, SquadInfo, Visibility } from "@/lib/types";
+
+/**
+ * Days after the match date beyond which cached completion data is pinnable
+ * without a confirming fetch. `isMatchComplete` already applies a hard time
+ * gate, so by this point scoring is final and a stale `scoring_progress` is
+ * not a risk worth one upstream refetch per view.
+ */
+const PIN_SETTLED_DAYS = 7;
+
+/**
+ * Can a cached-but-complete match be pinned as-is?
+ *
+ * Two ways to be sure the cached blob is not ceiling-stale:
+ *  - its last full fetch (`cachedAt`, preserved across probe-skip merges) is
+ *    younger than the probe's max-skip-age ceiling, or
+ *  - the match is old enough that nothing can change any more.
+ */
+export function isPinnableFromCache(
+  cachedAt: string,
+  daysSince: number,
+  ceilingSeconds: number,
+  nowMs: number = Date.now(),
+): boolean {
+  if (daysSince > PIN_SETTLED_DAYS) return true;
+  const ageSeconds = (nowMs - new Date(cachedAt).getTime()) / 1000;
+  return Number.isFinite(ageSeconds) && ageSeconds >= 0 && ageSeconds <= ceilingSeconds;
+}
+
+/**
+ * Let at most one view per match per window arm a confirming refresh, so a
+ * burst of viewers on the same completed match cannot each schedule a full
+ * re-expansion. Fails OPEN (returns true) if the cache is unavailable —
+ * losing the guard is better than never pinning at all.
+ */
+async function claimPinRefresh(ct: number, id: string): Promise<boolean> {
+  try {
+    return await cacheAdapter.setIfAbsent(`pin:refresh:${ct}:${id}`, "1", 300);
+  } catch {
+    return true;
+  }
+}
 
 // `computeMatchScoringPct` lives in lib/match-ttl.ts (alongside the other
 // scoring-state helpers); re-exported here for back-compat with existing
@@ -218,11 +259,24 @@ export async function fetchMatchData(
           // Persist completed match data to D1/SQLite for durable storage
           afterResponse(persistToMatchStore(matchKey, cached));
         }
-      } else {
-        // Completion inferred from CACHED data. With the probe-driven refresh
-        // that data can be up to the max-skip-age ceiling old — pinning it
-        // would freeze a stale scoring_progress permanently. Force one fresh
-        // full fetch; the next request pins from confirmed-fresh data.
+      } else if (isPinnableFromCache(cachedAt, daysSince, maxProbeSkipAgeSeconds())) {
+        // Cached, but demonstrably not ceiling-stale (see helper) — pin it.
+        const cached = await cacheAdapter.get(matchKey);
+        if (cached) {
+          await cacheAdapter.persist(matchKey);
+          afterResponse(persistToMatchStore(matchKey, cached));
+        }
+      } else if (await claimPinRefresh(ctNum, id)) {
+        // Completion inferred from CACHED data that could be up to the
+        // max-skip-age ceiling old; pinning it would freeze a stale
+        // scoring_progress permanently. Force one fresh full fetch — the
+        // next view sees a young `cachedAt` and pins via the branch above.
+        //
+        // Guarded by claimPinRefresh: this used to re-arm on EVERY view,
+        // and because a cache read always reports a `cachedAt` the "next
+        // request pins from fresh data" assumption never held — the branch
+        // re-fired forever. Measured 2026-08-20: 126 forced refreshes and
+        // 95 upstream GetMatch calls from 127 views of 4 completed matches.
         await cacheAdapter.set(forceRefreshKey(ctNum, id), "1", 300);
         afterResponse(
           refreshCachedMatchQuery<RawMatchData>(
