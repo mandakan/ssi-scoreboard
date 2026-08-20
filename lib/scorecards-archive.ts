@@ -613,7 +613,11 @@ export function computeScorecardsLockTtl(stageCount: number): number {
  * point, not an added delay in the happy path.
  */
 export function computeColdWaitMs(stageCount: number): number {
-  return Math.min(45_000, Math.max(10_000, Math.ceil(stageCount / 2) * 2_500 + 5_000));
+  // Cap kept well under the runtime's tolerance for a long-running request:
+  // a waiter holds its request open for this long, so an over-generous cap
+  // trades duplicate fan-outs for cancelled requests (seen at 45s during the
+  // 2026-08-20 load test, alongside the withdrawn global leases).
+  return Math.min(25_000, Math.max(10_000, Math.ceil(stageCount / 2) * 2_500 + 5_000));
 }
 
 interface ColdFetchWaitOptions {

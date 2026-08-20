@@ -284,7 +284,7 @@ describe("computeColdWaitMs", () => {
     expect(computeColdWaitMs(18)).toBeGreaterThan(computeColdWaitMs(6));
   });
 
-  it("caps so a dead winner cannot strand a request", () => {
-    expect(computeColdWaitMs(200)).toBe(45_000);
+  it("caps below the runtime's tolerance for a long-running request", () => {
+    expect(computeColdWaitMs(200)).toBe(25_000);
   });
 });

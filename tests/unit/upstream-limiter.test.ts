@@ -13,12 +13,16 @@ const ORIGINAL = process.env.UPSTREAM_MAX_CONCURRENCY;
 beforeEach(() => {
   cacheMock.setIfAbsent.mockReset().mockResolvedValue(true);
   cacheMock.del.mockReset().mockResolvedValue(undefined);
+  // Global leases are opt-in since 2026-08-20; the lease suites below turn
+  // them on explicitly. Default-off behaviour is asserted separately.
+  process.env.UPSTREAM_GLOBAL_LEASES = "on";
 });
 
 afterEach(() => {
   if (ORIGINAL === undefined) delete process.env.UPSTREAM_MAX_CONCURRENCY;
   else process.env.UPSTREAM_MAX_CONCURRENCY = ORIGINAL;
   delete process.env.UPSTREAM_GLOBAL_WAIT_MS;
+  delete process.env.UPSTREAM_GLOBAL_LEASES;
 });
 
 function deferred<T>() {
@@ -153,5 +157,30 @@ describe("global slot wait budget (hang regression, 2026-08-20)", () => {
     const started = Date.now();
     await withUpstreamSlot(async () => "ok");
     expect(Date.now() - started).toBeLessThan(200);
+  });
+});
+
+describe("global leases are off by default (withdrawn 2026-08-20)", () => {
+  it("touches no Redis slot keys unless explicitly enabled", async () => {
+    delete process.env.UPSTREAM_GLOBAL_LEASES;
+    await expect(withUpstreamSlot(async () => "ok")).resolves.toBe("ok");
+    expect(cacheMock.setIfAbsent).not.toHaveBeenCalled();
+    expect(cacheMock.del).not.toHaveBeenCalled();
+  });
+
+  it("still enforces the per-isolate cap with leases off", async () => {
+    delete process.env.UPSTREAM_GLOBAL_LEASES;
+    process.env.UPSTREAM_MAX_CONCURRENCY = "1";
+    let running = 0;
+    let peak = 0;
+    const task = () =>
+      withUpstreamSlot(async () => {
+        running++;
+        peak = Math.max(peak, running);
+        await new Promise((r) => setTimeout(r, 5));
+        running--;
+      });
+    await Promise.all([task(), task(), task()]);
+    expect(peak).toBe(1);
   });
 });

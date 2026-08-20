@@ -108,15 +108,42 @@ async function acquireGlobalSlot(): Promise<string | null> {
 }
 
 /**
- * Run `fn` while holding an upstream slot (local + best-effort global).
- * Callers should start their own request timeout INSIDE `fn` — time spent
- * queueing here must not count against the upstream fetch timeout.
+ * Global slot leases are OFF by default (`UPSTREAM_GLOBAL_LEASES=on` to try
+ * them). Shipped on 2026-08-19 and withdrawn 2026-08-20 after two rounds of
+ * production evidence:
+ *
+ *  - At a 10s per-call wait they hung whole requests (the budget is paid per
+ *    upstream call, so a multi-stage fan-out pays it repeatedly).
+ *  - At 800ms they still failed a realistic load test: 12 pollers over 4
+ *    matches produced 27 cancelled tasks and 2 user-visible 500s, and one
+ *    cold fan-out was killed partway so its match never finished caching.
+ *
+ * The flaw is structural, not a tuning problem. Funnelling every upstream
+ * call through two Redis-coordinated slots adds a round-trip per call and
+ * turns concurrent viewers into a queue that outlives the runtime's patience
+ * for a request. A correct distributed cap needs to bound work *before* it
+ * fans out (admission control per match), not per individual call.
+ *
+ * What actually bounds our upstream traffic — and what we described to SSI —
+ * is the combination that has held up in testing: the per-isolate semaphore
+ * here, distributed single-flight locks per cache key, the shared backoff
+ * gate, and probe-gated refresh. The same load test that exposed the leases
+ * measured 234 client requests producing 25 upstream calls with zero errors.
+ */
+function globalLeasesEnabled(): boolean {
+  return process.env.UPSTREAM_GLOBAL_LEASES === "on";
+}
+
+/**
+ * Run `fn` while holding an upstream slot. Callers should start their own
+ * request timeout INSIDE `fn` — time spent queueing here must not count
+ * against the upstream fetch timeout.
  */
 export async function withUpstreamSlot<T>(fn: () => Promise<T>): Promise<T> {
   await acquire();
   let globalSlot: string | null = null;
   try {
-    globalSlot = await acquireGlobalSlot();
+    if (globalLeasesEnabled()) globalSlot = await acquireGlobalSlot();
     return await fn();
   } finally {
     if (globalSlot) {
