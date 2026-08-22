@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { isApiKeyRejection } from "@/lib/graphql";
 
 const cacheMock = vi.hoisted(() => ({
   get: vi.fn<(key: string) => Promise<string | null>>(),
@@ -113,5 +114,32 @@ describe("recordUpstreamSuccess (half-open reset)", () => {
     cacheMock.get.mockResolvedValue(null);
     await recordUpstreamSuccess();
     expect(cacheMock.del).not.toHaveBeenCalled();
+  });
+});
+
+// ─── API-key rejection is a circuit-breaker condition (2026-08-22) ──────────
+// SSI enables our key on weekdays only, so on weekends every call comes back
+// as HTTP 200 with an "Invalid API Key!" GraphQL error. That bypasses the
+// 429/5xx branch, so nothing tripped the backoff and prod sent ~800 pointless
+// requests in a day. The predicate below is what now opens the gate.
+
+describe("isApiKeyRejection", () => {
+  it("matches SSI's key-rejection message", () => {
+    expect(isApiKeyRejection("Invalid API Key!")).toBe(true);
+    expect(isApiKeyRejection("2026-08-20..2026-08-27: Invalid API Key!")).toBe(true);
+    expect(isApiKeyRejection("invalid api key")).toBe(true);
+  });
+
+  it("does NOT match the transient JWT messages", () => {
+    // These are retried successfully by executeQuery's force-refresh path;
+    // tripping the shared backoff on them would take the whole fleet down
+    // for a token refresh.
+    expect(isApiKeyRejection("Signature has expired")).toBe(false);
+    expect(isApiKeyRejection("User must be authenticated")).toBe(false);
+  });
+
+  it("does NOT match unrelated upstream errors", () => {
+    expect(isApiKeyRejection("Not allowed to view event")).toBe(false);
+    expect(isApiKeyRejection("Cannot resolve keyword 'ipscscorecard_set'")).toBe(false);
   });
 });

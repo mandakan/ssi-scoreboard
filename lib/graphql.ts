@@ -230,6 +230,15 @@ async function executeQueryOnce<T>(
       const matchId = typeof variables?.id === "string" ? variables.id : null;
       reportError(`ssi-graphql-error:${operationName}`, new Error(msg), { ct, matchId, varsHash });
     }
+    // Key rejection is not retryable and not transient — every subsequent
+    // call will fail identically until a human changes something. SSI returns
+    // it as HTTP 200 with an errors array, so the 429/5xx branch above never
+    // sees it and the backoff never engaged: on 2026-08-22 (a Saturday, when
+    // SSI's key is disabled by design) we sent ~800 pointless requests, 670 in
+    // one hour. Trip the shared backoff so the whole fleet stops asking.
+    if (isApiKeyRejection(msg)) {
+      await recordUpstreamFailure(null);
+    }
     throw new Error(msg);
   }
 
@@ -266,6 +275,21 @@ async function executeQueryOnce<T>(
 // raw fields (handgun_div, rifle_div, etc.) are also available on the same
 // node — `get_division_display` is preferred and the others are kept only for
 // backward compatibility with entries cached before schema v8.
+/**
+ * Does this GraphQL error mean SSI rejected our `x-api-key` outright?
+ *
+ * Distinct from the JWT-expiry messages, which ARE transient and are handled
+ * by the force-refresh-and-retry path in `executeQuery`. A rejected API key
+ * stays rejected until a human acts, so it should open the backoff gate
+ * rather than be retried per request.
+ *
+ * The common cause is not a revoked key at all: SSI enables our key on
+ * weekdays only, so every weekend it reads as invalid.
+ */
+export function isApiKeyRejection(msg: string): boolean {
+  return /invalid api key/i.test(msg);
+}
+
 export const MATCH_QUERY = `
   query GetMatch($ct: Int!, $id: String!) {
     event(content_type: $ct, id: $id) {
