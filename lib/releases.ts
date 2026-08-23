@@ -18,9 +18,7 @@ export const RELEASES: Release[] = [
     id: LATEST_RELEASE_ID,
     date: "August 23, 2026",
     title: "Courtside grid: the live view, rebuilt for a phone at the range",
-    // TODO: no "live-grid" scene exists in scripts/screenshot-match.ts yet.
-    // Omitted rather than pointed at an unrelated scene; add the scene and
-    // list it here before the release ships.
+    screenshotScenes: ["live-grid", "comparison-table"],
     sections: [
       {
         heading: "A new live view",

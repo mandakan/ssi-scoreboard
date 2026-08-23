@@ -108,6 +108,16 @@ describe("LiveGrid", () => {
     expect(within(row).queryByText(/you/i)).not.toBeInTheDocument();
   });
 
+  it("keeps the surname when the first name is already an initial", () => {
+    // Some competitors register as "A. Lindstrom". Treating the first token
+    // as a full first name collapses that to "A. L." and loses the surname
+    // entirely -- the one part that identifies them.
+    renderGrid();
+    expect(
+      screen.queryByRole("rowheader", { name: /^M\. A\./ }),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows the match name", () => {
     renderGrid();
     expect(

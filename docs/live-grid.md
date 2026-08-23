@@ -66,11 +66,20 @@ positive mark. Drawing nothing would make "clean" and "no data" identical.
 `ns` maps from SSI's `penalty` field (`lib/scorecard-data.ts`). `c` already
 folds B-zone into C.
 
-### Known gap: Major scoring
+### Power factor
 
-The detail sheet's points-dropped arithmetic assumes **Minor** (A5/C3/D1) and
-is labelled `(minor)` for that reason. Major is A5/C4/D2. See
-`TODO(major-scoring)` in `components/live-grid-sheet.tsx`.
+The detail sheet's points-dropped arithmetic is power-factor aware: Minor
+scores A5/C3/D1, Major A5/C4/D2, so a charlie costs 2 at minor and 1 at
+major. It reads the factor via `isMajorPowerFactor()` from
+`lib/what-if-calc.ts` -- the same helper the stage simulator uses -- off the
+suffix `extractDivision()` already bakes into `LiveGridShooter.division`
+("Open Major", "Production").
+
+Non-handgun disciplines never get a Major/Minor suffix, because
+`formatDivisionDisplay()` only applies one when `shoots_handgun_major` is
+set. They therefore fall to minor here. That matches the stage simulator
+rather than diverging from it; if IPSC Rifle/Shotgun power factor is ever
+modelled, fix both together.
 
 ## Refresh
 

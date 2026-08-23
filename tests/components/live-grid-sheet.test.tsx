@@ -75,9 +75,51 @@ describe("LiveGridSheet", () => {
     expect(screen.queryByText("procedural")).not.toBeInTheDocument();
   });
 
-  it("labels the points-dropped figure as minor scoring", () => {
+  it("scores charlie and delta at minor values for a minor division", () => {
+    // Production is always minor: A5/C3/D1. 2C = -4, 1D = -4, 1NS = -10.
+    render(
+      <LiveGridSheet
+        open
+        cell={cell({ a: 8, c: 2, d: 1, m: 0, ns: 1, p: 0 })}
+        shooter={{ ...SHOOTER, division: "Production" }}
+        stage={STAGE}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/−18 points dropped/)).toBeInTheDocument();
+  });
+
+  it("scores charlie and delta at major values for a major division", () => {
+    // Open Major is A5/C4/D2. Same hits: 2C = -2, 1D = -3, 1NS = -10.
+    render(
+      <LiveGridSheet
+        open
+        cell={cell({ a: 8, c: 2, d: 1, m: 0, ns: 1, p: 0 })}
+        shooter={{ ...SHOOTER, division: "Open Major" }}
+        stage={STAGE}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/−15 points dropped/)).toBeInTheDocument();
+  });
+
+  it("shows the per-zone cost at the division's power factor", () => {
+    render(
+      <LiveGridSheet
+        open
+        cell={cell({ a: 8, c: 2, d: 0, m: 0, ns: 0, p: 0 })}
+        shooter={{ ...SHOOTER, division: "Open Major" }}
+        stage={STAGE}
+        onClose={vi.fn()}
+      />,
+    );
+    // 2 charlies at major cost 1 each.
+    expect(screen.getByText("−2")).toBeInTheDocument();
+  });
+
+  it("no longer claims every figure is minor", () => {
     renderSheet();
-    expect(screen.getByText(/points dropped \(minor\)/i)).toBeInTheDocument();
+    expect(screen.queryByText(/\(minor\)/i)).not.toBeInTheDocument();
   });
 
   it("celebrates a clean stage instead of showing a drop", () => {

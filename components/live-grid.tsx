@@ -208,7 +208,7 @@ export function LiveGrid({
         data-live-grid-scroller
         className="min-h-0 flex-1 overflow-auto bg-muted [scroll-snap-type:x_proximity] [overscroll-behavior-x:contain]"
       >
-        <table className="border-separate border-spacing-0 font-mono tabular-nums">
+        <table className="min-w-full border-separate border-spacing-0 font-mono tabular-nums">
           <thead>
             <tr>
               <th
@@ -296,9 +296,19 @@ export function LiveGrid({
   );
 }
 
-// "Mathias Axell" -> "Mathias A." so a 94px column holds a real name.
+/**
+ * Fit a name into a 94px column: "Mathias Axell" -> "Mathias A."
+ *
+ * When the first token is already an initial -- plenty of competitors
+ * register as "A. Lindstrom" -- abbreviating the surname too would leave
+ * "A. L.", dropping the only part that identifies them. Keep the surname
+ * whole in that case and let CSS truncate if it must.
+ */
 function shortName(full: string): string {
   const parts = full.trim().split(/\s+/);
   if (parts.length < 2) return full;
-  return `${parts[0]} ${parts[parts.length - 1].charAt(0)}.`;
+  const first = parts[0];
+  const last = parts[parts.length - 1];
+  const firstIsInitial = first.replace(".", "").length <= 1;
+  return firstIsInitial ? `${first} ${last}` : `${first} ${last.charAt(0)}.`;
 }

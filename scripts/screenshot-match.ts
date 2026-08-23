@@ -25,6 +25,7 @@
  *   hf-level-bars         HF Level bars
  *   archetype-chart       Archetype performance breakdown
  *   style-fingerprint     Style fingerprint scatter chart
+ *   live-grid             Courtside grid -- the full-screen live view
  *   shooter-dashboard     Shooter dashboard with match history and trend charts
  *   competitor-identity   Competitor picker open showing identity + tracked star states
  *   tracked-shooters-sheet  My shooters management sheet
@@ -83,6 +84,72 @@ function parseSsiUrl(url: string): { ct: string; id: string } | null {
   const match = url.match(/\/event\/(\d+)\/(\d+)\/?$/);
   if (!match) return null;
   return { ct: match[1], id: match[2] };
+}
+
+/**
+ * Live-grid mock, derived from MOCK_MATCH + MOCK_COMPARE rather than
+ * hand-authored, so it cannot drift from the comparison fixtures. Only the
+ * field-blind subset crosses over -- ranks and percentages are dropped,
+ * which is exactly the contract the real endpoint honours.
+ */
+function buildMockLiveGrid() {
+  const wanted = MOCK_IDS.split(",").map((n) => parseInt(n, 10));
+  const cells: Record<number, Record<number, unknown>> = {};
+  for (const id of wanted) cells[id] = {};
+
+  for (const stage of MOCK_COMPARE.stages) {
+    for (const id of wanted) {
+      const c = stage.competitors?.[id];
+      if (!c) continue;
+      cells[id][stage.stage_id] = {
+        hf: c.hit_factor,
+        time: c.time,
+        points: c.points,
+        a: c.a_hits,
+        c: c.c_hits,
+        d: c.d_hits,
+        m: c.miss_count,
+        ns: c.no_shoots,
+        p: c.procedurals,
+        status: c.dq
+          ? "dq"
+          : c.zeroed
+            ? "zeroed"
+            : c.dnf
+              ? "not_fired"
+              : c.incomplete
+                ? "incomplete"
+                : "scored",
+        // Ascending so the live edge lands on the last stage with data.
+        created: `2026-08-23T${String(8 + stage.stage_num).padStart(2, "0")}:00:00Z`,
+      };
+    }
+  }
+
+  const squadOf = (cid: number) =>
+    MOCK_MATCH.squads.find((sq) => sq.competitorIds.includes(cid))?.name ?? null;
+
+  return {
+    match_id: 88888888,
+    stages: MOCK_COMPARE.stages.map((st) => ({
+      stage_id: st.stage_id,
+      stage_num: st.stage_num,
+      name: st.stage_name,
+      max_points: st.max_points,
+    })),
+    shooters: MOCK_MATCH.competitors
+      .filter((c) => wanted.includes(c.id))
+      .map((c) => ({
+        id: c.id,
+        shooterId: c.shooterId,
+        name: c.name,
+        competitor_number: c.competitor_number,
+        division: c.division,
+        squad: squadOf(c.id),
+      })),
+    cells,
+    cacheInfo: { cachedAt: null },
+  };
 }
 
 // ── Scene catalogue ───────────────────────────────────────────────────────────
@@ -236,6 +303,34 @@ const SCENES: Scene[] = [
       // Wait for the identity card (h1) and at least one match card to render
       await page.waitForSelector("h1", { timeout: 10000 });
       await page.waitForSelector('[aria-labelledby="history-heading"]', { timeout: 8000 }).catch(() => null);
+    },
+  },
+  {
+    name: "live-grid",
+    description: "Courtside grid -- full-screen live view, one row per shooter, one column per stage",
+    suppressWhatsNew: true,
+    setup: async (page, matchPath) => {
+      // The mock match is completed (match_status "cp"), so autoMode resolves
+      // to coaching and the grid never mounts. Force the live view the same
+      // way the ModeToggle does, and pin the live surface to the grid.
+      const parts = matchPath.split("/").filter(Boolean);
+      const ct = parts[parts.length - 2];
+      const id = parts[parts.length - 1];
+      await page.addInitScript(
+        ({ ct, id }: { ct: string; id: string }) => {
+          localStorage.setItem(`ssi_mode_${ct}_${id}`, "live");
+          localStorage.setItem(`ssi_liveview_${ct}_${id}`, "grid");
+        },
+        { ct, id },
+      );
+      await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
+      // The grid owns the viewport, so wait on its own scroller rather than
+      // the page's usual table.
+      await page.waitForSelector("[data-live-grid-scroller] table", {
+        timeout: 10000,
+      });
+      // Let the live-edge auto-scroll settle before the shot.
+      await page.waitForTimeout(600);
     },
   },
   {
@@ -409,6 +504,9 @@ async function main() {
         );
         await page.route(/\/api\/compare/, (route) =>
           route.fulfill({ json: MOCK_COMPARE })
+        );
+        await page.route(/\/api\/live-grid/, (route) =>
+          route.fulfill({ json: buildMockLiveGrid() })
         );
       }
 
