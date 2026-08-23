@@ -1,0 +1,46 @@
+name: Release Please
+
+# Keeps a rolling "chore(main): release X.Y.Z" PR open against main, built from
+# Conventional Commit subjects. Merging that PR bumps package.json, writes
+# CHANGELOG.md, tags vX.Y.Z, publishes a GitHub Release -- and then deploys
+# production from that exact tag.
+#
+# Because we squash-merge, the PR *title* is what ends up in the changelog.
+# A non-conventional title is dropped silently.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # `on: release: published` cannot be used here: GitHub will not trigger a
+  # workflow from an event raised with the default GITHUB_TOKEN, so that
+  # trigger would never fire. Calling the deploy workflow directly avoids
+  # needing a PAT or GitHub App token just to break the recursion guard.
+  deploy-production:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    uses: ./.github/workflows/deploy-cloudflare.yml
+    with:
+      ref: ${{ needs.release-please.outputs.tag_name }}
+    secrets: inherit
