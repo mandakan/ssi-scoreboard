@@ -1172,3 +1172,58 @@ export interface Release {
    */
   screenshotScenes?: string[];
 }
+
+// ─── Live grid (courtside view) ───────────────────────────────────────────────
+// One row per shooter, one column per stage. See
+// docs/superpowers/specs/2026-08-23-live-grid-design.md.
+//
+// CONTRACT: every field below is derivable from a single shooter's own
+// scorecard plus the stage list. No stage-winner hit factor, no field median,
+// no division distribution, no ranking. That invariant is what lets the server
+// swap from "project the cached whole-field snapshot" to "fetch just these
+// shooters" without the client changing.
+
+/** One shooter's result on one stage. */
+export interface LiveGridCell {
+  hf: number | null;
+  time: number | null;
+  points: number | null;
+  a: number | null;
+  /** B-zone is already folded into C by `parseRawScorecards`. */
+  c: number | null;
+  d: number | null;
+  m: number | null;
+  /** No-shoots. Maps from SSI's `penalty` field (lib/scorecard-data.ts). */
+  ns: number | null;
+  p: number | null;
+  status: "scored" | "dq" | "zeroed" | "not_fired" | "incomplete" | "pending";
+  /** Scorecard creation timestamp; drives live-edge detection. */
+  created: string | null;
+}
+
+export interface LiveGridStage {
+  stage_id: number;
+  stage_num: number;
+  name: string;
+  max_points: number;
+}
+
+export interface LiveGridShooter {
+  id: number;
+  shooterId: number | null;
+  name: string;
+  competitor_number: string;
+  division: string | null;
+  squad: string | null;
+}
+
+export interface LiveGridResponse {
+  match_id: number;
+  stages: LiveGridStage[];
+  shooters: LiveGridShooter[];
+  /** cells[competitorId][stageId] */
+  cells: Record<number, Record<number, LiveGridCell>>;
+  cacheInfo: CacheInfo;
+  /** True when SSI returned no scorecard detail despite non-zero scoring. */
+  scorecardsRestricted?: boolean;
+}
