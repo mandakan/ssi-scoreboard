@@ -314,9 +314,14 @@ export default function MatchPageClient() {
   // fire the compare query -- that would pull the whole-field snapshot and
   // throw away the entire point of the view.
   const gridShowing = effectiveMode === "live" && liveView === "grid";
+  // Gate on matchQuery.data: autoMode falls back to "coaching" until the
+  // match response lands, so without this the page fires a whole-field
+  // compare request on every load -- including live matches showing the
+  // grid, where it is exactly the fetch we are trying not to make.
   const compareEnabled =
-    effectiveMode === "coaching" ||
-    (effectiveMode === "live" && liveScoresAccessible && !gridShowing);
+    Boolean(matchQuery.data) &&
+    (effectiveMode === "coaching" ||
+      (effectiveMode === "live" && liveScoresAccessible && !gridShowing));
   const compareQuery = useCompareQuery(
     ct,
     id,
