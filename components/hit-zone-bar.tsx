@@ -21,7 +21,9 @@ interface HitZoneBarProps {
 //
 // Color + pattern pairing — pattern carries the same information as color so the
 // bar remains readable under deuteranopia/protanopia and in grayscale print.
-const BAR_SEGMENTS = [
+// Exported so the live grid's cell-scale bar reuses these exact values
+// rather than re-picking them. Changing a colour here changes it there.
+export const BAR_SEGMENTS = [
   { key: "a" as const, fill: "#22c55e", patternKind: "solid" as const },
   { key: "c" as const, fill: "#facc15", patternKind: "diag-light" as const },
   { key: "d" as const, fill: "#fb923c", patternKind: "diag-dense" as const },
@@ -35,15 +37,15 @@ const BAR_HEIGHT = 12;
 // collapse to "shape × N".
 const PENALTY_PIP_THRESHOLD = 3;
 
-type PenaltyKind = "m" | "ns" | "p";
+export type PenaltyKind = "m" | "ns" | "p";
 
-interface PenaltyDef {
+export interface PenaltyDef {
   key: PenaltyKind;
   label: string; // text used in tooltip / aria
   shape: "square" | "triangle" | "diamond";
 }
 
-const PENALTY_DEFS: PenaltyDef[] = [
+export const PENALTY_DEFS: PenaltyDef[] = [
   { key: "m", label: "M", shape: "square" },
   { key: "ns", label: "NS", shape: "triangle" },
   { key: "p", label: "P", shape: "diamond" },

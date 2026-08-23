@@ -2,6 +2,11 @@
 
 export const MAX_COMPETITORS = 12;
 
+/** Live grid rows. Higher than MAX_COMPETITORS because a squad can exceed 14
+ *  and the grid's per-row cost is one scorecard slice, not a field-wide
+ *  compute. See docs/superpowers/specs/2026-08-23-live-grid-design.md. */
+export const MAX_LIVE_GRID_ROWS = 20;
+
 /**
  * Cache schema version — embedded in every cached GraphQL response.
  * Bump this (by 1) whenever the *shape* of a cached API response changes

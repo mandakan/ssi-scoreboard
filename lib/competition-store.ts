@@ -224,3 +224,44 @@ export function subscribeMode(onChange: () => void): () => void {
     window.removeEventListener("storage", onChange);
   };
 }
+
+// ---------------------------------------------------------------------------
+// Live view preference -- grid vs the deep comparison table
+// ---------------------------------------------------------------------------
+
+/** Which live surface the user last chose for a given match. */
+export type LiveView = "grid" | "table";
+
+function liveViewKey(ct: string, id: string): string {
+  return `ssi_liveview_${ct}_${id}`;
+}
+
+/**
+ * Persist the live surface choice. The grid is the default, so only an
+ * explicit switch to the deep table is worth remembering -- but both are
+ * stored so a later default change doesn't silently move people.
+ */
+export function saveLiveViewPreference(
+  ct: string,
+  id: string,
+  view: LiveView,
+): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(liveViewKey(ct, id), view);
+  } catch {
+    // ignore
+  }
+}
+
+/** Read the live surface choice. Defaults to the grid. */
+export function getLiveViewPreference(ct: string, id: string): LiveView {
+  if (typeof window === "undefined") return "grid";
+  try {
+    return localStorage.getItem(liveViewKey(ct, id)) === "table"
+      ? "table"
+      : "grid";
+  } catch {
+    return "grid";
+  }
+}

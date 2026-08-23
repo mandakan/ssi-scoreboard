@@ -1,8 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { fetchMatch, fetchCompare, fetchEvents, fetchPopularMatches, fetchLiveMatches, fetchCoachingAvailability, fetchCoachingTip, fetchShooterDashboard, fetchShooterSearch, fetchUpstreamStatus, type UpstreamStatus } from "@/lib/api";
-import type { CompareMode, MatchResponse, CompareResponse, EventSummary, PopularMatch, CoachingTipResponse, CoachingAvailability, ShooterDashboardResponse, ShooterSearchResult, PreMatchWeatherResponse } from "@/lib/types";
+import { fetchMatch, fetchCompare, fetchLiveGrid, fetchEvents, fetchPopularMatches, fetchLiveMatches, fetchCoachingAvailability, fetchCoachingTip, fetchShooterDashboard, fetchShooterSearch, fetchUpstreamStatus, type UpstreamStatus } from "@/lib/api";
+import type { CompareMode, LiveGridResponse, MatchResponse, CompareResponse, EventSummary, PopularMatch, CoachingTipResponse, CoachingAvailability, ShooterDashboardResponse, ShooterSearchResult, PreMatchWeatherResponse } from "@/lib/types";
 import { matchQueryKey, compareQueryKey, coachingAvailabilityKey, coachingTipQueryKey } from "@/lib/query-keys";
 
 // Re-export so existing imports from lib/queries keep working.
@@ -205,5 +205,25 @@ export function useCoachingTipQuery(
     enabled: false, // manual trigger only — user opens popover
     staleTime: Infinity, // tips for completed matches never go stale
     retry: false,
+  });
+}
+
+export function useLiveGridQuery(
+  ct: string,
+  id: string,
+  competitorIds: number[],
+) {
+  return useQuery<LiveGridResponse, Error>({
+    // Sorted so re-ordering rows doesn't churn the cache key.
+    queryKey: ["live-grid", ct, id, [...competitorIds].sort((a, b) => a - b)],
+    queryFn: () => fetchLiveGrid(ct, id, competitorIds),
+    // Same 30s cadence the live comparison already uses. Deliberately NOT a
+    // new clock: the server's freshness window is what actually bounds
+    // upstream traffic, and a second cadence on the same match would raise
+    // refresh frequency -- the opposite of why this view exists.
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+    enabled: Boolean(ct && id && competitorIds.length > 0),
   });
 }

@@ -52,6 +52,10 @@ Key directories:
 - `lib/db-impl.ts` -- re-exports SQLite adapter by default; CF builds override via webpack/turbopack alias
 - `lib/match-data-store.ts` -- tiered match data read/write helpers: `getMatchDataWithFallback()` (Redis -> D1 -> null), `persistToMatchStore()` (D1 write + Redis 24h drain), `parseMatchCacheKey()`
 - `lib/match-ttl.ts` -- pure `computeMatchTtl()` -- smart TTL tiers for pre/active/complete matches
+- `app/api/live-grid/route.ts` -- courtside grid data; **field-blind by contract** (see `docs/live-grid.md`)
+- `lib/live-grid.ts` -- pure projection from `RawScorecard[]` to the grid's cell map
+- `lib/live-grid-rows.ts` -- pure `resolveGridRows()` -- squad vs tracked row sources
+- `components/live-grid.tsx` -- full-screen live grid (default live view); cell + detail sheet alongside it
 - `lib/mcp-tools.ts` -- shared MCP tool registration (server-only, used by HTTP route + stdio server)
 - `lib/types.ts` -- single source of truth for all TypeScript interfaces
 - `lib/queries.ts` -- TanStack Query v5 hooks used by client components
@@ -236,6 +240,17 @@ Levers and overrides:
   always-refetch as well. Set via `wrangler secret put` for instant prod recovery without
   a code deploy.
 - `POST /api/admin/cache/force-refresh?ct=&id=` -- one-shot full refetch for both keys.
+
+## Courtside Grid -> `docs/live-grid.md`
+
+The default live view: one row per shooter, one column per stage, full-screen and
+mobile-first. **Its data contract is field-blind** -- every rendered value derives from a
+single shooter's own scorecard plus the stage list. No stage-winner HF, field median,
+division distribution, or ranking. That constraint exists so Phase 2 can swap the server
+from "project the cached whole-field snapshot" to "fetch just these shooters" without a
+client change; breaking it silently forecloses the only real upstream-load lever we have.
+`compareEnabled` must stay false while the grid shows (e2e-guarded). Do not add a second
+poll clock. See `docs/live-grid.md`.
 
 ## Telemetry -> `docs/telemetry.md`
 

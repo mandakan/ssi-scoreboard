@@ -12,6 +12,7 @@ import type {
   ShooterDashboardResponse,
   ShooterSearchResult,
   BackfillProgress,
+  LiveGridResponse,
 } from "@/lib/types";
 
 export async function fetchMatch(ct: string, id: string): Promise<MatchResponse> {
@@ -172,6 +173,34 @@ export async function addMatchToShooter(
   if (!res.ok) {
     const body = await res.json().catch(() => ({ message: "Unknown error" }));
     throw new Error(body.message ?? `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Fetch the courtside live grid for a set of competitors.
+ *
+ * Deliberately narrow: the response carries only each shooter's own stage
+ * results, no field-wide context. See
+ * docs/superpowers/specs/2026-08-23-live-grid-design.md.
+ */
+export async function fetchLiveGrid(
+  ct: string,
+  id: string,
+  competitorIds: number[],
+): Promise<LiveGridResponse> {
+  if (competitorIds.length === 0) {
+    throw new Error("No competitor IDs provided");
+  }
+  const params = new URLSearchParams({
+    ct,
+    id,
+    competitor_ids: competitorIds.join(","),
+  });
+  const res = await fetch(`/api/live-grid?${params}`);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Live grid fetch failed (${res.status}): ${body}`);
   }
   return res.json();
 }
