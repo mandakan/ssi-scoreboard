@@ -23,7 +23,7 @@ import { UpstreamDegradedBanner } from "@/components/upstream-degraded-banner";
 import { LoadingBar } from "@/components/loading-bar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, AlertCircle, ArrowLeft, RefreshCw, ChevronDown, ChevronUp, HelpCircle, ExternalLink, Info, ArrowUpDown, Undo2, XCircle } from "lucide-react";
+import { Loader2, AlertCircle, ArrowLeft, RefreshCw, ChevronDown, ChevronUp, HelpCircle, ExternalLink, Info, ArrowUpDown, Undo2, XCircle, LayoutGrid } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import {
   Popover,
@@ -41,12 +41,17 @@ import {
   saveModeOverride,
   getModeOverrideSnapshot,
   subscribeMode,
+  saveLiveViewPreference,
+  getLiveViewPreference,
+  type LiveView,
 } from "@/lib/competition-store";
 import { getMyIdentity, getTrackedShooters } from "@/lib/shooter-identity";
 import { useMyIdentity } from "@/lib/hooks/use-my-identity";
 import { useTrackedShooters } from "@/lib/hooks/use-tracked-shooters";
 import { MAX_COMPETITORS } from "@/lib/constants";
 import { PreMatchView } from "@/components/pre-match-view";
+import { LiveGrid } from "@/components/live-grid";
+import { resolveGridRows, type GridRowSource } from "@/lib/live-grid-rows";
 import { StageTimesExport } from "@/components/stage-times-export";
 import { computeFocusAreas } from "@/lib/coaching-rules";
 
@@ -137,8 +142,25 @@ export default function MatchPageClient() {
   const [showCoachingView, setShowCoachingView] = useState(false);
   const [showSimulator, setShowSimulator] = useState(false);
   const [showManage, setShowManage] = useState(false);
+
   const params = useParams<{ ct: string; id: string }>();
   const { ct, id } = params;
+
+  // Live surface: the courtside grid is the default, with the deep
+  // comparison table one tap away. See
+  // docs/superpowers/specs/2026-08-23-live-grid-design.md.
+  const [liveView, setLiveViewState] = useState<LiveView>("grid");
+  const [gridSource, setGridSource] = useState<GridRowSource>("squad");
+  useEffect(() => {
+    setLiveViewState(getLiveViewPreference(ct, id));
+  }, [ct, id]);
+  const setLiveView = useCallback(
+    (view: LiveView) => {
+      setLiveViewState(view);
+      saveLiveViewPreference(ct, id, view);
+    },
+    [ct, id],
+  );
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -288,9 +310,13 @@ export default function MatchPageClient() {
   const liveScoresAccessible =
     matchQuery.data?.is_live_scores_accessible === true;
   const compareMode: CompareMode = effectiveMode === "coaching" ? "coaching" : "live";
+  // The grid is field-blind by design, so while it is showing we must NOT
+  // fire the compare query -- that would pull the whole-field snapshot and
+  // throw away the entire point of the view.
+  const gridShowing = effectiveMode === "live" && liveView === "grid";
   const compareEnabled =
     effectiveMode === "coaching" ||
-    (effectiveMode === "live" && liveScoresAccessible);
+    (effectiveMode === "live" && liveScoresAccessible && !gridShowing);
   const compareQuery = useCompareQuery(
     ct,
     id,
@@ -391,6 +417,24 @@ export default function MatchPageClient() {
   }, [ct, id, matchQuery.data, router]);
 
   // Tracked-in-match indicator: how many tracked/identity shooters are in this match.
+  // Rows for the courtside grid. Squad and tracked both resolve from the
+  // already-cached GetMatch response, so switching source costs nothing
+  // upstream.
+  const gridRows = useMemo(
+    () =>
+      matchQuery.data
+        ? resolveGridRows({
+            source: gridSource,
+            competitors: matchQuery.data.competitors,
+            squads: matchQuery.data.squads,
+            myShooterId: identity?.shooterId ?? null,
+            trackedShooterIds: trackedIds,
+            fallback: selectedIds,
+          })
+        : EMPTY_IDS,
+    [matchQuery.data, gridSource, identity, trackedIds, selectedIds],
+  );
+
   const trackedInMatch = useMemo(() => {
     if (!matchQuery.data) return null;
     const map = new Map(
@@ -962,12 +1006,38 @@ export default function MatchPageClient() {
         </div>
       )}
 
+      {/* Courtside grid — the default live surface. Full-screen, one row per
+          shooter, one column per stage, and field-blind by contract. The deep
+          comparison table stays one tap away via onExit. */}
+      {gridShowing && match.is_live_scores_accessible && gridRows.length > 0 && (
+        <LiveGrid
+          ct={ct}
+          id={id}
+          shooters={gridRows}
+          matchName={match.name}
+          myShooterId={identity?.shooterId ?? null}
+          source={gridSource}
+          onSourceChange={setGridSource}
+          onExit={() => setLiveView("table")}
+        />
+      )}
+
       {/* Comparison views — rendered for completed matches (coaching mode)
           and for live matches whose organizer has enabled live scorecard access. */}
       {(effectiveMode === "coaching" ||
-        (effectiveMode === "live" && match.is_live_scores_accessible)) &&
+        (effectiveMode === "live" && match.is_live_scores_accessible && !gridShowing)) &&
         selectedIds.length > 0 && (
         <div className="space-y-6">
+          {effectiveMode === "live" && match.is_live_scores_accessible && (
+            <button
+              type="button"
+              onClick={() => setLiveView("grid")}
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-md border px-3 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <LayoutGrid className="h-4 w-4" aria-hidden="true" />
+              Back to courtside grid
+            </button>
+          )}
           {effectiveMode === "live" &&
             match.is_live_scores_accessible &&
             match.results_status !== "all" && (
