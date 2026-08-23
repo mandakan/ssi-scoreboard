@@ -41,12 +41,13 @@ carries a releasable type.
 
 ## Two things to know about the setup
 
-**`release-as` is pinned to `1.0.0` and must be removed after the first
-release.** `release-please-config.json` currently forces the next version to
-`1.0.0` so the repo leaves its permanent `0.1.0` behind on a clean number.
-`release-as` is sticky -- it forces that same version on *every* subsequent
-release. Delete the `"release-as": "1.0.0"` line in the PR immediately after
-`v1.0.0` ships.
+**`release-as` was pinned to `1.0.0` for the first release and has since been
+removed** (v1.0.0 shipped 2026-08-23). It forced the version to `1.0.0` so the
+repo left its permanent `0.1.0` behind on a clean number. `release-as` is
+sticky -- it forces the same version on *every* subsequent release -- so it was
+deleted immediately afterwards. If you ever pin it again, delete it in the same
+breath as the release it was pinned for, or version bumps stop working
+silently.
 
 **The deploy is a `workflow_call`, not `on: release: published`.** GitHub will
 not trigger a workflow from an event raised with the default `GITHUB_TOKEN`;
