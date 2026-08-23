@@ -2,22 +2,35 @@
 
 import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
-import { PENALTY_DEFS } from "@/components/hit-zone-bar";
-import { BAR_SEGMENTS } from "@/components/hit-zone-bar";
+import { BAR_SEGMENTS, PENALTY_DEFS } from "@/components/hit-zone-bar";
+import { isMajorPowerFactor } from "@/lib/what-if-calc";
 import type {
   LiveGridCell,
   LiveGridShooter,
   LiveGridStage,
 } from "@/lib/types";
 
-// Points a single hit or penalty costs against an all-alpha run.
-//
-// TODO(major-scoring): these are Minor values (A5/C3/D1). Major is A5/C4/D2,
-// which changes charlie from -2 to -1 and delta from -4 to -3. The scorecard
-// response does not currently carry the competitor's power factor into this
-// component, so the section is labelled "minor" rather than silently
-// presenting Minor numbers as universal.
-const COST = { c: 2, d: 4, m: 15, ns: 10, p: 10 } as const;
+/**
+ * What each dropped hit or penalty costs against an all-alpha run, at the
+ * competitor's power factor.
+ *
+ * Minor scores A5/C3/D1, Major A5/C4/D2 -- so a charlie costs 2 at minor but
+ * only 1 at major, and a delta 4 vs 3. A miss is 15 either way (the 5-point
+ * alpha you did not score, plus the 10-point penalty); no-shoots and
+ * procedurals are flat 10s.
+ *
+ * Power factor is read off the formatted division string via
+ * isMajorPowerFactor, the same helper the stage simulator uses -- the suffix
+ * is already baked into LiveGridShooter.division by extractDivision().
+ *
+ * Non-handgun disciplines never carry a Major/Minor suffix
+ * (formatDivisionDisplay only applies one when shoots_handgun_major is set),
+ * so they fall to minor here. That matches the stage simulator's existing
+ * behaviour rather than diverging from it.
+ */
+function costsFor(isMajor: boolean) {
+  return { c: isMajor ? 1 : 2, d: isMajor ? 3 : 4, m: 15, ns: 10, p: 10 };
+}
 
 interface ZoneRow {
   key: string;
@@ -103,7 +116,7 @@ export function LiveGridSheet({
           </button>
         </div>
 
-        <SheetBody cell={cell} stage={stage} />
+        <SheetBody cell={cell} stage={stage} shooter={shooter} />
       </div>
     </div>
   );
@@ -112,9 +125,11 @@ export function LiveGridSheet({
 function SheetBody({
   cell,
   stage,
+  shooter,
 }: {
   cell: LiveGridCell;
   stage: LiveGridStage;
+  shooter: LiveGridShooter;
 }) {
   if (cell.status === "pending" || cell.status === "not_fired") {
     return (
@@ -145,6 +160,8 @@ function SheetBody({
   const ns = cell.ns ?? 0;
   const p = cell.p ?? 0;
 
+  const isMajor = isMajorPowerFactor(shooter.division);
+  const COST = costsFor(isMajor);
   const hitLoss = c * COST.c + d * COST.d + m * 5;
   const penLoss = (m + ns) * 10 + p * COST.p;
   const dropped = hitLoss + penLoss;
@@ -205,7 +222,7 @@ function SheetBody({
         <div className="flex items-center gap-3 rounded-md bg-muted px-3 py-2.5">
           <div className="min-w-0 flex-1">
             <b className="block text-[13px] font-semibold">
-              −{dropped} points dropped (minor)
+              −{dropped} points dropped
             </b>
             <span className="text-[11px] text-muted-foreground">
               {hitLoss} on target
