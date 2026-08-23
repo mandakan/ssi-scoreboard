@@ -11,11 +11,43 @@ import type { Release } from "@/lib/types";
  * differs from the value stored in localStorage("whats-new-seen-id").
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-05-12-coaching-features";
+export const LATEST_RELEASE_ID = "2026-08-23-courtside-grid";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "August 23, 2026",
+    title: "Courtside grid: the live view, rebuilt for a phone at the range",
+    // TODO: no "live-grid" scene exists in scripts/screenshot-match.ts yet.
+    // Omitted rather than pointed at an unrelated scene; add the scene and
+    // list it here before the release ships.
+    sections: [
+      {
+        heading: "A new live view",
+        items: [
+          "Live matches now open in a full-screen grid: one row per shooter, one column per stage. No page chrome, no scrolling past charts to find a score -- just the stage data, sized for one hand at 390px.",
+          "Rows come from your squad or your tracked shooters, switchable in one tap. Your own row leads, so it is on screen before you scroll anywhere.",
+          "The grid opens scrolled to the stage your squad just shot, and a rail across the top keeps every stage one tap away even when only four columns fit.",
+        ],
+      },
+      {
+        heading: "Reading a cell",
+        items: [
+          "Each cell carries hit factor, time, the A/C/D split, and any misses, no-shoots or procedurals.",
+          "A stage where you dropped points draws a hit-zone bar. A clean run instead shows a green circle and ALL A -- so a squad shooting well is a quiet column, and whatever went wrong is the only busy mark on screen.",
+          "Tap any cell for the full scorecard: points against stage max, what every zone and penalty cost you, and what your hit factor would have been on a clean run.",
+        ],
+      },
+      {
+        heading: "Full analysis is still there",
+        items: [
+          "The comparison table, charts and coaching analysis are one tap away behind Full analysis, and the app remembers which you last chose for each match.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-05-12-coaching-features",
     date: "May 12, 2026",
     title: "Coaching features: peak stage, near achievements, self-comparison, and personalised brief",
     screenshotScenes: ["shooter-dashboard", "comparison-table"],
