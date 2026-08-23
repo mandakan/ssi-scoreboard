@@ -289,6 +289,19 @@ Auto-shows once per release; also reachable from the footer. To announce a relea
 `lib/releases.ts`. Add an entry whenever a user-visible feature ships. See `docs/whats-new.md`
 for the full entry shape, screenshot scene catalogue, and rules for adding new scenes.
 
+This is deliberately separate from the generated `CHANGELOG.md`: the changelog is the
+commit-derived engineering record, `RELEASES` is curated user-facing prose. A user-visible
+`feat` needs **both** -- a Conventional Commit PR title and a `RELEASES` entry.
+
+## Releases -> `docs/releases.md`
+
+Versioning, tagging, `CHANGELOG.md`, and the production deploy are driven by release-please
+(`.github/workflows/release-please.yml`). Merging the rolling `chore(main): release X.Y.Z` PR
+tags the release and deploys production from that tag. **We squash-merge, so the PR title is
+what release-please parses** -- a non-conventional title is silently dropped from the changelog
+and does not bump the version. See `docs/releases.md` for the type/bump table and the two
+setup caveats (sticky `release-as`, and why the deploy is a `workflow_call`).
+
 ## Environment Variables -> `docs/env-vars.md`
 
 Full table of every env var, where it's read, which deploy target uses it, and notes/defaults.

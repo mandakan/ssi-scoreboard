@@ -2,6 +2,16 @@ name: Deploy to Cloudflare
 
 on:
   workflow_dispatch:
+  # Called by release-please.yml after it cuts a release. GitHub refuses to
+  # trigger workflows from events raised with the default GITHUB_TOKEN, so
+  # `on: release: published` would silently never fire -- the release job
+  # calls this workflow directly instead. See docs/releases.md.
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git ref (tag or SHA) to deploy. Defaults to the triggering ref.'
+        required: false
+        type: string
 
 concurrency:
   group: deploy-production
@@ -16,6 +26,10 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Pin production to the exact tagged commit when invoked from a
+          # release, rather than whatever main has drifted to since.
+          ref: ${{ inputs.ref || github.ref }}
 
       - uses: actions/setup-node@v7
         with:
