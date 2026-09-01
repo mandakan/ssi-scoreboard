@@ -1,12 +1,12 @@
 {
-  "updated": "2026-05-11",
+  "updated": "2026-09-01",
   "period_days": 30,
   "currency": "EUR",
-  "usd_to_eur_rate": 0.85,
+  "usd_to_eur_rate": 0.8624,
   "lines": [
     {
       "label": "Workers (Paid plan + requests/CPU)",
-      "amount": 4.25,
+      "amount": 4.31,
       "note": "below included quota"
     },
     {
@@ -16,8 +16,7 @@
     },
     {
       "label": "R2 (telemetry buckets)",
-      "amount": 0,
-      "note": "below included quota"
+      "amount": 0.53
     },
     {
       "label": "Redis (ssi-scoreboard-prod)",
@@ -29,6 +28,6 @@
       "note": "€18/yr ÷ 12"
     }
   ],
-  "total": 5.78,
+  "total": 6.38,
   "notes": []
 }
