@@ -27,12 +27,30 @@ redis.on("error", (err: Error) => {
 const PREFIX = process.env.CACHE_KEY_PREFIX ?? "";
 const pk = (key: string) => `${PREFIX}${key}`;
 
+// Fail fast while Redis is known to be down. With the offline queue enabled
+// (needed so the lazy first connection can buffer commands), a command sent
+// while ioredis waits out its reconnect back-off sits in that queue until the
+// next attempt fails -- up to 500ms each. A match-page render chains several
+// cache reads, so an unreachable Redis turned into multi-second stalls
+// instead of the cheap cache miss the retry settings above intend. The
+// statuses below are only reached after a connection has been lost or a
+// connect attempt has failed; "wait"/"connecting"/"connect"/"ready" pass
+// through so cold starts still connect normally.
+const UNAVAILABLE_STATUSES = new Set(["reconnecting", "close", "end"]);
+function assertRedisAvailable(): void {
+  if (UNAVAILABLE_STATUSES.has(redis.status)) {
+    throw new Error(`Redis unavailable (status: ${redis.status})`);
+  }
+}
+
 const adapter: CacheAdapter = {
   async get(key) {
+    assertRedisAvailable();
     return redis.get(pk(key));
   },
 
   async set(key, value, ttlSeconds) {
+    assertRedisAvailable();
     if (ttlSeconds == null) {
       await redis.set(pk(key), value);
     } else {
@@ -41,23 +59,28 @@ const adapter: CacheAdapter = {
   },
 
   async persist(key) {
+    assertRedisAvailable();
     await redis.persist(pk(key));
   },
 
   async del(...keys) {
+    assertRedisAvailable();
     if (keys.length > 0) await redis.del(...keys.map(pk));
   },
 
   async expire(key, ttlSeconds) {
+    assertRedisAvailable();
     await redis.expire(pk(key), ttlSeconds);
   },
 
   async setIfAbsent(key, value, ttlSeconds) {
+    assertRedisAvailable();
     const res = await redis.set(pk(key), value, "EX", ttlSeconds, "NX");
     return res === "OK";
   },
 
   async scanCachedMatchKeys() {
+    assertRedisAvailable();
     const pattern = `${PREFIX}gql:GetMatch:*`;
     const keys: string[] = [];
     const stream = redis.scanStream({ match: pattern, count: 200 });
