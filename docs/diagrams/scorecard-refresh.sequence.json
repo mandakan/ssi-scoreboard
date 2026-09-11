@@ -146,8 +146,7 @@
       "from": "route",
       "to": "redis",
       "y": 336,
-      "label": "diff against probe:stage-state sidecar",
-      "note": "unchanged cycle: extend TTL, stop here"
+      "label": "diff against probe:stage-state sidecar"
     },
     {
       "id": "fetch-changed",

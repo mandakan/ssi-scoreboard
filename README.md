@@ -215,6 +215,12 @@ Browser -> Next.js Route Handlers -> shootnscoreit.com/graphql/
 The `SSI_API_KEY` lives server-side only and is never sent to the browser. Route Handlers
 are the only place that touches the upstream GraphQL API.
 
+![SSI Scoreboard system architecture: browser, MCP and API v1 clients call Next.js Route Handlers, which use Redis, AppDatabase and telemetry inside the app boundary and reach ShootNScoreIt only through the upstream limiter and SSI auth](docs/diagrams/system-architecture.svg)
+
+More diagrams (the live scorecard refresh cycle and the tiered match data store) are in
+[`docs/diagrams/`](docs/diagrams/README.md), rendered inline there; the `.html` files in
+that directory are interactive versions of the same diagrams.
+
 Two persistence layers:
 - **Redis** (ioredis on Docker, @upstash/redis on Cloudflare) -- hot cache for active matches and per-request data.
 - **AppDatabase** (SQLite on Docker, D1 on Cloudflare) -- durable store for shooter profiles, match indices, achievements, and historical match data offloaded from Redis.
