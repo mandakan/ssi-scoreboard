@@ -133,27 +133,16 @@ jobs:
             exit 1
           fi
 
-      - name: DIAG match-page SSR timing (no redis, dummy key)
-        shell: bash
-        env:
-          SSI_API_KEY: dummy_key_for_e2e
-        run: |
-          set +e
-          cat /etc/hosts
-          getent ahosts localhost
-          node -e 'const n=require("net");const t=Date.now();const s=n.connect(6379,"localhost");s.on("error",e=>{console.log("localhost:6379",e.code,Date.now()-t,"ms")})'
-          curl -s -o /dev/null -w "ssi dummy-key: %{http_code} %{time_total}s\n" -X POST -H 'content-type: application/json' -H 'x-api-key: dummy' --data '{"query":"{ __typename }"}' https://shootnscoreit.com/graphql/
-          (HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js 2>&1 | while IFS= read -r l; do printf '%s %s\n' "$(date +%T.%3N)" "$l"; done > /tmp/srv.log) &
-          for i in $(seq 1 40); do curl -sf -o /dev/null localhost:3000/ && break; sleep 0.5; done
-          for i in 1 2 3; do curl -s -o /dev/null -w "match page: %{http_code} %{time_total}s\n" localhost:3000/match/22/99999999; done
-          echo "=== server log ==="
-          grep -vE 'at Socket|at h |^\S+\s*$' /tmp/srv.log | cut -c1-220
-          pkill -f 'standalone/server.js'
-          true
       - run: pnpm test:e2e
         timeout-minutes: 10
         env:
           SSI_API_KEY: dummy_key_for_e2e
+          # Keep e2e hermetic: the sentinel key skips JWT acquisition, but
+          # server-side renders (generateMetadata, page prefetch, event
+          # search) still fetch from SSI with it. SSI now throttles an IP
+          # after a burst of invalid-key calls, which turned those fetches
+          # into 8s timeouts and broke the URL-timing tests (Sep 2026).
+          SSI_UPSTREAM_PAUSED: "on"
 
       - uses: actions/upload-artifact@v7
         if: failure()
