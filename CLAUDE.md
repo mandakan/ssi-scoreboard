@@ -34,6 +34,9 @@ by client components.
 Browser -> Next.js Route Handlers -> shootnscoreit.com/graphql/
 ```
 
+Interactive diagrams of the system, the scorecard refresh cycle, and the tiered match
+data store live in `docs/diagrams/` (see its README to regenerate them).
+
 Key directories:
 - `app/api/match/[ct]/[id]/route.ts` -- proxies match overview query
 - `app/api/compare/route.ts` -- fans out competitor scorecard queries, calls logic.ts

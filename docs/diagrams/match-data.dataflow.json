@@ -1,0 +1,282 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Match Data Tiered Store",
+    "output": "match-data-tiers.html",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1080,
+      560
+    ],
+    "views": [
+      {
+        "id": "hot-path",
+        "label": "Hot path",
+        "focus": [
+          "ssi",
+          "cached",
+          "redis",
+          "match_page"
+        ],
+        "note": "Live match views read the Redis snapshot written by cachedExecuteQuery."
+      },
+      {
+        "id": "durable",
+        "label": "Durable tier",
+        "focus": [
+          "redis",
+          "d1",
+          "match_page",
+          "shooter_dash"
+        ],
+        "note": "Redis drains into D1/SQLite so completed matches survive cache eviction."
+      },
+      {
+        "id": "index",
+        "label": "Shooter index",
+        "focus": [
+          "cached",
+          "indexer",
+          "appdb",
+          "shooter_dash"
+        ],
+        "note": "Every fetched competitor list updates the persistent shooter index."
+      }
+    ]
+  },
+  "stages": [
+    {
+      "label": "Sources"
+    },
+    {
+      "label": "Ingress"
+    },
+    {
+      "label": "Hot cache"
+    },
+    {
+      "label": "Durable"
+    },
+    {
+      "label": "Consumers"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "ssi",
+      "type": "external",
+      "label": "SSI GraphQL",
+      "sublabel": "shootnscoreit.com",
+      "stage": 0,
+      "row": 0,
+      "tag": "rate-limited"
+    },
+    {
+      "id": "cached",
+      "type": "backend",
+      "label": "cachedExecuteQuery",
+      "sublabel": "lib/graphql.ts",
+      "stage": 1,
+      "row": 0,
+      "tag": "schema v tag"
+    },
+    {
+      "id": "redis",
+      "type": "database",
+      "label": "Redis",
+      "sublabel": "match cache + sidecar",
+      "stage": 2,
+      "row": 0,
+      "tag": "TTL by match state"
+    },
+    {
+      "id": "indexer",
+      "type": "backend",
+      "label": "indexMatchShooters",
+      "sublabel": "lib/shooter-index.ts",
+      "stage": 2,
+      "row": 2,
+      "tag": "afterResponse"
+    },
+    {
+      "id": "d1",
+      "type": "database",
+      "label": "match_data_cache",
+      "sublabel": "D1 / SQLite",
+      "stage": 3,
+      "row": 1,
+      "tag": "last known good"
+    },
+    {
+      "id": "appdb",
+      "type": "database",
+      "label": "Shooter index",
+      "sublabel": "shooter_matches",
+      "stage": 3,
+      "row": 2,
+      "tag": "200 per shooter"
+    },
+    {
+      "id": "match_page",
+      "type": "frontend",
+      "label": "Match page",
+      "sublabel": "live grid + charts",
+      "stage": 4,
+      "row": 1
+    },
+    {
+      "id": "shooter_dash",
+      "type": "frontend",
+      "label": "Shooter dashboard",
+      "sublabel": "/shooter/{id}",
+      "stage": 4,
+      "row": 2
+    }
+  ],
+  "flows": [
+    {
+      "id": "fetch",
+      "from": "ssi",
+      "to": "cached",
+      "label": "GraphQL response",
+      "classification": "fresh",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "id": "hot-write",
+      "from": "cached",
+      "to": "redis",
+      "label": "write entry",
+      "classification": "v, cachedAt",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "id": "index-write",
+      "from": "cached",
+      "to": "indexer",
+      "label": "competitor list",
+      "classification": "side effect",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "left",
+      "via": [
+        [
+          315,
+          385
+        ]
+      ]
+    },
+    {
+      "id": "drain",
+      "from": "redis",
+      "to": "d1",
+      "label": "persistToMatchStore drain",
+      "classification": "24h",
+      "variant": "default",
+      "fromSide": "bottom",
+      "toSide": "left",
+      "via": [
+        [
+          530,
+          271
+        ]
+      ]
+    },
+    {
+      "id": "hot-read",
+      "from": "redis",
+      "to": "match_page",
+      "label": "cached snapshot",
+      "classification": "SWR",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "top",
+      "via": [
+        [
+          960,
+          157
+        ]
+      ]
+    },
+    {
+      "id": "fallback-read",
+      "from": "d1",
+      "to": "match_page",
+      "label": "fallback read",
+      "classification": "Redis miss",
+      "variant": "dashed",
+      "route": "straight"
+    },
+    {
+      "id": "per-match",
+      "from": "d1",
+      "to": "shooter_dash",
+      "label": "per-match results",
+      "classification": "durable",
+      "variant": "default",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "via": [
+        [
+          745,
+          328
+        ],
+        [
+          960,
+          328
+        ]
+      ]
+    },
+    {
+      "id": "profiles",
+      "from": "indexer",
+      "to": "appdb",
+      "label": "upsert refs",
+      "classification": "profiles",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "id": "aggregates",
+      "from": "appdb",
+      "to": "shooter_dash",
+      "label": "career aggregates",
+      "classification": "read",
+      "variant": "emphasis",
+      "route": "straight"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "amber",
+      "title": "Read order",
+      "items": [
+        "getMatchDataWithFallback: Redis, then D1/SQLite, then null",
+        "GraphQL is reached only on a full miss",
+        "Entries missing v or on an older CACHE_SCHEMA_VERSION count as misses"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "TTL tiers",
+      "items": [
+        "computeMatchTtl picks pre / active / complete tiers",
+        "Completed matches are pinned permanently after a fresh confirm",
+        "Cached inputs never pin; a forced fresh confirm runs first",
+        "scripts/warm-cache.ts pre-writes permanent entries to both Redis and D1"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Shooter index",
+      "items": [
+        "indexMatchShooters runs after the response, never on the request path",
+        "shooter_matches is capped at 200 per shooter",
+        "Achievements persist so unlocks survive the prune window"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,325 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "SSI Scoreboard System Architecture",
+    "output": "system-architecture.html",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1180,
+      600
+    ],
+    "views": [
+      {
+        "id": "clients",
+        "label": "Client surfaces",
+        "focus": [
+          "browser",
+          "mcp_client",
+          "splitsmith",
+          "routes"
+        ],
+        "note": "Three entry points converge on the same Route Handlers; only /api/v1 is a stable contract."
+      },
+      {
+        "id": "upstream",
+        "label": "Upstream guard rail",
+        "focus": [
+          "routes",
+          "limiter",
+          "ssi_auth",
+          "ssi"
+        ],
+        "note": "Every SSI call passes the semaphore, backoff, and pause switch, carrying a Redis-shared JWT."
+      },
+      {
+        "id": "storage",
+        "label": "Cache and durable state",
+        "focus": [
+          "routes",
+          "redis",
+          "appdb",
+          "telemetry"
+        ],
+        "note": "Redis is the hot match cache; AppDatabase holds the shooter index and last-known-good match data."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "browser",
+      "type": "frontend",
+      "label": "Browser app",
+      "sublabel": "Next.js client",
+      "pos": [
+        30,
+        260
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "mcp_client",
+      "type": "external",
+      "label": "MCP clients",
+      "sublabel": "Claude Desktop / Code",
+      "pos": [
+        30,
+        90
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "splitsmith",
+      "type": "external",
+      "label": "API v1 consumers",
+      "sublabel": "splitsmith",
+      "pos": [
+        30,
+        430
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "tag": "bearer token"
+    },
+    {
+      "id": "routes",
+      "type": "backend",
+      "label": "Route Handlers",
+      "sublabel": "app/api/*",
+      "pos": [
+        320,
+        260
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "only SSI caller"
+    },
+    {
+      "id": "telemetry",
+      "type": "cloud",
+      "label": "Telemetry",
+      "sublabel": "console + R2",
+      "pos": [
+        320,
+        430
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "redis",
+      "type": "database",
+      "label": "Redis",
+      "sublabel": "ioredis / Upstash",
+      "pos": [
+        550,
+        90
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "match cache"
+    },
+    {
+      "id": "limiter",
+      "type": "security",
+      "label": "Upstream limiter",
+      "sublabel": "semaphore + backoff",
+      "pos": [
+        550,
+        260
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "concurrency 2"
+    },
+    {
+      "id": "appdb",
+      "type": "database",
+      "label": "AppDatabase",
+      "sublabel": "SQLite / D1",
+      "pos": [
+        550,
+        430
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "shooter index"
+    },
+    {
+      "id": "ssi_auth",
+      "type": "security",
+      "label": "SSI auth",
+      "sublabel": "lib/ssi-auth.ts",
+      "pos": [
+        780,
+        90
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "JWT lifecycle"
+    },
+    {
+      "id": "ssi",
+      "type": "external",
+      "label": "ShootNScoreIt",
+      "sublabel": "GraphQL API",
+      "pos": [
+        1010,
+        260
+      ],
+      "size": [
+        140,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Next.js app: Docker or Cloudflare Pages",
+      "wraps": [
+        "routes",
+        "telemetry",
+        "redis",
+        "limiter",
+        "appdb",
+        "ssi_auth"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "browser-routes",
+      "from": "browser",
+      "to": "routes",
+      "label": "fetch /api/*",
+      "variant": "emphasis",
+      "labelDx": -38
+    },
+    {
+      "id": "mcp-routes",
+      "from": "mcp_client",
+      "to": "routes",
+      "label": "JSON-RPC /api/mcp",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "id": "v1-routes",
+      "from": "splitsmith",
+      "to": "routes",
+      "label": "GET /api/v1/*",
+      "variant": "security"
+    },
+    {
+      "id": "routes-redis",
+      "from": "routes",
+      "to": "redis",
+      "label": "SWR match cache",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "routes-limiter",
+      "from": "routes",
+      "to": "limiter",
+      "label": "upstream call",
+      "variant": "emphasis"
+    },
+    {
+      "id": "routes-appdb",
+      "from": "routes",
+      "to": "appdb",
+      "label": "profiles, match_data_cache"
+    },
+    {
+      "id": "routes-telemetry",
+      "from": "routes",
+      "to": "telemetry",
+      "label": "structured events",
+      "variant": "dashed",
+      "labelDy": 24
+    },
+    {
+      "id": "limiter-ssi",
+      "from": "limiter",
+      "to": "ssi",
+      "label": "GraphQL + JWT",
+      "variant": "emphasis"
+    },
+    {
+      "id": "limiter-auth",
+      "from": "limiter",
+      "to": "ssi_auth",
+      "label": "get token",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "auth-redis",
+      "from": "ssi_auth",
+      "to": "redis",
+      "label": "shared token",
+      "variant": "dashed"
+    },
+    {
+      "id": "auth-ssi",
+      "from": "ssi_auth",
+      "to": "ssi",
+      "label": "token_auth / refresh",
+      "variant": "security",
+      "fromSide": "right",
+      "toSide": "top"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Entry points",
+      "items": [
+        "Browser UI reads only via hooks in lib/queries.ts",
+        "MCP tools shared by HTTP and stdio transports",
+        "/api/v1 is the only bearer-gated, shape-locked surface"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Upstream protection",
+      "items": [
+        "One MatchSyncProbe per 60s cycle gates every refresh",
+        "Per-isolate semaphore, Redis-shared backoff, SSI_UPSTREAM_PAUSED kill switch",
+        "SSI_API_KEY and JWT never reach client code"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "State",
+      "items": [
+        "Redis: match cache with smart TTL tiers",
+        "AppDatabase: shooter index, achievements, last-known-good match data",
+        "Telemetry never logs IPs, user agents, or shooter IDs"
+      ]
+    }
+  ]
+}
