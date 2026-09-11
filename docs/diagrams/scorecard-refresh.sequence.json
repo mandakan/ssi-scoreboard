@@ -1,0 +1,258 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Live Scorecard Refresh Cycle",
+    "output": "scorecard-refresh-cycle.html",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1080,
+      540
+    ],
+    "column_fit": "spread",
+    "views": [
+      {
+        "id": "serve",
+        "label": "Serve from cache",
+        "focus": [
+          "browser",
+          "route",
+          "redis"
+        ],
+        "note": "The poll always answers from the cached snapshot; refresh never blocks the response."
+      },
+      {
+        "id": "probe",
+        "label": "Single probe",
+        "focus": [
+          "route",
+          "ssi",
+          "redis"
+        ],
+        "note": "One MatchSyncProbe per cycle decides whether anything changed."
+      },
+      {
+        "id": "splice",
+        "label": "Changed stages only",
+        "focus": [
+          "route",
+          "ssi",
+          "redis",
+          "d1"
+        ],
+        "note": "Only stages whose probe state moved are refetched, then spliced into the snapshot."
+      }
+    ]
+  },
+  "participants": [
+    {
+      "id": "browser",
+      "type": "frontend",
+      "label": "Browser",
+      "sublabel": "live grid poll"
+    },
+    {
+      "id": "route",
+      "type": "backend",
+      "label": "Route Handler",
+      "sublabel": "getMatchScorecards"
+    },
+    {
+      "id": "redis",
+      "type": "database",
+      "label": "Redis",
+      "sublabel": "snapshot + sidecar"
+    },
+    {
+      "id": "ssi",
+      "type": "external",
+      "label": "SSI GraphQL",
+      "sublabel": "shootnscoreit.com"
+    },
+    {
+      "id": "d1",
+      "type": "database",
+      "label": "D1 / SQLite",
+      "sublabel": "match_data_cache"
+    }
+  ],
+  "segments": [
+    {
+      "from": 150,
+      "to": 256,
+      "label": "Serve"
+    },
+    {
+      "from": 266,
+      "to": 312,
+      "label": "Background probe"
+    },
+    {
+      "from": 322,
+      "to": 452,
+      "label": "Diff and splice"
+    }
+  ],
+  "messages": [
+    {
+      "id": "poll",
+      "from": "browser",
+      "to": "route",
+      "y": 160,
+      "label": "GET scorecards (60s poll)",
+      "variant": "emphasis"
+    },
+    {
+      "id": "read-snapshot",
+      "from": "route",
+      "to": "redis",
+      "y": 188,
+      "label": "read GetMatchScorecards"
+    },
+    {
+      "id": "snapshot-hit",
+      "from": "redis",
+      "to": "route",
+      "y": 216,
+      "label": "hit, older than freshness",
+      "variant": "return"
+    },
+    {
+      "id": "respond",
+      "from": "route",
+      "to": "browser",
+      "y": 244,
+      "label": "200 cached snapshot",
+      "variant": "return"
+    },
+    {
+      "id": "probe-call",
+      "from": "route",
+      "to": "ssi",
+      "y": 276,
+      "label": "MatchSyncProbe via upstream limiter",
+      "variant": "security"
+    },
+    {
+      "id": "probe-result",
+      "from": "ssi",
+      "to": "route",
+      "y": 304,
+      "label": "per-stage latest_scorecard_update",
+      "variant": "return"
+    },
+    {
+      "id": "read-sidecar",
+      "from": "route",
+      "to": "redis",
+      "y": 336,
+      "label": "diff against probe:stage-state sidecar",
+      "note": "unchanged cycle: extend TTL, stop here"
+    },
+    {
+      "id": "fetch-changed",
+      "from": "route",
+      "to": "ssi",
+      "y": 364,
+      "label": "STAGE_SCORECARDS_QUERY, changed stages only",
+      "variant": "security"
+    },
+    {
+      "id": "stage-result",
+      "from": "ssi",
+      "to": "route",
+      "y": 392,
+      "label": "stage scorecards",
+      "variant": "return"
+    },
+    {
+      "id": "write-snapshot",
+      "from": "route",
+      "to": "redis",
+      "y": 420,
+      "label": "write snapshot, then sidecar",
+      "variant": "emphasis"
+    },
+    {
+      "id": "persist",
+      "from": "route",
+      "to": "d1",
+      "y": 448,
+      "label": "persist last-known-good",
+      "variant": "dashed"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "route",
+      "from": 160,
+      "to": 454,
+      "type": "backend"
+    },
+    {
+      "participant": "redis",
+      "from": 183,
+      "to": 222,
+      "type": "database"
+    },
+    {
+      "participant": "ssi",
+      "from": 276,
+      "to": 310,
+      "type": "external"
+    },
+    {
+      "participant": "redis",
+      "from": 331,
+      "to": 342,
+      "type": "database"
+    },
+    {
+      "participant": "ssi",
+      "from": 364,
+      "to": 398,
+      "type": "external"
+    },
+    {
+      "participant": "redis",
+      "from": 415,
+      "to": 426,
+      "type": "database"
+    },
+    {
+      "participant": "d1",
+      "from": 443,
+      "to": 454,
+      "type": "database"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Serve first",
+      "items": [
+        "The poll is answered from Redis before any upstream work",
+        "Refresh runs after the response via afterResponse()",
+        "A setIfAbsent inflight lock single-flights refresh across instances"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "One probe per cycle",
+      "items": [
+        "MatchSyncProbe carries per-stage latest_scorecard_update and counts",
+        "Every upstream call passes the semaphore, backoff, and pause switch",
+        "Unchanged cycle = 1 probe, 0 stage fetches"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Write order matters",
+      "items": [
+        "Snapshot first, sidecar second; never reverse",
+        "A crash in between refetches the same stages next cycle",
+        "Full resync on missing sidecar, probe failure, force-refresh, or 900s ceiling"
+      ]
+    }
+  ]
+}
