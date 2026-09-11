@@ -29,10 +29,13 @@ const GRAPHQL_ENDPOINT = "https://shootnscoreit.com/graphql/";
 const CACHE_KEY = "ssi:jwt:v1";
 
 // Sentinel API key set by the CI e2e job (.github/workflows/ci.yml). When seen
-// we skip JWT acquisition entirely and return a placeholder -- e2e tests mock
-// every /api/* call, so the placeholder never reaches the wire. Without this
+// we skip JWT acquisition entirely and return a placeholder. Without this
 // short-circuit every server-side render (e.g. generateMetadata) would throw
 // from missing creds, slowing navigations enough to flake URL-timing tests.
+// NOTE: e2e tests mock every browser-side /api/* call, but server-side
+// renders still fetch from SSI with this key. The CI job therefore also sets
+// SSI_UPSTREAM_PAUSED=on so nothing reaches the wire -- SSI throttles an IP
+// after a burst of invalid-key calls.
 const E2E_SENTINEL_API_KEY = "dummy_key_for_e2e";
 const E2E_PLACEHOLDER_JWT = "e2e-placeholder-jwt";
 
