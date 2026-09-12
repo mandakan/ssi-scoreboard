@@ -137,6 +137,12 @@ jobs:
         timeout-minutes: 10
         env:
           SSI_API_KEY: dummy_key_for_e2e
+          # Keep e2e hermetic: the sentinel key skips JWT acquisition, but
+          # server-side renders (generateMetadata, page prefetch, event
+          # search) still fetch from SSI with it. SSI now throttles an IP
+          # after a burst of invalid-key calls, which turned those fetches
+          # into 8s timeouts and broke the URL-timing tests (Sep 2026).
+          SSI_UPSTREAM_PAUSED: "on"
 
       - uses: actions/upload-artifact@v7
         if: failure()
