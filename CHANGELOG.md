@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/mandakan/ssi-scoreboard/compare/v1.0.1...v1.1.0) (2026-09-15)
+
+
+### Features
+
+* **api-v1:** anonymous read access with IP-keyed rate limiting ([#555](https://github.com/mandakan/ssi-scoreboard/issues/555)) ([c37fbee](https://github.com/mandakan/ssi-scoreboard/commit/c37fbee31030ca3b87ec04456e6793e5ccdf9281)), closes [#554](https://github.com/mandakan/ssi-scoreboard/issues/554)
+
 ## [1.0.1](https://github.com/mandakan/ssi-scoreboard/compare/v1.0.0...v1.0.1) (2026-09-12)
 
 
