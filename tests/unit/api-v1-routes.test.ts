@@ -70,6 +70,8 @@ const ORIGINAL_TOKENS = process.env.EXTERNAL_API_TOKENS;
 
 beforeEach(() => {
   process.env.EXTERNAL_API_TOKENS = "secret-token";
+  cacheMock.get.mockReset();
+  cacheMock.set.mockReset();
   cacheMock.get.mockResolvedValue(null);
   cacheMock.set.mockResolvedValue(undefined);
   innerEvents.mockReset();
@@ -87,11 +89,56 @@ afterEach(() => {
 const auth = { Authorization: "Bearer secret-token" } as const;
 
 describe("/api/v1/events", () => {
-  it("requires a bearer token", async () => {
+  it("serves anonymous callers (no Authorization header) from an IP bucket", async () => {
+    innerEvents.mockResolvedValue(
+      new Response(JSON.stringify([]), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    const { GET } = await import("@/app/api/v1/events/route");
+    const res = await GET(
+      new Request("http://x/api/v1/events", { headers: { "CF-Connecting-IP": "203.0.113.7" } }),
+    );
+    expect(res.status).toBe(200);
+    expect(innerEvents).toHaveBeenCalledTimes(1);
+    const usedKey = cacheMock.set.mock.calls[0]?.[0];
+    expect(usedKey).toMatch(/^rl:v1:anon:203\.0\.113\.7:\d+$/);
+  });
+
+  it("serves anonymous callers when EXTERNAL_API_TOKENS is unset", async () => {
+    delete process.env.EXTERNAL_API_TOKENS;
+    innerEvents.mockResolvedValue(
+      new Response(JSON.stringify([]), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
     const { GET } = await import("@/app/api/v1/events/route");
     const res = await GET(new Request("http://x/api/v1/events"));
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects an invalid bearer token with 401", async () => {
+    const { GET } = await import("@/app/api/v1/events/route");
+    const res = await GET(
+      new Request("http://x/api/v1/events", { headers: { Authorization: "Bearer wrong" } }),
+    );
     expect(res.status).toBe(401);
+    const body = await res.json();
+    v1ErrorEnvelopeSchema.parse(body);
+    expect(body.error.code).toBe("unauthorized");
     expect(innerEvents).not.toHaveBeenCalled();
+  });
+
+  it("keys a valid bearer on the token bucket, not the IP", async () => {
+    innerEvents.mockResolvedValue(
+      new Response(JSON.stringify([]), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    const { GET } = await import("@/app/api/v1/events/route");
+    const res = await GET(
+      new Request("http://x/api/v1/events", {
+        headers: { ...auth, "CF-Connecting-IP": "203.0.113.7" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const usedKey = cacheMock.set.mock.calls[0]?.[0];
+    expect(usedKey).toMatch(/^rl:v1:[0-9a-f]+:\d+$/);
+    expect(usedKey).not.toContain("203.0.113.7");
   });
 
   it("forwards query params and returns the inner payload unchanged", async () => {
@@ -253,6 +300,29 @@ describe("/api/v1/match/[ct]/[id]", () => {
     const body = await res.json();
     v1ErrorEnvelopeSchema.parse(body);
     expect(body).toMatchSnapshot();
+  });
+
+  it("denies a private match identically for anonymous and token callers", async () => {
+    // The inner route answers 404 for matches the bot cannot see (#341,
+    // #340, #426). Anonymous v1 must get the same answer as a token caller:
+    // going tokenless never widens visibility.
+    innerMatch.mockResolvedValue(
+      new Response(JSON.stringify({ error: "Match not found" }), { status: 404 }),
+    );
+    const { GET } = await import("@/app/api/v1/match/[ct]/[id]/route");
+    const ctx = { params: Promise.resolve({ ct: "22", id: "31337" }) };
+    const anon = await GET(new Request("http://x/api/v1/match/22/31337"), ctx);
+    const withToken = await GET(
+      new Request("http://x/api/v1/match/22/31337", { headers: auth }),
+      ctx,
+    );
+    expect(anon.status).toBe(404);
+    expect(withToken.status).toBe(404);
+    const anonBody = await anon.json();
+    const tokenBody = await withToken.json();
+    v1ErrorEnvelopeSchema.parse(anonBody);
+    expect(anonBody).toEqual(tokenBody);
+    expect(anonBody.error.code).toBe("not_found");
   });
 
   it("maps a 400 from the inner route to bad_request", async () => {

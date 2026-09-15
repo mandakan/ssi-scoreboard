@@ -1,4 +1,4 @@
-// /api/v1/shooter/{shooterId} -- public, bearer-token-gated shooter dashboard.
+// /api/v1/shooter/{shooterId} -- public shooter dashboard (anonymous or bearer-identified).
 //
 // Thin wrapper around /api/shooter/[shooterId]. The DELETE endpoint on the
 // internal route (GDPR suppression) is intentionally not re-exported here:

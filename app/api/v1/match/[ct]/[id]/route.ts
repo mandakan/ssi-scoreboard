@@ -1,4 +1,4 @@
-// /api/v1/match/{ct}/{id} -- public, bearer-token-gated match overview.
+// /api/v1/match/{ct}/{id} -- public match overview (anonymous or bearer-identified).
 //
 // Thin wrapper around /api/match/[ct]/[id]. See docs/api-v1.md.
 

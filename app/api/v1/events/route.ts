@@ -1,4 +1,4 @@
-// /api/v1/events -- public, bearer-token-gated event search.
+// /api/v1/events -- public event search (anonymous or bearer-identified).
 //
 // Thin wrapper around /api/events. Forwards query params verbatim and remaps
 // errors into the v1 envelope. See docs/api-v1.md for the contract.

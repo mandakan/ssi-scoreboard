@@ -9,6 +9,7 @@ vi.mock("@/lib/cache-impl", () => ({ default: cacheMock }));
 
 const ORIGINAL_TOKENS = process.env.EXTERNAL_API_TOKENS;
 const ORIGINAL_LIMIT = process.env.EXTERNAL_API_RATE_LIMIT_PER_MIN;
+const ORIGINAL_ANON_LIMIT = process.env.EXTERNAL_API_ANON_RATE_LIMIT_PER_MIN;
 
 describe("api-v1 auth + rate limit", () => {
   beforeEach(() => {
@@ -23,9 +24,33 @@ describe("api-v1 auth + rate limit", () => {
     else process.env.EXTERNAL_API_TOKENS = ORIGINAL_TOKENS;
     if (ORIGINAL_LIMIT === undefined) delete process.env.EXTERNAL_API_RATE_LIMIT_PER_MIN;
     else process.env.EXTERNAL_API_RATE_LIMIT_PER_MIN = ORIGINAL_LIMIT;
+    if (ORIGINAL_ANON_LIMIT === undefined) delete process.env.EXTERNAL_API_ANON_RATE_LIMIT_PER_MIN;
+    else process.env.EXTERNAL_API_ANON_RATE_LIMIT_PER_MIN = ORIGINAL_ANON_LIMIT;
   });
 
-  it("rejects when EXTERNAL_API_TOKENS is unset", async () => {
+  it("treats a missing Authorization header as an anonymous caller keyed by IP", async () => {
+    process.env.EXTERNAL_API_TOKENS = "abc,def";
+    const { authenticateV1Request } = await import("@/lib/api-v1");
+    const res = authenticateV1Request(
+      new Request("http://x/api/v1/events", { headers: { "CF-Connecting-IP": "203.0.113.7" } }),
+    );
+    expect(res).not.toBeInstanceOf(Response);
+    if (res instanceof Response) return;
+    expect(res).toEqual({ kind: "anonymous", ip: "203.0.113.7" });
+  });
+
+  it("still serves anonymous callers when EXTERNAL_API_TOKENS is unset", async () => {
+    delete process.env.EXTERNAL_API_TOKENS;
+    const { authenticateV1Request } = await import("@/lib/api-v1");
+    const res = authenticateV1Request(
+      new Request("http://x/api/v1/events", { headers: { "X-Forwarded-For": "198.51.100.9, 10.0.0.1" } }),
+    );
+    expect(res).not.toBeInstanceOf(Response);
+    if (res instanceof Response) return;
+    expect(res).toEqual({ kind: "anonymous", ip: "198.51.100.9" });
+  });
+
+  it("rejects a bearer when EXTERNAL_API_TOKENS is unset (no silent downgrade)", async () => {
     delete process.env.EXTERNAL_API_TOKENS;
     const { authenticateV1Request } = await import("@/lib/api-v1");
     const res = authenticateV1Request(
@@ -34,14 +59,16 @@ describe("api-v1 auth + rate limit", () => {
     expect(res).toBeInstanceOf(Response);
     if (!(res instanceof Response)) return;
     expect(res.status).toBe(401);
-    const body = (await res.json()) as { error: { code: string; message: string } };
+    const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("unauthorized");
   });
 
-  it("rejects when Authorization header is missing", async () => {
+  it("rejects a present but malformed Authorization header", async () => {
     process.env.EXTERNAL_API_TOKENS = "abc,def";
     const { authenticateV1Request } = await import("@/lib/api-v1");
-    const res = authenticateV1Request(new Request("http://x/api/v1/events"));
+    const res = authenticateV1Request(
+      new Request("http://x/api/v1/events", { headers: { Authorization: "Basic abc" } }),
+    );
     expect(res).toBeInstanceOf(Response);
     if (!(res instanceof Response)) return;
     expect(res.status).toBe(401);
@@ -68,7 +95,7 @@ describe("api-v1 auth + rate limit", () => {
     );
     expect(res).not.toBeInstanceOf(Response);
     if (res instanceof Response) return;
-    expect(res.token).toBe("def");
+    expect(res).toEqual({ kind: "token", token: "def" });
   });
 
   it("trims whitespace and ignores empty entries in EXTERNAL_API_TOKENS", async () => {
@@ -114,18 +141,71 @@ describe("api-v1 auth + rate limit", () => {
     process.env.EXTERNAL_API_TOKENS = "abc";
     cacheMock.get.mockRejectedValue(new Error("redis down"));
     const { checkV1RateLimit } = await import("@/lib/api-v1");
-    const result = await checkV1RateLimit("abc");
+    const result = await checkV1RateLimit({ kind: "token", token: "abc" });
     expect(result).toEqual({ allowed: true });
   });
 
   it("uses a token-hash cache key (not the raw token)", async () => {
     process.env.EXTERNAL_API_TOKENS = "supersecret";
     const { checkV1RateLimit } = await import("@/lib/api-v1");
-    await checkV1RateLimit("supersecret");
+    await checkV1RateLimit({ kind: "token", token: "supersecret" });
     const usedKey = cacheMock.set.mock.calls[0]?.[0];
     expect(usedKey).toBeTruthy();
     expect(usedKey).not.toContain("supersecret");
     expect(usedKey).toMatch(/^rl:v1:[0-9a-f]+:\d+$/);
+  });
+
+  it("gives two anonymous IPs separate buckets", async () => {
+    const { checkV1RateLimit } = await import("@/lib/api-v1");
+    await checkV1RateLimit({ kind: "anonymous", ip: "203.0.113.7" });
+    await checkV1RateLimit({ kind: "anonymous", ip: "203.0.113.8" });
+    const [k1, k2] = cacheMock.set.mock.calls.map((c) => c[0]);
+    expect(k1).toMatch(/^rl:v1:anon:203\.0\.113\.7:\d+$/);
+    expect(k2).toMatch(/^rl:v1:anon:203\.0\.113\.8:\d+$/);
+    expect(k1).not.toBe(k2);
+  });
+
+  it("does not share a bucket between a token caller and an anonymous caller from the same IP", async () => {
+    process.env.EXTERNAL_API_TOKENS = "abc";
+    const { gateV1Request } = await import("@/lib/api-v1");
+    const ip = { "CF-Connecting-IP": "203.0.113.7" };
+    await gateV1Request(
+      new Request("http://x/api/v1/events", { headers: { ...ip, Authorization: "Bearer abc" } }),
+    );
+    await gateV1Request(new Request("http://x/api/v1/events", { headers: ip }));
+    const [tokenKey, anonKey] = cacheMock.set.mock.calls.map((c) => c[0]);
+    expect(tokenKey).toBeTruthy();
+    expect(anonKey).toBeTruthy();
+    expect(tokenKey).not.toBe(anonKey);
+    expect(tokenKey).not.toContain("203.0.113.7");
+  });
+
+  it("applies the lower anonymous limit (default 30/min) to IP buckets", async () => {
+    const { checkV1RateLimit } = await import("@/lib/api-v1");
+    cacheMock.get.mockResolvedValueOnce("29").mockResolvedValueOnce("30");
+    const under = await checkV1RateLimit({ kind: "anonymous", ip: "203.0.113.7" });
+    const over = await checkV1RateLimit({ kind: "anonymous", ip: "203.0.113.7" });
+    expect(under).toEqual({ allowed: true });
+    expect(over.allowed).toBe(false);
+  });
+
+  it("keeps the token limit (default 60/min) independent of the anonymous limit", async () => {
+    const { checkV1RateLimit } = await import("@/lib/api-v1");
+    cacheMock.get.mockResolvedValueOnce("30").mockResolvedValueOnce("60");
+    const under = await checkV1RateLimit({ kind: "token", token: "abc" });
+    const over = await checkV1RateLimit({ kind: "token", token: "abc" });
+    expect(under).toEqual({ allowed: true });
+    expect(over.allowed).toBe(false);
+  });
+
+  it("honours EXTERNAL_API_ANON_RATE_LIMIT_PER_MIN", async () => {
+    process.env.EXTERNAL_API_ANON_RATE_LIMIT_PER_MIN = "2";
+    const { checkV1RateLimit } = await import("@/lib/api-v1");
+    cacheMock.get.mockResolvedValueOnce("1").mockResolvedValueOnce("2");
+    const under = await checkV1RateLimit({ kind: "anonymous", ip: "203.0.113.7" });
+    const over = await checkV1RateLimit({ kind: "anonymous", ip: "203.0.113.7" });
+    expect(under).toEqual({ allowed: true });
+    expect(over.allowed).toBe(false);
   });
 });
 
