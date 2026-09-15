@@ -1,5 +1,5 @@
-// /api/v1/match/{ct}/{id}/competitor/{competitorId}/stages -- public,
-// bearer-token-gated per-competitor stage results.
+// /api/v1/match/{ct}/{id}/competitor/{competitorId}/stages -- public
+// per-competitor stage results (anonymous or bearer-identified).
 //
 // Thin wrapper around the internal /api/match/[ct]/[id]/competitor/[competitorId]/stages
 // route. See docs/api-v1.md.

@@ -33,9 +33,11 @@ interface RateLimitOptions {
 /**
  * Extract client IP from request headers.
  * Checks CF-Connecting-IP (Cloudflare), X-Forwarded-For (reverse proxy),
- * then falls back to a generic key.
+ * then falls back to a generic key. Route Handlers never see the socket's
+ * remote address, so direct (unproxied) callers all share the "unknown"
+ * bucket. Also used by lib/api-v1.ts to key anonymous v1 callers.
  */
-function getClientIp(req: Request): string {
+export function getClientIp(req: Request): string {
   return (
     req.headers.get("cf-connecting-ip") ??
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??

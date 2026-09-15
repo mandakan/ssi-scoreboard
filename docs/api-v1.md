@@ -7,12 +7,14 @@ data without re-implementing the SSI GraphQL client, vendoring the MCP server,
 or pinning to internal `/api/*` routes that may change at any time.
 
 The internal `/api/*` routes used by the browser app remain unauthenticated
-and are **not** part of any contract. Only `/api/v1/*` is gated, rate-limited,
-and shape-locked.
+and are **not** part of any contract. Only `/api/v1/*` is rate-limited per
+caller and shape-locked.
 
 The base URL for the production deployment is `https://scoreboard.urdr.dev`.
-All examples below use `$TOKEN` as a placeholder for a valid bearer token (see
-[Authentication](#authentication)).
+No token is needed to read: every endpoint works anonymously at a per-IP rate
+limit. The examples below pass `Authorization: Bearer $TOKEN` to show the
+optional identified-consumer form, which gets its own higher limit (see
+[Authentication](#authentication)). Drop the header for anonymous access.
 
 ---
 
@@ -340,27 +342,53 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 
 ## Authentication
 
-Every `/api/v1/*` request must carry a bearer token:
+The data behind v1 is public IPSC results, and the same data is served
+unauthenticated to the browser app, so **no token is required to read**. A
+bearer token is not access control; it identifies a consumer so it can be
+rate-limited (and revoked) on its own instead of sharing the anonymous per-IP
+bucket.
 
-```
-Authorization: Bearer <token>
-```
+| Request | Result |
+|---|---|
+| No `Authorization` header | Anonymous caller. Rate-limited per client IP. |
+| `Authorization: Bearer <token>` with a token in `EXTERNAL_API_TOKENS` | Identified consumer. Rate-limited per token. |
+| `Authorization` present but unknown token or not `Bearer ...` | `401 unauthorized`. A bad header is never downgraded to anonymous, so a typo or a revoked token is noticed rather than silently throttled harder. |
+
+Anonymous callers see exactly what the unauthenticated browser routes serve.
+Matches the scoreboard's bot account cannot see (non-public visibility, #341,
+#340, #426) are `404 not_found` for anonymous and token callers alike; a token
+never widens visibility.
+
+### Identify yourself with `User-Agent`
+
+Anonymous or not, send a `User-Agent` of the form `<app>/<version>` (for
+example `splitsmith/1.4.0`) so egress logs still say who is calling. Desktop
+apps that install onto end users' machines should stay anonymous: a token
+baked into a wheel or binary is extractable, and revoking it breaks every
+install at once.
+
+### When to use a token
+
+Tokens fit consumers that run in one place and want the higher limit and
+per-consumer revocation: a hosted service, a CI job, the MCP server. Each such
+consumer should get its own token.
 
 Tokens are configured server-side via the `EXTERNAL_API_TOKENS` environment
 variable -- a comma-separated list:
 
 ```
-EXTERNAL_API_TOKENS=splitsmith-prod-xxxx,splitsmith-dev-yyyy
+EXTERNAL_API_TOKENS=splitsmith-ci-xxxx,mcp-prod-yyyy
 ```
 
-Each consumer should get its own token so revocation is per-consumer.
+If `EXTERNAL_API_TOKENS` is unset or empty, anonymous access still works; it
+only means there are no identified consumers, and any bearer sent is a `401`.
 
 ### Generating tokens
 
 Use any cryptographically random value of >= 32 bytes:
 
 ```bash
-python -c "import secrets; print('splitsmith-prod-' + secrets.token_urlsafe(32))"
+python -c "import secrets; print('splitsmith-ci-' + secrets.token_urlsafe(32))"
 ```
 
 ### Rotation procedure
@@ -377,20 +405,25 @@ python -c "import secrets; print('splitsmith-prod-' + secrets.token_urlsafe(32))
    their config / your egress logs).
 4. Remove the old token from `EXTERNAL_API_TOKENS`.
 
-If `EXTERNAL_API_TOKENS` is unset or empty, **every** v1 request returns
-`401 unauthorized` -- there is no implicit "no auth required" mode.
-
 ---
 
 ## Rate limiting
 
-Per-token, fixed-window:
+Fixed-window (60 s), keyed per caller:
 
-- Default: 60 req/min per token
-- Override: `EXTERNAL_API_RATE_LIMIT_PER_MIN=120` (positive integer)
+| Caller | Bucket key | Default | Override |
+|---|---|---|---|
+| Anonymous | client IP | 30 req/min | `EXTERNAL_API_ANON_RATE_LIMIT_PER_MIN` |
+| Token | SHA-256 hash of the token (the raw token never lands in Redis) | 60 req/min | `EXTERNAL_API_RATE_LIMIT_PER_MIN` |
 
-The bucket key is a SHA-256 hash of the token (the raw token never lands in
-Redis). When a token is over the limit:
+The client IP is `CF-Connecting-IP` on Cloudflare, the first hop of
+`X-Forwarded-For` behind the Docker reverse proxy, and a shared `unknown`
+bucket when neither header is present (Route Handlers never see the socket
+address, so run the Docker target behind a proxy that sets the header).
+
+A token caller and an anonymous caller from the same IP have separate
+buckets; two anonymous callers behind the same NAT share one. When a bucket
+is over the limit:
 
 ```
 HTTP/1.1 429 Too Many Requests
@@ -405,7 +438,7 @@ out (same posture as the internal IP-based limiter).
 
 The internal IP-based rate limit on routes like `/api/events` (30/min) does
 **not** apply to `/api/v1/*` calls -- the v1 wrapper bypasses it so the
-documented per-token limit is the effective one.
+documented per-caller limit is the effective one.
 
 ---
 
@@ -424,8 +457,8 @@ Every non-2xx response uses the same shape:
 
 | Code | HTTP | Meaning |
 |---|---|---|
-| `unauthorized` | 401 | Missing / malformed Authorization header, unknown token, or `EXTERNAL_API_TOKENS` unconfigured |
-| `rate_limited` | 429 | Per-token bucket exhausted; check `Retry-After` |
+| `unauthorized` | 401 | `Authorization` header present but malformed or carrying an unknown token (omit the header for anonymous access) |
+| `rate_limited` | 429 | Per-caller bucket (IP or token) exhausted; check `Retry-After` |
 | `bad_request` | 400 | Malformed query params or path segments |
 | `not_found` | 404 (or 410 for GDPR-suppressed shooters) | Resource does not exist |
 | `upstream_failed` | 502 | SSI GraphQL or downstream cache failed |

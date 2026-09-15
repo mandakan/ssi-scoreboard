@@ -353,7 +353,11 @@ external servers). See `docs/mcp-server.md` for full developer notes.
 `/api/v1/*` is the **stable** external surface (currently consumed by
 [splitsmith](https://github.com/mandakan/splitsmith)). The internal `/api/*`
 routes the browser app uses are unauthenticated and have no contract. Only
-`/api/v1/*` is bearer-token-gated, per-token rate-limited, and shape-locked.
+`/api/v1/*` is per-caller rate-limited and shape-locked. Reads need no token:
+anonymous callers get a per-IP bucket (30/min); a valid bearer from
+`EXTERNAL_API_TOKENS` identifies a consumer and gives it its own per-token
+bucket (60/min). A present-but-invalid bearer is a 401, never a downgrade to
+anonymous (#554).
 
 Endpoints (thin wrappers around the internal routes, see `app/api/v1/`):
 - `GET /api/v1/events` -- match search
@@ -381,11 +385,12 @@ Endpoints (thin wrappers around the internal routes, see `app/api/v1/`):
   Codes: `unauthorized`, `rate_limited`, `not_found`, `upstream_failed`,
   `bad_request`. Add a new code only with a v2 bump.
 
-`lib/api-v1.ts` holds the auth + per-token rate-limit + error-mapping helpers.
-The wrapper bypasses the inner IP-based rate limit via
-`runWithIpRateLimitSkipped` so the documented per-token limit is the effective
+`lib/api-v1.ts` holds the caller-resolution + per-caller rate-limit + error-mapping
+helpers. The wrapper bypasses the inner IP-based rate limit via
+`runWithIpRateLimitSkipped` so the documented per-caller limit is the effective
 one. See `docs/api-v1.md` for the full contract, token rotation procedure, and
-the `EXTERNAL_API_TOKENS` / `EXTERNAL_API_RATE_LIMIT_PER_MIN` env vars.
+the `EXTERNAL_API_TOKENS` / `EXTERNAL_API_RATE_LIMIT_PER_MIN` /
+`EXTERNAL_API_ANON_RATE_LIMIT_PER_MIN` env vars.
 
 ## Package Manager
 This project uses **pnpm@10.30.3**. Do not use npm or yarn. Use `pnpm add` / `pnpm add -D`.

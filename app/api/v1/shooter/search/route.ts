@@ -1,4 +1,4 @@
-// /api/v1/shooter/search -- public, bearer-token-gated shooter name search.
+// /api/v1/shooter/search -- public shooter name search (anonymous or bearer-identified).
 //
 // Thin wrapper around /api/shooter/search. See docs/api-v1.md.
 

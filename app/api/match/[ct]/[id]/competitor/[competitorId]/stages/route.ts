@@ -3,7 +3,7 @@
 // Per-competitor stage results for a single match: time, hit factor, points,
 // stage_pct, hit zones, penalties, and DQ flag for every stage. The v1 wrapper
 // at app/api/v1/match/[ct]/[id]/competitor/[competitorId]/stages/route.ts is
-// the public, bearer-token-gated surface for this data.
+// the public, rate-limited surface for this data.
 
 import { NextResponse } from "next/server";
 import { getMatchScorecards } from "@/lib/scorecards-archive";

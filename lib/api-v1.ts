@@ -2,8 +2,11 @@
 //
 // The v1 namespace is the stable contract for external consumers (currently
 // splitsmith). Internal browser routes under /api/* keep their existing
-// unauthenticated, IP-based rate limiting; only /api/v1/* is gated by a
-// bearer token from EXTERNAL_API_TOKENS and rate-limited per token.
+// unauthenticated, IP-based rate limiting. /api/v1/* serves the same public
+// data without a token (rate-limited per client IP); a bearer from
+// EXTERNAL_API_TOKENS identifies a consumer and moves it to its own,
+// higher per-token bucket (#554). A present-but-invalid bearer is still a
+// 401 so a typo never silently downgrades a consumer to anonymous.
 //
 // Error envelope: { "error": { "code": string, "message": string } }
 // Documented codes: unauthorized, rate_limited, not_found, upstream_failed,
@@ -13,7 +16,7 @@
 
 import { NextResponse } from "next/server";
 import cache from "@/lib/cache-impl";
-import { runWithIpRateLimitSkipped } from "@/lib/rate-limit";
+import { getClientIp, runWithIpRateLimitSkipped } from "@/lib/rate-limit";
 
 export type V1ErrorCode =
   | "unauthorized"
@@ -59,67 +62,85 @@ export function parseExternalApiTokens(): Set<string> {
 }
 
 /**
- * Resolve and validate the bearer token on a v1 request.
- *
- * Returns the token string on success, or a NextResponse on failure (401).
- * If no tokens are configured, every request is rejected -- the v1 surface is
- * never accidentally open.
+ * Who is calling a v1 endpoint. Token callers are identified by their bearer
+ * (validated against EXTERNAL_API_TOKENS); everyone else is anonymous and
+ * identified by client IP. The rate limiter keys its bucket on this.
  */
-export function authenticateV1Request(
-  req: Request,
-): { token: string } | NextResponse {
-  const tokens = parseExternalApiTokens();
-  if (tokens.size === 0) {
-    return v1Error(
-      "unauthorized",
-      "EXTERNAL_API_TOKENS is not configured on this deployment",
-      401,
-    );
-  }
+export type V1Caller =
+  | { kind: "token"; token: string }
+  | { kind: "anonymous"; ip: string };
+
+/**
+ * Resolve the caller identity on a v1 request.
+ *
+ * - No Authorization header -> anonymous caller keyed by client IP. Works
+ *   even when EXTERNAL_API_TOKENS is unset (that only means "no elevated
+ *   consumers", not "closed").
+ * - A present header must be a valid `Bearer <token>` from
+ *   EXTERNAL_API_TOKENS, otherwise 401. An invalid or malformed header is
+ *   never downgraded to anonymous, so a misconfigured consumer notices.
+ */
+export function authenticateV1Request(req: Request): V1Caller | NextResponse {
   const header = req.headers.get("Authorization");
-  if (!header || !header.startsWith("Bearer ")) {
+  if (header === null) {
+    return { kind: "anonymous", ip: getClientIp(req) };
+  }
+  if (!header.startsWith("Bearer ")) {
     return v1Error(
       "unauthorized",
-      "Missing or malformed Authorization header (expected 'Bearer <token>')",
+      "Malformed Authorization header (expected 'Bearer <token>'); omit it for anonymous access",
       401,
     );
   }
   const token = header.slice("Bearer ".length).trim();
+  const tokens = parseExternalApiTokens();
   if (!token || !tokens.has(token)) {
     return v1Error("unauthorized", "Invalid bearer token", 401);
   }
-  return { token };
+  return { kind: "token", token };
 }
 
 /** Default per-token rate limit (requests per minute). Override with EXTERNAL_API_RATE_LIMIT_PER_MIN. */
 const DEFAULT_RATE_LIMIT_PER_MIN = 60;
+/** Default anonymous (per-IP) rate limit. Matches the internal IP limiter. Override with EXTERNAL_API_ANON_RATE_LIMIT_PER_MIN. */
+const DEFAULT_ANON_RATE_LIMIT_PER_MIN = 30;
 
-function getRateLimitPerMin(): number {
-  const raw = process.env.EXTERNAL_API_RATE_LIMIT_PER_MIN;
-  if (!raw) return DEFAULT_RATE_LIMIT_PER_MIN;
+function readPositiveIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
   const n = parseInt(raw, 10);
-  if (!Number.isFinite(n) || n <= 0) return DEFAULT_RATE_LIMIT_PER_MIN;
+  if (!Number.isFinite(n) || n <= 0) return fallback;
   return n;
 }
 
+function getRateLimitPerMin(caller: V1Caller): number {
+  return caller.kind === "token"
+    ? readPositiveIntEnv("EXTERNAL_API_RATE_LIMIT_PER_MIN", DEFAULT_RATE_LIMIT_PER_MIN)
+    : readPositiveIntEnv("EXTERNAL_API_ANON_RATE_LIMIT_PER_MIN", DEFAULT_ANON_RATE_LIMIT_PER_MIN);
+}
+
 /**
- * Per-token fixed-window rate limiter backed by the cache adapter.
+ * Fixed-window rate limiter backed by the cache adapter, keyed per caller.
  *
- * Uses a stable hash of the token for the cache key so the raw secret never
- * lands in Redis. Window is 60 seconds; the limit comes from
- * EXTERNAL_API_RATE_LIMIT_PER_MIN (default 60).
+ * Token callers bucket on a stable hash of the token so the raw secret never
+ * lands in Redis (limit: EXTERNAL_API_RATE_LIMIT_PER_MIN, default 60).
+ * Anonymous callers bucket on client IP under a separate `anon:` prefix
+ * (limit: EXTERNAL_API_ANON_RATE_LIMIT_PER_MIN, default 30), so a token
+ * caller and an anonymous caller sharing an IP never share a bucket.
+ * Window is 60 seconds.
  *
  * Fails open on cache errors -- a degraded Redis must not lock external
  * consumers out, the same posture as lib/rate-limit.ts for internal routes.
  */
 export async function checkV1RateLimit(
-  token: string,
+  caller: V1Caller,
 ): Promise<{ allowed: true } | { allowed: false; retryAfter: number }> {
-  const limit = getRateLimitPerMin();
+  const limit = getRateLimitPerMin(caller);
   const windowSeconds = 60;
   const window = Math.floor(Date.now() / 1000 / windowSeconds);
-  const tokenKey = await hashToken(token);
-  const key = `rl:v1:${tokenKey}:${window}`;
+  const bucket =
+    caller.kind === "token" ? await hashToken(caller.token) : `anon:${caller.ip}`;
+  const key = `rl:v1:${bucket}:${window}`;
 
   try {
     const current = await cache.get(key);
@@ -149,16 +170,14 @@ async function hashToken(token: string): Promise<string> {
 }
 
 /**
- * Combined gate: authenticate, then rate-limit. Returns the token on success
- * or the appropriate NextResponse on failure. Use at the top of every v1
- * route handler.
+ * Combined gate: resolve the caller, then rate-limit. Returns the caller on
+ * success or the appropriate NextResponse on failure. Use at the top of
+ * every v1 route handler.
  */
-export async function gateV1Request(
-  req: Request,
-): Promise<{ token: string } | NextResponse> {
+export async function gateV1Request(req: Request): Promise<V1Caller | NextResponse> {
   const auth = authenticateV1Request(req);
   if (auth instanceof NextResponse) return auth;
-  const rl = await checkV1RateLimit(auth.token);
+  const rl = await checkV1RateLimit(auth);
   if (!rl.allowed) {
     return v1Error("rate_limited", "Rate limit exceeded", 429, {
       "Retry-After": String(rl.retryAfter),
@@ -169,7 +188,7 @@ export async function gateV1Request(
 
 /**
  * Forward to an internal route handler with the IP-based rate limit bypassed.
- * The v1 surface enforces its own per-token bucket; double-counting against
+ * The v1 surface enforces its own per-caller bucket; double-counting against
  * the internal IP bucket would defeat the documented v1 limit.
  */
 export function forwardToInternal<T>(fn: () => Promise<T> | T): Promise<T> {
