@@ -211,6 +211,7 @@ export default function GridPageClient() {
         myShooterId={identity?.shooterId ?? null}
         source={source}
         onSourceChange={onSourceChange}
+        live={phase !== "complete"}
       />
     </div>
   );

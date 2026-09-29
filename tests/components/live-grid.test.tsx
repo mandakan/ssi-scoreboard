@@ -47,13 +47,15 @@ const FIXTURE: LiveGridResponse = {
   cacheInfo: { cachedAt: null },
 };
 
+const useLiveGridQuerySpy = vi.fn<(...args: unknown[]) => unknown>(() => ({
+  data: FIXTURE,
+  isLoading: false,
+  isFetching: false,
+  error: null,
+}));
+
 vi.mock("@/lib/queries", () => ({
-  useLiveGridQuery: () => ({
-    data: FIXTURE,
-    isLoading: false,
-    isFetching: false,
-    error: null,
-  }),
+  useLiveGridQuery: (...args: unknown[]) => useLiveGridQuerySpy(...args),
 }));
 
 import { LiveGrid } from "@/components/live-grid";
@@ -72,6 +74,18 @@ function renderGrid(over: Partial<React.ComponentProps<typeof LiveGrid>> = {}) {
 }
 
 describe("LiveGrid", () => {
+  it("polls by default (live)", () => {
+    useLiveGridQuerySpy.mockClear();
+    renderGrid();
+    expect(useLiveGridQuerySpy).toHaveBeenLastCalledWith("22", "1", [1, 2], { live: true });
+  });
+
+  it("passes live=false to the query so a completed match does not poll", () => {
+    useLiveGridQuerySpy.mockClear();
+    renderGrid({ live: false });
+    expect(useLiveGridQuerySpy).toHaveBeenLastCalledWith("22", "1", [1, 2], { live: false });
+  });
+
   it("renders one row per shooter", () => {
     renderGrid();
     expect(screen.getByRole("rowheader", { name: /Mathias/ })).toBeInTheDocument();

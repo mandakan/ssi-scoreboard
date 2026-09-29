@@ -23,6 +23,11 @@ export interface LiveGridProps {
   myShooterId?: number | null;
   source: GridRowSource;
   onSourceChange: (source: GridRowSource) => void;
+  /**
+   * False once the match is complete: the grid fetches once and stops
+   * polling. Defaults to true (live polling).
+   */
+  live?: boolean;
 }
 
 /**
@@ -36,8 +41,9 @@ export function LiveGrid({
   myShooterId = null,
   source,
   onSourceChange,
+  live = true,
 }: LiveGridProps) {
-  const query = useLiveGridQuery(ct, id, shooters);
+  const query = useLiveGridQuery(ct, id, shooters, { live });
   const scrollerRef = useRef<HTMLDivElement>(null);
   const didAutoScroll = useRef(false);
   const [openCell, setOpenCell] = useState<{ row: number; stage: number } | null>(
