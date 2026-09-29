@@ -38,7 +38,7 @@ export function bucketScoring(scoringPct: number): "pre" | "active" | "complete"
   return "active";
 }
 
-export { bucketStageExportCompetitors } from "@/lib/ui-telemetry-schema";
+export { bucketStageExportCompetitors } from "@/lib/telemetry-buckets";
 
 /** Bucket courtside-grid row counts. Rows are capped at MAX_LIVE_GRID_ROWS
  *  (20); the bands separate "just me", a small tracked set, a typical squad,

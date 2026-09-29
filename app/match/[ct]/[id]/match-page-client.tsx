@@ -54,6 +54,7 @@ import { LiveGrid } from "@/components/live-grid";
 import { resolveGridRows, type GridRowSource } from "@/lib/live-grid-rows";
 import { StageTimesExport } from "@/components/stage-times-export";
 import { computeFocusAreas } from "@/lib/coaching-rules";
+import { trackUi } from "@/lib/ui-telemetry";
 
 // Stable empty array for useSyncExternalStore server snapshot — must be a
 // constant reference so React's referential equality check doesn't loop.
@@ -161,6 +162,27 @@ export default function MatchPageClient() {
     },
     [ct, id],
   );
+
+  // Section-open telemetry counts only the closed->open transition.
+  const onCoachingOpenChange = useCallback(
+    (open: boolean) => {
+      setShowCoachingView(open);
+      if (open) {
+        trackUi({ op: "analysis-section-open", ct: parseInt(ct, 10), section: "deep-dive" });
+      }
+    },
+    [ct],
+  );
+  const onSimulatorOpenChange = useCallback(
+    (open: boolean) => {
+      setShowSimulator(open);
+      if (open) {
+        trackUi({ op: "analysis-section-open", ct: parseInt(ct, 10), section: "simulator" });
+      }
+    },
+    [ct],
+  );
+
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -1336,7 +1358,7 @@ export default function MatchPageClient() {
               {effectiveMode === "coaching" && (
                 <>
                   {/* Coaching / analysis view — hidden by default */}
-                  <Collapsible id="coaching-analysis" open={showCoachingView} onOpenChange={setShowCoachingView} className="rounded-lg border p-4 space-y-3">
+                  <Collapsible id="coaching-analysis" open={showCoachingView} onOpenChange={onCoachingOpenChange} className="rounded-lg border p-4 space-y-3">
                     {/* WAI-ARIA accordion pattern: heading wraps the disclosure button */}
                     <h2 className="font-semibold text-base m-0 leading-none">
                       <CollapsibleTrigger asChild>
@@ -1473,7 +1495,7 @@ export default function MatchPageClient() {
 
                   {/* Stage Simulator — collapsed by default, only ≥ 80% complete */}
                   {match.scoring_pct >= 80 && (
-                    <Collapsible open={showSimulator} onOpenChange={setShowSimulator} className="rounded-lg border p-4">
+                    <Collapsible open={showSimulator} onOpenChange={onSimulatorOpenChange} className="rounded-lg border p-4">
                       <div className="flex items-start gap-2">
                         <h2 className="flex-1 font-semibold text-base m-0 leading-none">
                           <CollapsibleTrigger asChild>

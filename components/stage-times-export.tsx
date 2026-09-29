@@ -16,6 +16,8 @@ import {
   buildStageTimesExport,
   stageTimesFilenameStem,
 } from "@/lib/stage-times-export";
+import { trackUi } from "@/lib/ui-telemetry";
+import { bucketStageExportCompetitors } from "@/lib/telemetry-buckets";
 import type { CompareResponse, MatchResponse } from "@/lib/types";
 
 interface Props {
@@ -49,6 +51,14 @@ export function StageTimesExport({ ct, id, match, compareData, selectedIds }: Pr
     });
   }, [ct, id, match, compareData, selectedIds]);
 
+  const trackExport = () =>
+    trackUi({
+      op: "stage-export",
+      ct: parseInt(ct, 10),
+      surface: "ui",
+      nCompetitorsBucket: bucketStageExportCompetitors(selectedIds.length),
+    });
+
   const onDownloadJson = () => {
     const data = buildExport();
     const json = JSON.stringify(data, null, 2);
@@ -57,6 +67,7 @@ export function StageTimesExport({ ct, id, match, compareData, selectedIds }: Pr
       `${stageTimesFilenameStem(data.match)}.json`,
       "application/json;charset=utf-8",
     );
+    trackExport();
   };
 
   const onDownloadCsv = () => {
@@ -67,6 +78,7 @@ export function StageTimesExport({ ct, id, match, compareData, selectedIds }: Pr
       `${stageTimesFilenameStem(data.match)}.csv`,
       "text/csv;charset=utf-8",
     );
+    trackExport();
   };
 
   const disabled = selectedIds.length === 0;

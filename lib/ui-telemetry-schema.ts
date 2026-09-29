@@ -18,15 +18,6 @@ export const CHART_IDS = [
   "stage-balance",
 ] as const;
 
-/** Bucket competitor count for stage-export usage events. Mirrors the
- *  scale used by mcp-telemetry's bucketCompetitors so dashboards can join
- *  on the same labels. */
-export function bucketStageExportCompetitors(n: number): "1" | "2-4" | "5-12" {
-  if (n <= 1) return "1";
-  if (n <= 4) return "2-4";
-  return "5-12";
-}
-
 const ct = z.number().int().positive();
 
 export const uiTelemetryEventSchema = z.discriminatedUnion("op", [

@@ -249,6 +249,12 @@ test.describe("Collapsible — coaching analysis expand", () => {
       route.fulfill({ json: { available: false } }),
     );
 
+    const uiEvents: unknown[] = [];
+    await page.route("**/api/telemetry/ui", async (route) => {
+      uiEvents.push(JSON.parse(route.request().postData() ?? "null"));
+      await route.fulfill({ status: 204 });
+    });
+
     await page.goto("/match/22/99999999?competitors=100,200");
     await expect(page.getByText("Stage results")).toBeVisible();
 
@@ -261,6 +267,17 @@ test.describe("Collapsible — coaching analysis expand", () => {
     await expect(
       page.locator("[aria-labelledby='coaching-view-heading']"),
     ).toBeVisible();
+
+    await expect.poll(() => uiEvents).toContainEqual({
+      op: "analysis-section-open", ct: 22, section: "deep-dive",
+    });
+
+    // Closing must not emit -- only the closed->open transition counts.
+    const before = uiEvents.length;
+    await coachingBtn.click();
+    await expect(coachingBtn).toHaveAttribute("aria-expanded", "false");
+    await page.waitForTimeout(300);
+    expect(uiEvents.length).toBe(before);
   });
 });
 

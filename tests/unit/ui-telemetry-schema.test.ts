@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  bucketStageExportCompetitors,
-  CHART_IDS,
-  uiTelemetryEventSchema,
-} from "@/lib/ui-telemetry-schema";
+import { CHART_IDS, uiTelemetryEventSchema } from "@/lib/ui-telemetry-schema";
+import { bucketStageExportCompetitors } from "@/lib/telemetry-buckets";
 
 const ok = (v: unknown) => uiTelemetryEventSchema.safeParse(v).success;
 
