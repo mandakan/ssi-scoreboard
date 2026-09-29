@@ -60,4 +60,41 @@ describe("POST /api/telemetry/ui", () => {
     expect(res.status).toBe(413);
     expect(usageSpy).not.toHaveBeenCalled();
   });
+
+  it("413s on a declared Content-Length over the cap without reading the body", async () => {
+    const text = vi.fn(async () => "");
+    const req = {
+      headers: new Headers({ "content-length": "5000" }),
+      text,
+    } as unknown as Request;
+    const res = await POST(req);
+    expect(res.status).toBe(413);
+    expect(text).not.toHaveBeenCalled();
+    expect(usageSpy).not.toHaveBeenCalled();
+  });
+
+  it("measures the cap in UTF-8 bytes, not characters", async () => {
+    // 600 chars, 1200 bytes: under a character cap, over the byte cap.
+    const res = await post("\u00e9".repeat(600));
+    expect(res.status).toBe(413);
+  });
+
+  it("403s cross-site senders without logging", async () => {
+    const res = await POST(new Request("http://localhost/api/telemetry/ui", {
+      method: "POST",
+      headers: { "sec-fetch-site": "cross-site" },
+      body: JSON.stringify({ op: "tab-view", ct: 22, tab: "grid" }),
+    }));
+    expect(res.status).toBe(403);
+    expect(usageSpy).not.toHaveBeenCalled();
+  });
+
+  it("accepts same-origin senders and senders without Sec-Fetch-Site", async () => {
+    const body = JSON.stringify({ op: "tab-view", ct: 22, tab: "grid" });
+    const sameOrigin = await POST(new Request("http://localhost/api/telemetry/ui", {
+      method: "POST", headers: { "sec-fetch-site": "same-origin" }, body,
+    }));
+    expect(sameOrigin.status).toBe(204);
+    expect((await post(body)).status).toBe(204);
+  });
 });
