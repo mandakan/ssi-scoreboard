@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ANALYSIS_CHARTS, availableCharts, resolveChart } from "@/lib/analysis-charts";
+import { ANALYSIS_CHARTS, availableCharts, chartForHash, resolveChart } from "@/lib/analysis-charts";
 import { CHART_IDS } from "@/lib/ui-telemetry-schema";
 import type { CompareResponse } from "@/lib/types";
 
@@ -23,5 +23,20 @@ describe("analysis charts", () => {
     expect(resolveChart(null, av)).toBe("hf-by-stage");
     expect(resolveChart("pie", av)).toBe("hf-by-stage");
     expect(resolveChart("division-position", av)).toBe("hf-by-stage");
+  });
+
+  describe("chartForHash", () => {
+    const av = availableCharts(noDist);
+    it("maps a known anchor to its chart when available", () => {
+      expect(chartForHash("#chart-speed-accuracy", av)).toBe("speed-accuracy");
+    });
+    it("returns null when the mapped chart is unavailable", () => {
+      expect(chartForHash("#chart-speed-accuracy", ["hf-by-stage"])).toBeNull();
+    });
+    it("returns null for unknown or empty hashes", () => {
+      expect(chartForHash("#nope", av)).toBeNull();
+      expect(chartForHash("", av)).toBeNull();
+      expect(chartForHash("#", av)).toBeNull();
+    });
   });
 });

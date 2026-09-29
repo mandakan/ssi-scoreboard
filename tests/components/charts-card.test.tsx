@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { CompareResponse } from "@/lib/types";
 
 vi.mock("@/components/comparison-chart", () => ({ ComparisonChart: () => <p>chart:hf-by-stage</p> }));
@@ -15,8 +15,41 @@ import { ChartsCard } from "@/components/analysis/charts-card";
 const data = { stages: [{ divisionDistributions: {} }] } as unknown as CompareResponse;
 const props = { data, stages: [], sortedCompName: null, careerBaselineHF: null, careerBaselinePct: null, ct: "22" };
 
+const scrollIntoView = vi.fn();
+Element.prototype.scrollIntoView = scrollIntoView;
+
 describe("ChartsCard", () => {
-  beforeEach(() => { localStorage.clear(); trackUi.mockClear(); });
+  beforeEach(() => {
+    localStorage.clear();
+    trackUi.mockClear();
+    scrollIntoView.mockClear();
+    window.location.hash = "";
+  });
+
+  it("selects and scrolls to the speed/accuracy chart for its anchor on mount", async () => {
+    window.location.hash = "#chart-speed-accuracy";
+    render(<ChartsCard {...props} />);
+    expect(await screen.findByText("chart:speed-accuracy")).toBeInTheDocument();
+    expect(scrollIntoView).toHaveBeenCalled();
+    expect(localStorage.getItem("ssi-analysis-chart")).toBe("speed-accuracy");
+    expect(trackUi).not.toHaveBeenCalledWith(expect.objectContaining({ op: "chart-switch" }));
+  });
+
+  it("reacts to hashchange", async () => {
+    render(<ChartsCard {...props} />);
+    expect(await screen.findByText("chart:hf-by-stage")).toBeInTheDocument();
+    window.location.hash = "#chart-speed-accuracy";
+    await act(async () => { window.dispatchEvent(new HashChangeEvent("hashchange")); });
+    expect(await screen.findByText("chart:speed-accuracy")).toBeInTheDocument();
+    expect(scrollIntoView).toHaveBeenCalled();
+  });
+
+  it("ignores unknown hashes", async () => {
+    window.location.hash = "#something-else";
+    render(<ChartsCard {...props} />);
+    expect(await screen.findByText("chart:hf-by-stage")).toBeInTheDocument();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
 
   it("mounts only the first available chart by default", async () => {
     render(<ChartsCard {...props} />);

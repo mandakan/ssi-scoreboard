@@ -32,3 +32,19 @@ export function resolveChart(
 ): AnalysisChartId {
   return available.find((id) => id === stored) ?? available[0];
 }
+
+// Legacy in-page anchors (used by coaching focus-area "Jump to chart" links)
+// that now resolve to a chart inside the Charts card.
+export const CHART_ANCHORS: Record<string, AnalysisChartId> = {
+  "chart-speed-accuracy": "speed-accuracy",
+};
+
+export function chartForHash(
+  hash: string,
+  available: AnalysisChartId[],
+): AnalysisChartId | null {
+  const key = hash.startsWith("#") ? hash.slice(1) : hash;
+  if (!Object.prototype.hasOwnProperty.call(CHART_ANCHORS, key)) return null;
+  const id = CHART_ANCHORS[key];
+  return available.includes(id) ? id : null;
+}
