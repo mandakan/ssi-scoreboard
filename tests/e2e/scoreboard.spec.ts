@@ -235,8 +235,9 @@ test.describe("Scoreboard E2E", () => {
       route.fulfill({ json: MOCK_COMPARE })
     );
 
-    await page.goto("/match/22/99999999");
-    await expect(page.getByText("Test IPSC Match")).toBeVisible();
+    await page.goto("/match/22/99999999/analysis");
+    // The match header belongs to the shell (Task 7); wait on the picker.
+    await expect(page.getByRole("button", { name: /add competitor/i })).toBeVisible();
 
     // Open picker and select all 3 competitors
     await page.getByRole("button", { name: /add competitor/i }).click();
@@ -260,7 +261,7 @@ test.describe("Scoreboard E2E", () => {
       route.fulfill({ json: MOCK_COMPARE })
     );
 
-    await page.goto("/match/22/99999999");
+    await page.goto("/match/22/99999999/analysis");
     await page.getByRole("button", { name: /add competitor/i }).click();
     await page.getByRole("option", { name: /alice/i }).click();
 
@@ -277,6 +278,7 @@ test.describe("Scoreboard E2E", () => {
     );
 
     await page.goto("/match/22/99999999?competitors=100,200");
+    await expect(page).toHaveURL(/\/match\/22\/99999999\/analysis\?competitors=/);
     await expect(page.getByText("Test IPSC Match")).toBeVisible();
 
     // Pre-selected competitors should appear without manually opening the picker
@@ -293,7 +295,7 @@ test.describe("Scoreboard E2E", () => {
       route.fulfill({ json: MOCK_COMPARE_2 })
     );
 
-    await page.goto("/match/22/99999999");
+    await page.goto("/match/22/99999999/analysis");
     await page.getByRole("button", { name: /add competitor/i }).click();
     await page.getByRole("option", { name: /alice/i }).click();
     await page.getByRole("option", { name: /bob/i }).click();
@@ -309,7 +311,7 @@ test.describe("Scoreboard E2E", () => {
       route.fulfill({ json: MOCK_COMPARE_2 })
     );
 
-    await page.goto("/match/22/99999999?competitors=100,200");
+    await page.goto("/match/22/99999999/analysis?competitors=100,200");
     await expect(page.getByText("Stage results")).toBeVisible();
 
     await page.getByRole("button", { name: /remove alice/i }).click();
@@ -326,7 +328,7 @@ test.describe("Scoreboard E2E", () => {
       route.fulfill({ json: ids.includes("300") ? MOCK_COMPARE : MOCK_COMPARE_2 });
     });
 
-    await page.goto("/match/22/99999999");
+    await page.goto("/match/22/99999999/analysis");
     await page.getByRole("button", { name: /add competitor/i }).click();
     await page.getByRole("option", { name: /alice/i }).click();
     await page.getByRole("option", { name: /bob/i }).click();
@@ -347,8 +349,9 @@ test.describe("Scoreboard E2E", () => {
       route.fulfill({ json: MOCK_COMPARE_2 })
     );
 
-    await page.goto("/match/22/99999999");
-    await expect(page.getByText("Test IPSC Match")).toBeVisible();
+    await page.goto("/match/22/99999999/analysis");
+    // The match header belongs to the shell (Task 7); wait on the picker.
+    await expect(page.getByRole("button", { name: /add competitor/i })).toBeVisible();
 
     // Open the squad picker popover (trigger label: "Replace selection with a squad")
     await page
@@ -366,6 +369,16 @@ test.describe("Scoreboard E2E", () => {
     // Both competitor badges should now be visible
     await expect(page.getByRole("button", { name: /remove alice/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /remove bob/i })).toBeVisible();
+  });
+
+  test("analysis with no selection and no identity shows the picker and does not call compare", async ({ page }) => {
+    const compareCalls: string[] = [];
+    page.on("request", (r) => { if (r.url().includes("/api/compare")) compareCalls.push(r.url()); });
+    await page.route("/api/match/22/99999999", (route) => route.fulfill({ json: MOCK_MATCH }));
+    await page.goto("/match/22/99999999/analysis");
+    await expect(page.getByRole("button", { name: /add competitor/i })).toBeVisible();
+    await page.waitForTimeout(1000);
+    expect(compareCalls).toEqual([]);
   });
 });
 
@@ -516,6 +529,7 @@ test.describe("Mobile 390px viewport", () => {
     );
 
     await page.goto("/match/22/99999999?competitors=100,200");
+    await expect(page).toHaveURL(/\/match\/22\/99999999\/analysis\?competitors=/);
     await expect(page.getByText("Test IPSC Match")).toBeVisible();
     await expect(page.getByText("Stage results")).toBeVisible();
     await expect(page.getByRole("table")).toBeVisible();

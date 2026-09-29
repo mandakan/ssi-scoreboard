@@ -215,7 +215,7 @@ test.describe("Collapsible — coaching and simulator sections", () => {
       route.fulfill({ json: { available: false } }),
     );
 
-    await page.goto("/match/22/99999999?competitors=100,200");
+    await page.goto("/match/22/99999999/analysis?competitors=100,200");
     await expect(page.getByText("Stage results")).toBeVisible();
 
     // Coaching analysis should start collapsed
@@ -255,7 +255,7 @@ test.describe("Collapsible — coaching analysis expand", () => {
       await route.fulfill({ status: 204 });
     });
 
-    await page.goto("/match/22/99999999?competitors=100,200");
+    await page.goto("/match/22/99999999/analysis?competitors=100,200");
     await expect(page.getByText("Stage results")).toBeVisible();
 
     const coachingBtn = page.getByRole("button", { name: /coaching analysis/i });
@@ -299,7 +299,7 @@ test.describe("ToggleGroup — comparison table view mode", () => {
       route.fulfill({ json: MOCK_COMPARE }),
     );
 
-    await page.goto("/match/22/99999999?competitors=100,200");
+    await page.goto("/match/22/99999999/analysis?competitors=100,200");
     await expect(page.getByText("Stage results")).toBeVisible();
 
     const absoluteRadio = page.getByRole("radio", { name: "Absolute" });
@@ -318,7 +318,7 @@ test.describe("ToggleGroup — comparison table view mode", () => {
       route.fulfill({ json: MOCK_COMPARE }),
     );
 
-    await page.goto("/match/22/99999999?competitors=100,200");
+    await page.goto("/match/22/99999999/analysis?competitors=100,200");
     await expect(page.getByText("Stage results")).toBeVisible();
 
     await page.getByRole("radio", { name: "Delta" }).click();
@@ -336,7 +336,7 @@ test.describe("ToggleGroup — comparison table view mode", () => {
       route.fulfill({ json: MOCK_COMPARE }),
     );
 
-    await page.goto("/match/22/99999999?competitors=100,200");
+    await page.goto("/match/22/99999999/analysis?competitors=100,200");
     await expect(page.getByText("Stage results")).toBeVisible();
 
     // Focus the Absolute radio
