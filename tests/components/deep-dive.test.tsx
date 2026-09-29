@@ -81,4 +81,15 @@ describe("DeepDive", () => {
     await act(async () => { await new Promise((r) => requestAnimationFrame(() => r(null))); });
     expect(scrollIntoView).toHaveBeenCalled();
   });
+
+  it("opens and scrolls to the deep dive for the legacy coaching-analysis anchor", async () => {
+    window.location.hash = "#coaching-analysis";
+    render(<DeepDive ct="22" id="1" match={match} selectedIds={[1]} compareMode="coaching" coachingData={coaching} />);
+    expect(screen.getByRole("button", { name: /deep dive/i })).toHaveAttribute("aria-expanded", "true");
+    await act(async () => { await new Promise((r) => requestAnimationFrame(() => r(null))); });
+    expect(scrollIntoView).toHaveBeenCalled();
+    expect(scrollIntoView.mock.contexts.at(-1)).toBe(document.getElementById("deep-dive"));
+    expect(window.location.hash).toBe("");
+    expect(trackUi.mock.calls.filter((c) => c[0].section === "deep-dive")).toHaveLength(1);
+  });
 });

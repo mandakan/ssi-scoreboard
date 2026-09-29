@@ -24,7 +24,10 @@ import type { CompareMode, CompareResponse, MatchResponse } from "@/lib/types";
 const EMPTY_IDS: number[] = [];
 
 const FINGERPRINT_ANCHOR = "chart-style-fingerprint";
-const FINGERPRINT_ANCHORS = [FINGERPRINT_ANCHOR];
+// "coaching-analysis" is the id the coaching section had before it became Deep
+// dive; coaching-rules focus areas still link to it, so it scrolls to the section.
+const DEEP_DIVE_ANCHOR = "coaching-analysis";
+const ANCHORS = [FINGERPRINT_ANCHOR, DEEP_DIVE_ANCHOR];
 
 const ChartSkeleton = () => <Skeleton className="h-64 w-full rounded-lg" />;
 
@@ -109,12 +112,13 @@ export function DeepDive({ ct, id, match, selectedIds, compareMode, coachingData
   // (after opening, and after live data arrives), so the scroll is deferred:
   // a pending flag is flushed from a requestAnimationFrame and again from an
   // effect whenever open/data changes, and cleared once the target is found.
-  const pendingScroll = useRef(false);
+  const pendingScroll = useRef<string | null>(null);
   const flushScroll = useCallback(() => {
-    if (!pendingScroll.current) return;
-    const el = document.getElementById(FINGERPRINT_ANCHOR);
+    const target = pendingScroll.current;
+    if (!target) return;
+    const el = document.getElementById(target);
     if (!el) return;
-    pendingScroll.current = false;
+    pendingScroll.current = null;
     el.scrollIntoView({ block: "start" });
   }, []);
   const hasData = data != null;
@@ -123,8 +127,8 @@ export function DeepDive({ ct, id, match, selectedIds, compareMode, coachingData
     const raf = requestAnimationFrame(flushScroll);
     return () => cancelAnimationFrame(raf);
   }, [open, hasData, flushScroll]);
-  useHashAnchor(FINGERPRINT_ANCHORS, () => {
-    pendingScroll.current = true;
+  useHashAnchor(ANCHORS, (anchor) => {
+    pendingScroll.current = anchor === DEEP_DIVE_ANCHOR ? "deep-dive" : FINGERPRINT_ANCHOR;
     if (!open) onOpenChange(true);
     requestAnimationFrame(flushScroll);
   });
