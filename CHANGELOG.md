@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0](https://github.com/mandakan/ssi-scoreboard/compare/v1.1.0...v1.2.0) (2026-09-29)
+
+
+### Features
+
+* **telemetry:** grid time-in-view and UI section usage baseline ([#561](https://github.com/mandakan/ssi-scoreboard/issues/561)) ([1f10d6e](https://github.com/mandakan/ssi-scoreboard/commit/1f10d6edd6411e16ba3514112b213449d7dc4f66))
+
+
+### Bug Fixes
+
+* **live-grid:** stop scroll snap from hiding a stage under the name column ([#560](https://github.com/mandakan/ssi-scoreboard/issues/560)) ([199c255](https://github.com/mandakan/ssi-scoreboard/commit/199c255d545b237e77ae5c099657d62949b4c203))
+
 ## [1.1.0](https://github.com/mandakan/ssi-scoreboard/compare/v1.0.1...v1.1.0) (2026-09-15)
 
 
