@@ -1,5 +1,5 @@
 import { MAX_COMPETITORS } from "@/lib/constants";
-import { detectMatchView } from "@/lib/mode";
+import { matchScoresPhase } from "@/lib/scores-phase";
 import type { CompareMode, MatchResponse } from "@/lib/types";
 
 /**
@@ -22,15 +22,5 @@ export function initialAnalysisSelection(a: {
 
 /** Replaces the mode toggle: poll live until the match is done. */
 export function analysisCompareMode(match: MatchResponse, nowMs: number): CompareMode {
-  const startMs = match.date ? new Date(match.date).getTime() : null;
-  const endMs = match.ends ? new Date(match.ends).getTime() : null;
-  const view = detectMatchView({
-    scoringPct: match.scoring_pct,
-    daysSinceMatchStart: startMs != null ? (nowMs - startMs) / 86_400_000 : 0,
-    daysSinceMatchEnd: endMs != null ? (nowMs - endMs) / 86_400_000 : null,
-    resultsStatus: match.results_status,
-    matchStatus: match.match_status,
-    hasActualScores: false,
-  });
-  return view === "coaching" ? "coaching" : "live";
+  return matchScoresPhase(match, nowMs) === "complete" ? "coaching" : "live";
 }

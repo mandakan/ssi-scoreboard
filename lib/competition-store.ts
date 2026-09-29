@@ -28,6 +28,9 @@ export const SELECTION_CHANGED = "ssi:selection_changed";
 /** Custom event dispatched (same-tab) whenever a mode override changes. */
 export const MODE_CHANGED = "ssi:mode_changed";
 
+/** Custom event dispatched (same-tab) when the live-scores opt-in is saved. */
+export const SCORES_OPTIN_CHANGED = "ssi:scores_optin_changed";
+
 function competitorKey(ct: string, id: string): string {
   return `ssi_competitors_${ct}_${id}`;
 }
@@ -296,5 +299,35 @@ export function getGridSourcePreference(ct: string, id: string): GridRowSource {
       : "squad";
   } catch {
     return "squad";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Live scores opt-in -- pre-match windows never fetch scorecards on their own
+// ---------------------------------------------------------------------------
+
+function scoresOptInKey(ct: string, id: string): string {
+  return `ssi_scores_optin_${ct}_${id}`;
+}
+
+/** Session-scoped: the user asked to load scores before scoring really began. */
+export function getLiveScoresOptIn(ct: string, id: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return sessionStorage.getItem(scoresOptInKey(ct, id)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function saveLiveScoresOptIn(ct: string, id: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(scoresOptInKey(ct, id), "1");
+    window.dispatchEvent(
+      new CustomEvent(SCORES_OPTIN_CHANGED, { detail: { ct, id } }),
+    );
+  } catch {
+    // ignore
   }
 }

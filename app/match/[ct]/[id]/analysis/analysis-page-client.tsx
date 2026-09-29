@@ -12,6 +12,7 @@ import { ComparisonTable } from "@/components/comparison-table";
 import { useMatch } from "@/components/match-gate";
 import { useCompareQuery, useCoachingAvailability, useShooterDashboardQuery } from "@/lib/queries";
 import { computeCareerBaseline } from "@/lib/career-baseline";
+import { matchScoresPhase } from "@/lib/scores-phase";
 import { analysisCompareMode, initialAnalysisSelection } from "@/lib/analysis-selection";
 import { CacheInfoBadge } from "@/components/cache-info-badge";
 import { UpstreamDegradedBanner } from "@/components/upstream-degraded-banner";
@@ -32,6 +33,9 @@ import {
   saveCompetitorSelection,
   getCompetitorSelectionSnapshot,
   getGridSourcePreference,
+  getLiveScoresOptIn,
+  saveLiveScoresOptIn,
+  SCORES_OPTIN_CHANGED,
   SELECTION_CHANGED,
 } from "@/lib/competition-store";
 import { useMyIdentity } from "@/lib/hooks/use-my-identity";
@@ -201,11 +205,12 @@ export default function AnalysisPageClient() {
     () => EMPTY_IDS
   );
 
-  // Selection on arrival: URL, then saved, then the grid's rows (see
-  // initialAnalysisSelection). Derived at render rather than copied into state,
-  // and never persisted while it is only seeded from the grid rows: persisting
-  // would pin the next visit (and the grid's fallback) to a list the user never
-  // chose. Once the user edits, the saved selection is the source of truth.
+  // Selection: an explicit URL wins, then the saved selection, then the
+  // grid's rows (see initialAnalysisSelection). Derived at render rather than
+  // copied into state. A seed is never persisted or written to the URL:
+  // that would pin the next visit (and the grid's fallback) to a list the
+  // user never chose. Once the user edits, the saved selection is the source
+  // of truth, so Clear does not re-seed.
   const [edited, setEdited] = useState(false);
   const urlParam = searchParams.get("competitors") ?? "";
   const urlIds = useMemo(
@@ -216,25 +221,42 @@ export default function AnalysisPageClient() {
     () => initialAnalysisSelection({ urlIds, savedIds, gridRows }),
     [urlIds, savedIds, gridRows],
   );
-  const selectedIds = edited ? savedIds : initial.ids.length > 0 ? initial.ids : EMPTY_IDS;
+  const selectedIds = edited
+    ? urlIds.length > 0 ? urlIds : savedIds
+    : initial.ids.length > 0 ? initial.ids : EMPTY_IDS;
 
-  // Arrival sync: persist an explicit shared-link selection, or reflect the
-  // saved/seeded selection into the URL. Each runs at most once per visit.
+  // Arrival sync, once per visit: persist a shared-link selection, or reflect
+  // an already-saved selection into the URL.
   const arrivalHandledRef = useRef(false);
   useEffect(() => {
-    if (edited || arrivalHandledRef.current) return;
+    if (arrivalHandledRef.current) return;
     if (urlIds.length > 0) {
       arrivalHandledRef.current = true;
       saveCompetitorSelection(ct, id, urlIds);
-    } else if (initial.ids.length > 0) {
+    } else if (savedIds.length > 0) {
       arrivalHandledRef.current = true;
-      router.replace(`${window.location.pathname}?competitors=${initial.ids.join(",")}`, { scroll: false });
+      router.replace(`${window.location.pathname}?competitors=${savedIds.join(",")}`, { scroll: false });
     }
-  }, [edited, urlIds, initial, ct, id, router]);
+  }, [urlIds, savedIds, ct, id, router]);
 
   // Capture mount timestamp once to avoid impure Date.now() in render path.
   const [mountMs] = useState(() => Date.now());
   const compareMode = analysisCompareMode(match, mountMs);
+  const phase = matchScoresPhase(match, mountMs);
+  // Before scoring really starts nothing fetches scorecards on its own: the
+  // user opts in per session (never an automatic upstream poll).
+  const scoresOptIn = useSyncExternalStore(
+    useCallback(
+      (onChange) => {
+        window.addEventListener(SCORES_OPTIN_CHANGED, onChange);
+        return () => window.removeEventListener(SCORES_OPTIN_CHANGED, onChange);
+      },
+      [],
+    ),
+    useCallback(() => getLiveScoresOptIn(ct, id), [ct, id]),
+    () => false,
+  );
+  const prematchGated = phase === "prematch" && !scoresOptIn;
 
   // Compare query: fires for completed matches (coaching mode) and for live
   // matches whose organizer has enabled live scorecard access (or where our
@@ -242,7 +264,8 @@ export default function AnalysisPageClient() {
   // returns empty scorecards (#410) and we render the "Match in progress"
   // empty state instead. useCompareQuery self-disables on an empty id list.
   const liveScoresAccessible = match.is_live_scores_accessible === true;
-  const compareEnabled = compareMode === "coaching" || liveScoresAccessible;
+  const compareEnabled =
+    (compareMode === "coaching" || liveScoresAccessible) && !prematchGated;
   const compareQuery = useCompareQuery(ct, id, compareEnabled ? selectedIds : EMPTY_IDS, compareMode);
   const coachingAvailability = useCoachingAvailability();
 
@@ -366,8 +389,8 @@ export default function AnalysisPageClient() {
   }
 
   function replaceSelectionWithUndo(newIds: number[], message: string) {
-    // Capture the snapshot via the live store, not closure, to avoid stale prev.
-    const prev = getCompetitorSelectionSnapshot(ct, id);
+    // What the user sees now, which is not in the store while it is seeded.
+    const prev = selectedIds;
     writeSelection(newIds);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     setPendingUndo({ prevIds: prev, message, expiresAt: Date.now() + UNDO_TIMEOUT_MS });
@@ -614,6 +637,24 @@ export default function AnalysisPageClient() {
               </a>
             </p>
           )}
+        </div>
+      )}
+
+      {/* Pre-match gate: scorecards are not loaded until the user asks. */}
+      {prematchGated && liveScoresAccessible && (
+        <div role="status" className="rounded-lg border bg-muted/40 p-4 space-y-2">
+          <h2 className="font-semibold">Scoring has not really started</h2>
+          <p className="text-sm text-muted-foreground">
+            Live scores are not loaded automatically this early in the match.
+            Load them now if you want to compare shooters who have already scored.
+          </p>
+          <Button
+            variant="outline"
+            className="min-h-11"
+            onClick={() => saveLiveScoresOptIn(ct, id)}
+          >
+            Show live scores
+          </Button>
         </div>
       )}
 

@@ -1,15 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { MatchResponse } from "@/lib/types";
 
 const replace = vi.fn();
+let search = "";
 vi.mock("next/navigation", () => ({
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(search),
   useRouter: () => ({ replace }),
 }));
 
-const FIXTURE = {
+let FIXTURE = {
   name: "Test Match",
   date: null,
   ends: null,
@@ -25,6 +26,7 @@ const FIXTURE = {
   ],
   squads: [{ id: 1, number: 1, name: "Squad 1", competitorIds: [100, 200] }],
 } as unknown as MatchResponse;
+const LIVE = FIXTURE;
 
 const useCompareQuery = vi.fn();
 vi.mock("@/lib/queries", async (importOriginal) => ({
@@ -38,10 +40,23 @@ vi.mock("@/lib/queries", async (importOriginal) => ({
 import { MatchGate } from "@/components/match-gate";
 import AnalysisPageClient from "@/app/match/[ct]/[id]/analysis/analysis-page-client";
 
-describe("Analysis selection seeding", () => {
+const lastIds = () => useCompareQuery.mock.calls.at(-1)?.[2];
+
+function renderPage() {
+  return render(
+    <QueryClientProvider client={new QueryClient()}>
+      <MatchGate ct="22" id="1"><AnalysisPageClient /></MatchGate>
+    </QueryClientProvider>,
+  );
+}
+
+describe("Analysis selection", () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     replace.mockClear();
+    search = "";
+    FIXTURE = LIVE;
     useCompareQuery.mockReset();
     useCompareQuery.mockReturnValue({ data: undefined, isLoading: false, isFetching: false });
     localStorage.setItem(
@@ -50,14 +65,60 @@ describe("Analysis selection seeding", () => {
     );
   });
 
-  it("seeds from the grid rows without persisting the seed", async () => {
-    render(
-      <QueryClientProvider client={new QueryClient()}>
-        <MatchGate ct="22" id="1"><AnalysisPageClient /></MatchGate>
-      </QueryClientProvider>,
-    );
-    await waitFor(() => expect(replace).toHaveBeenCalled());
-    expect(replace.mock.calls[0][0]).toMatch(/\?competitors=100,200$/);
+  it("seeds from the grid rows without persisting or writing the URL", () => {
+    renderPage();
+    expect(lastIds()).toEqual([100, 200]);
     expect(localStorage.getItem("ssi_competitors_22_1")).toBeNull();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("persists an explicit URL selection and prefers it", () => {
+    search = "competitors=200";
+    renderPage();
+    expect(lastIds()).toEqual([200]);
+    expect(localStorage.getItem("ssi_competitors_22_1")).toBe("[200]");
+  });
+
+  it("reflects an already-saved selection into the URL", () => {
+    localStorage.setItem("ssi_competitors_22_1", "[100]");
+    renderPage();
+    expect(lastIds()).toEqual([100]);
+    expect(replace).toHaveBeenCalledWith(expect.stringMatching(/\?competitors=100$/), { scroll: false });
+  });
+
+  it("Clear does not re-seed; Undo restores the seeded ids and persists them as an edit", () => {
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: /clear all selected competitors/i }));
+    expect(lastIds()).toEqual([]);
+    expect(localStorage.getItem("ssi_competitors_22_1")).toBe("[]");
+    fireEvent.click(screen.getByRole("button", { name: /undo last selection change/i }));
+    expect(lastIds()).toEqual([100, 200]);
+    expect(localStorage.getItem("ssi_competitors_22_1")).toBe("[100,200]");
+    expect(replace).toHaveBeenLastCalledWith(expect.stringMatching(/\?competitors=100,200$/), { scroll: false });
+  });
+});
+
+describe("Analysis pre-match compare gating", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    replace.mockClear();
+    search = "competitors=100,200";
+    FIXTURE = { ...LIVE, scoring_pct: 0 } as MatchResponse;
+    useCompareQuery.mockReset();
+    useCompareQuery.mockReturnValue({ data: undefined, isLoading: false, isFetching: false });
+  });
+
+  it("does not compare until the user opts in", () => {
+    renderPage();
+    expect(screen.getByRole("heading", { name: "Scoring has not really started" })).toBeInTheDocument();
+    for (const call of useCompareQuery.mock.calls) expect(call[2]).toEqual([]);
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Show live scores" }));
+    });
+    expect(lastIds()).toEqual([100, 200]);
+    expect(useCompareQuery.mock.calls.at(-1)?.[3]).toBe("live");
+    expect(screen.queryByRole("heading", { name: "Scoring has not really started" })).toBeNull();
+    expect(sessionStorage.getItem("ssi_scores_optin_22_1")).not.toBeNull();
   });
 });
