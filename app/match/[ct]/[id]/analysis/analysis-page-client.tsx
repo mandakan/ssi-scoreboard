@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { ShareButton } from "@/components/share-button";
 import { TrackedShootersSheet } from "@/components/tracked-shooters-sheet";
 import { SelectionBar } from "@/components/analysis/selection-bar";
+import { UndoBanner } from "@/components/analysis/undo-banner";
 import { ComparisonTable } from "@/components/comparison-table";
 import { useMatch } from "@/components/match-gate";
 import { MatchTabPlaceholder } from "@/components/match-tab-placeholder";
@@ -18,7 +19,7 @@ import { UpstreamDegradedBanner } from "@/components/upstream-degraded-banner";
 import { LoadingBar } from "@/components/loading-bar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, AlertCircle, RefreshCw, ExternalLink, Undo2 } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, ExternalLink } from "lucide-react";
 import {
   saveCompetitorSelection,
   getCompetitorSelectionSnapshot,
@@ -426,27 +427,11 @@ function AnalysisPageContent() {
           onSetMyIdentity={handleSetMyIdentity}
           onToggleTracked={handleToggleTracked}
           onManage={() => setShowManage(true)}
+          pendingUndo={pendingUndo}
+          onUndo={applyUndo}
         />
         {pendingUndo && (
-          <div
-            role="status"
-            aria-live="polite"
-            className="mt-2 flex items-center justify-between gap-3 rounded-md border bg-muted/50 px-3 py-2 text-sm animate-fade-in"
-          >
-            <span className="text-muted-foreground truncate">
-              {pendingUndo.message}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 shrink-0"
-              onClick={applyUndo}
-              aria-label="Undo last selection change"
-            >
-              <Undo2 className="w-3.5 h-3.5" aria-hidden="true" />
-              Undo
-            </Button>
-          </div>
+          <UndoBanner message={pendingUndo.message} onUndo={applyUndo} className="mt-2" />
         )}
       </div>
 

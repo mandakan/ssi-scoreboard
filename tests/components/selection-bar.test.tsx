@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import type { MatchResponse } from "@/lib/types";
 
@@ -39,6 +39,8 @@ function setup(over: Partial<React.ComponentProps<typeof SelectionBar>> = {}) {
     onSetMyIdentity: vi.fn(),
     onToggleTracked: vi.fn(),
     onManage: vi.fn(),
+    pendingUndo: null,
+    onUndo: vi.fn(),
     ...over,
   };
   render(<SelectionBar {...props} />);
@@ -75,5 +77,28 @@ describe("SelectionBar", () => {
     setup({ gridRows: [] });
     fireEvent.click(screen.getByRole("button", { name: /Comparing:/ }));
     expect(screen.queryByRole("button", { name: "Reset to grid shooters" })).toBeNull();
+  });
+
+  it("returns focus to the summary button when the sheet closes and exposes aria-expanded", async () => {
+    setup();
+    const btn = screen.getByRole("button", { name: /Comparing:/ });
+    expect(btn).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(btn);
+    expect(screen.getByRole("button", { name: /Comparing:/, hidden: true })).toHaveAttribute("aria-expanded", "true");
+    fireEvent.keyDown(screen.getByRole("dialog", { name: "Who to compare" }), { key: "Escape" });
+    const after = screen.getByRole("button", { name: /Comparing:/ });
+    expect(after).toHaveAttribute("aria-expanded", "false");
+    await waitFor(() => expect(document.activeElement).toBe(after));
+  });
+
+  it("shows the pending undo inside the open sheet and calls onUndo", () => {
+    const onUndo = vi.fn();
+    setup({ pendingUndo: { message: "Cleared 2 selected" }, onUndo });
+    fireEvent.click(screen.getByRole("button", { name: /Comparing:/ }));
+    const dialog = screen.getByRole("dialog", { name: "Who to compare" });
+    const undo = within(dialog).getByRole("button", { name: "Undo last selection change" });
+    expect(within(dialog).getByText("Cleared 2 selected")).toBeInTheDocument();
+    fireEvent.click(undo);
+    expect(onUndo).toHaveBeenCalledTimes(1);
   });
 });

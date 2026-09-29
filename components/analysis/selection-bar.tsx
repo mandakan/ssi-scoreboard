@@ -20,7 +20,9 @@ import {
   SheetHeader,
   SheetTitle,
   SheetDescription,
+  SheetTrigger,
 } from "@/components/ui/sheet";
+import { UndoBanner } from "@/components/analysis/undo-banner";
 import { MAX_COMPETITORS } from "@/lib/constants";
 import { selectionSummary } from "@/lib/selection-summary";
 import type { FieldFingerprintPoint, MatchResponse } from "@/lib/types";
@@ -44,6 +46,9 @@ interface SelectionBarProps {
     division: string | null;
   }) => void;
   onManage: () => void;
+  /** Pending bulk-change undo, mirrored inside the sheet so it stays reachable. */
+  pendingUndo: { message: string } | null;
+  onUndo: () => void;
 }
 
 /**
@@ -65,6 +70,8 @@ export function SelectionBar({
   onSetMyIdentity,
   onToggleTracked,
   onManage,
+  pendingUndo,
+  onUndo,
 }: SelectionBarProps) {
   const [open, setOpen] = useState(false);
 
@@ -76,26 +83,26 @@ export function SelectionBar({
 
   return (
     <div>
-      <button
-        type="button"
-        aria-haspopup="dialog"
-        onClick={() => setOpen(true)}
-        className="flex min-h-11 w-full items-center justify-between gap-2 rounded-md border px-3 text-left text-sm"
-      >
-        <span className="min-w-0">
-          <span className="block truncate">
-            {summary ? `Comparing: ${summary}` : "Choose shooters to compare"}
-          </span>
-          {trackedInMatch && trackedInMatch.total > 0 && (
-            <span className="block text-xs text-muted-foreground">
-              {trackedInMatch.present} of {trackedInMatch.total} tracked
-            </span>
-          )}
-        </span>
-        <ChevronDown className="w-4 h-4 shrink-0" aria-hidden="true" />
-      </button>
-
       <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <button
+          type="button"
+          aria-haspopup="dialog"
+          className="flex min-h-11 w-full items-center justify-between gap-2 rounded-md border px-3 text-left text-sm"
+        >
+          <span className="min-w-0">
+            <span className="block truncate">
+              {summary ? `Comparing: ${summary}` : "Choose shooters to compare"}
+            </span>
+            {trackedInMatch && trackedInMatch.total > 0 && (
+              <span className="block text-xs text-muted-foreground">
+                {trackedInMatch.present} of {trackedInMatch.total} tracked
+              </span>
+            )}
+          </span>
+          <ChevronDown className="w-4 h-4 shrink-0" aria-hidden="true" />
+        </button>
+      </SheetTrigger>
         <SheetContent
           side="bottom"
           className="max-h-[85dvh] overflow-y-auto pb-[max(1rem,env(safe-area-inset-bottom))]"
@@ -197,6 +204,9 @@ export function SelectionBar({
               >
                 Reset to grid shooters
               </Button>
+            )}
+            {pendingUndo && (
+              <UndoBanner message={pendingUndo.message} onUndo={onUndo} />
             )}
           </div>
         </SheetContent>
