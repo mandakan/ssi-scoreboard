@@ -20,7 +20,7 @@ import { UpstreamDegradedBanner } from "@/components/upstream-degraded-banner";
 import { LoadingBar } from "@/components/loading-bar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, AlertCircle, RefreshCw, ChevronDown, ChevronUp, HelpCircle, ExternalLink, ArrowUpDown, Undo2, XCircle } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, ChevronDown, ChevronUp, HelpCircle, ExternalLink, Undo2, XCircle } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import {
   Popover,
@@ -47,6 +47,7 @@ import { resolveGridRows, type GridRowSource } from "@/lib/live-grid-rows";
 import { StageTimesExport } from "@/components/stage-times-export";
 import { computeFocusAreas } from "@/lib/coaching-rules";
 import { trackUi } from "@/lib/ui-telemetry";
+import { ChartsCard } from "@/components/analysis/charts-card";
 
 const noopSubscribeGridSource = () => () => {};
 
@@ -56,22 +57,6 @@ const EMPTY_IDS: number[] = [];
 
 const ChartSkeleton = () => <Skeleton className="h-64 w-full rounded-lg" />;
 
-const ComparisonChart = dynamic(
-  () => import("@/components/comparison-chart").then((m) => m.ComparisonChart),
-  { ssr: false, loading: ChartSkeleton },
-);
-const HfPercentChart = dynamic(
-  () => import("@/components/hf-percent-chart").then((m) => m.HfPercentChart),
-  { ssr: false, loading: ChartSkeleton },
-);
-const SpeedAccuracyChart = dynamic(
-  () => import("@/components/scatter-chart").then((m) => m.SpeedAccuracyChart),
-  { ssr: false, loading: ChartSkeleton },
-);
-const StageBalanceChart = dynamic(
-  () => import("@/components/radar-chart").then((m) => m.StageBalanceChart),
-  { ssr: false, loading: ChartSkeleton },
-);
 const StyleFingerprintChart = dynamic(
   () =>
     import("@/components/style-fingerprint-chart").then(
@@ -117,13 +102,6 @@ const StageDegradationChart = dynamic(
 const StageSimulator = dynamic(
   () => import("@/components/stage-simulator").then((m) => m.StageSimulator),
   { ssr: false, loading: () => <Skeleton className="h-48 w-full rounded-lg" /> },
-);
-const DivisionDistributionChart = dynamic(
-  () =>
-    import("@/components/division-distribution-chart").then(
-      (m) => m.DivisionDistributionChart,
-    ),
-  { ssr: false, loading: ChartSkeleton },
 );
 const FocusAreasSection = dynamic(
   () =>
@@ -803,177 +781,14 @@ function AnalysisPageContent() {
                 />
               </div>
 
-              <div className="rounded-lg border p-4 space-y-3">
-                <div className="flex items-center gap-1.5">
-                  <h2 className="font-semibold">
-                    Hit factor by stage
-                    {sortedCompName && (
-                      <span className="ml-1.5 text-xs font-normal text-muted-foreground">· {sortedCompName}&apos;s shooting order</span>
-                    )}
-                  </h2>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button
-                        className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                        aria-label="About this chart"
-                      >
-                        <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
-                      <PopoverHeader>
-                        <PopoverTitle>Hit factor by stage</PopoverTitle>
-                        <PopoverDescription>Bar height = hit factor (points ÷ time) for each stage. Higher is always better.</PopoverDescription>
-                      </PopoverHeader>
-                      <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                        <p>The dashed line (field leader) and dotted line (field median) benchmark your group against the full match field — toggle them with the buttons above the chart.</p>
-                        <p>DNF and DQ runs appear at HF 0 with reduced opacity.</p>
-                        <p>Click a competitor name in the legend to show or hide their bars.</p>
-                        <p>Stages appear in the same order as the comparison table. Use the <ArrowUpDown className="inline w-3 h-3 align-middle" aria-hidden="true" /><span className="sr-only">sort</span> button in a competitor&apos;s column header to sort by their shooting order — this chart will follow.</p>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <ComparisonChart
-                  data={compareQuery.data}
-                  stages={sortedStages}
-                  careerBaselineHF={myCompetitorId != null ? careerBaseline?.medianHF : null}
-                />
-              </div>
-
-              <div className="rounded-lg border p-4 space-y-3">
-                <div className="flex items-center gap-1.5">
-                  <h2 className="font-semibold">
-                    HF% vs stage winner
-                    {sortedCompName && (
-                      <span className="ml-1.5 text-xs font-normal text-muted-foreground">· {sortedCompName}&apos;s shooting order</span>
-                    )}
-                  </h2>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button
-                        className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                        aria-label="About this chart"
-                      >
-                        <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
-                      <PopoverHeader>
-                        <PopoverTitle>HF% vs stage winner</PopoverTitle>
-                        <PopoverDescription>Your hit factor as a percentage of the reference, per stage. 100% = you matched the winner.</PopoverDescription>
-                      </PopoverHeader>
-                      <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                        <p>Colour bands: green ≥ 95%, amber 85–95%, red &lt; 85% indicate run quality zones.</p>
-                        <p>Use the reference buttons above the chart to switch from &ldquo;stage winner&rdquo; to any specific competitor to compare gaps directly.</p>
-                        <p>Percentages control for relative HF level — a short stage and a long stage at 90% represent equal relative performance.</p>
-                        <p>Stages appear in the same order as the comparison table. Use the <ArrowUpDown className="inline w-3 h-3 align-middle" aria-hidden="true" /><span className="sr-only">sort</span> button in a competitor&apos;s column header to sort by their shooting order — this chart will follow.</p>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <HfPercentChart
-                  data={compareQuery.data}
-                  stages={sortedStages}
-                  careerBaselinePct={myCompetitorId != null ? careerBaseline?.medianMatchPct : null}
-                />
-              </div>
-
-              {compareQuery.data.stages.some(
-                (s) => Object.keys(s.divisionDistributions ?? {}).length > 0
-              ) && (
-                <div className="rounded-lg border p-4 space-y-3">
-                  <div className="flex items-center gap-1.5">
-                    <h2 className="font-semibold">
-                      Division position
-                      {sortedCompName && (
-                        <span className="ml-1.5 text-xs font-normal text-muted-foreground">· {sortedCompName}&apos;s shooting order</span>
-                      )}
-                    </h2>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <button
-                          className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                          aria-label="About this chart"
-                        >
-                          <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
-                        <PopoverHeader>
-                          <PopoverTitle>Division position</PopoverTitle>
-                          <PopoverDescription>Where each competitor sits within their division&apos;s HF distribution per stage — as a percentage of the division winner.</PopoverDescription>
-                        </PopoverHeader>
-                        <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                          <p>The shaded band shows where the middle 50% of the division scored (Q1–Q3). The dashed line is the division median, and the faint dotted line is the division minimum.</p>
-                          <p>A competitor sitting above the band outperformed most of their division on that stage; below the band means they trailed the majority.</p>
-                          <p>Compare stages where your line dips below the band — those are disproportionate opportunities relative to peers in the same division.</p>
-                          <p>Hover a stage bar to see the number of competitors contributing to that distribution. The legend shows the n range across all stages — a narrow band from a small field (e.g. n=4) is less reliable than one from a large field.</p>
-                          <p>When competitors are in different divisions, use the selector to switch between them.</p>
-                          <p>Stages appear in the same order as the comparison table. Use the <ArrowUpDown className="inline w-3 h-3 align-middle" aria-hidden="true" /><span className="sr-only">sort</span> button in a competitor&apos;s column header to sort by their shooting order — this chart will follow.</p>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <DivisionDistributionChart data={compareQuery.data} stages={sortedStages} />
-                </div>
-              )}
-
-              <div id="chart-speed-accuracy" className="rounded-lg border p-4 space-y-3">
-                <div className="flex items-center gap-1.5">
-                  <h2 className="font-semibold">Speed vs. accuracy</h2>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button
-                        className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                        aria-label="About this chart"
-                      >
-                        <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
-                      <PopoverHeader>
-                        <PopoverTitle>Speed vs. accuracy</PopoverTitle>
-                        <PopoverDescription>Each point is one stage: X-axis = time taken, Y-axis = points scored.</PopoverDescription>
-                      </PopoverHeader>
-                      <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                        <p>Up and to the left is better — more points, less time.</p>
-                        <p>Diagonal iso-HF lines connect all time/points combinations with the same hit factor. A stage dot above the &ldquo;HF 6&rdquo; line means you achieved better than HF 6 on that stage.</p>
-                        <p>Look for stages where you drifted right (slow) or dropped down (lost points) relative to your usual cluster — those are your biggest improvement opportunities.</p>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <SpeedAccuracyChart data={compareQuery.data} />
-              </div>
-
-              <div className="rounded-lg border p-4 space-y-3">
-                <div className="flex items-center gap-1.5">
-                  <h2 className="font-semibold">Stage balance</h2>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button
-                        className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                        aria-label="About this chart"
-                      >
-                        <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
-                      <PopoverHeader>
-                        <PopoverTitle>Stage balance</PopoverTitle>
-                        <PopoverDescription>Radar polygon showing your percentage per stage. A uniform shape means consistent performance.</PopoverDescription>
-                      </PopoverHeader>
-                      <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                        <p>Each spoke is one stage; distance from the centre = your % of the reference.</p>
-                        <p>Inward dips are stages where you under-performed; outward spikes are strong stages.</p>
-                        <p>Switch between Group %, Division %, and Overall % using the toggle inside the chart. Toggle competitors on/off to compare polygon shapes side-by-side.</p>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <StageBalanceChart data={compareQuery.data} />
-              </div>
+              <ChartsCard
+                data={compareQuery.data}
+                stages={sortedStages}
+                sortedCompName={sortedCompName}
+                careerBaselineHF={myCompetitorId != null ? careerBaseline?.medianHF : null}
+                careerBaselinePct={myCompetitorId != null ? careerBaseline?.medianMatchPct : null}
+                ct={ct}
+              />
 
               {/* Coaching sections — only rendered in coaching mode */}
               {compareMode === "coaching" && (
