@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { MatchGate } from "@/components/match-gate";
 import AnalysisPageClient from "./analysis-page-client";
 
 interface PageProps {
@@ -26,12 +25,6 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   };
 }
 
-export default async function AnalysisPage({ params }: PageProps) {
-  const { ct, id } = await params;
-  // Task 7 moves MatchGate into the shell and deletes this wrapper.
-  return (
-    <MatchGate ct={ct} id={id}>
-      <AnalysisPageClient />
-    </MatchGate>
-  );
+export default function AnalysisPage() {
+  return <AnalysisPageClient />;
 }

@@ -74,8 +74,6 @@ export default async function RootLayout({
           {children}
           <Footer />
           <BottomNav />
-          {/* Spacer so content isn't hidden behind the fixed bottom nav on mobile */}
-          <div className="h-14 md:hidden" aria-hidden="true" />
         </Providers>
       </body>
     </html>

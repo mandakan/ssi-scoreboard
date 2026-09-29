@@ -168,3 +168,53 @@ test("pre-match grid never fetches live-grid until the user opts in", async ({ p
   await page.getByRole("button", { name: "Show live scores" }).click();
   await expect.poll(() => gridCalls).toBeGreaterThan(0);
 });
+
+test("tab switches keep one match fetch and hide the global nav", async ({ page }) => {
+  await suppressDialogs(page);
+  let matchFetches = 0;
+  await page.route("**/api/match/**", (r) => {
+    matchFetches++;
+    return r.fulfill({ json: MOCK_MATCH });
+  });
+  await page.route("**/api/live-grid**", (r) =>
+    r.fulfill({ json: { shooters: [], stages: [], cells: {} } }),
+  );
+  await page.goto("/match/22/88888888/info");
+  const tabs = page.getByRole("navigation", { name: "Match sections" });
+  await expect(tabs).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
+  await tabs.getByRole("link", { name: /analysis/i }).click();
+  await expect(page).toHaveURL(/\/analysis/);
+  // dispatchEvent: under `next dev` the Next.js issues badge (bottom-left) can
+  // sit on top of the Grid tab and swallow a pointer click. Dev-only.
+  await tabs.getByRole("link", { name: /grid/i }).dispatchEvent("click");
+  await expect(page).toHaveURL(/\/match\/22\/88888888$/);
+  await tabs.getByRole("link", { name: /info/i }).click();
+  await expect(page).toHaveURL(/\/info$/);
+  expect(matchFetches).toBeLessThanOrEqual(1);
+});
+
+for (const path of ["", "/info", "/analysis"]) {
+  test(`no horizontal overflow at 390px on ${path || "/"}`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await suppressDialogs(page);
+    await mockApis(page);
+    await page.goto(`/match/22/88888888${path}`);
+    await expect(page.getByRole("navigation", { name: "Match sections" })).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(overflow).toBe(false);
+  });
+}
+
+test("tab bar links meet the 44px touch floor", async ({ page }) => {
+  await suppressDialogs(page);
+  await mockApis(page);
+  await page.goto("/match/22/88888888/info");
+  const heights = await page
+    .getByRole("navigation", { name: "Match sections" })
+    .getByRole("link")
+    .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
+  expect(Math.min(...heights)).toBeGreaterThanOrEqual(44);
+});

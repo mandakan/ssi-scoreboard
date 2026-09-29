@@ -279,6 +279,7 @@ test.describe("Scoreboard E2E", () => {
 
     await page.goto("/match/22/99999999?competitors=100,200");
     await expect(page).toHaveURL(/\/match\/22\/99999999\/analysis\?competitors=/);
+    await expect(page.locator("main header").getByText("Test IPSC Match")).toBeVisible();
 
     // Pre-selected competitors should appear without manually opening the picker
     await expect(page.getByText("Stage results")).toBeVisible();
@@ -529,6 +530,7 @@ test.describe("Mobile 390px viewport", () => {
 
     await page.goto("/match/22/99999999?competitors=100,200");
     await expect(page).toHaveURL(/\/match\/22\/99999999\/analysis\?competitors=/);
+    await expect(page.locator("main header").getByText("Test IPSC Match")).toBeVisible();
     await expect(page.getByText("Stage results")).toBeVisible();
     await expect(page.getByRole("table")).toBeVisible();
 

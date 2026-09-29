@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 import { ExternalLink, Info } from "lucide-react";
 import { useMatch } from "@/components/match-gate";
 import { MatchHeader } from "@/components/match-header";
@@ -9,18 +9,38 @@ import { ShareButton } from "@/components/share-button";
 import { ShareEventLink } from "@/components/share-event-link";
 import { TrackedShootersSheet } from "@/components/tracked-shooters-sheet";
 import { UpstreamDegradedBanner } from "@/components/upstream-degraded-banner";
-import { getCompetitorSelectionSnapshot } from "@/lib/competition-store";
+import { SELECTION_CHANGED, getCompetitorSelectionSnapshot } from "@/lib/competition-store";
 import { useMyIdentity } from "@/lib/hooks/use-my-identity";
 import { useTrackedShooters } from "@/lib/hooks/use-tracked-shooters";
 import { useCoachingAvailability } from "@/lib/queries";
+
+const EMPTY_IDS: number[] = [];
 
 export default function InfoPageClient() {
   const { ct, id, match } = useMatch();
   const { identity } = useMyIdentity();
   const { trackedIds } = useTrackedShooters();
   const coachingAvailability = useCoachingAvailability();
-  // Info does not edit the selection, so a one-time read is enough.
-  const [selectedIds] = useState(() => getCompetitorSelectionSnapshot(ct, id));
+  // useSyncExternalStore, not a useState initializer: the layout prefetch lets
+  // this render during SSR, and a localStorage read there would mismatch on
+  // hydration.
+  const subscribeSelection = useCallback(
+    (onChange: () => void) => {
+      const handler = (e: Event) => {
+        const d = (e as CustomEvent<{ ct: string; id: string }>).detail;
+        if (d && (d.ct !== ct || d.id !== id)) return;
+        onChange();
+      };
+      window.addEventListener(SELECTION_CHANGED, handler);
+      return () => window.removeEventListener(SELECTION_CHANGED, handler);
+    },
+    [ct, id],
+  );
+  const selectedIds = useSyncExternalStore(
+    subscribeSelection,
+    () => getCompetitorSelectionSnapshot(ct, id),
+    () => EMPTY_IDS,
+  );
   const [showManage, setShowManage] = useState(false);
 
   const resultsPublished = match.results_status === "all";
@@ -54,7 +74,7 @@ export default function InfoPageClient() {
           <span>
             {matchCancelled
               ? "This match was cancelled."
-              : "Results are not yet officially published by the organizers -- data shown here may change."
+              : "Results are not yet officially published by the organizers, so data shown here may change."
             }
             {match.ssi_url && !matchCancelled && (
               <>
