@@ -8,7 +8,9 @@ import { LiveGrid } from "@/components/live-grid";
 import { SquadPicker } from "@/components/squad-picker";
 import { TrackedShootersSheet } from "@/components/tracked-shooters-sheet";
 import { useMatch } from "@/components/match-gate";
+import { MatchTabPlaceholder } from "@/components/match-tab-placeholder";
 import { Button } from "@/components/ui/button";
+import { useHydrated } from "@/lib/hooks/use-hydrated";
 import { useMyIdentity } from "@/lib/hooks/use-my-identity";
 import { useTrackedShooters } from "@/lib/hooks/use-tracked-shooters";
 import { resolveGridRows, type GridRowSource } from "@/lib/live-grid-rows";
@@ -41,14 +43,27 @@ function subscribeToMatchEvent(eventName: string, ct: string, id: string) {
   };
 }
 
+/**
+ * Server render and hydration show a neutral placeholder: the rows come from
+ * browser-only state (identity, tracked shooters, saved selection) and the
+ * phase from Date.now(), so the server would otherwise render "Pick your
+ * squad" and flip on the client. The content mounts once hydrated.
+ */
 export default function GridPageClient() {
+  const hydrated = useHydrated();
+  if (!hydrated) return <MatchTabPlaceholder />;
+  return <GridPageContent />;
+}
+
+function GridPageContent() {
   const { ct, id, match } = useMatch();
   const router = useRouter();
   const { identity } = useMyIdentity();
   const { trackedIds } = useTrackedShooters();
   const [sourceOverride, setSourceOverride] = useState<GridRowSource | null>(null);
   const [showManage, setShowManage] = useState(false);
-  // Captured once so the phase is stable across renders.
+  // Captured once so the phase is stable across renders. Client-only: this
+  // component mounts after hydration (see GridPageClient).
   const [mountMs] = useState(() => Date.now());
 
   // Hash never reaches the server, so #stage-N legacy links resolve here.

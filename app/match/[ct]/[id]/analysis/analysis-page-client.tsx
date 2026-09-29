@@ -10,6 +10,7 @@ import { SquadPicker } from "@/components/squad-picker";
 import { BenchmarkPicker } from "@/components/benchmark-picker";
 import { ComparisonTable } from "@/components/comparison-table";
 import { useMatch } from "@/components/match-gate";
+import { MatchTabPlaceholder } from "@/components/match-tab-placeholder";
 import { useCompareQuery, useCoachingAvailability, useShooterDashboardQuery } from "@/lib/queries";
 import { computeCareerBaseline } from "@/lib/career-baseline";
 import { matchScoresPhase } from "@/lib/scores-phase";
@@ -38,6 +39,7 @@ import {
   SCORES_OPTIN_CHANGED,
   SELECTION_CHANGED,
 } from "@/lib/competition-store";
+import { useHydrated } from "@/lib/hooks/use-hydrated";
 import { useMyIdentity } from "@/lib/hooks/use-my-identity";
 import { useTrackedShooters } from "@/lib/hooks/use-tracked-shooters";
 import { MAX_COMPETITORS } from "@/lib/constants";
@@ -131,7 +133,19 @@ const FocusAreasSection = dynamic(
   { ssr: false },
 );
 
+/**
+ * Server render and hydration show a neutral placeholder: the selection is
+ * seeded from browser-only state (saved selection, identity, tracked
+ * shooters) and the phase from Date.now(), so the server would otherwise
+ * render the empty picker state and flip on the client.
+ */
 export default function AnalysisPageClient() {
+  const hydrated = useHydrated();
+  if (!hydrated) return <MatchTabPlaceholder />;
+  return <AnalysisPageContent />;
+}
+
+function AnalysisPageContent() {
   const { ct, id, match, isFetching } = useMatch();
 
   const [showCoachingView, setShowCoachingView] = useState(false);
@@ -249,6 +263,7 @@ export default function AnalysisPageClient() {
   }, [urlIds, savedIds, ct, id, router]);
 
   // Capture mount timestamp once to avoid impure Date.now() in render path.
+  // Client-only: this component mounts after hydration (see AnalysisPageClient).
   const [mountMs] = useState(() => Date.now());
   const compareMode = analysisCompareMode(match, mountMs);
   const phase = matchScoresPhase(match, mountMs);
