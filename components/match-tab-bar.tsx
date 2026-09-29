@@ -30,10 +30,13 @@ export function MatchTabBar({ ct, id }: { ct: string; id: string }) {
           const Icon = ICON[tab];
           const current = tab === active;
           return (
-            // prefetch={false}: Next's default prefetch of a dynamic route
-            // renders down to [id]/loading.tsx, which runs the match layout
-            // (fetchMatchData + generateMetadata) for every sibling tab on
-            // every page view. That would add upstream calls.
+            // prefetch={false}: belt and braces. Default prefetch of a dynamic
+            // route renders down to the nearest loading.js. That boundary now
+            // sits at app/match/[ct]/loading.tsx, above the match layout, so a
+            // default prefetch would not run fetchMatchData; but the tabs share
+            // the already-mounted layout, so prefetching them buys nothing and
+            // any future loading.js added below [id] would reintroduce layout
+            // renders (and upstream calls) for every sibling tab.
             <Link
               key={tab}
               href={matchTabHref(ct, id, tab)}
