@@ -527,7 +527,7 @@ function AnalysisPageContent() {
                 <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-80" side="bottom" align="start">
+            <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
               <PopoverHeader>
                 <PopoverTitle>Picking who to compare</PopoverTitle>
                 <PopoverDescription>
@@ -820,7 +820,7 @@ function AnalysisPageContent() {
                         <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-80" side="bottom" align="start">
+                    <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
                       <PopoverHeader>
                         <PopoverTitle>Hit factor by stage</PopoverTitle>
                         <PopoverDescription>Bar height = hit factor (points ÷ time) for each stage. Higher is always better.</PopoverDescription>
@@ -858,7 +858,7 @@ function AnalysisPageContent() {
                         <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-80" side="bottom" align="start">
+                    <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
                       <PopoverHeader>
                         <PopoverTitle>HF% vs stage winner</PopoverTitle>
                         <PopoverDescription>Your hit factor as a percentage of the reference, per stage. 100% = you matched the winner.</PopoverDescription>
@@ -899,7 +899,7 @@ function AnalysisPageContent() {
                           <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
                         </button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-80" side="bottom" align="start">
+                      <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
                         <PopoverHeader>
                           <PopoverTitle>Division position</PopoverTitle>
                           <PopoverDescription>Where each competitor sits within their division&apos;s HF distribution per stage — as a percentage of the division winner.</PopoverDescription>
@@ -931,7 +931,7 @@ function AnalysisPageContent() {
                         <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-80" side="bottom" align="start">
+                    <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
                       <PopoverHeader>
                         <PopoverTitle>Speed vs. accuracy</PopoverTitle>
                         <PopoverDescription>Each point is one stage: X-axis = time taken, Y-axis = points scored.</PopoverDescription>
@@ -959,7 +959,7 @@ function AnalysisPageContent() {
                         <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-80" side="bottom" align="start">
+                    <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
                       <PopoverHeader>
                         <PopoverTitle>Stage balance</PopoverTitle>
                         <PopoverDescription>Radar polygon showing your percentage per stage. A uniform shape means consistent performance.</PopoverDescription>
@@ -1026,7 +1026,7 @@ function AnalysisPageContent() {
                                   <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
                                 </button>
                               </PopoverTrigger>
-                              <PopoverContent className="w-80" side="bottom" align="start">
+                              <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
                                 <PopoverHeader>
                                   <PopoverTitle>Shooter style fingerprint</PopoverTitle>
                                   <PopoverDescription>Match-wide accuracy vs. speed plotted for each competitor.</PopoverDescription>
@@ -1056,7 +1056,7 @@ function AnalysisPageContent() {
                                   <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
                                 </button>
                               </PopoverTrigger>
-                              <PopoverContent className="w-80" side="bottom" align="start">
+                              <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
                                 <PopoverHeader>
                                   <PopoverTitle>Shooter style profile</PopoverTitle>
                                   <PopoverDescription>Four-axis radar showing where each competitor ranks across key shooting dimensions.</PopoverDescription>
@@ -1086,7 +1086,7 @@ function AnalysisPageContent() {
                                   <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
                                 </button>
                               </PopoverTrigger>
-                              <PopoverContent className="w-80" side="bottom" align="start">
+                              <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
                                 <PopoverHeader>
                                   <PopoverTitle>Stage degradation</PopoverTitle>
                                   <PopoverDescription>Does shooting position on a stage correlate with performance?</PopoverDescription>
@@ -1149,7 +1149,7 @@ function AnalysisPageContent() {
                                 <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
                               </button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-80" side="bottom" align="end">
+                            <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="end">
                               <PopoverHeader>
                                 <PopoverTitle>Stage Simulator</PopoverTitle>
                                 <PopoverDescription>

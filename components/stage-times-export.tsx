@@ -96,7 +96,7 @@ export function StageTimesExport({ ct, id, match, compareData, selectedIds }: Pr
               <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-80" side="bottom" align="start">
+          <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
             <PopoverHeader>
               <PopoverTitle>Export stage times</PopoverTitle>
               <PopoverDescription>
