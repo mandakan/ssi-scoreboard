@@ -41,10 +41,12 @@ import {
 import { useMyIdentity } from "@/lib/hooks/use-my-identity";
 import { useTrackedShooters } from "@/lib/hooks/use-tracked-shooters";
 import { MAX_COMPETITORS } from "@/lib/constants";
-import { resolveGridRows } from "@/lib/live-grid-rows";
+import { resolveGridRows, type GridRowSource } from "@/lib/live-grid-rows";
 import { StageTimesExport } from "@/components/stage-times-export";
 import { computeFocusAreas } from "@/lib/coaching-rules";
 import { trackUi } from "@/lib/ui-telemetry";
+
+const noopSubscribeGridSource = () => () => {};
 
 // Stable empty array for useSyncExternalStore server snapshot — must be a
 // constant reference so React's referential equality check doesn't loop.
@@ -173,17 +175,24 @@ export default function AnalysisPageClient() {
 
   // Grid rows, resolved exactly as the grid does, so Analysis opens on the
   // shooters the user was just looking at (spec Section 1, decision 4).
+  // Stored source read via useSyncExternalStore (server snapshot "squad") so
+  // SSR and hydration agree.
+  const gridSource = useSyncExternalStore(
+    noopSubscribeGridSource,
+    useCallback(() => getGridSourcePreference(ct, id), [ct, id]),
+    (): GridRowSource => "squad",
+  );
   const gridRows = useMemo(
     () =>
       resolveGridRows({
-        source: getGridSourcePreference(ct, id),
+        source: gridSource,
         competitors: match.competitors,
         squads: match.squads,
         myShooterId: identity?.shooterId ?? null,
         trackedShooterIds: trackedIds,
         fallback: EMPTY_IDS,
       }),
-    [ct, id, match, identity, trackedIds],
+    [gridSource, match, identity, trackedIds],
   );
 
   // Use useSyncExternalStore to read competitor selection from localStorage.

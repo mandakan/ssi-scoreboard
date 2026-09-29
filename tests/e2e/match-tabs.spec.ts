@@ -212,9 +212,11 @@ test("tab bar links meet the 44px touch floor", async ({ page }) => {
   await suppressDialogs(page);
   await mockApis(page);
   await page.goto("/match/22/88888888/info");
-  const heights = await page
-    .getByRole("navigation", { name: "Match sections" })
+  const nav = page.getByRole("navigation", { name: "Match sections" });
+  await expect(nav).toBeVisible();
+  const heights = await nav
     .getByRole("link")
     .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
+  expect(heights).toHaveLength(3);
   expect(Math.min(...heights)).toBeGreaterThanOrEqual(44);
 });

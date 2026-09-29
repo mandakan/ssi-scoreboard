@@ -27,7 +27,9 @@ describe("MatchTabBar", () => {
   });
 
   it("reports the viewed tab once", () => {
+    trackUi.mockClear();
     render(<MatchTabBar ct="22" id="1" />);
+    expect(trackUi).toHaveBeenCalledTimes(1);
     expect(trackUi).toHaveBeenCalledWith({ op: "tab-view", ct: 22, tab: "info" });
   });
 
