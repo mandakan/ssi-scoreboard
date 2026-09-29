@@ -1,4 +1,5 @@
 import type { MatchResponse, MatchView, Visibility } from "@/lib/types";
+import type { GridRowSource } from "@/lib/live-grid-rows";
 
 export interface StoredCompetition {
   ct: string;
@@ -263,5 +264,37 @@ export function getLiveViewPreference(ct: string, id: string): LiveView {
       : "grid";
   } catch {
     return "grid";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Grid row source -- squad vs tracked, remembered per match
+// ---------------------------------------------------------------------------
+
+function gridSourceKey(ct: string, id: string): string {
+  return `ssi_gridsource_${ct}_${id}`;
+}
+
+export function saveGridSourcePreference(
+  ct: string,
+  id: string,
+  source: GridRowSource,
+): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(gridSourceKey(ct, id), source);
+  } catch {
+    // ignore
+  }
+}
+
+export function getGridSourcePreference(ct: string, id: string): GridRowSource {
+  if (typeof window === "undefined") return "squad";
+  try {
+    return localStorage.getItem(gridSourceKey(ct, id)) === "tracked"
+      ? "tracked"
+      : "squad";
+  } catch {
+    return "squad";
   }
 }
