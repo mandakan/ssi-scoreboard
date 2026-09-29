@@ -149,9 +149,13 @@ async function openGrid(page: Page) {
   await page.addInitScript((releaseId) => {
     localStorage.setItem("ssi-cell-help-seen", "1");
     localStorage.setItem("whats-new-seen-id", releaseId);
+    localStorage.setItem(
+      "ssi-my-shooter",
+      JSON.stringify({ shooterId: 500, name: "Shooter 1 Lastname", license: null }),
+    );
   }, LATEST_RELEASE_ID);
   await mockApis(page);
-  await page.goto("/match/22/88888888?competitors=100,101,102");
+  await page.goto("/match/22/88888888");
   // exact: true -- "S1" would otherwise also match S10, S11 and S12.
   await expect(
     page.getByRole("columnheader", { name: "S1", exact: true }),
@@ -254,9 +258,13 @@ test.describe("live grid", () => {
     expect(compareCalls).toEqual([]);
   });
 
-  test("switching to full analysis leaves the grid", async ({ page }) => {
+  test("the Analysis tab leaves the grid", async ({ page }) => {
     await openGrid(page);
-    await page.getByRole("button", { name: /full analysis/i }).click();
+    await page
+      .getByRole("navigation", { name: "Match sections" })
+      .getByRole("link", { name: /analysis/i })
+      .click();
+    await expect(page).toHaveURL(/\/analysis/);
     await expect(
       page.getByRole("columnheader", { name: "S1", exact: true }),
     ).toBeHidden();

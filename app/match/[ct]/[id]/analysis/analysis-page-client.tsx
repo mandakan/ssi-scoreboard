@@ -1,29 +1,26 @@
 "use client";
 
 import { useCallback, useSyncExternalStore, useEffect, useMemo, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { useParams, useSearchParams, useRouter } from "next/navigation";
-import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { MatchHeader } from "@/components/match-header";
 import { ShareButton } from "@/components/share-button";
-import { ShareEventLink } from "@/components/share-event-link";
 import { CompetitorPicker } from "@/components/competitor-picker";
 import { TrackedShootersSheet } from "@/components/tracked-shooters-sheet";
 import { SquadPicker } from "@/components/squad-picker";
 import { BenchmarkPicker } from "@/components/benchmark-picker";
 import { ComparisonTable } from "@/components/comparison-table";
-import { ModeToggle } from "@/components/mode-toggle";
-import { useMatchQuery, useCompareQuery, useCoachingAvailability, useShooterDashboardQuery } from "@/lib/queries";
+import { useMatch } from "@/components/match-gate";
+import { MatchTabPlaceholder } from "@/components/match-tab-placeholder";
+import { useCompareQuery, useCoachingAvailability, useShooterDashboardQuery } from "@/lib/queries";
 import { computeCareerBaseline } from "@/lib/career-baseline";
-import { detectMatchView, isPreMatchEligible } from "@/lib/mode";
-import type { CompareMode, EventSummary, Visibility } from "@/lib/types";
+import { matchScoresPhase } from "@/lib/scores-phase";
+import { analysisCompareMode, initialAnalysisSelection } from "@/lib/analysis-selection";
 import { CacheInfoBadge } from "@/components/cache-info-badge";
 import { UpstreamDegradedBanner } from "@/components/upstream-degraded-banner";
 import { LoadingBar } from "@/components/loading-bar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, AlertCircle, ArrowLeft, RefreshCw, ChevronDown, ChevronUp, HelpCircle, ExternalLink, Info, ArrowUpDown, Undo2, XCircle, LayoutGrid } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, ChevronDown, ChevronUp, HelpCircle, ExternalLink, ArrowUpDown, Undo2, XCircle } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import {
   Popover,
@@ -34,27 +31,24 @@ import {
   PopoverDescription,
 } from "@/components/ui/popover";
 import {
-  saveRecentCompetition,
   saveCompetitorSelection,
   getCompetitorSelectionSnapshot,
+  getGridSourcePreference,
+  getLiveScoresOptIn,
+  saveLiveScoresOptIn,
+  SCORES_OPTIN_CHANGED,
   SELECTION_CHANGED,
-  saveModeOverride,
-  getModeOverrideSnapshot,
-  subscribeMode,
-  saveLiveViewPreference,
-  getLiveViewPreference,
-  type LiveView,
 } from "@/lib/competition-store";
-import { getMyIdentity, getTrackedShooters } from "@/lib/shooter-identity";
+import { useHydrated } from "@/lib/hooks/use-hydrated";
 import { useMyIdentity } from "@/lib/hooks/use-my-identity";
 import { useTrackedShooters } from "@/lib/hooks/use-tracked-shooters";
 import { MAX_COMPETITORS } from "@/lib/constants";
-import { PreMatchView } from "@/components/pre-match-view";
-import { LiveGrid } from "@/components/live-grid";
 import { resolveGridRows, type GridRowSource } from "@/lib/live-grid-rows";
 import { StageTimesExport } from "@/components/stage-times-export";
 import { computeFocusAreas } from "@/lib/coaching-rules";
 import { trackUi } from "@/lib/ui-telemetry";
+
+const noopSubscribeGridSource = () => () => {};
 
 // Stable empty array for useSyncExternalStore server snapshot — must be a
 // constant reference so React's referential equality check doesn't loop.
@@ -139,29 +133,24 @@ const FocusAreasSection = dynamic(
   { ssr: false },
 );
 
-export default function MatchPageClient() {
+/**
+ * Server render and hydration show a neutral placeholder: the selection is
+ * seeded from browser-only state (saved selection, identity, tracked
+ * shooters) and the phase from Date.now(), so the server would otherwise
+ * render the empty picker state and flip on the client.
+ */
+export default function AnalysisPageClient() {
+  const hydrated = useHydrated();
+  if (!hydrated) return <MatchTabPlaceholder />;
+  return <AnalysisPageContent />;
+}
+
+function AnalysisPageContent() {
+  const { ct, id, match, isFetching } = useMatch();
+
   const [showCoachingView, setShowCoachingView] = useState(false);
   const [showSimulator, setShowSimulator] = useState(false);
   const [showManage, setShowManage] = useState(false);
-
-  const params = useParams<{ ct: string; id: string }>();
-  const { ct, id } = params;
-
-  // Live surface: the courtside grid is the default, with the deep
-  // comparison table one tap away. See
-  // docs/superpowers/specs/2026-08-23-live-grid-design.md.
-  const [liveView, setLiveViewState] = useState<LiveView>("grid");
-  const [gridSource, setGridSource] = useState<GridRowSource>("squad");
-  useEffect(() => {
-    setLiveViewState(getLiveViewPreference(ct, id));
-  }, [ct, id]);
-  const setLiveView = useCallback(
-    (view: LiveView) => {
-      setLiveViewState(view);
-      saveLiveViewPreference(ct, id, view);
-    },
-    [ct, id],
-  );
 
   // Section-open telemetry counts only the closed->open transition.
   const onCoachingOpenChange = useCallback(
@@ -186,40 +175,44 @@ export default function MatchPageClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // On mount: reset scroll and move focus to main content for screen readers.
-  useEffect(() => {
-    window.scrollTo(0, 0);
-    document.getElementById("main-content")?.focus({ preventScroll: true });
-  }, []);
+  // Identity and tracked shooters (localStorage-backed, reactive).
+  const { identity, setIdentity } = useMyIdentity();
+  const { tracked: trackedShooters, trackedIds, add: addTracked, remove: removeTracked } =
+    useTrackedShooters();
 
-  // On mount: seed localStorage from ?competitors= URL param (shared links),
-  // or reflect existing localStorage selection into the URL (backward compat).
-  const seededRef = useRef(false);
-  useEffect(() => {
-    if (seededRef.current) return;
-    seededRef.current = true;
+  // Career baseline: fetch the identity's dashboard only when they are one
+  // of the selected competitors. The query is disabled when shooterId is null
+  // (anonymous viewer) or when match data hasn't loaded yet.
+  const shooterDashQuery = useShooterDashboardQuery(identity?.shooterId ?? null);
+  const careerBaseline =
+    shooterDashQuery.data ? computeCareerBaseline(shooterDashQuery.data.matches) : null;
 
-    const competitorsParam = searchParams.get("competitors");
-    if (competitorsParam) {
-      const ids = competitorsParam
-        .split(",")
-        .map(Number)
-        .filter((n) => Number.isFinite(n) && n > 0);
-      if (ids.length > 0) {
-        saveCompetitorSelection(ct, id, ids);
-      }
-    } else {
-      const localIds = getCompetitorSelectionSnapshot(ct, id);
-      if (localIds.length > 0) {
-        router.replace(`?competitors=${localIds.join(",")}`, { scroll: false });
-      }
-    }
-  }, [ct, id, searchParams, router]);
+  // Grid rows, resolved exactly as the grid does, so Analysis opens on the
+  // shooters the user was just looking at (spec Section 1, decision 4).
+  // Stored source read via useSyncExternalStore (server snapshot "squad") so
+  // SSR and hydration agree.
+  const gridSource = useSyncExternalStore(
+    noopSubscribeGridSource,
+    useCallback(() => getGridSourcePreference(ct, id), [ct, id]),
+    (): GridRowSource => "squad",
+  );
+  const gridRows = useMemo(
+    () =>
+      resolveGridRows({
+        source: gridSource,
+        competitors: match.competitors,
+        squads: match.squads,
+        myShooterId: identity?.shooterId ?? null,
+        trackedShooterIds: trackedIds,
+        fallback: EMPTY_IDS,
+      }),
+    [gridSource, match, identity, trackedIds],
+  );
 
   // Use useSyncExternalStore to read competitor selection from localStorage.
   // This handles SSR (server snapshot = []) and client-side hydration correctly,
   // and avoids setState-in-effect for restoration.
-  const selectedIds = useSyncExternalStore(
+  const savedIds = useSyncExternalStore(
     useCallback(
       (onChange) => {
         const handler = (e: Event) => {
@@ -235,121 +228,69 @@ export default function MatchPageClient() {
     () => EMPTY_IDS
   );
 
-  // Mode override from localStorage (useSyncExternalStore for SSR safety).
-  const modeOverride = useSyncExternalStore(
-    subscribeMode,
-    useCallback(() => getModeOverrideSnapshot(ct, id), [ct, id]),
-    () => null,
+  // Selection: an explicit URL wins, then the saved selection, then the
+  // grid's rows (see initialAnalysisSelection). Derived at render rather than
+  // copied into state. A seed is never persisted or written to the URL:
+  // that would pin the next visit (and the grid's fallback) to a list the
+  // user never chose. Once the user edits, the saved selection is the source
+  // of truth, so Clear does not re-seed.
+  const [edited, setEdited] = useState(false);
+  const urlParam = searchParams.get("competitors") ?? "";
+  const urlIds = useMemo(
+    () => urlParam.split(",").map(Number).filter((n) => Number.isFinite(n) && n > 0),
+    [urlParam],
   );
+  const initial = useMemo(
+    () => initialAnalysisSelection({ urlIds, savedIds, gridRows }),
+    [urlIds, savedIds, gridRows],
+  );
+  const selectedIds = edited
+    ? urlIds.length > 0 ? urlIds : savedIds
+    : initial.ids.length > 0 ? initial.ids : EMPTY_IDS;
 
-  const matchQuery = useMatchQuery(ct, id);
-
-  // When match data fails to load, look up the match's visibility from any
-  // events list we already have cached. If the user got here from the home
-  // page or a search result, the events query carries `visibility`, so we
-  // can tell them precisely *why* the match isn't viewable (private vs
-  // missing) instead of giving the generic copy.
-  const queryClient = useQueryClient();
-  const knownVisibility: Visibility | null = useMemo(() => {
-    if (!matchQuery.isError) return null;
-    const ctNum = Number(ct);
-    const idNum = Number(id);
-    const matchEntry = (list: unknown): EventSummary | undefined => {
-      if (!Array.isArray(list)) return undefined;
-      return (list as EventSummary[]).find(
-        (e) => e.id === idNum && e.content_type === ctNum,
-      );
-    };
-    const candidates = [
-      ...queryClient.getQueriesData<EventSummary[]>({ queryKey: ["live-matches"] }),
-      ...queryClient.getQueriesData<EventSummary[]>({ queryKey: ["events"] }),
-    ];
-    for (const [, data] of candidates) {
-      const hit = matchEntry(data);
-      if (hit?.visibility) return hit.visibility;
+  // Arrival sync, once per visit: persist a shared-link selection, or reflect
+  // an already-saved selection into the URL.
+  const arrivalHandledRef = useRef(false);
+  useEffect(() => {
+    if (arrivalHandledRef.current) return;
+    if (urlIds.length > 0) {
+      arrivalHandledRef.current = true;
+      saveCompetitorSelection(ct, id, urlIds);
+    } else if (savedIds.length > 0) {
+      arrivalHandledRef.current = true;
+      router.replace(`${window.location.pathname}?competitors=${savedIds.join(",")}`, { scroll: false });
     }
-    return null;
-  }, [matchQuery.isError, queryClient, ct, id]);
-
-  // Identity and tracked shooters (localStorage-backed, reactive).
-  const { identity, setIdentity } = useMyIdentity();
-  const { tracked: trackedShooters, trackedIds, add: addTracked, remove: removeTracked } =
-    useTrackedShooters();
-
-  // Career baseline: fetch the identity's dashboard only when they are one
-  // of the selected competitors. The query is disabled when shooterId is null
-  // (anonymous viewer) or when match data hasn't loaded yet.
-  const shooterDashQuery = useShooterDashboardQuery(identity?.shooterId ?? null);
-  const careerBaseline =
-    shooterDashQuery.data ? computeCareerBaseline(shooterDashQuery.data.matches) : null;
+  }, [urlIds, savedIds, ct, id, router]);
 
   // Capture mount timestamp once to avoid impure Date.now() in render path.
+  // Client-only: this component mounts after hydration (see AnalysisPageClient).
   const [mountMs] = useState(() => Date.now());
-
-  // Compute auto view from match data (defaults to "coaching" until loaded).
-  const matchDateMs = matchQuery.data?.date ? new Date(matchQuery.data.date).getTime() : null;
-  const matchEndsMs = matchQuery.data?.ends ? new Date(matchQuery.data.ends).getTime() : null;
-  const daysSinceMatchStart =
-    matchDateMs != null ? (mountMs - matchDateMs) / 86_400_000 : 0;
-  const daysSinceMatchEnd =
-    matchEndsMs != null ? (mountMs - matchEndsMs) / 86_400_000 : null;
-
-  // Auto view is computed from match-only data first, then refined once the
-  // compare response confirms whether any stage already has scores.
-  // (This enables falling back to "live" if `scoring_pct` is still 0
-  // but the API has scores — handles rounding / delayed reporting.)
-  const autoMode = useMemo(() => {
-    if (!matchQuery.data) return "coaching" as const;
-    return detectMatchView({
-      scoringPct: matchQuery.data.scoring_pct,
-      daysSinceMatchStart,
-      daysSinceMatchEnd,
-      resultsStatus: matchQuery.data.results_status,
-      matchStatus: matchQuery.data.match_status,
-      hasActualScores: false,
-    });
-  }, [matchQuery.data, daysSinceMatchStart, daysSinceMatchEnd]);
-
-  const effectiveMode = modeOverride ?? autoMode;
-
-  // Pre-match selectability — offered as a manual choice while the match
-  // isn't fully wrapped up. Gated on scoring %, not on dates, so it stays
-  // available for multi-day matches where some squads still haven't shot.
-  const preMatchEligible = matchQuery.data
-    ? isPreMatchEligible({
-        scoringPct: matchQuery.data.scoring_pct,
-        resultsStatus: matchQuery.data.results_status,
-        matchStatus: matchQuery.data.match_status,
-      })
-    : false;
+  const compareMode = analysisCompareMode(match, mountMs);
+  const phase = matchScoresPhase(match, mountMs);
+  // Before scoring really starts nothing fetches scorecards on its own: the
+  // user opts in per session (never an automatic upstream poll).
+  const scoresOptIn = useSyncExternalStore(
+    useCallback(
+      (onChange) => {
+        window.addEventListener(SCORES_OPTIN_CHANGED, onChange);
+        return () => window.removeEventListener(SCORES_OPTIN_CHANGED, onChange);
+      },
+      [],
+    ),
+    useCallback(() => getLiveScoresOptIn(ct, id), [ct, id]),
+    () => false,
+  );
+  const prematchGated = phase === "prematch" && !scoresOptIn;
 
   // Compare query: fires for completed matches (coaching mode) and for live
   // matches whose organizer has enabled live scorecard access (or where our
-  // bot has Staff bypass) — gated on `is_live_scores_accessible`. When that
-  // flag is false during a live match, SSI returns empty scorecards (#410)
-  // and we render the "Match in progress" empty state instead. Pre-match is
-  // always skipped (no scores yet by definition).
-  const liveScoresAccessible =
-    matchQuery.data?.is_live_scores_accessible === true;
-  const compareMode: CompareMode = effectiveMode === "coaching" ? "coaching" : "live";
-  // The grid is field-blind by design, so while it is showing we must NOT
-  // fire the compare query -- that would pull the whole-field snapshot and
-  // throw away the entire point of the view.
-  const gridShowing = effectiveMode === "live" && liveView === "grid";
-  // Gate on matchQuery.data: autoMode falls back to "coaching" until the
-  // match response lands, so without this the page fires a whole-field
-  // compare request on every load -- including live matches showing the
-  // grid, where it is exactly the fetch we are trying not to make.
+  // bot has Staff bypass). When that flag is false during a live match, SSI
+  // returns empty scorecards (#410) and we render the "Match in progress"
+  // empty state instead. useCompareQuery self-disables on an empty id list.
+  const liveScoresAccessible = match.is_live_scores_accessible === true;
   const compareEnabled =
-    Boolean(matchQuery.data) &&
-    (effectiveMode === "coaching" ||
-      (effectiveMode === "live" && liveScoresAccessible && !gridShowing));
-  const compareQuery = useCompareQuery(
-    ct,
-    id,
-    compareEnabled ? selectedIds : EMPTY_IDS,
-    compareMode,
-  );
+    (compareMode === "coaching" || liveScoresAccessible) && !prematchGated;
+  const compareQuery = useCompareQuery(ct, id, compareEnabled ? selectedIds : EMPTY_IDS, compareMode);
   const coachingAvailability = useCoachingAvailability();
 
   // ── Stage sort (shared by table + charts) ─────────────────────────────────
@@ -399,73 +340,10 @@ export default function MatchPageClient() {
   }, [compareQuery.data?.stages, stageSort]);
   // ─────────────────────────────────────────────────────────────────────────
 
-  // Save match to recents whenever data loads/changes (localStorage write, no setState).
-  useEffect(() => {
-    if (matchQuery.data) {
-      saveRecentCompetition(ct, id, matchQuery.data);
-    }
-  }, [ct, id, matchQuery.data]);
-
-  // Auto-select tracked/identity competitors once per match visit (only when no existing selection).
-  const autoSelectAppliedRef = useRef(false);
-  useEffect(() => {
-    if (autoSelectAppliedRef.current || !matchQuery.data) return;
-    autoSelectAppliedRef.current = true;
-
-    // Only auto-select if no existing selection
-    const existing = getCompetitorSelectionSnapshot(ct, id);
-    if (existing.length > 0) return;
-
-    // Build shooterId → competitorId map
-    const map = new Map<number, number>();
-    for (const c of matchQuery.data.competitors) {
-      if (c.shooterId !== null) map.set(c.shooterId, c.id);
-    }
-
-    // Gather tracked + identity shooter IDs
-    const identityNow = getMyIdentity();
-    const trackedNow = getTrackedShooters();
-    const shooterIds = new Set<number>();
-    if (identityNow) shooterIds.add(identityNow.shooterId);
-    for (const t of trackedNow) shooterIds.add(t.shooterId);
-
-    // Resolve to match-specific competitor IDs
-    const autoIds: number[] = [];
-    for (const sId of shooterIds) {
-      const cId = map.get(sId);
-      if (cId !== undefined) autoIds.push(cId);
-    }
-
-    if (autoIds.length > 0) {
-      const toAdd = autoIds.slice(0, MAX_COMPETITORS);
-      saveCompetitorSelection(ct, id, toAdd);
-      router.replace(`?competitors=${toAdd.join(",")}`, { scroll: false });
-    }
-  }, [ct, id, matchQuery.data, router]);
-
   // Tracked-in-match indicator: how many tracked/identity shooters are in this match.
-  // Rows for the courtside grid. Squad and tracked both resolve from the
-  // already-cached GetMatch response, so switching source costs nothing
-  // upstream.
-  const gridRows = useMemo(
-    () =>
-      matchQuery.data
-        ? resolveGridRows({
-            source: gridSource,
-            competitors: matchQuery.data.competitors,
-            squads: matchQuery.data.squads,
-            myShooterId: identity?.shooterId ?? null,
-            trackedShooterIds: trackedIds,
-            fallback: selectedIds,
-          })
-        : EMPTY_IDS,
-    [matchQuery.data, gridSource, identity, trackedIds, selectedIds],
-  );
-
   const trackedInMatch = useMemo(() => {
-    if (!matchQuery.data) return null;
     const map = new Map(
-      matchQuery.data.competitors
+      match.competitors
         .filter((c) => c.shooterId !== null)
         .map((c) => [c.shooterId!, c.id]),
     );
@@ -476,7 +354,7 @@ export default function MatchPageClient() {
     const total = allTrackedIds.length;
     const present = allTrackedIds.filter((sid) => map.has(sid)).length;
     return total > 0 ? { present, total } : null;
-  }, [matchQuery.data, trackedShooters, identity]);
+  }, [match, trackedShooters, identity]);
 
   function handleSetMyIdentity(c: { shooterId: number | null; name: string }) {
     if (c.shooterId === null) return;
@@ -517,9 +395,11 @@ export default function MatchPageClient() {
     };
   }, []);
 
+
   const writeSelection = useCallback(
     (ids: number[]) => {
       saveCompetitorSelection(ct, id, ids);
+      setEdited(true);
       const qs = ids.length > 0 ? `?competitors=${ids.join(",")}` : "";
       router.replace(`${window.location.pathname}${qs}`, { scroll: false });
     },
@@ -533,8 +413,8 @@ export default function MatchPageClient() {
   }
 
   function replaceSelectionWithUndo(newIds: number[], message: string) {
-    // Capture the snapshot via the live store, not closure, to avoid stale prev.
-    const prev = getCompetitorSelectionSnapshot(ct, id);
+    // What the user sees now, which is not in the store while it is seeded.
+    const prev = selectedIds;
     writeSelection(newIds);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     setPendingUndo({ prevIds: prev, message, expiresAt: Date.now() + UNDO_TIMEOUT_MS });
@@ -560,152 +440,14 @@ export default function MatchPageClient() {
     handleSelectionChange(next);
   }
 
-  if (matchQuery.isLoading) {
-    return (
-      <>
-      <LoadingBar matchLoaded={false} compareLoaded={false} hasCompetitors={selectedIds.length > 0} />
-      <main id="main-content" tabIndex={-1} className="min-h-screen p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
-        {/* nav row */}
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-8 w-20 rounded-md" />
-        </div>
-
-        {/* match header */}
-        <div className="rounded-lg border p-4 space-y-3">
-          <Skeleton className="h-6 w-3/4" />
-          <div className="flex gap-3">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-4 w-32" />
-          </div>
-        </div>
-
-        {/* stage list */}
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-16" />
-          <div className="flex gap-2 flex-wrap">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-8 w-24 rounded-full" />
-            ))}
-          </div>
-        </div>
-
-        {/* competitor picker */}
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-36" />
-          <Skeleton className="h-10 w-full rounded-md" />
-        </div>
-      </main>
-      </>
-    );
-  }
-
-  if (matchQuery.isError || !matchQuery.data) {
-    // SSI returns null for the match node when the requesting account isn't
-    // allowed to read it — most often a non-public match where the bot hasn't
-    // been invited as Staff. When the user reached this page from a list that
-    // carries visibility info, we can say so explicitly (`knownVisibility`).
-    // Otherwise we hedge between "private" and "removed" so the copy is
-    // accurate either way.
-    const errMsg = matchQuery.error?.message ?? "";
-    // fetchMatch() throws `Match fetch failed (404): ...` when the API returns
-    // 404. Any non-404 (e.g. 502 from a degraded upstream) renders the
-    // generic failure copy instead of the "private" explainer.
-    const isNotFound = !matchQuery.isError || /\(404\)/.test(errMsg);
-    const confirmedPrivate =
-      isNotFound && knownVisibility?.class === "organizer-published";
-    return (
-      <main
-        id="main-content"
-        tabIndex={-1}
-        className="min-h-screen flex flex-col items-center justify-center gap-4 p-8"
-      >
-        <div className="w-full max-w-md rounded-lg border bg-card p-6 text-center space-y-4">
-          <AlertCircle className="w-8 h-8 text-muted-foreground mx-auto" aria-hidden="true" />
-          {isNotFound && confirmedPrivate ? (
-            <>
-              <h1 className="text-lg font-semibold">This match is private</h1>
-              <div className="text-sm text-muted-foreground space-y-2 text-left" role="alert">
-                <p>
-                  The organizer marked this match as{" "}
-                  <em>{knownVisibility?.displayName || "non-public"}</em> on
-                  ShootNScoreIt and hasn{"’"}t published it to the scoreboard,
-                  so we can{"’"}t show its details here.
-                </p>
-                <p>
-                  If you organize this match and want to make it viewable, see{" "}
-                  <Link
-                    href="/about/organizer-published"
-                    className="text-primary hover:underline underline-offset-2"
-                  >
-                    how to publish a private match
-                  </Link>
-                  .
-                </p>
-              </div>
-            </>
-          ) : isNotFound ? (
-            <>
-              <h1 className="text-lg font-semibold">Match not viewable</h1>
-              <div className="text-sm text-muted-foreground space-y-2 text-left" role="alert">
-                <p>
-                  We couldn{"’"}t load this match. There are two common reasons:
-                </p>
-                <ul className="list-disc list-inside space-y-1">
-                  <li>
-                    It{"’"}s a <strong>private match</strong> on ShootNScoreIt
-                    and the organizer hasn{"’"}t published it to the scoreboard.
-                  </li>
-                  <li>The match has been removed or doesn{"’"}t exist.</li>
-                </ul>
-                <p>
-                  If you organize a private match and want to make it viewable
-                  here, see{" "}
-                  <Link
-                    href="/about/organizer-published"
-                    className="text-primary hover:underline underline-offset-2"
-                  >
-                    how to publish a private match
-                  </Link>
-                  .
-                </p>
-              </div>
-            </>
-          ) : (
-            <>
-              <h1 className="text-lg font-semibold">Failed to load match</h1>
-              <p className="text-sm text-muted-foreground" role="alert">
-                {errMsg || "Something went wrong."}
-              </p>
-            </>
-          )}
-          <Button variant="outline" asChild>
-            <Link href="/">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
-            </Link>
-          </Button>
-        </div>
-      </main>
-    );
-  }
-
-  const match = matchQuery.data;
-
   // Resolve the identity's per-match competitor ID (null when not in this match).
   const myCompetitorId = identity?.shooterId != null
     ? (match.competitors.find((c) => c.shooterId === identity.shooterId)?.id ?? null)
     : null;
 
   // results_status === "all" is the definitive "published" signal from SSI.
-  const isMatchComplete = match.results_status === "all" || effectiveMode === "coaching";
-  const resultsPublished = match.results_status === "all";
-  const matchCancelled = match.match_status === "cs";
+  const isMatchComplete = match.results_status === "all" || compareMode === "coaching";
   const aiAvailable = coachingAvailability.data?.available === true;
-  // The active view drives what's rendered. Auto-detection chooses pre-match
-  // when scoring hasn't really started; the user can override via ModeToggle
-  // (e.g. early squads have finished but their afternoon/day-2 squad hasn't).
-  const isPreMatch = effectiveMode === "prematch";
 
   // Pick the cachedAt to show in the "Updated X ago" badge.
   //
@@ -726,8 +468,7 @@ export default function MatchPageClient() {
   const compareCachedAt = compareQuery.data?.cacheInfo.cachedAt ?? null;
   const scorecardsCachedAt =
     compareQuery.data?.cacheInfo.scorecardsCachedAt ?? null;
-  const isLivePhase =
-    effectiveMode !== "prematch" && effectiveMode !== "coaching";
+  const isLivePhase = compareMode === "live";
   const stalestCachedAt = isLivePhase
     ? scorecardsCachedAt ?? compareCachedAt ?? matchCachedAt
     : matchCachedAt && compareCachedAt
@@ -748,39 +489,23 @@ export default function MatchPageClient() {
     compareQuery.data?.cacheInfo.upstreamPaused === true;
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen p-4 sm:p-6 max-w-6xl mx-auto space-y-6 animate-fade-in">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6 animate-fade-in">
       <LoadingBar
         matchLoaded={true}
         compareLoaded={!!compareQuery.data}
         hasCompetitors={selectedIds.length > 0}
       />
-      {/* Back link + share */}
-      <div className="flex items-center justify-between">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          All matches
-        </Link>
-        <div className="flex items-center gap-3">
-          <CacheInfoBadge
-            ct={ct}
-            id={id}
-            cachedAt={stalestCachedAt}
-            lastScorecardAt={compareQuery.data?.cacheInfo.lastScorecardAt ?? null}
-            phase={
-              effectiveMode === "prematch"
-                ? "prematch"
-                : effectiveMode === "coaching"
-                  ? "finished"
-                  : "live"
-            }
-            isRefreshing={matchQuery.isFetching || compareQuery.isFetching}
-          />
-          <ShareEventLink ct={ct} id={id} matchName={match.name} />
-          <ShareButton title={match.name} competitorCount={selectedIds.length} />
-        </div>
+      {/* Cache freshness + share */}
+      <div className="flex items-center justify-end gap-3">
+        <CacheInfoBadge
+          ct={ct}
+          id={id}
+          cachedAt={stalestCachedAt}
+          lastScorecardAt={compareQuery.data?.cacheInfo.lastScorecardAt ?? null}
+          phase={compareMode === "coaching" ? "finished" : "live"}
+          isRefreshing={isFetching || compareQuery.isFetching}
+        />
+        <ShareButton title={match.name} competitorCount={selectedIds.length} />
       </div>
 
       {/* Upstream degraded banner — shown when SSI is failing (or we've
@@ -788,86 +513,6 @@ export default function MatchPageClient() {
       {(upstreamDegraded || upstreamPaused) && (
         <UpstreamDegradedBanner cachedAt={stalestCachedAt} paused={upstreamPaused} />
       )}
-
-      {/* Match header */}
-      <MatchHeader match={match} />
-
-      {/* Results disclaimer — shown whenever SSI has not publicly published results (not for pre-match) */}
-      {!resultsPublished && !isPreMatch && (
-        <div
-          role="alert"
-          className="flex items-start gap-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3.5 py-3 text-sm text-amber-900 dark:text-amber-200"
-        >
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-          <span>
-            {matchCancelled
-              ? "This match was cancelled."
-              : "Results are not yet officially published by the organizers — data shown here may change."
-            }
-            {match.ssi_url && !matchCancelled && (
-              <>
-                {" "}
-                <a
-                  href={match.ssi_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 font-medium underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-100"
-                >
-                  ShootNScoreIt is the source of truth
-                  <ExternalLink className="h-3 w-3" aria-hidden="true" />
-                  <span className="sr-only">(opens in new tab)</span>
-                </a>
-                .
-              </>
-            )}
-          </span>
-        </div>
-      )}
-
-      {/* View toggle — pre-match / live / coaching. Pre-match stays available
-          while the match is in progress so users in late squads can still see
-          squad rotation, weather, and field info. */}
-      <div className="space-y-1">
-        <div className="flex items-center gap-1.5">
-          <ModeToggle
-            autoMode={autoMode}
-            effectiveMode={effectiveMode}
-            preMatchEligible={preMatchEligible}
-            onModeChange={(mode) => saveModeOverride(ct, id, mode)}
-          />
-          <Popover>
-            <PopoverTrigger asChild>
-              <button
-                className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                aria-label="About pre-match, live, and coaching views"
-              >
-                <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80" side="bottom" align="start">
-              <PopoverHeader>
-                <PopoverTitle>Pre-match, Live, and Coaching</PopoverTitle>
-                <PopoverDescription>The app picks a view based on match state. You can override it.</PopoverDescription>
-              </PopoverHeader>
-              <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                <p><strong>Pre-match</strong> — squad rotation, weather, registered field, and AI brief. Useful when your squad hasn&apos;t shot yet, even if early squads have finished.</p>
-                <p><strong>Live</strong> — for active matches. Per-stage scores appear when the match organizer has enabled live publication on SSI; otherwise the page shows a &ldquo;Match in progress&rdquo; notice until scoring completes.</p>
-                <p><strong>Coaching</strong> — for completed matches. Full analysis: style fingerprints, archetype breakdown, course-length splits, constraint performance, and the stage simulator.</p>
-                <p>The view is auto-detected: pre-match before scoring really gets going, live once scoring is underway, and coaching for ≥ 95% scored or matches older than 3 days. Tap any mode to override, or tap the active mode to reset to auto.</p>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {effectiveMode === "prematch"
-            ? "Squad rotation, weather, and registered field. No scores shown."
-            : effectiveMode === "live"
-            ? liveScoresAccessible
-              ? "Live scores published by the organizer. Coaching analysis unlocks once the match is complete."
-              : "Scoring in progress. Detailed results unlock when the organizer publishes live scores or when the match completes."
-            : "Full analysis with style fingerprints, breakdowns, and simulator."}
-        </p>
-      </div>
 
       {/* Competitor picker */}
       <div className="space-y-1">
@@ -984,25 +629,11 @@ export default function MatchPageClient() {
         )}
       </div>
 
-      {/* Pre-match view — replaces comparison when no scores yet */}
-      {isPreMatch && (
-        <PreMatchView
-          match={match}
-          selectedIds={selectedIds}
-          trackedShooterIds={trackedIds}
-          myShooterId={identity?.shooterId ?? null}
-          ct={ct}
-          id={id}
-          aiAvailable={aiAvailable}
-          onManageShooters={() => setShowManage(true)}
-        />
-      )}
-
       {/* Match in progress -- shown when SSI/organizer has not enabled live
           scorecard access for this match. When the organizer flips "Resultat"
           to a public option (or our bot has Staff bypass), the comparison
           renders below in live mode instead. */}
-      {effectiveMode === "live" && !match.is_live_scores_accessible && (
+      {compareMode === "live" && !match.is_live_scores_accessible && (
         <div
           role="status"
           className="rounded-lg border bg-muted/40 p-4 space-y-2"
@@ -1033,39 +664,29 @@ export default function MatchPageClient() {
         </div>
       )}
 
-      {/* Courtside grid — the default live surface. Full-screen, one row per
-          shooter, one column per stage, and field-blind by contract. The deep
-          comparison table stays one tap away via onExit. */}
-      {gridShowing && match.is_live_scores_accessible && gridRows.length > 0 && (
-        <LiveGrid
-          ct={ct}
-          id={id}
-          shooters={gridRows}
-          matchName={match.name}
-          myShooterId={identity?.shooterId ?? null}
-          source={gridSource}
-          onSourceChange={setGridSource}
-          onExit={() => setLiveView("table")}
-        />
+      {/* Pre-match gate: scorecards are not loaded until the user asks. */}
+      {prematchGated && liveScoresAccessible && (
+        <div role="status" className="rounded-lg border bg-muted/40 p-4 space-y-2">
+          <h2 className="font-semibold">Scoring has not really started</h2>
+          <p className="text-sm text-muted-foreground">
+            Live scores are not loaded automatically this early in the match.
+            Load them now if you want to compare shooters who have already scored.
+          </p>
+          <Button
+            variant="outline"
+            className="min-h-11"
+            onClick={() => saveLiveScoresOptIn(ct, id)}
+          >
+            Show live scores
+          </Button>
+        </div>
       )}
 
       {/* Comparison views — rendered for completed matches (coaching mode)
           and for live matches whose organizer has enabled live scorecard access. */}
-      {(effectiveMode === "coaching" ||
-        (effectiveMode === "live" && match.is_live_scores_accessible && !gridShowing)) &&
-        selectedIds.length > 0 && (
+      {compareEnabled && selectedIds.length > 0 && (
         <div className="space-y-6">
-          {effectiveMode === "live" && match.is_live_scores_accessible && (
-            <button
-              type="button"
-              onClick={() => setLiveView("grid")}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-md border px-3 text-sm text-muted-foreground hover:text-foreground"
-            >
-              <LayoutGrid className="h-4 w-4" aria-hidden="true" />
-              Back to courtside grid
-            </button>
-          )}
-          {effectiveMode === "live" &&
+          {compareMode === "live" &&
             match.is_live_scores_accessible &&
             match.results_status !== "all" && (
               <div
@@ -1140,7 +761,7 @@ export default function MatchPageClient() {
           {compareQuery.data && !compareQuery.data.scorecardsRestricted && (
             <>
               {/* Focus areas -- identity-gated; coaching mode only */}
-              {effectiveMode === "coaching" &&
+              {compareMode === "coaching" &&
                 myCompetitorId != null &&
                 selectedIds.includes(myCompetitorId) && (() => {
                   const competitorName =
@@ -1355,7 +976,7 @@ export default function MatchPageClient() {
               </div>
 
               {/* Coaching sections — only rendered in coaching mode */}
-              {effectiveMode === "coaching" && (
+              {compareMode === "coaching" && (
                 <>
                   {/* Coaching / analysis view — hidden by default */}
                   <Collapsible id="coaching-analysis" open={showCoachingView} onOpenChange={onCoachingOpenChange} className="rounded-lg border p-4 space-y-3">
@@ -1570,13 +1191,13 @@ export default function MatchPageClient() {
         </div>
       )}
 
-      {!isPreMatch && selectedIds.length === 0 && (
+      {selectedIds.length === 0 && (
         <p className="text-muted-foreground text-sm">
           Select one or more competitors above to see the comparison.
         </p>
       )}
 
       <TrackedShootersSheet open={showManage} onOpenChange={setShowManage} />
-    </main>
+    </div>
   );
 }

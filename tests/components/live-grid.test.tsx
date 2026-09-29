@@ -47,13 +47,15 @@ const FIXTURE: LiveGridResponse = {
   cacheInfo: { cachedAt: null },
 };
 
+const useLiveGridQuerySpy = vi.fn<(...args: unknown[]) => unknown>(() => ({
+  data: FIXTURE,
+  isLoading: false,
+  isFetching: false,
+  error: null,
+}));
+
 vi.mock("@/lib/queries", () => ({
-  useLiveGridQuery: () => ({
-    data: FIXTURE,
-    isLoading: false,
-    isFetching: false,
-    error: null,
-  }),
+  useLiveGridQuery: (...args: unknown[]) => useLiveGridQuerySpy(...args),
 }));
 
 import { LiveGrid } from "@/components/live-grid";
@@ -64,16 +66,26 @@ function renderGrid(over: Partial<React.ComponentProps<typeof LiveGrid>> = {}) {
       ct="22"
       id="1"
       shooters={[1, 2]}
-      matchName="Swedish Handgun Championship"
       source="squad"
       onSourceChange={vi.fn()}
-      onExit={vi.fn()}
       {...over}
     />,
   );
 }
 
 describe("LiveGrid", () => {
+  it("polls by default (live)", () => {
+    useLiveGridQuerySpy.mockClear();
+    renderGrid();
+    expect(useLiveGridQuerySpy).toHaveBeenLastCalledWith("22", "1", [1, 2], { live: true });
+  });
+
+  it("passes live=false to the query so a completed match does not poll", () => {
+    useLiveGridQuerySpy.mockClear();
+    renderGrid({ live: false });
+    expect(useLiveGridQuerySpy).toHaveBeenLastCalledWith("22", "1", [1, 2], { live: false });
+  });
+
   it("renders one row per shooter", () => {
     renderGrid();
     expect(screen.getByRole("rowheader", { name: /Mathias/ })).toBeInTheDocument();
@@ -116,20 +128,6 @@ describe("LiveGrid", () => {
     expect(
       screen.queryByRole("rowheader", { name: /^M\. A\./ }),
     ).not.toBeInTheDocument();
-  });
-
-  it("shows the match name", () => {
-    renderGrid();
-    expect(
-      screen.getByText("Swedish Handgun Championship"),
-    ).toBeInTheDocument();
-  });
-
-  it("offers a way back to the full analysis", () => {
-    const onExit = vi.fn();
-    renderGrid({ onExit });
-    screen.getByRole("button", { name: /full analysis/i }).click();
-    expect(onExit).toHaveBeenCalled();
   });
 
   it("renders a cell button for every shooter and stage combination", () => {

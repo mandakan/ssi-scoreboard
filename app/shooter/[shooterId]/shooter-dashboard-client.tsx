@@ -1,5 +1,6 @@
 "use client";
 
+import { matchTabHref } from "@/lib/match-routes";
 import { useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import {
@@ -224,7 +225,7 @@ function StatCard({
 // ─── Match history card ───────────────────────────────────────────────────────
 
 function MatchCard({ match }: { match: ShooterMatchSummary }) {
-  const href = `/match/${match.ct}/${match.matchId}?competitors=${match.competitorId}`;
+  const href = `${matchTabHref(String(match.ct), String(match.matchId), "analysis")}?competitors=${match.competitorId}`;
   const badge = levelBadge(match.level);
 
   return (
@@ -393,7 +394,7 @@ const ACTION_STYLES: Record<MatchAction["variant"], { icon: LucideIcon; classNam
 };
 
 function UpcomingMatchCard({ match }: { match: UpcomingMatch }) {
-  const href = `/match/${match.ct}/${match.matchId}?competitors=${match.competitorId}`;
+  const href = `${matchTabHref(String(match.ct), String(match.matchId), "analysis")}?competitors=${match.competitorId}`;
   const badge = levelBadge(match.level);
   const action = getMatchAction(match);
   const days = daysUntil(match.date);

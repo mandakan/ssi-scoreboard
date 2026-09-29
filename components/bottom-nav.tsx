@@ -209,6 +209,9 @@ export function BottomNav() {
     ? pathname.startsWith(`/shooter/${identity!.shooterId}`)
     : false;
 
+  // The match shell has its own tab bar.
+  if (pathname.startsWith("/match/")) return null;
+
   return (
     <>
       <nav
@@ -249,6 +252,9 @@ export function BottomNav() {
           />
         </div>
       </nav>
+
+      {/* Spacer so content isn't hidden behind the fixed bottom nav on mobile */}
+      <div className="h-14 md:hidden" aria-hidden="true" />
 
       <TrackedShootersSheet open={showShooters} onOpenChange={setShowShooters} />
       <MoreSheet

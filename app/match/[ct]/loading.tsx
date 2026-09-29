@@ -1,9 +1,20 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { LoadingBar } from "@/components/loading-bar";
 
-// Shown by Next.js Suspense streaming while the async MatchPage server
-// component executes (i.e. while fetchMatchData runs against the cache).
-// Must match the matchQuery.isLoading skeleton in match-page-client.tsx so
+// Loading boundary for the whole [id] segment, INCLUDING its layout.
+//
+// It lives at app/match/[ct]/ rather than app/match/[ct]/[id]/ on purpose:
+// Next's default <Link> prefetch of a dynamic route renders only down to the
+// nearest loading.js. With the boundary here, a prefetch of /match/{ct}/{id}
+// stops above app/match/[ct]/[id]/layout.tsx, so it never runs
+// fetchMatchData or generateMetadata. Links into a match from the shooter
+// dashboard, home lists and admin pages therefore cost zero server match
+// fetches (and zero upstream calls) until the user actually navigates.
+// Do not move it back below the [id] layout.
+//
+// Shown while the match layout's server prefetch (fetchMatchData against the
+// cache) runs on navigation into a match.
+// Must match the matchQuery.isLoading skeleton in components/match-gate.tsx so
 // there is no layout shift when one transitions into the other.
 export default function Loading() {
   return (

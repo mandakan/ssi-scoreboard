@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3 } from "lucide-react";
 import { LiveGridCellView } from "@/components/live-grid-cell";
 import { LiveGridSheet } from "@/components/live-grid-sheet";
 import { computeLiveEdgeStageId } from "@/lib/live-grid";
@@ -21,29 +20,30 @@ export interface LiveGridProps {
   id: string;
   /** Competitor IDs, already resolved by resolveGridRows. */
   shooters: number[];
-  matchName: string;
   myShooterId?: number | null;
   source: GridRowSource;
   onSourceChange: (source: GridRowSource) => void;
-  /** Switches to the deep comparison table. */
-  onExit: () => void;
+  /**
+   * False once the match is complete: the grid fetches once and stops
+   * polling. Defaults to true (live polling).
+   */
+  live?: boolean;
 }
 
 /**
- * The courtside grid: one row per shooter, one column per stage, filling the
- * viewport. See docs/superpowers/specs/2026-08-23-live-grid-design.md.
+ * The courtside grid: one row per shooter, one column per stage; fills its
+ * container (the match shell owns the viewport). See docs/superpowers/specs/2026-08-23-live-grid-design.md.
  */
 export function LiveGrid({
   ct,
   id,
   shooters,
-  matchName,
   myShooterId = null,
   source,
   onSourceChange,
-  onExit,
+  live = true,
 }: LiveGridProps) {
-  const query = useLiveGridQuery(ct, id, shooters);
+  const query = useLiveGridQuery(ct, id, shooters, { live });
   const scrollerRef = useRef<HTMLDivElement>(null);
   const didAutoScroll = useRef(false);
   const [openCell, setOpenCell] = useState<{ row: number; stage: number } | null>(
@@ -58,15 +58,6 @@ export function LiveGrid({
     () => computeLiveEdgeStageId(cells, stages),
     [cells, stages],
   );
-
-  // Lock body scroll while the grid owns the viewport.
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
 
   const jumpTo = useCallback(
     (stageId: number, behavior: ScrollBehavior = "smooth") => {
@@ -125,81 +116,56 @@ export function LiveGrid({
       : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex h-[100dvh] flex-col bg-background">
-      {/* Title bar */}
-      <div className="flex flex-none items-center gap-2.5 border-b bg-card px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
-        <span
-          aria-hidden="true"
-          className="h-[7px] w-[7px] shrink-0 rounded-full bg-[var(--perf-green)]"
-        />
-        <span className="flex min-w-0 flex-1 flex-col">
-          <b className="truncate text-[13px] font-semibold tracking-tight">
-            {matchName}
-          </b>
-          <span className="text-[10.5px] text-muted-foreground">
-            {source === "squad" ? "My squad" : "Tracked"} &middot;{" "}
-            {query.isFetching ? "updating…" : `${shooters.length} shooters`}
-          </span>
-        </span>
-        <button
-          type="button"
-          onClick={onExit}
-          className="flex h-11 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-[11.5px] font-medium text-muted-foreground"
-        >
-          <BarChart3 className="h-3.5 w-3.5" aria-hidden="true" />
-          Full analysis
-        </button>
-      </div>
-
-      {/* Row source */}
-      <div className="flex flex-none items-center gap-1.5 bg-card px-3 pb-1 pt-2">
-        {(["squad", "tracked"] as const).map((s) => (
-          <button
-            key={s}
-            type="button"
-            aria-pressed={source === s}
-            onClick={() => onSourceChange(s)}
-            className={cn(
-              "min-h-0 rounded-full border px-3 py-1.5 text-[11.5px] font-medium",
-              source === s
-                ? "border-foreground bg-foreground text-background"
-                : "text-muted-foreground",
-            )}
-          >
-            {s === "squad" ? "My squad" : "Tracked"}
-          </button>
-        ))}
-      </div>
-
-      {/* Stage rail */}
-      <div className="flex flex-none items-center gap-[3px] border-b bg-card px-3 py-1.5">
-        {stages.map((stage) => {
-          const state = stageState(stage);
-          return (
+    <div className="flex h-full min-h-0 flex-col bg-background">
+      {/* Row source chips and stage rail */}
+      <div className="flex flex-none items-center gap-2 border-b bg-card px-3 py-1.5">
+        <div className="flex flex-none items-center gap-1.5">
+          {(["squad", "tracked"] as const).map((s) => (
             <button
-              key={stage.stage_id}
+              key={s}
               type="button"
-              onClick={() => jumpTo(stage.stage_id)}
-              aria-label={`Jump to stage ${stage.stage_num}`}
-              className="grid h-5 flex-1 place-items-center bg-transparent p-0"
+              aria-pressed={source === s}
+              onClick={() => onSourceChange(s)}
+              className={cn(
+                "min-h-0 rounded-full border px-3 py-1.5 text-[11.5px] font-medium",
+                source === s
+                  ? "border-foreground bg-foreground text-background"
+                  : "text-muted-foreground",
+              )}
             >
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "block w-full rounded-sm",
-                  state === "live"
-                    ? "h-[5px] bg-foreground"
-                    : state === "done"
-                      ? "h-[3px] bg-[var(--perf-green)]"
-                      : "h-[3px] bg-border",
-                )}
-              />
+              {s === "squad" ? "My squad" : "Tracked"}
             </button>
-          );
-        })}
-        <small className="ml-1.5 whitespace-nowrap font-mono text-[9.5px] tracking-wide text-muted-foreground">
-          {stages.filter((s) => stageState(s) === "done").length}/{stages.length}
-        </small>
+          ))}
+        </div>
+        <div className="flex min-w-0 flex-1 items-center gap-[3px]">
+          {stages.map((stage) => {
+            const state = stageState(stage);
+            return (
+              <button
+                key={stage.stage_id}
+                type="button"
+                onClick={() => jumpTo(stage.stage_id)}
+                aria-label={`Jump to stage ${stage.stage_num}`}
+                className="grid h-5 flex-1 place-items-center bg-transparent p-0"
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "block w-full rounded-sm",
+                    state === "live"
+                      ? "h-[5px] bg-foreground"
+                      : state === "done"
+                        ? "h-[3px] bg-[var(--perf-green)]"
+                        : "h-[3px] bg-border",
+                  )}
+                />
+              </button>
+            );
+          })}
+          <small className="ml-1.5 whitespace-nowrap font-mono text-[9.5px] tracking-wide text-muted-foreground">
+            {stages.filter((s) => stageState(s) === "done").length}/{stages.length}
+          </small>
+        </div>
       </div>
 
       {/* Grid. scroll-padding-left matches the sticky name column so snap

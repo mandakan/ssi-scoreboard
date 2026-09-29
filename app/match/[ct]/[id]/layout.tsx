@@ -1,10 +1,43 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { QueryClient, dehydrate, HydrationBoundary } from "@tanstack/react-query";
+import { MatchShell } from "@/components/match-shell";
+import { fetchMatchData } from "@/lib/match-data";
+import { isSameMatchPath } from "@/lib/match-routes";
 import { fetchOgMatchData } from "@/lib/og-data";
+import { matchQueryKey } from "@/lib/query-keys";
+import { usageTelemetry, bucketScoring } from "@/lib/usage-telemetry";
 
 interface Props {
   params: Promise<{ ct: string; id: string }>;
   children: React.ReactNode;
+}
+
+/**
+ * Detect whether this server render was reached from a page of the same
+ * match (any of its tabs), judged by the Referer path.
+ *
+ * Soft navigation between tabs does not re-run this layout: shared layouts
+ * persist across client navigations, so a tab switch never reaches this
+ * code. The guard matters for full document loads whose Referer is the same
+ * match -- a reload, a tab opened from a link inside the match, or a
+ * navigation that falls back to a hard load -- which would otherwise count
+ * one visit as several match-views. External arrivals never carry a
+ * same-match Referer.
+ *
+ * Fails open (returns false) when Referer is missing -- accept the
+ * occasional over-count rather than miss legitimate first-page-loads.
+ */
+async function isSameMatchSoftNav(ct: string, id: string): Promise<boolean> {
+  try {
+    const h = await headers();
+    const referer = h.get("referer") ?? "";
+    if (!referer) return false;
+    const path = new URL(referer).pathname;
+    return isSameMatchPath(path, ct, id);
+  } catch {
+    return false;
+  }
 }
 
 function formatDate(iso: string): string {
@@ -79,6 +112,57 @@ export async function generateMetadata({
   };
 }
 
-export default function MatchLayout({ children }: Pick<Props, "children">) {
-  return children;
+/**
+ * Prefetch match data server-side so the client's useMatchQuery resolves
+ * immediately from the TanStack Query hydration cache, eliminating the
+ * client-side /api/match round-trip. One fetchMatchData per layout render,
+ * shared by all three tabs.
+ */
+export default async function MatchLayout({ params, children }: Props) {
+  const { ct, id } = await params;
+  const queryClient = new QueryClient();
+
+  await queryClient.prefetchQuery({
+    queryKey: matchQueryKey(ct, id),
+    queryFn: async () => {
+      const result = await fetchMatchData(ct, id);
+      console.log(JSON.stringify({
+        route: "match-layout-ssr",
+        ct, id,
+        prefetch_status: result ? "success" : "not_found",
+        cache_hit: result !== null && result.cachedAt !== null,
+        ms_fetch: result ? Math.round(result.msFetch) : null,
+      }));
+      if (!result) throw new Error("Match not found");
+      // Fire match-view telemetry once per real page open. Skipped when the
+      // Referer is the same match (see isSameMatchSoftNav above).
+      const ctNum = parseInt(ct, 10);
+      if (!isNaN(ctNum) && !(await isSameMatchSoftNav(ct, id))) {
+        usageTelemetry({
+          op: "match-view",
+          ct: ctNum,
+          level: result.data.level ?? null,
+          region: result.data.region ?? null,
+          scoringBucket: bucketScoring(result.data.scoring_pct ?? 0),
+          cacheHit: result.cachedAt !== null,
+          accessReason: result.data.access_reason.kind,
+        });
+      }
+      return result.data;
+    },
+  });
+
+  // Only dehydrate successfully prefetched queries. If the server-side fetch
+  // fails (no API key in test/dev, cold cache), we must NOT propagate the
+  // error state to the client -- TanStack Query v5 dehydrates errors by
+  // default, which would stop the client from retrying via /api/match.
+  return (
+    <HydrationBoundary
+      state={dehydrate(queryClient, {
+        shouldDehydrateQuery: (query) => query.state.status === "success",
+      })}
+    >
+      <MatchShell ct={ct} id={id}>{children}</MatchShell>
+    </HydrationBoundary>
+  );
 }

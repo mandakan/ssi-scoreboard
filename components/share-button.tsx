@@ -2,6 +2,7 @@
 
 import { Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ogImagePath } from "@/lib/match-routes";
 import { ShareDrawer } from "@/components/share-drawer";
 
 interface ShareButtonProps {
@@ -18,9 +19,7 @@ export function ShareButton({ title, competitorCount = 0 }: ShareButtonProps) {
 
   // OG image URL: include competitors param if any are selected
   const ogPath =
-    typeof window !== "undefined"
-      ? window.location.pathname.replace(/^\/match\//, "/api/og/match/")
-      : "";
+    typeof window !== "undefined" ? ogImagePath(window.location.pathname) : "";
   const competitorsParam =
     typeof window !== "undefined"
       ? new URLSearchParams(window.location.search).get("competitors")

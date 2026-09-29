@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Coffee, Crosshair } from "lucide-react";
 import { GithubIcon } from "@/components/icons/github-icon";
 import { useWhatsNew } from "@/components/whats-new-provider";
@@ -8,7 +9,10 @@ import { RELEASES } from "@/lib/releases";
 
 export function Footer() {
   const { setOpen } = useWhatsNew();
+  const pathname = usePathname();
   const hasReleases = RELEASES.length > 0;
+
+  if (pathname.startsWith("/match/")) return null;
 
   return (
     <footer className="w-full flex flex-col items-center gap-2 p-4 text-xs text-muted-foreground border-t border-border mt-auto">

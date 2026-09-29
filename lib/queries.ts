@@ -208,10 +208,20 @@ export function useCoachingTipQuery(
   });
 }
 
+export interface LiveGridQueryOptions {
+  /**
+   * Whether the match is still being scored. When false (a completed match)
+   * the grid fetches once and never polls or refetches on focus: the scores
+   * cannot change, so every further request would be wasted load.
+   */
+  live?: boolean;
+}
+
 export function useLiveGridQuery(
   ct: string,
   id: string,
   competitorIds: number[],
+  { live = true }: LiveGridQueryOptions = {},
 ) {
   return useQuery<LiveGridResponse, Error>({
     // Sorted so re-ordering rows doesn't churn the cache key.
@@ -221,9 +231,9 @@ export function useLiveGridQuery(
     // new clock: the server's freshness window is what actually bounds
     // upstream traffic, and a second cadence on the same match would raise
     // refresh frequency -- the opposite of why this view exists.
-    staleTime: 30_000,
-    refetchInterval: 30_000,
-    refetchOnWindowFocus: true,
+    staleTime: live ? 30_000 : Infinity,
+    refetchInterval: live ? 30_000 : false,
+    refetchOnWindowFocus: live,
     enabled: Boolean(ct && id && competitorIds.length > 0),
   });
 }

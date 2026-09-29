@@ -222,9 +222,9 @@ test.describe("Scoreboard E2E", () => {
     await page.getByPlaceholder(/match url/i).fill("https://shootnscoreit.com/event/22/99999999/");
 
     await page.waitForURL("/match/22/99999999");
-    await expect(page.getByText("Test IPSC Match")).toBeVisible();
-    // Competitor picker should be present
-    await expect(page.getByRole("button", { name: /add competitor/i })).toBeVisible();
+    // The bare match URL is the grid; with no squad chosen it prompts for one
+    // (the match header and picker moved to the Info/Analysis tabs).
+    await expect(page.getByRole("heading", { name: /pick your squad/i })).toBeVisible();
   });
 
   test("selecting 3 competitors shows comparison table with 3 columns", async ({ page }) => {
@@ -235,8 +235,9 @@ test.describe("Scoreboard E2E", () => {
       route.fulfill({ json: MOCK_COMPARE })
     );
 
-    await page.goto("/match/22/99999999");
-    await expect(page.getByText("Test IPSC Match")).toBeVisible();
+    await page.goto("/match/22/99999999/analysis");
+    // The match header belongs to the shell (Task 7); wait on the picker.
+    await expect(page.getByRole("button", { name: /add competitor/i })).toBeVisible();
 
     // Open picker and select all 3 competitors
     await page.getByRole("button", { name: /add competitor/i }).click();
@@ -260,7 +261,7 @@ test.describe("Scoreboard E2E", () => {
       route.fulfill({ json: MOCK_COMPARE })
     );
 
-    await page.goto("/match/22/99999999");
+    await page.goto("/match/22/99999999/analysis");
     await page.getByRole("button", { name: /add competitor/i }).click();
     await page.getByRole("option", { name: /alice/i }).click();
 
@@ -277,7 +278,8 @@ test.describe("Scoreboard E2E", () => {
     );
 
     await page.goto("/match/22/99999999?competitors=100,200");
-    await expect(page.getByText("Test IPSC Match")).toBeVisible();
+    await expect(page).toHaveURL(/\/match\/22\/99999999\/analysis\?competitors=/);
+    await expect(page.locator("main header").getByText("Test IPSC Match")).toBeVisible();
 
     // Pre-selected competitors should appear without manually opening the picker
     await expect(page.getByText("Stage results")).toBeVisible();
@@ -293,7 +295,7 @@ test.describe("Scoreboard E2E", () => {
       route.fulfill({ json: MOCK_COMPARE_2 })
     );
 
-    await page.goto("/match/22/99999999");
+    await page.goto("/match/22/99999999/analysis");
     await page.getByRole("button", { name: /add competitor/i }).click();
     await page.getByRole("option", { name: /alice/i }).click();
     await page.getByRole("option", { name: /bob/i }).click();
@@ -309,7 +311,7 @@ test.describe("Scoreboard E2E", () => {
       route.fulfill({ json: MOCK_COMPARE_2 })
     );
 
-    await page.goto("/match/22/99999999?competitors=100,200");
+    await page.goto("/match/22/99999999/analysis?competitors=100,200");
     await expect(page.getByText("Stage results")).toBeVisible();
 
     await page.getByRole("button", { name: /remove alice/i }).click();
@@ -326,7 +328,7 @@ test.describe("Scoreboard E2E", () => {
       route.fulfill({ json: ids.includes("300") ? MOCK_COMPARE : MOCK_COMPARE_2 });
     });
 
-    await page.goto("/match/22/99999999");
+    await page.goto("/match/22/99999999/analysis");
     await page.getByRole("button", { name: /add competitor/i }).click();
     await page.getByRole("option", { name: /alice/i }).click();
     await page.getByRole("option", { name: /bob/i }).click();
@@ -347,8 +349,9 @@ test.describe("Scoreboard E2E", () => {
       route.fulfill({ json: MOCK_COMPARE_2 })
     );
 
-    await page.goto("/match/22/99999999");
-    await expect(page.getByText("Test IPSC Match")).toBeVisible();
+    await page.goto("/match/22/99999999/analysis");
+    // The match header belongs to the shell (Task 7); wait on the picker.
+    await expect(page.getByRole("button", { name: /add competitor/i })).toBeVisible();
 
     // Open the squad picker popover (trigger label: "Replace selection with a squad")
     await page
@@ -366,6 +369,16 @@ test.describe("Scoreboard E2E", () => {
     // Both competitor badges should now be visible
     await expect(page.getByRole("button", { name: /remove alice/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /remove bob/i })).toBeVisible();
+  });
+
+  test("analysis with no selection and no identity shows the picker and does not call compare", async ({ page }) => {
+    const compareCalls: string[] = [];
+    page.on("request", (r) => { if (r.url().includes("/api/compare")) compareCalls.push(r.url()); });
+    await page.route("/api/match/22/99999999", (route) => route.fulfill({ json: MOCK_MATCH }));
+    await page.goto("/match/22/99999999/analysis");
+    await expect(page.getByRole("button", { name: /add competitor/i })).toBeVisible();
+    await page.waitForTimeout(1000);
+    expect(compareCalls).toEqual([]);
   });
 });
 
@@ -516,7 +529,8 @@ test.describe("Mobile 390px viewport", () => {
     );
 
     await page.goto("/match/22/99999999?competitors=100,200");
-    await expect(page.getByText("Test IPSC Match")).toBeVisible();
+    await expect(page).toHaveURL(/\/match\/22\/99999999\/analysis\?competitors=/);
+    await expect(page.locator("main header").getByText("Test IPSC Match")).toBeVisible();
     await expect(page.getByText("Stage results")).toBeVisible();
     await expect(page.getByRole("table")).toBeVisible();
 
@@ -549,17 +563,12 @@ test.describe("Mobile 390px viewport", () => {
     });
 
     await page.goto("/match/22/99999999");
-    await expect(page.getByText("Test IPSC Match")).toBeVisible();
 
-    // "Match in progress" notice should be visible immediately (no selection needed)
+    // The grid route owns the notice; it shows immediately (no selection needed)
     await expect(page.getByText("Match in progress")).toBeVisible();
     await expect(page.getByText(/scoring is complete/i)).toBeVisible();
-
-    // Select a competitor — notice should still be shown, not a comparison table
-    await page.getByRole("button", { name: /add competitor/i }).click();
-    await page.getByRole("option", { name: /alice/i }).click();
-    await expect(page.getByText("Match in progress")).toBeVisible();
-    await expect(page.getByRole("table")).not.toBeVisible();
+    // The notice replaces the grid: no LiveGrid scroller is rendered.
+    await expect(page.locator("[data-live-grid-scroller]")).toHaveCount(0);
 
     // Compare API must never have been called
     expect(compareCallCount).toBe(0);
