@@ -202,11 +202,12 @@ export function LiveGrid({
         </small>
       </div>
 
-      {/* Grid */}
+      {/* Grid. scroll-padding-left matches the sticky name column so snap
+          points land beside it rather than hiding a stage underneath. */}
       <div
         ref={scrollerRef}
         data-live-grid-scroller
-        className="min-h-0 flex-1 overflow-auto bg-muted [scroll-snap-type:x_proximity] [overscroll-behavior-x:contain]"
+        className="min-h-0 flex-1 overflow-auto bg-muted [scroll-snap-type:x_proximity] [scroll-padding-left:94px] [overscroll-behavior-x:contain]"
       >
         <table className="min-w-full border-separate border-spacing-0 font-mono tabular-nums">
           <thead>
@@ -214,7 +215,7 @@ export function LiveGrid({
               <th
                 scope="col"
                 data-name-col
-                className="sticky left-0 top-0 z-40 w-[94px] min-w-[94px] border-b border-r bg-card px-2 py-1.5 text-left text-[10px] font-semibold tracking-widest text-muted-foreground"
+                className="sticky left-0 top-0 z-40 w-[94px] min-w-[94px] max-w-[94px] border-b border-r bg-card px-2 py-1.5 text-left text-[10px] font-semibold tracking-widest text-muted-foreground"
               >
                 SHOOTER
               </th>
@@ -240,7 +241,7 @@ export function LiveGrid({
                 <th
                   scope="row"
                   data-name-col
-                  className="sticky left-0 z-20 w-[94px] min-w-[94px] border-b border-r bg-card px-2 py-1.5 text-left shadow-[3px_0_6px_-4px_rgba(0,0,0,0.28)]"
+                  className="sticky left-0 z-20 w-[94px] min-w-[94px] max-w-[94px] border-b border-r bg-card px-2 py-1.5 text-left shadow-[3px_0_6px_-4px_rgba(0,0,0,0.28)]"
                 >
                   <span className="block truncate font-sans text-[11.5px] font-semibold tracking-tight text-foreground">
                     {shortName(shooter.name)}

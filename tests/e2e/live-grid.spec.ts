@@ -202,6 +202,44 @@ test.describe("live grid", () => {
       .toBeGreaterThan(before);
   });
 
+  test("scroll snapping never parks a stage column under the name column", async ({
+    page,
+  }) => {
+    // Snap points must align to the right edge of the sticky shooter column,
+    // not the scroller's left edge -- otherwise every snap hides a stage.
+    await openGrid(page);
+    const scroller = page.locator("[data-live-grid-scroller]");
+    const hiddenPx = () =>
+      scroller.evaluate((sc) => {
+        const name = sc.querySelector("tbody [data-name-col]")!;
+        const nameRight = name.getBoundingClientRect().right;
+        const tds = Array.from(sc.querySelectorAll("tbody tr:first-child td"));
+        const first = tds.find(
+          (td) => td.getBoundingClientRect().right > nameRight + 1,
+        )!;
+        return Math.max(0, nameRight - first.getBoundingClientRect().left);
+      });
+    const settle = () => page.waitForTimeout(800);
+
+    await settle();
+    expect(await hiddenPx()).toBeLessThanOrEqual(1);
+
+    await scroller.evaluate((e) => {
+      e.scrollLeft = 0;
+    });
+    await settle();
+    expect(await scroller.evaluate((e) => e.scrollLeft)).toBe(0);
+
+    await page.mouse.move(250, 400);
+    await page.mouse.wheel(40, 0);
+    await settle();
+    expect(await hiddenPx()).toBeLessThanOrEqual(1);
+
+    await page.getByRole("button", { name: "Jump to stage 5" }).click();
+    await settle();
+    expect(await hiddenPx()).toBeLessThanOrEqual(1);
+  });
+
   test("never calls /api/compare while the grid is showing", async ({
     page,
   }) => {
