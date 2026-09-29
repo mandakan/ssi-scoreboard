@@ -204,7 +204,7 @@ test.describe("Collapsible — coaching and simulator sections", () => {
     }, LATEST_RELEASE_ID);
   });
 
-  test("coaching and simulator toggles use aria-expanded", async ({ page }) => {
+  test("deep dive and simulator toggles use aria-expanded", async ({ page }) => {
     await page.route("/api/match/22/99999999", (route) =>
       route.fulfill({ json: MOCK_MATCH }),
     );
@@ -218,12 +218,14 @@ test.describe("Collapsible — coaching and simulator sections", () => {
     await page.goto("/match/22/99999999/analysis?competitors=100,200");
     await expect(page.getByText("Stage results")).toBeVisible();
 
-    // Coaching analysis should start collapsed
-    const coachingBtn = page.getByRole("button", { name: /coaching analysis/i });
+    // Deep dive should start collapsed
+    const coachingBtn = page.getByRole("button", { name: /deep dive/i });
     await expect(coachingBtn).toBeVisible();
     await expect(coachingBtn).toHaveAttribute("aria-expanded", "false");
 
-    // Stage simulator should also start collapsed
+    // The simulator lives inside Deep dive and starts collapsed too
+    await coachingBtn.click();
+    await expect(coachingBtn).toHaveAttribute("aria-expanded", "true");
     const simulatorBtn = page.getByRole("button", { name: /stage simulator/i });
     await expect(simulatorBtn).toBeVisible();
     await expect(simulatorBtn).toHaveAttribute("aria-expanded", "false");
@@ -238,7 +240,7 @@ test.describe("Collapsible — coaching analysis expand", () => {
     }, LATEST_RELEASE_ID);
   });
 
-  test("coaching analysis expands on click and reveals content region", async ({ page }) => {
+  test("deep dive expands on click and reveals content region", async ({ page }) => {
     await page.route("/api/match/22/99999999", (route) =>
       route.fulfill({ json: MOCK_MATCH }),
     );
@@ -258,14 +260,14 @@ test.describe("Collapsible — coaching analysis expand", () => {
     await page.goto("/match/22/99999999/analysis?competitors=100,200");
     await expect(page.getByText("Stage results")).toBeVisible();
 
-    const coachingBtn = page.getByRole("button", { name: /coaching analysis/i });
+    const coachingBtn = page.getByRole("button", { name: /deep dive/i });
     await expect(coachingBtn).toHaveAttribute("aria-expanded", "false");
     await coachingBtn.click();
     await expect(coachingBtn).toHaveAttribute("aria-expanded", "true");
 
     // Coaching content region should appear
     await expect(
-      page.locator("[aria-labelledby='coaching-view-heading']"),
+      page.locator("[aria-labelledby='deep-dive-heading']"),
     ).toBeVisible();
 
     await expect.poll(() => uiEvents).toContainEqual({

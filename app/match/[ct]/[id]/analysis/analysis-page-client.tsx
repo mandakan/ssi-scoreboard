@@ -20,8 +20,7 @@ import { UpstreamDegradedBanner } from "@/components/upstream-degraded-banner";
 import { LoadingBar } from "@/components/loading-bar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, AlertCircle, RefreshCw, ChevronDown, ChevronUp, HelpCircle, ExternalLink, Undo2, XCircle } from "lucide-react";
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+import { Loader2, AlertCircle, RefreshCw, HelpCircle, ExternalLink, Undo2, XCircle } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -44,9 +43,8 @@ import { useMyIdentity } from "@/lib/hooks/use-my-identity";
 import { useTrackedShooters } from "@/lib/hooks/use-tracked-shooters";
 import { MAX_COMPETITORS } from "@/lib/constants";
 import { resolveGridRows, type GridRowSource } from "@/lib/live-grid-rows";
-import { StageTimesExport } from "@/components/stage-times-export";
+import { DeepDive } from "@/components/analysis/deep-dive";
 import { computeFocusAreas } from "@/lib/coaching-rules";
-import { trackUi } from "@/lib/ui-telemetry";
 import { ChartsCard } from "@/components/analysis/charts-card";
 
 const noopSubscribeGridSource = () => () => {};
@@ -55,54 +53,6 @@ const noopSubscribeGridSource = () => () => {};
 // constant reference so React's referential equality check doesn't loop.
 const EMPTY_IDS: number[] = [];
 
-const ChartSkeleton = () => <Skeleton className="h-64 w-full rounded-lg" />;
-
-const StyleFingerprintChart = dynamic(
-  () =>
-    import("@/components/style-fingerprint-chart").then(
-      (m) => m.StyleFingerprintChart,
-    ),
-  { ssr: false, loading: ChartSkeleton },
-);
-const ArchetypePerformanceSummary = dynamic(
-  () =>
-    import("@/components/archetype-performance").then(
-      (m) => m.ArchetypePerformanceSummary,
-    ),
-  { ssr: false },
-);
-const CourseLengthSummary = dynamic(
-  () =>
-    import("@/components/course-performance").then(
-      (m) => m.CourseLengthSummary,
-    ),
-  { ssr: false },
-);
-const ConstraintSummary = dynamic(
-  () =>
-    import("@/components/course-performance").then(
-      (m) => m.ConstraintSummary,
-    ),
-  { ssr: false },
-);
-const ShooterStyleRadarChart = dynamic(
-  () =>
-    import("@/components/shooter-style-radar-chart").then(
-      (m) => m.ShooterStyleRadarChart,
-    ),
-  { ssr: false, loading: ChartSkeleton },
-);
-const StageDegradationChart = dynamic(
-  () =>
-    import("@/components/stage-degradation-chart").then(
-      (m) => m.StageDegradationChart,
-    ),
-  { ssr: false, loading: ChartSkeleton },
-);
-const StageSimulator = dynamic(
-  () => import("@/components/stage-simulator").then((m) => m.StageSimulator),
-  { ssr: false, loading: () => <Skeleton className="h-48 w-full rounded-lg" /> },
-);
 const FocusAreasSection = dynamic(
   () =>
     import("@/components/focus-areas-section").then(
@@ -126,29 +76,7 @@ export default function AnalysisPageClient() {
 function AnalysisPageContent() {
   const { ct, id, match, isFetching } = useMatch();
 
-  const [showCoachingView, setShowCoachingView] = useState(false);
-  const [showSimulator, setShowSimulator] = useState(false);
   const [showManage, setShowManage] = useState(false);
-
-  // Section-open telemetry counts only the closed->open transition.
-  const onCoachingOpenChange = useCallback(
-    (open: boolean) => {
-      setShowCoachingView(open);
-      if (open) {
-        trackUi({ op: "analysis-section-open", ct: parseInt(ct, 10), section: "deep-dive" });
-      }
-    },
-    [ct],
-  );
-  const onSimulatorOpenChange = useCallback(
-    (open: boolean) => {
-      setShowSimulator(open);
-      if (open) {
-        trackUi({ op: "analysis-section-open", ct: parseInt(ct, 10), section: "simulator" });
-      }
-    },
-    [ct],
-  );
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -790,217 +718,14 @@ function AnalysisPageContent() {
                 ct={ct}
               />
 
-              {/* Coaching sections — only rendered in coaching mode */}
-              {compareMode === "coaching" && (
-                <>
-                  {/* Coaching / analysis view — hidden by default */}
-                  <Collapsible id="coaching-analysis" open={showCoachingView} onOpenChange={onCoachingOpenChange} className="rounded-lg border p-4 space-y-3">
-                    {/* WAI-ARIA accordion pattern: heading wraps the disclosure button */}
-                    <h2 className="font-semibold text-base m-0 leading-none">
-                      <CollapsibleTrigger asChild>
-                        <button
-                          type="button"
-                          id="coaching-view-heading"
-                          className="flex w-full items-center justify-between text-left gap-2"
-                        >
-                          <span>
-                            Coaching analysis
-                            <span className="block text-xs font-normal text-muted-foreground mt-0.5">
-                              Post-match aggregate view — not recommended during active shooting.
-                            </span>
-                          </span>
-                          {showCoachingView ? (
-                            <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-                          ) : (
-                            <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-                          )}
-                        </button>
-                      </CollapsibleTrigger>
-                    </h2>
-
-                    <CollapsibleContent>
-                      <section
-                        role="region"
-                        aria-labelledby="coaching-view-heading"
-                        className="space-y-6 pt-2"
-                      >
-
-                        <CourseLengthSummary data={compareQuery.data} />
-                        <ConstraintSummary data={compareQuery.data} />
-                        <ArchetypePerformanceSummary data={compareQuery.data} />
-
-                        <div id="chart-style-fingerprint" className="space-y-2">
-                          <div className="flex items-center gap-1.5">
-                            <h3 className="text-sm font-semibold">Shooter style fingerprint</h3>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <button
-                                  className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                                  aria-label="About this chart"
-                                >
-                                  <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
-                                <PopoverHeader>
-                                  <PopoverTitle>Shooter style fingerprint</PopoverTitle>
-                                  <PopoverDescription>Match-wide accuracy vs. speed plotted for each competitor.</PopoverDescription>
-                                </PopoverHeader>
-                                <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                                  <p>Both axes are <strong>field percentile ranks</strong> (0–100): X = accuracy rank (A-zone ratio vs. the full field), Y = speed rank (pts/s vs. the full field). A value of 50 means exactly field median.</p>
-                                  <p>The dashed crosshair is always at (50, 50) — the field median — so each quadrant contains roughly 25 % of the field. Quadrant labels: <strong>Gunslinger</strong> (fast & accurate), <strong>Surgeon</strong> (accurate, leaving time on table), <strong>Speed Demon</strong> (fast, bleeding points), <strong>Grinder</strong> (room to grow).</p>
-                                  <p>Each competitor gets an archetype badge based on their quadrant. Hover a dot or check the legend to see the archetype with raw values (α%, pts/s) and exact percentile.</p>
-                                  <p>With fewer than 25 competitors in the field, archetype labels read <em>tends toward X style</em> rather than a definitive label — the quadrant boundaries are less stable with a small cohort. The field size (n) is shown in the tooltip.</p>
-                                  <p>Faded background dots = field cohort cloud. Use the Field overlay toggle to show all competitors, same division, or none. Dot size ∝ penalty rate.</p>
-                                </div>
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                          <StyleFingerprintChart data={compareQuery.data} />
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-1.5">
-                            <h3 className="text-sm font-semibold">Shooter style profile</h3>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <button
-                                  className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                                  aria-label="About this chart"
-                                >
-                                  <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
-                                <PopoverHeader>
-                                  <PopoverTitle>Shooter style profile</PopoverTitle>
-                                  <PopoverDescription>Four-axis radar showing where each competitor ranks across key shooting dimensions.</PopoverDescription>
-                                </PopoverHeader>
-                                <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                                  <p><strong>Speed</strong> — points-per-second percentile rank. 100 = fastest scorer in the field.</p>
-                                  <p><strong>Accuracy</strong> — A-zone ratio percentile rank. 100 = highest proportion of alpha hits.</p>
-                                  <p><strong>Composure</strong> — inverse penalty-rate rank. 100 = fewest misses, no-shoots, and procedurals per round fired.</p>
-                                  <p><strong>Consistency</strong> — inverse stage-to-stage hit-factor variability rank. 100 = most repeatable across stages. Shows 50 when only one stage is available.</p>
-                                  <p>The dashed polygon marks the field median (50th percentile on all axes). A larger polygon means a stronger overall profile.</p>
-                                </div>
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                          <ShooterStyleRadarChart data={compareQuery.data} />
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-1.5">
-                            <h3 className="text-sm font-semibold">Stage degradation</h3>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <button
-                                  className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                                  aria-label="About this chart"
-                                >
-                                  <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
-                                <PopoverHeader>
-                                  <PopoverTitle>Stage degradation</PopoverTitle>
-                                  <PopoverDescription>Does shooting position on a stage correlate with performance?</PopoverDescription>
-                                </PopoverHeader>
-                                <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                                  <p>X axis = the order in which each competitor shot this specific stage (1 = first to shoot, N = last). Derived from scorecard submission timestamps.</p>
-                                  <p>Y axis = HF as % of the stage overall leader (100% = best run). Faded dots = full field; colored dots = your selected competitors.</p>
-                                  <p>The dashed line is a linear trend. The Spearman r badge summarises how strongly shooting position correlates with performance: negative r means earlier shooters scored higher (stage degraded over the day); positive r means later shooters benefited (e.g., learned from watching).</p>
-                                  <p>The badge also shows the sample size (n) and whether the correlation is statistically significant at 95% confidence. A non-significant result is shown in muted text — the trend may simply be noise from a small or noisy field rather than a real shooting-order effect.</p>
-                                </div>
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                          <StageDegradationChart data={compareQuery.data} />
-                        </div>
-
-                        <StageTimesExport
-                          ct={ct}
-                          id={id}
-                          match={match}
-                          compareData={compareQuery.data}
-                          selectedIds={selectedIds}
-                        />
-                      </section>
-                    </CollapsibleContent>
-                  </Collapsible>
-
-                  {/* Stage Simulator — collapsed by default, only ≥ 80% complete */}
-                  {match.scoring_pct >= 80 && (
-                    <Collapsible open={showSimulator} onOpenChange={onSimulatorOpenChange} className="rounded-lg border p-4">
-                      <div className="flex items-start gap-2">
-                        <h2 className="flex-1 font-semibold text-base m-0 leading-none">
-                          <CollapsibleTrigger asChild>
-                            <button
-                              type="button"
-                              id="stage-simulator-heading"
-                              className="flex w-full items-center justify-between text-left gap-2"
-                            >
-                              <span>
-                                Stage Simulator
-                                <span className="block text-xs font-normal text-muted-foreground mt-0.5">
-                                  What-if sandbox — the comparison table above is not affected.
-                                </span>
-                              </span>
-                              {showSimulator ? (
-                                <ChevronUp className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-                              ) : (
-                                <ChevronDown className="w-4 h-4 flex-none text-muted-foreground" aria-hidden="true" />
-                              )}
-                            </button>
-                          </CollapsibleTrigger>
-                        </h2>
-                        {showSimulator && (
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button
-                                className="flex-none text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                                aria-label="About the stage simulator"
-                              >
-                                <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="end">
-                              <PopoverHeader>
-                                <PopoverTitle>Stage Simulator</PopoverTitle>
-                                <PopoverDescription>
-                                  Adjust one stage at a time to see how a cleaner run would affect your hit factor, stage percentage, and match rank.
-                                </PopoverDescription>
-                              </PopoverHeader>
-                              <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                                <p>Pick a competitor and stage, then dial in adjustments — faster time, converting misses or no-shoots to A or C hits, upgrading C or D-hits to A-hits, or removing procedural penalties.</p>
-                                <p>Adjust multiple stages independently; the match avg and group rank rows show the cumulative impact across all modified stages.</p>
-                                <p>Division rank and overall rank (vs the full field) appear below the group rank after a short delay — they reflect the simulated scorecards server-side.</p>
-                                <p>Your adjustments are saved per-stage and restored if you refresh the page.</p>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        )}
-                      </div>
-
-                      <CollapsibleContent>
-                        <section
-                          role="region"
-                          aria-labelledby="stage-simulator-heading"
-                          className="pt-4"
-                        >
-                          <StageSimulator
-                            ct={ct}
-                            id={id}
-                            data={compareQuery.data}
-                            competitors={compareQuery.data.competitors}
-                            scoringCompleted={match.scoring_pct}
-                          />
-                        </section>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  )}
-                </>
-              )}
+              <DeepDive
+                ct={ct}
+                id={id}
+                match={match}
+                selectedIds={selectedIds}
+                compareMode={compareMode}
+                coachingData={compareMode === "coaching" ? compareQuery.data : undefined}
+              />
             </>
           )}
         </div>
