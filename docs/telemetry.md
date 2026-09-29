@@ -6,7 +6,7 @@ Lives in `lib/telemetry.ts` (transport) + per-domain typed wrappers:
 - `lib/cache-telemetry.ts` -- match TTL decisions, cache reads, schema evictions
 - `lib/upstream-telemetry.ts` -- every SSI GraphQL fetch (latency, outcome, bytes)
 - `lib/error-telemetry.ts` -- `reportError(site, err, extra)` for swallowed-catch sites; records error class + truncated message (no stack -- avoids PII)
-- `lib/usage-telemetry.ts` -- server-side product analytics (match views, comparisons, searches, OG renders, dashboard views)
+- `lib/usage-telemetry.ts` -- server-side product analytics (match views, comparisons, courtside grid views, searches, OG renders, dashboard views). Also receives browser-sent UI events (`tab-view`, `analysis-section-open`, `chart-switch`, `stage-export` with `surface:"ui"`) through `POST /api/telemetry/ui`, which validates against the strict allowlist in `lib/ui-telemetry-schema.ts` -- unknown ops or extra fields are rejected, never stripped. Client code calls `trackUi()` from `lib/ui-telemetry.ts`.
 - `lib/mcp-telemetry.ts` -- MCP-server-boundary events (JSON-RPC requests, tool calls, auth fails) emitted from `/api/mcp`.
 - `lib/visibility-telemetry.ts` -- per-match `visibility-decision` events (SSI visibility code -> 3-class projection).
 - `lib/access-reason-telemetry.ts` -- per-match `access-reason-decision` events explaining *why* SSI returned us data on a given match (`public` | `service_admin_match` | `service_assistant_match` | `service_staff_match` | `service_role_match` | `unknown_visibility` | `unauthorized_unexpected`). Emits a debounced `access-reason-anomaly` event on the audit-canary buckets so the alert signal stays low-volume even when the decision stream is hot. Aggregated onto `usage.match-view` as the optional `accessReason` field for fast request-level slicing.
@@ -28,6 +28,7 @@ that the MCP toolset reaches must add `maybeTagAsMcp(req)` to keep this property
 - **Never** record raw search query text -- only `queryLength` and a bucketed `resultBucket`.
 - Match IDs *are* recorded -- matches are public events whose IDs are not personally identifying.
 - New `usage` events must use bucketed counts (`bucketCount`, `bucketScoring`) instead of raw numbers when the underlying value could correlate to a person.
+- Browser-sent UI events carry `ct` plus enum values only -- no match id. Adding a field means extending `uiTelemetryEventSchema` (a reviewable change) and updating `/legal` Section 6.
 - The user-facing privacy policy at `/legal` describes this contract (Section 6). Update it whenever telemetry collection changes.
 
 ## Sinks (registered automatically per deploy target)

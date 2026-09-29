@@ -209,6 +209,13 @@ export default function LegalPage() {
                   Match IDs are recorded because matches are public events
                   whose IDs are not personally identifying.
                 </li>
+                <li>
+                  <strong>Interaction events from your browser:</strong> which
+                  match tab you open, which analysis sections and charts you
+                  expand or switch to, and when you download a stage-time
+                  export. These carry only the kind of match and the name of
+                  the section, never match, shooter or competitor identifiers.
+                </li>
               </ul>
               <p className="text-muted-foreground">
                 Telemetry is stored in Cloudflare Workers Logs (3-day
