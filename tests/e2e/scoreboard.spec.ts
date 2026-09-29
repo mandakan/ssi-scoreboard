@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import type { MatchResponse, CompareResponse } from "@/lib/types";
 import { LATEST_RELEASE_ID } from "@/lib/releases";
 
@@ -187,6 +187,18 @@ const MOCK_COMPARE_2: CompareResponse = {
   })),
 };
 
+async function openPicker(page: Page) {
+  await page.getByRole("button", { name: /comparing:|choose shooters/i }).click();
+  await expect(page.getByRole("dialog", { name: "Who to compare" })).toBeVisible();
+}
+
+/** Dismiss the picker sheet via its close button (dispatchEvent: the dev-mode indicator can cover the corner). */
+async function closePicker(page: Page) {
+  const dialog = page.getByRole("dialog", { name: "Who to compare" });
+  await dialog.getByRole("button", { name: "Close" }).dispatchEvent("click");
+  await expect(dialog).toBeHidden();
+}
+
 test.describe("Scoreboard E2E", () => {
   test.beforeEach(async ({ page }) => {
     // Suppress first-visit modals so they don't intercept clicks in tests.
@@ -236,15 +248,16 @@ test.describe("Scoreboard E2E", () => {
     );
 
     await page.goto("/match/22/99999999/analysis");
-    // The match header belongs to the shell (Task 7); wait on the picker.
-    await expect(page.getByRole("button", { name: /add competitor/i })).toBeVisible();
+    await openPicker(page);
 
     // Open picker and select all 3 competitors
-    await page.getByRole("button", { name: /add competitor/i }).click();
+    // dispatchEvent: the Next dev-mode indicator badge sits over this bottom-left button
+    await page.getByRole("button", { name: /add competitor/i }).dispatchEvent("click");
     await page.getByRole("option", { name: /alice/i }).click();
     await page.getByRole("option", { name: /bob/i }).click();
     await page.getByRole("option", { name: /charlie/i }).click();
 
+    await closePicker(page);
     // Table should appear
     await expect(page.getByText("Stage results")).toBeVisible();
     // 3 competitor columns in table header (scoped to avoid matching picker options)
@@ -262,9 +275,12 @@ test.describe("Scoreboard E2E", () => {
     );
 
     await page.goto("/match/22/99999999/analysis");
-    await page.getByRole("button", { name: /add competitor/i }).click();
+    await openPicker(page);
+    // dispatchEvent: the Next dev-mode indicator badge sits over this bottom-left button
+    await page.getByRole("button", { name: /add competitor/i }).dispatchEvent("click");
     await page.getByRole("option", { name: /alice/i }).click();
 
+    await closePicker(page);
     // Check the chart section renders (contains recharts SVG)
     await expect(page.getByText("Hit factor by stage")).toBeVisible();
   });
@@ -296,11 +312,14 @@ test.describe("Scoreboard E2E", () => {
     );
 
     await page.goto("/match/22/99999999/analysis");
-    await page.getByRole("button", { name: /add competitor/i }).click();
+    await openPicker(page);
+    // dispatchEvent: the Next dev-mode indicator badge sits over this bottom-left button
+    await page.getByRole("button", { name: /add competitor/i }).dispatchEvent("click");
     await page.getByRole("option", { name: /alice/i }).click();
     await page.getByRole("option", { name: /bob/i }).click();
 
     await expect(page).toHaveURL(/\?competitors=100,200/);
+    await closePicker(page);
   });
 
   test("deselecting a competitor updates the URL", async ({ page }) => {
@@ -329,14 +348,16 @@ test.describe("Scoreboard E2E", () => {
     });
 
     await page.goto("/match/22/99999999/analysis");
-    await page.getByRole("button", { name: /add competitor/i }).click();
+    await openPicker(page);
+    // dispatchEvent: the Next dev-mode indicator badge sits over this bottom-left button
+    await page.getByRole("button", { name: /add competitor/i }).dispatchEvent("click");
     await page.getByRole("option", { name: /alice/i }).click();
     await page.getByRole("option", { name: /bob/i }).click();
     await page.getByRole("option", { name: /charlie/i }).click();
-    // Scope to table to avoid matching the picker's still-open option list
+    await closePicker(page);
     await expect(page.getByRole("table").getByText("#116")).toBeVisible();
 
-    // Deselect Charlie by clicking the X badge
+    // Deselect Charlie by clicking the X badge in the table header
     await page.getByRole("button", { name: /remove charlie/i }).click();
     await expect(page.getByRole("table").getByText("#116")).not.toBeVisible();
   });
@@ -350,8 +371,7 @@ test.describe("Scoreboard E2E", () => {
     );
 
     await page.goto("/match/22/99999999/analysis");
-    // The match header belongs to the shell (Task 7); wait on the picker.
-    await expect(page.getByRole("button", { name: /add competitor/i })).toBeVisible();
+    await openPicker(page);
 
     // Open the squad picker popover (trigger label: "Replace selection with a squad")
     await page
@@ -366,17 +386,18 @@ test.describe("Scoreboard E2E", () => {
       .getByRole("button", { name: /replace selection with squad 1/i })
       .click();
 
+    await closePicker(page);
     // Both competitor badges should now be visible
     await expect(page.getByRole("button", { name: /remove alice/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /remove bob/i })).toBeVisible();
   });
 
-  test("analysis with no selection and no identity shows the picker and does not call compare", async ({ page }) => {
+  test("analysis with no selection and no identity prompts to choose and does not call compare", async ({ page }) => {
     const compareCalls: string[] = [];
     page.on("request", (r) => { if (r.url().includes("/api/compare")) compareCalls.push(r.url()); });
     await page.route("/api/match/22/99999999", (route) => route.fulfill({ json: MOCK_MATCH }));
     await page.goto("/match/22/99999999/analysis");
-    await expect(page.getByRole("button", { name: /add competitor/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /choose shooters to compare/i })).toBeVisible();
     await page.waitForTimeout(1000);
     expect(compareCalls).toEqual([]);
   });

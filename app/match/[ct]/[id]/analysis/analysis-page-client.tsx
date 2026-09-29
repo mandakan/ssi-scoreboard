@@ -4,10 +4,8 @@ import { useCallback, useSyncExternalStore, useEffect, useMemo, useRef, useState
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ShareButton } from "@/components/share-button";
-import { CompetitorPicker } from "@/components/competitor-picker";
 import { TrackedShootersSheet } from "@/components/tracked-shooters-sheet";
-import { SquadPicker } from "@/components/squad-picker";
-import { BenchmarkPicker } from "@/components/benchmark-picker";
+import { SelectionBar } from "@/components/analysis/selection-bar";
 import { ComparisonTable } from "@/components/comparison-table";
 import { useMatch } from "@/components/match-gate";
 import { MatchTabPlaceholder } from "@/components/match-tab-placeholder";
@@ -20,15 +18,7 @@ import { UpstreamDegradedBanner } from "@/components/upstream-degraded-banner";
 import { LoadingBar } from "@/components/loading-bar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, AlertCircle, RefreshCw, HelpCircle, ExternalLink, Undo2, XCircle } from "lucide-react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  PopoverHeader,
-  PopoverTitle,
-  PopoverDescription,
-} from "@/components/ui/popover";
+import { Loader2, AlertCircle, RefreshCw, ExternalLink, Undo2 } from "lucide-react";
 import {
   saveCompetitorSelection,
   getCompetitorSelectionSnapshot,
@@ -420,98 +410,23 @@ function AnalysisPageContent() {
         <UpstreamDegradedBanner cachedAt={stalestCachedAt} paused={upstreamPaused} />
       )}
 
-      {/* Competitor picker */}
+      {/* Selection summary + picker sheet */}
       <div className="space-y-1">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <p className="text-sm font-medium">Compare competitors</p>
-          <Popover>
-            <PopoverTrigger asChild>
-              <button
-                className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                aria-label="How competitor selection works"
-              >
-                <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
-              <PopoverHeader>
-                <PopoverTitle>Picking who to compare</PopoverTitle>
-                <PopoverDescription>
-                  Mix and match up to {MAX_COMPETITORS} competitors. Your favorites and &ldquo;you&rdquo; appear at the top of the picker.
-                </PopoverDescription>
-              </PopoverHeader>
-              <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                <p><strong>Star</strong> — favorite a competitor. Stars live in the picker, in the comparison table header, and on the shooter dashboard. The picker also has an &ldquo;Add all favorites&rdquo; pill so you can pull in everyone you track in one tap.</p>
-                <p><strong>Squad</strong> — replaces your selection with everyone in a squad. One tap to undo.</p>
-                <p><strong>Benchmark</strong> — once you set &ldquo;this is me&rdquo; in My Shooters, you unlock one-tap presets: one-above, one-below, division podium, percentile cohort, and same-club peers.</p>
-                <p><strong>Reorder</strong> — use the chevrons in each comparison-table column header to move a competitor left or right. Their column color follows the new position.</p>
-                <p><strong>Clear</strong> — wipes the selection. Undo lasts 5 seconds.</p>
-              </div>
-            </PopoverContent>
-          </Popover>
-          {trackedInMatch && trackedInMatch.total > 0 && (
-            <span className="ml-1.5 text-xs text-muted-foreground">
-              {trackedInMatch.present} of {trackedInMatch.total} tracked in this match
-            </span>
-          )}
-        </div>
-        <div className="flex items-start gap-2 flex-wrap">
-          <CompetitorPicker
-            competitors={match.competitors}
-            selectedIds={selectedIds}
-            onSelectionChange={handleSelectionChange}
-            myShooterId={identity?.shooterId ?? null}
-            trackedShooterIds={trackedIds}
-            onSetMyIdentity={handleSetMyIdentity}
-            onToggleTracked={handleToggleTracked}
-            onManage={() => setShowManage(true)}
-          />
-          {match.squads.length > 0 && (
-            <SquadPicker
-              squads={match.squads}
-              selectedIds={selectedIds}
-              onReplaceSelection={(ids, squadName) =>
-                replaceSelectionWithUndo(
-                  ids,
-                  `Replaced selection with ${squadName}`,
-                )
-              }
-            />
-          )}
-          {selectedIds.length > 0 && (
-            <BenchmarkPicker
-              fieldFingerprintPoints={
-                compareQuery.data?.fieldFingerprintPoints ?? []
-              }
-              competitors={match.competitors}
-              selectedIds={selectedIds}
-              onSelectionChange={handleSelectionChange}
-              myShooterId={identity?.shooterId ?? null}
-              onReplaceSelection={(ids, message) =>
-                replaceSelectionWithUndo(ids, message)
-              }
-              disabled={!compareQuery.data}
-            />
-          )}
-          {selectedIds.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1.5 text-muted-foreground hover:text-foreground"
-              onClick={() => {
-                if (selectedIds.length === 0) return;
-                replaceSelectionWithUndo(
-                  [],
-                  `Cleared ${selectedIds.length} selected`,
-                );
-              }}
-              aria-label="Clear all selected competitors"
-            >
-              <XCircle className="w-4 h-4" aria-hidden="true" />
-              Clear
-            </Button>
-          )}
-        </div>
+        <SelectionBar
+          match={match}
+          selectedIds={selectedIds}
+          gridRows={gridRows}
+          identityShooterId={identity?.shooterId ?? null}
+          trackedIds={trackedIds}
+          fieldFingerprintPoints={compareQuery.data?.fieldFingerprintPoints ?? []}
+          benchmarkDisabled={!compareQuery.data}
+          trackedInMatch={trackedInMatch}
+          onSelectionChange={handleSelectionChange}
+          onReplaceSelection={replaceSelectionWithUndo}
+          onSetMyIdentity={handleSetMyIdentity}
+          onToggleTracked={handleToggleTracked}
+          onManage={() => setShowManage(true)}
+        />
         {pendingUndo && (
           <div
             role="status"
@@ -733,7 +648,7 @@ function AnalysisPageContent() {
 
       {selectedIds.length === 0 && (
         <p className="text-muted-foreground text-sm">
-          Select one or more competitors above to see the comparison.
+          Choose shooters above to see the comparison.
         </p>
       )}
 

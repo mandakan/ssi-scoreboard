@@ -6,6 +6,7 @@ import { LiveGridSheet } from "@/components/live-grid-sheet";
 import { computeLiveEdgeStageId } from "@/lib/live-grid";
 import type { GridRowSource } from "@/lib/live-grid-rows";
 import { useLiveGridQuery } from "@/lib/queries";
+import { shortName } from "@/lib/selection-summary";
 import { cn } from "@/lib/utils";
 import type { LiveGridCell, LiveGridStage } from "@/lib/types";
 
@@ -261,21 +262,4 @@ export function LiveGrid({
       )}
     </div>
   );
-}
-
-/**
- * Fit a name into a 94px column: "Mathias Axell" -> "Mathias A."
- *
- * When the first token is already an initial -- plenty of competitors
- * register as "A. Lindstrom" -- abbreviating the surname too would leave
- * "A. L.", dropping the only part that identifies them. Keep the surname
- * whole in that case and let CSS truncate if it must.
- */
-function shortName(full: string): string {
-  const parts = full.trim().split(/\s+/);
-  if (parts.length < 2) return full;
-  const first = parts[0];
-  const last = parts[parts.length - 1];
-  const firstIsInitial = first.replace(".", "").length <= 1;
-  return firstIsInitial ? `${first} ${last}` : `${first} ${last.charAt(0)}.`;
 }

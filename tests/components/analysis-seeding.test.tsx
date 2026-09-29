@@ -88,7 +88,9 @@ describe("Analysis selection", () => {
 
   it("Clear does not re-seed; Undo restores the seeded ids and persists them as an edit", () => {
     renderPage();
+    fireEvent.click(screen.getByRole("button", { name: /comparing:/i }));
     fireEvent.click(screen.getByRole("button", { name: /clear all selected competitors/i }));
+    fireEvent.keyDown(screen.getByRole("dialog", { name: "Who to compare" }), { key: "Escape" });
     expect(lastIds()).toEqual([]);
     expect(localStorage.getItem("ssi_competitors_22_1")).toBe("[]");
     fireEvent.click(screen.getByRole("button", { name: /undo last selection change/i }));
