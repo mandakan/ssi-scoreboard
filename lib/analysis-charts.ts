@@ -38,13 +38,3 @@ export function resolveChart(
 export const CHART_ANCHORS: Record<string, AnalysisChartId> = {
   "chart-speed-accuracy": "speed-accuracy",
 };
-
-export function chartForHash(
-  hash: string,
-  available: AnalysisChartId[],
-): AnalysisChartId | null {
-  const key = hash.startsWith("#") ? hash.slice(1) : hash;
-  if (!Object.prototype.hasOwnProperty.call(CHART_ANCHORS, key)) return null;
-  const id = CHART_ANCHORS[key];
-  return available.includes(id) ? id : null;
-}
