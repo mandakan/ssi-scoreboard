@@ -46,6 +46,16 @@ export function bucketStageExportCompetitors(n: number): "1" | "2-4" | "5-12" {
   return "5-12";
 }
 
+/** Bucket courtside-grid row counts. Rows are capped at MAX_LIVE_GRID_ROWS
+ *  (20); the bands separate "just me", a small tracked set, a typical squad,
+ *  and a large squad. */
+export function bucketGridRows(n: number): "1" | "2-5" | "6-12" | "13-20" {
+  if (n <= 1) return "1";
+  if (n <= 5) return "2-5";
+  if (n <= 12) return "6-12";
+  return "13-20";
+}
+
 export type UsageEvent =
   | {
       op: "match-view";
@@ -92,6 +102,15 @@ export type UsageEvent =
       ct: number;
       variant: "overview" | "single" | "multi" | "fallback";
       nCompetitors: number;
+    }
+  | {
+      // Courtside grid served. Polls every 30s like `comparison` (live), so
+      // the count measures time-in-view and compares directly with live-table
+      // time. `restricted` = organizer has not published live scores.
+      op: "live-grid-view";
+      ct: number;
+      rowsBucket: "1" | "2-5" | "6-12" | "13-20";
+      restricted: boolean;
     }
   | {
       // Stage-times export was generated. surface:"mcp" covers the

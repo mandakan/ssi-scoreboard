@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { _resetTelemetryForTests } from "@/lib/telemetry";
-import { usageTelemetry, bucketCount, bucketScoring } from "@/lib/usage-telemetry";
+import { usageTelemetry, bucketCount, bucketScoring, bucketGridRows } from "@/lib/usage-telemetry";
 
 describe("bucketCount", () => {
   it("buckets 0", () => expect(bucketCount(0)).toBe("0"));
@@ -31,6 +31,27 @@ describe("bucketScoring", () => {
   it("100+ → complete", () => {
     expect(bucketScoring(100)).toBe("complete");
     expect(bucketScoring(101)).toBe("complete"); // upstream sometimes returns >100
+  });
+});
+
+describe("bucketGridRows", () => {
+  it("1", () => expect(bucketGridRows(1)).toBe("1"));
+  it("0 and negatives clamp to 1", () => {
+    expect(bucketGridRows(0)).toBe("1");
+    expect(bucketGridRows(-3)).toBe("1");
+  });
+  it("2-5", () => {
+    expect(bucketGridRows(2)).toBe("2-5");
+    expect(bucketGridRows(5)).toBe("2-5");
+  });
+  it("6-12", () => {
+    expect(bucketGridRows(6)).toBe("6-12");
+    expect(bucketGridRows(12)).toBe("6-12");
+  });
+  it("13-20", () => {
+    expect(bucketGridRows(13)).toBe("13-20");
+    expect(bucketGridRows(20)).toBe("13-20");
+    expect(bucketGridRows(99)).toBe("13-20");
   });
 });
 
@@ -74,6 +95,14 @@ describe("usageTelemetry", () => {
     usageTelemetry({ op: "shooter-dashboard-view", matchCountBucket: "10-99", cacheHit: true });
     usageTelemetry({ op: "og-render", ct: 22, variant: "multi", nCompetitors: 4 });
     expect(infoSpy).toHaveBeenCalledTimes(6);
+  });
+
+  it("emits live-grid-view with bucketed rows and no ids", () => {
+    usageTelemetry({ op: "live-grid-view", ct: 22, rowsBucket: "6-12", restricted: false });
+    const line = JSON.parse(infoSpy.mock.calls[0][0] as string);
+    expect(line).toMatchObject({ domain: "usage", op: "live-grid-view", ct: 22, rowsBucket: "6-12", restricted: false });
+    expect(line.competitorIds).toBeUndefined();
+    expect(line.matchId).toBeUndefined();
   });
 
   it("never logs query strings — only lengths", () => {
