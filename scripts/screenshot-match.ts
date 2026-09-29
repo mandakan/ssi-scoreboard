@@ -187,7 +187,7 @@ const SCENES: Scene[] = [
     description: "Full comparison table",
     suppressWhatsNew: true,
     setup: async (page, matchPath) => {
-      await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
+      await page.goto(`${matchPath}/analysis?competitors=${MOCK_IDS}`);
       await page.waitForSelector("table", { timeout: 10000 });
       await page.locator("text=Stage results").evaluate(
         (el) => el.scrollIntoView({ block: "start", behavior: "instant" })
@@ -199,7 +199,7 @@ const SCENES: Scene[] = [
     description: "Comparison table with conditions overlay active (weather + time-of-day icons per cell)",
     suppressWhatsNew: true,
     setup: async (page, matchPath) => {
-      await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
+      await page.goto(`${matchPath}/analysis?competitors=${MOCK_IDS}`);
       await page.waitForSelector("table", { timeout: 10000 });
       // Activate the conditions toggle
       const toggle = page.locator('button[aria-label="Show conditions overlay"]');
@@ -216,7 +216,7 @@ const SCENES: Scene[] = [
     description: "Stage degradation chart with Spearman r badge",
     suppressWhatsNew: true,
     setup: async (page, matchPath) => {
-      await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
+      await page.goto(`${matchPath}/analysis?competitors=${MOCK_IDS}`);
       await page.waitForSelector("text=Stage results", { timeout: 10000 });
       await openCoachingSection(page);
       const heading = page.locator("h3", { hasText: "Stage degradation" }).first();
@@ -233,7 +233,7 @@ const SCENES: Scene[] = [
     description: "HF Level bars in stage rows of the comparison table",
     suppressWhatsNew: true,
     setup: async (page, matchPath) => {
-      await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
+      await page.goto(`${matchPath}/analysis?competitors=${MOCK_IDS}`);
       await page.waitForSelector("table", { timeout: 10000 });
       // HF Level bars are the difficulty indicators in each stage row.
       // Centering the first bar keeps the table column headers in view above
@@ -250,7 +250,7 @@ const SCENES: Scene[] = [
     description: "Stage archetype breakdown (Speed / Precision / Mixed)",
     suppressWhatsNew: true,
     setup: async (page, matchPath) => {
-      await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
+      await page.goto(`${matchPath}/analysis?competitors=${MOCK_IDS}`);
       await page.waitForSelector("text=Stage results", { timeout: 10000 });
       await openCoachingSection(page);
       const heading = page.locator("h3", { hasText: "Stage archetype breakdown" }).first();
@@ -265,7 +265,7 @@ const SCENES: Scene[] = [
     description: "Style fingerprint scatter chart",
     suppressWhatsNew: true,
     setup: async (page, matchPath) => {
-      await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
+      await page.goto(`${matchPath}/analysis?competitors=${MOCK_IDS}`);
       await page.waitForSelector("text=Stage results", { timeout: 10000 });
       await openCoachingSection(page);
       const heading = page.locator("h3", { hasText: "Shooter style fingerprint" }).first();
@@ -280,7 +280,7 @@ const SCENES: Scene[] = [
     description: "Stage times export download buttons inside the coaching analysis accordion",
     suppressWhatsNew: true,
     setup: async (page, matchPath) => {
-      await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
+      await page.goto(`${matchPath}/analysis?competitors=${MOCK_IDS}`);
       await page.waitForSelector("text=Stage results", { timeout: 10000 });
       await openCoachingSection(page);
       const heading = page.locator("h3", { hasText: "Export stage times" }).first();
@@ -310,20 +310,16 @@ const SCENES: Scene[] = [
     description: "Courtside grid -- full-screen live view, one row per shooter, one column per stage",
     suppressWhatsNew: true,
     setup: async (page, matchPath) => {
-      // The mock match is completed (match_status "cp"), so autoMode resolves
-      // to coaching and the grid never mounts. Force the live view the same
-      // way the ModeToggle does, and pin the live surface to the grid.
-      const parts = matchPath.split("/").filter(Boolean);
-      const ct = parts[parts.length - 2];
-      const id = parts[parts.length - 1];
-      await page.addInitScript(
-        ({ ct, id }: { ct: string; id: string }) => {
-          localStorage.setItem(`ssi_mode_${ct}_${id}`, "live");
-          localStorage.setItem(`ssi_liveview_${ct}_${id}`, "grid");
-        },
-        { ct, id },
-      );
-      await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
+      // The grid is the match index route. Seed the tracked shooter so it
+      // has rows; the mock match is completed, so the pre-match gate does
+      // not apply.
+      await page.addInitScript((shooterId: number) => {
+        localStorage.setItem(
+          "ssi-my-shooter",
+          JSON.stringify({ shooterId, name: "A. Lindstr\u00f6m", license: null }),
+        );
+      }, MOCK_MATCH.competitors[0].shooterId as number);
+      await page.goto(matchPath);
       // The grid owns the viewport, so wait on its own scroller rather than
       // the page's usual table.
       await page.waitForSelector("[data-live-grid-scroller] table", {
@@ -352,7 +348,7 @@ const SCENES: Scene[] = [
           ])
         );
       });
-      await page.goto(matchPath);
+      await page.goto(`${matchPath}/analysis`);
       // Wait for the page to load, then open the competitor picker
       const addBtn = page.locator("button", { hasText: "Add competitor" });
       await addBtn.waitFor({ timeout: 10000 }).catch(() => null);
@@ -384,7 +380,7 @@ const SCENES: Scene[] = [
           ])
         );
       });
-      await page.goto(`${matchPath}?competitors=${MOCK_IDS}`);
+      await page.goto(`${matchPath}/analysis?competitors=${MOCK_IDS}`);
       await page.waitForSelector("table", { timeout: 10000 });
       // Open the "My shooters" sheet via the footer identity button
       const identityBtn = page.locator('button[aria-label*="Your identity"]').first();

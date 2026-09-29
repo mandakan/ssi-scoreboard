@@ -1,4 +1,4 @@
-import type { MatchResponse, MatchView, Visibility } from "@/lib/types";
+import type { MatchResponse, Visibility } from "@/lib/types";
 import type { GridRowSource } from "@/lib/live-grid-rows";
 
 export interface StoredCompetition {
@@ -25,7 +25,7 @@ export const RECENTS_CHANGED = "ssi:recents_changed";
 /** Custom event dispatched (same-tab) whenever a competitor selection changes. */
 export const SELECTION_CHANGED = "ssi:selection_changed";
 
-/** Custom event dispatched (same-tab) whenever a mode override changes. */
+// Still dispatched by lib/sync.ts for old payloads carrying modeOverrides; nothing reads ssi_mode_* since the mode toggle was retired.
 export const MODE_CHANGED = "ssi:mode_changed";
 
 /** Custom event dispatched (same-tab) when the live-scores opt-in is saved. */
@@ -175,99 +175,6 @@ export function getCompetitorSelectionSnapshot(
   }
   _selCache.set(key, { json: raw ?? "", ids });
   return ids;
-}
-
-// ---------------------------------------------------------------------------
-// Mode override — helpers
-// ---------------------------------------------------------------------------
-
-function modeKey(ct: string, id: string): string {
-  return `ssi_mode_${ct}_${id}`;
-}
-
-/** Save a view override for this match. Pass null to clear (revert to auto). */
-export function saveModeOverride(ct: string, id: string, mode: MatchView | null): void {
-  if (typeof window === "undefined") return;
-  try {
-    const key = modeKey(ct, id);
-    if (mode === null) {
-      localStorage.removeItem(key);
-    } else {
-      localStorage.setItem(key, mode);
-    }
-    window.dispatchEvent(new Event(MODE_CHANGED));
-  } catch {
-    // ignore
-  }
-}
-
-/** Stable-reference snapshot cache for view override. */
-const _modeCache = new Map<string, { raw: string | null; mode: MatchView | null }>();
-
-export function getModeOverrideSnapshot(ct: string, id: string): MatchView | null {
-  if (typeof window === "undefined") return null;
-  const key = modeKey(ct, id);
-  const raw = localStorage.getItem(key);
-  const cached = _modeCache.get(key);
-  if (cached && cached.raw === raw) return cached.mode;
-  const mode =
-    raw === "live" || raw === "coaching" || raw === "prematch" ? raw : null;
-  _modeCache.set(key, { raw, mode });
-  return mode;
-}
-
-/**
- * Subscribe function for useSyncExternalStore — mode override.
- * Listens for same-tab MODE_CHANGED and cross-tab storage events.
- */
-export function subscribeMode(onChange: () => void): () => void {
-  window.addEventListener(MODE_CHANGED, onChange);
-  window.addEventListener("storage", onChange);
-  return () => {
-    window.removeEventListener(MODE_CHANGED, onChange);
-    window.removeEventListener("storage", onChange);
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Live view preference -- grid vs the deep comparison table
-// ---------------------------------------------------------------------------
-
-/** Which live surface the user last chose for a given match. */
-export type LiveView = "grid" | "table";
-
-function liveViewKey(ct: string, id: string): string {
-  return `ssi_liveview_${ct}_${id}`;
-}
-
-/**
- * Persist the live surface choice. The grid is the default, so only an
- * explicit switch to the deep table is worth remembering -- but both are
- * stored so a later default change doesn't silently move people.
- */
-export function saveLiveViewPreference(
-  ct: string,
-  id: string,
-  view: LiveView,
-): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(liveViewKey(ct, id), view);
-  } catch {
-    // ignore
-  }
-}
-
-/** Read the live surface choice. Defaults to the grid. */
-export function getLiveViewPreference(ct: string, id: string): LiveView {
-  if (typeof window === "undefined") return "grid";
-  try {
-    return localStorage.getItem(liveViewKey(ct, id)) === "table"
-      ? "table"
-      : "grid";
-  } catch {
-    return "grid";
-  }
 }
 
 // ---------------------------------------------------------------------------

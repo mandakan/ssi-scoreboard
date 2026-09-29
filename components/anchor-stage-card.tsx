@@ -10,6 +10,7 @@ import {
   PopoverDescription,
 } from "@/components/ui/popover";
 import type { AnchorStage } from "@/lib/types";
+import { matchTabHref } from "@/lib/match-routes";
 
 interface AnchorStageCardProps {
   anchorStage: AnchorStage;
@@ -23,7 +24,7 @@ function formatDate(iso: string | null): string {
 }
 
 export function AnchorStageCard({ anchorStage }: AnchorStageCardProps) {
-  const matchPath = `/match/${anchorStage.ct}/${anchorStage.matchId}#stage-${anchorStage.stageNumber}`;
+  const matchPath = `${matchTabHref(String(anchorStage.ct), String(anchorStage.matchId), "analysis")}#stage-${anchorStage.stageNumber}`;
   const stagePctDisplay = anchorStage.stagePct.toFixed(1);
   const dateStr = formatDate(anchorStage.date);
   const metaParts = [
