@@ -14,12 +14,16 @@ interface Props {
 }
 
 /**
- * Detect whether this server render is a soft navigation within the same
- * match (a tab switch, or the client appending ?competitors=... to the URL).
- * Without this guard a single page open would fire match-view several times
- * because Next.js re-runs the layout on navigation. We compare the Referer
- * path against the current match, across all its tabs -- external arrivals
- * never have it set to the same match, real soft navigations always do.
+ * Detect whether this server render was reached from a page of the same
+ * match (any of its tabs), judged by the Referer path.
+ *
+ * Soft navigation between tabs does not re-run this layout: shared layouts
+ * persist across client navigations, so a tab switch never reaches this
+ * code. The guard matters for full document loads whose Referer is the same
+ * match -- a reload, a tab opened from a link inside the match, or a
+ * navigation that falls back to a hard load -- which would otherwise count
+ * one visit as several match-views. External arrivals never carry a
+ * same-match Referer.
  *
  * Fails open (returns false) when Referer is missing -- accept the
  * occasional over-count rather than miss legitimate first-page-loads.
@@ -130,8 +134,8 @@ export default async function MatchLayout({ params, children }: Props) {
         ms_fetch: result ? Math.round(result.msFetch) : null,
       }));
       if (!result) throw new Error("Match not found");
-      // Fire match-view telemetry once per real page open. Skipped on
-      // same-match soft navigations (see isSameMatchSoftNav above).
+      // Fire match-view telemetry once per real page open. Skipped when the
+      // Referer is the same match (see isSameMatchSoftNav above).
       const ctNum = parseInt(ct, 10);
       if (!isNaN(ctNum) && !(await isSameMatchSoftNav(ct, id))) {
         usageTelemetry({

@@ -72,7 +72,13 @@ export function MatchGate({
 
   if (matchQuery.isLoading) {
     return (
-      <div data-testid="match-gate-loading" className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
+      <div
+        data-testid="match-gate-loading"
+        role="status"
+        aria-busy="true"
+        className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6"
+      >
+        <span className="sr-only">Loading match</span>
         {/* nav row */}
         <div className="flex items-center justify-between">
           <Skeleton className="h-4 w-24" />

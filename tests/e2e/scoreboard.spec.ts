@@ -567,7 +567,8 @@ test.describe("Mobile 390px viewport", () => {
     // The grid route owns the notice; it shows immediately (no selection needed)
     await expect(page.getByText("Match in progress")).toBeVisible();
     await expect(page.getByText(/scoring is complete/i)).toBeVisible();
-    await expect(page.getByRole("table")).not.toBeVisible();
+    // The notice replaces the grid: no LiveGrid scroller is rendered.
+    await expect(page.locator("[data-live-grid-scroller]")).toHaveCount(0);
 
     // Compare API must never have been called
     expect(compareCallCount).toBe(0);

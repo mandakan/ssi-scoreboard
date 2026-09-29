@@ -29,6 +29,14 @@ describe("MatchGate", () => {
     expect(screen.queryByText(/22\/1/)).toBeNull();
   });
 
+  it("announces the loading state as a busy status", () => {
+    useMatchQuery.mockReturnValue({ isLoading: true, isError: false, data: undefined });
+    renderGate();
+    const status = screen.getByRole("status");
+    expect(status).toHaveAttribute("aria-busy", "true");
+    expect(status).toHaveTextContent("Loading match");
+  });
+
   it("renders children with the loaded match", () => {
     useMatchQuery.mockReturnValue({
       isLoading: false, isError: false, isFetching: false,
