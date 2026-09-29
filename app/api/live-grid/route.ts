@@ -26,6 +26,7 @@ import { decodeShooterId } from "@/lib/shooter-index";
 import { parseRawScorecards, type RawScorecardsData } from "@/lib/scorecard-data";
 import { buildLiveGridCells } from "@/lib/live-grid";
 import { maybeTagAsMcp } from "@/lib/telemetry-context";
+import { bucketGridRows, usageTelemetry } from "@/lib/usage-telemetry";
 import type {
   LiveGridResponse,
   LiveGridShooter,
@@ -235,6 +236,12 @@ export async function GET(req: Request) {
   // Live match whose organizer has not published scores: SSI returns empty
   // scorecards, so short-circuit rather than fetching them.
   if (!isComplete && matchData.event?.is_live_scores_accessible !== true) {
+    usageTelemetry({
+      op: "live-grid-view",
+      ct: ctNum,
+      rowsBucket: bucketGridRows(competitorIds.length),
+      restricted: true,
+    });
     return NextResponse.json({
       match_id: parseInt(id, 10),
       stages,
@@ -288,6 +295,13 @@ export async function GET(req: Request) {
   // empty scorecards array.
   const scorecardsRestricted =
     scoringPct > 0 && rawScorecards.length === 0 && stages.length > 0;
+
+  usageTelemetry({
+    op: "live-grid-view",
+    ct: ctNum,
+    rowsBucket: bucketGridRows(competitorIds.length),
+    restricted: scorecardsRestricted,
+  });
 
   return NextResponse.json({
     match_id: parseInt(id, 10),

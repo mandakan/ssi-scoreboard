@@ -21,6 +21,7 @@
 
 import { telemetry } from "@/lib/telemetry";
 import type { AccessReasonKind } from "@/lib/access-reason";
+import type { UiTelemetryEvent } from "@/lib/ui-telemetry-schema";
 
 /** Bucket a count into a small set of cardinality-bounded labels. */
 export function bucketCount(n: number): "0" | "1-9" | "10-99" | "100+" {
@@ -37,13 +38,16 @@ export function bucketScoring(scoringPct: number): "pre" | "active" | "complete"
   return "active";
 }
 
-/** Bucket competitor count for stage-export usage events. Mirrors the
- *  scale used by mcp-telemetry's bucketCompetitors so dashboards can join
- *  on the same labels. */
-export function bucketStageExportCompetitors(n: number): "1" | "2-4" | "5-12" {
+export { bucketStageExportCompetitors } from "@/lib/telemetry-buckets";
+
+/** Bucket courtside-grid row counts. Rows are capped at MAX_LIVE_GRID_ROWS
+ *  (20); the bands separate "just me", a small tracked set, a typical squad,
+ *  and a large squad. */
+export function bucketGridRows(n: number): "1" | "2-5" | "6-12" | "13-20" {
   if (n <= 1) return "1";
-  if (n <= 4) return "2-4";
-  return "5-12";
+  if (n <= 5) return "2-5";
+  if (n <= 12) return "6-12";
+  return "13-20";
 }
 
 export type UsageEvent =
@@ -94,10 +98,22 @@ export type UsageEvent =
       nCompetitors: number;
     }
   | {
+      // Courtside grid served. Polls every 30s like `comparison` (live), so
+      // the count measures time-in-view and compares directly with live-table
+      // time. `restricted` = organizer has not published live scores.
+      op: "live-grid-view";
+      ct: number;
+      rowsBucket: "1" | "2-5" | "6-12" | "13-20";
+      restricted: boolean;
+    }
+  // Browser-sent via POST /api/telemetry/ui (see lib/ui-telemetry-schema.ts).
+  | Extract<UiTelemetryEvent, { op: "tab-view" }>
+  | Extract<UiTelemetryEvent, { op: "analysis-section-open" }>
+  | Extract<UiTelemetryEvent, { op: "chart-switch" }>
+  | {
       // Stage-times export was generated. surface:"mcp" covers the
       // get_stage_times MCP tool (both HTTP and stdio transports).
-      // surface:"ui" is reserved for a future client-side download
-      // tracker; not currently emitted.
+      // surface:"ui" arrives from the browser via POST /api/telemetry/ui.
       op: "stage-export";
       surface: "mcp" | "ui";
       ct: number;
