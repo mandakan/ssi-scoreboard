@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { CompareResponse, MatchResponse } from "@/lib/types";
@@ -14,7 +15,15 @@ vi.mock("@/components/stage-degradation-chart", () => ({ StageDegradationChart: 
 vi.mock("@/components/stage-simulator", () => ({ StageSimulator: () => <p>simulator</p> }));
 vi.mock("@/components/stage-times-export", () => ({ StageTimesExport: () => <p>export</p> }));
 
-import { DeepDive } from "@/components/analysis/deep-dive";
+import { DeepDive as ControlledDeepDive } from "@/components/analysis/deep-dive";
+
+type DeepDiveProps = Omit<React.ComponentProps<typeof ControlledDeepDive>, "open" | "onOpenChange">;
+
+// The page owns the open state; this wrapper stands in for it.
+function DeepDive(props: DeepDiveProps) {
+  const [open, setOpen] = useState(false);
+  return <ControlledDeepDive {...props} open={open} onOpenChange={setOpen} />;
+}
 
 const match = { scoring_pct: 90, competitors: [] } as unknown as MatchResponse;
 const coaching = { competitors: [] } as unknown as CompareResponse;
@@ -91,5 +100,21 @@ describe("DeepDive", () => {
     expect(scrollIntoView.mock.contexts.at(-1)).toBe(document.getElementById("deep-dive"));
     expect(window.location.hash).toBe("");
     expect(trackUi.mock.calls.filter((c) => c[0].section === "deep-dive")).toHaveLength(1);
+  });
+
+  it("keeps its open state when the section unmounts and remounts", () => {
+    function Host({ show }: { show: boolean }) {
+      const [open, setOpen] = useState(false);
+      return show ? (
+        <ControlledDeepDive ct="22" id="1" match={match} selectedIds={[1]} compareMode="coaching" coachingData={coaching} open={open} onOpenChange={setOpen} />
+      ) : (
+        <p>loading</p>
+      );
+    }
+    const { rerender } = render(<Host show />);
+    fireEvent.click(screen.getByRole("button", { name: /deep dive/i }));
+    rerender(<Host show={false} />);
+    rerender(<Host show />);
+    expect(screen.getByRole("button", { name: /deep dive/i })).toHaveAttribute("aria-expanded", "true");
   });
 });

@@ -68,10 +68,12 @@ interface DeepDiveProps {
   compareMode: CompareMode;
   /** The page's compare data when compareMode is "coaching", else undefined. */
   coachingData: CompareResponse | undefined;
+  /** Controlled by the page so the state survives this section unmounting. */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
-export function DeepDive({ ct, id, match, selectedIds, compareMode, coachingData }: DeepDiveProps) {
-  const [open, setOpen] = useState(false);
+export function DeepDive({ ct, id, match, selectedIds, compareMode, coachingData, open, onOpenChange: setOpen }: DeepDiveProps) {
   const [showSimulator, setShowSimulator] = useState(false);
 
   // Live matches: fetch coaching data once, only after the user opens the

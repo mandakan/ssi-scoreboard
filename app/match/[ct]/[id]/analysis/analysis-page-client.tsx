@@ -68,6 +68,9 @@ function AnalysisPageContent() {
   const { ct, id, match, isFetching } = useMatch();
 
   const [showManage, setShowManage] = useState(false);
+  // Deep dive open state lives here so it survives the section unmounting
+  // while compare data reloads after a selection change.
+  const [deepDiveOpen, setDeepDiveOpen] = useState(false);
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -625,6 +628,8 @@ function AnalysisPageContent() {
                 selectedIds={selectedIds}
                 compareMode={compareMode}
                 coachingData={compareMode === "coaching" ? compareQuery.data : undefined}
+                open={deepDiveOpen}
+                onOpenChange={setDeepDiveOpen}
               />
             </>
           )}
