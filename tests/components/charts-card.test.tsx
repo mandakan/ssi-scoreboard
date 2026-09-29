@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { CompareResponse } from "@/lib/types";
 
 vi.mock("@/components/comparison-chart", () => ({ ComparisonChart: () => <p>chart:hf-by-stage</p> }));
@@ -30,7 +30,8 @@ describe("ChartsCard", () => {
     window.location.hash = "#chart-speed-accuracy";
     render(<ChartsCard {...props} />);
     expect(await screen.findByText("chart:speed-accuracy")).toBeInTheDocument();
-    expect(scrollIntoView).toHaveBeenCalled();
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+    expect(window.location.hash).toBe("");
     expect(localStorage.getItem("ssi-analysis-chart")).toBe("speed-accuracy");
     expect(trackUi).not.toHaveBeenCalledWith(expect.objectContaining({ op: "chart-switch" }));
   });
@@ -41,7 +42,8 @@ describe("ChartsCard", () => {
     window.location.hash = "#chart-speed-accuracy";
     await act(async () => { window.dispatchEvent(new HashChangeEvent("hashchange")); });
     expect(await screen.findByText("chart:speed-accuracy")).toBeInTheDocument();
-    expect(scrollIntoView).toHaveBeenCalled();
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+    expect(window.location.hash).toBe("");
   });
 
   it("ignores unknown hashes", async () => {

@@ -17,10 +17,11 @@ import {
   ANALYSIS_CHARTS,
   CHART_STORAGE_KEY,
   availableCharts,
-  chartForHash,
+  CHART_ANCHORS,
   resolveChart,
   type AnalysisChartId,
 } from "@/lib/analysis-charts";
+import { useHashAnchor } from "@/lib/hooks/use-hash-anchor";
 import { trackUi } from "@/lib/ui-telemetry";
 import type { CompareResponse, StageComparison } from "@/lib/types";
 
@@ -115,20 +116,17 @@ export function ChartsCard({
     return () => observer.disconnect();
   }, [ct]);
 
-  const availableKey = available.join(",");
-  useEffect(() => {
-    const list = availableKey.split(",") as AnalysisChartId[];
-    function applyHash() {
-      const id = chartForHash(window.location.hash, list);
-      if (!id) return;
-      setOverride(id);
-      safeSet(CHART_STORAGE_KEY, id);
-      document.getElementById("charts-card")?.scrollIntoView({ block: "start" });
-    }
-    applyHash();
-    window.addEventListener("hashchange", applyHash);
-    return () => window.removeEventListener("hashchange", applyHash);
-  }, [availableKey]);
+  // Anchors are only offered for charts that are available; the hook clears
+  // the hash once it fires. Scroll waits a frame so the chart has rendered.
+  const anchors = Object.keys(CHART_ANCHORS).filter((k) => available.includes(CHART_ANCHORS[k]));
+  useHashAnchor(anchors, (anchor) => {
+    const id = CHART_ANCHORS[anchor];
+    setOverride(id);
+    safeSet(CHART_STORAGE_KEY, id);
+    requestAnimationFrame(() =>
+      document.getElementById("charts-card")?.scrollIntoView({ block: "start" }),
+    );
+  });
 
   function choose(id: AnalysisChartId) {
     setOverride(id);
