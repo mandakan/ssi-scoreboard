@@ -64,10 +64,8 @@ function renderGrid(over: Partial<React.ComponentProps<typeof LiveGrid>> = {}) {
       ct="22"
       id="1"
       shooters={[1, 2]}
-      matchName="Swedish Handgun Championship"
       source="squad"
       onSourceChange={vi.fn()}
-      onExit={vi.fn()}
       {...over}
     />,
   );
@@ -116,20 +114,6 @@ describe("LiveGrid", () => {
     expect(
       screen.queryByRole("rowheader", { name: /^M\. A\./ }),
     ).not.toBeInTheDocument();
-  });
-
-  it("shows the match name", () => {
-    renderGrid();
-    expect(
-      screen.getByText("Swedish Handgun Championship"),
-    ).toBeInTheDocument();
-  });
-
-  it("offers a way back to the full analysis", () => {
-    const onExit = vi.fn();
-    renderGrid({ onExit });
-    screen.getByRole("button", { name: /full analysis/i }).click();
-    expect(onExit).toHaveBeenCalled();
   });
 
   it("renders a cell button for every shooter and stage combination", () => {

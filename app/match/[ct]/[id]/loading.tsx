@@ -3,7 +3,7 @@ import { LoadingBar } from "@/components/loading-bar";
 
 // Shown by Next.js Suspense streaming while the async MatchPage server
 // component executes (i.e. while fetchMatchData runs against the cache).
-// Must match the matchQuery.isLoading skeleton in match-page-client.tsx so
+// Must match the matchQuery.isLoading skeleton in components/match-gate.tsx so
 // there is no layout shift when one transitions into the other.
 export default function Loading() {
   return (

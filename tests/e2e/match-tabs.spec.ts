@@ -114,3 +114,57 @@ test.describe("match tabs", () => {
     await expect(page.getByText(/results are not yet officially published/i)).toBeVisible();
   });
 });
+
+test("legacy ?competitors link redirects to analysis", async ({ page }) => {
+  await suppressDialogs(page);
+  await mockApis(page);
+  await page.goto("/match/22/88888888?competitors=100,101");
+  await expect(page).toHaveURL(/\/match\/22\/88888888\/analysis\?competitors=100,101$/);
+});
+
+test("legacy #stage anchor redirects to analysis", async ({ page }) => {
+  await suppressDialogs(page);
+  await mockApis(page);
+  await page.goto("/match/22/88888888#stage-3");
+  await expect(page).toHaveURL(/\/analysis#stage-3$/);
+});
+
+test("grid with no resolvable rows explains how to add shooters", async ({ page }) => {
+  await suppressDialogs(page);
+  await mockApis(page);
+  await page.goto("/match/22/88888888");
+  await expect(page.getByRole("heading", { name: /pick your squad/i })).toBeVisible();
+});
+
+test("grid with live scores hidden explains why", async ({ page }) => {
+  await suppressDialogs(page);
+  await page.route("**/api/match/**", (r) =>
+    r.fulfill({ json: { ...MOCK_MATCH, is_live_scores_accessible: false } }));
+  await page.goto("/match/22/88888888");
+  await expect(page.getByRole("heading", { name: "Match in progress" })).toBeVisible();
+});
+
+test("pre-match grid never fetches live-grid until the user opts in", async ({ page }) => {
+  await suppressDialogs(page);
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "ssi-my-shooter",
+      JSON.stringify({ shooterId: 500, name: "Shooter 1 Lastname", license: null }),
+    );
+  });
+  await page.route("**/api/match/**", (r) =>
+    r.fulfill({ json: { ...MOCK_MATCH, scoring_pct: 0, date: new Date().toISOString() } }));
+  await page.route("**/api/upstream-status**", (r) =>
+    r.fulfill({ json: { degraded: false, paused: false } }));
+  let gridCalls = 0;
+  await page.route("**/api/live-grid**", (r) => {
+    gridCalls++;
+    return r.fulfill({ json: { stages: [], shooters: [], cells: {} } });
+  });
+  await page.goto("/match/22/88888888");
+  await expect(page.getByText("Scoring has not really started")).toBeVisible();
+  await page.waitForTimeout(1500);
+  expect(gridCalls).toBe(0);
+  await page.getByRole("button", { name: "Show live scores" }).click();
+  await expect.poll(() => gridCalls).toBeGreaterThan(0);
+});

@@ -222,9 +222,9 @@ test.describe("Scoreboard E2E", () => {
     await page.getByPlaceholder(/match url/i).fill("https://shootnscoreit.com/event/22/99999999/");
 
     await page.waitForURL("/match/22/99999999");
-    await expect(page.getByText("Test IPSC Match")).toBeVisible();
-    // Competitor picker should be present
-    await expect(page.getByRole("button", { name: /add competitor/i })).toBeVisible();
+    // The bare match URL is the grid; with no squad chosen it prompts for one
+    // (the match header and picker moved to the Info/Analysis tabs).
+    await expect(page.getByRole("heading", { name: /pick your squad/i })).toBeVisible();
   });
 
   test("selecting 3 competitors shows comparison table with 3 columns", async ({ page }) => {
@@ -279,7 +279,6 @@ test.describe("Scoreboard E2E", () => {
 
     await page.goto("/match/22/99999999?competitors=100,200");
     await expect(page).toHaveURL(/\/match\/22\/99999999\/analysis\?competitors=/);
-    await expect(page.getByText("Test IPSC Match")).toBeVisible();
 
     // Pre-selected competitors should appear without manually opening the picker
     await expect(page.getByText("Stage results")).toBeVisible();
@@ -530,7 +529,6 @@ test.describe("Mobile 390px viewport", () => {
 
     await page.goto("/match/22/99999999?competitors=100,200");
     await expect(page).toHaveURL(/\/match\/22\/99999999\/analysis\?competitors=/);
-    await expect(page.getByText("Test IPSC Match")).toBeVisible();
     await expect(page.getByText("Stage results")).toBeVisible();
     await expect(page.getByRole("table")).toBeVisible();
 
@@ -563,16 +561,10 @@ test.describe("Mobile 390px viewport", () => {
     });
 
     await page.goto("/match/22/99999999");
-    await expect(page.getByText("Test IPSC Match")).toBeVisible();
 
-    // "Match in progress" notice should be visible immediately (no selection needed)
+    // The grid route owns the notice; it shows immediately (no selection needed)
     await expect(page.getByText("Match in progress")).toBeVisible();
     await expect(page.getByText(/scoring is complete/i)).toBeVisible();
-
-    // Select a competitor — notice should still be shown, not a comparison table
-    await page.getByRole("button", { name: /add competitor/i }).click();
-    await page.getByRole("option", { name: /alice/i }).click();
-    await expect(page.getByText("Match in progress")).toBeVisible();
     await expect(page.getByRole("table")).not.toBeVisible();
 
     // Compare API must never have been called
