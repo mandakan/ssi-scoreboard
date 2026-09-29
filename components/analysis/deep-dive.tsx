@@ -97,7 +97,7 @@ export function DeepDive({ ct, id, match, selectedIds, compareMode, coachingData
         trackUi({ op: "analysis-section-open", ct: parseInt(ct, 10), section: "deep-dive" });
       }
     },
-    [ct],
+    [ct, setOpen],
   );
   const onSimulatorOpenChange = useCallback(
     (next: boolean) => {
