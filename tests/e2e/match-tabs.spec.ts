@@ -284,12 +284,27 @@ test("analysis sections appear in spec order without horizontal overflow", async
   await mockApis(page);
   await page.route(/\/api\/compare/, (r) => r.fulfill({ json: MOCK_COMPARE }));
   await page.goto("/match/22/88888888/analysis?competitors=100,101");
-  await expect(page.getByRole("button", { name: /deep dive/i })).toBeVisible();
+  // Wait for the compare-driven sections so order and overflow run on rendered content.
+  await expect(page.locator("main h2", { hasText: /Hit factor by stage/ })).toBeVisible();
+  await expect(page.locator("main h2", { hasText: /Deep dive/ })).toBeVisible();
   const order = await page.locator("main h2").allTextContents();
   const idx = (re: RegExp) => order.findIndex((t) => re.test(t));
   expect(idx(/Stage results/)).toBeGreaterThanOrEqual(0);
   expect(idx(/Stage results/)).toBeLessThan(idx(/Hit factor by stage/));
   expect(idx(/Hit factor by stage/)).toBeLessThan(idx(/Deep dive/));
+  // Selection bar summary precedes Stage results. (Focus areas are identity-gated
+  // and not present in this fixture, so they are not asserted here.)
+  const barFirst = await page.evaluate(() => {
+    const bar = Array.from(document.querySelectorAll("main button")).find((b) =>
+      /comparing:|choose shooters/i.test(b.textContent ?? ""),
+    );
+    const heading = Array.from(document.querySelectorAll("main h2")).find((h) =>
+      /Stage results/.test(h.textContent ?? ""),
+    );
+    if (!bar || !heading) return false;
+    return !!(bar.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+  expect(barFirst).toBe(true);
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
   );
