@@ -59,5 +59,5 @@ to capture all.
 **When to add a new scene:** if a new chart or UI section isn't well-represented by any
 existing scene, add one to `scripts/screenshot-match.ts` (follow the existing `Scene`
 pattern: `name`, `description`, `suppressWhatsNew`, `setup`). If the new section is inside
-the "Coaching analysis" accordion, call `openCoachingSection(page)` before scrolling.
+the "Deep dive" accordion, call `openCoachingSection(page)` before scrolling.
 Update the catalogue list above and in `docs/release-post.md` whenever scenes are added.
