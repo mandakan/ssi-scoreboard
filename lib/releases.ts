@@ -7,8 +7,9 @@ import type { Release } from "@/lib/types";
  *   1. Prepend a new Release object with a unique `id` (ISO date recommended).
  *   2. Fill in the sections with user-facing highlights.
  *
- * The dialog auto-shows once per browser profile whenever RELEASES[0].id
- * differs from the value stored in localStorage("whats-new-seen-id").
+ * A dot (More button, desktop header) marks the release as unseen whenever
+ * RELEASES[0].id differs from localStorage("whats-new-seen-id"). The dialog
+ * only opens when the user asks for it.
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
 export const LATEST_RELEASE_ID = "2026-08-23-courtside-grid";
