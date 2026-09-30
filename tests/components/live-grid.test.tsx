@@ -106,16 +106,47 @@ describe("LiveGrid", () => {
     expect(screen.getByText("Stages done:")).toBeInTheDocument();
   });
 
-  it("makes the live rail segment taller than done segments (not color-only)", () => {
-    const { container } = renderGrid({ shooters: [1] });
-    const segs = Array.from(
-      container.querySelectorAll("[data-live-grid-rail] > span"),
-    );
-    // Stage 10 holds the newest scorecard (live edge); stage 11 is not shot.
-    const [live, other] = segs;
-    expect(other.className).toMatch(/\bh-1\b/);
-    expect(live.className).toMatch(/\bh-1\.5\b/);
-    expect(live.className).not.toBe(other.className);
+  it("draws the live rail segment h-1.5 and done and todo segments h-1", () => {
+    const scored = (created: string) => ({
+      ...FIXTURE.cells[1][10],
+      created,
+    });
+    const data: LiveGridResponse = {
+      ...FIXTURE,
+      stages: [
+        ...FIXTURE.stages,
+        { stage_id: 12, stage_num: 3, name: "Third", max_points: 30 },
+      ],
+      cells: {
+        // Stage 10: both shooters scored (done). Stage 11: newest card (live).
+        // Stage 12: nobody yet (todo).
+        1: { 10: scored("2026-08-23T09:00:00Z"), 11: scored("2026-08-23T10:00:00Z") },
+        2: { 10: scored("2026-08-23T09:05:00Z") },
+      },
+    };
+    useLiveGridQuerySpy.mockReturnValue({
+      data,
+      isLoading: false,
+      isFetching: false,
+      error: null,
+    });
+    try {
+      const { container } = renderGrid();
+      const heightOf = (el: Element) =>
+        el.className.split(/\s+/).find((c) => /^h-/.test(c));
+      const segs = Array.from(
+        container.querySelectorAll("[data-live-grid-rail] > span"),
+      );
+      expect(segs.map(heightOf)).toEqual(["h-1", "h-1.5", "h-1"]);
+    } finally {
+      useLiveGridQuerySpy.mockReset();
+      useLiveGridQuerySpy.mockImplementation(() => ({
+        data: FIXTURE,
+        isLoading: false,
+        isFetching: false,
+        error: null,
+      }));
+    }
   });
 
   it("renders staticData without fetching (empty id list)", () => {
