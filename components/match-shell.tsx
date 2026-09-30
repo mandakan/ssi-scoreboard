@@ -32,7 +32,6 @@ function TopBar() {
           className="grid h-11 w-11 shrink-0 place-items-center"
         >
           <span aria-hidden="true" className="h-2 w-2 rounded-full bg-amber-500" />
-          <span className="sr-only">Match notice, see Info</span>
         </Link>
       )}
       <span className="shrink-0 pr-2 font-mono text-xs text-muted-foreground" aria-label={`${Math.round(match.scoring_pct)} percent scored`}>

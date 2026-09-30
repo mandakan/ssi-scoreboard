@@ -1088,8 +1088,9 @@ export function PreMatchView({
                     </PopoverHeader>
                     <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
                       <p>
-                        Competitors you track are highlighted. Divisions with your
-                        tracked shooters expand automatically.
+                        Competitors you track are highlighted. The field starts
+                        collapsed. Once you open it, divisions with your tracked
+                        shooters are already expanded.
                       </p>
                       <p>
                         Tap a division heading to expand or collapse the competitor
