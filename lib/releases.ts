@@ -34,7 +34,7 @@ export const RELEASES: Release[] = [
         items: [
           "Who you compare is one line at the top. Tap it to pick shooters, apply a squad or benchmark, or reset to the shooters from your grid.",
           "The five charts share one card. Switch between them with the chips above the chart; your last choice is remembered.",
-          "Coaching analyses, the stage-time export and the stage simulator live in a Deep dive section that stays closed until you open it.",
+          "Coaching analyses, the stage-time export and, for finished matches, the stage simulator live in a Deep dive section that stays closed until you open it.",
         ],
       },
       {

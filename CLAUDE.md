@@ -66,8 +66,10 @@ Key directories:
 - `app/api/events/route.ts` -- event search; defaults to `minLevel=l2plus` (hides Level I club matches)
 - `app/api/og/match/[ct]/[id]/route.tsx` -- dynamic OG image generation (see `docs/og-images.md`)
 - `app/api/admin/cache/health/route.ts` -- protected diagnostic endpoint (`Authorization: Bearer <CACHE_PURGE_SECRET>`); reports env var presence and runs a live write->read->delete round-trip against the cache adapter with latency
-- `app/match/[ct]/[id]/layout.tsx` -- match layout with `generateMetadata()` for dynamic page titles + OG meta tags
-- `app/match/[ct]/[id]/match-page-client.tsx` -- `"use client"` match page component (extracted from page.tsx to allow server-side metadata generation)
+- `app/match/[ct]/[id]/layout.tsx` -- match layout: `generateMetadata()` (titles + OG tags), match prefetch, `MatchShell`
+- `app/match/[ct]/[id]/page.tsx` + `grid-page-client.tsx` -- Grid tab (index route); `info/` and `analysis/` (+ `components/analysis/*`) are sibling routes
+- `components/match-shell.tsx`, `components/match-gate.tsx`, `components/match-tab-bar.tsx` -- match chrome, gating and tab bar
+- `app/match/[ct]/loading.tsx` -- match loading boundary, above the layout
 - `lib/og-data.ts` -- server-only helper that fetches match data for OG images and page metadata (1500ms timeout via `Promise.race`)
 - `lib/shooter-index.ts` -- `decodeShooterId()` + `indexMatchShooters()` -- writes shooter profiles and match refs into AppDatabase (SQLite/D1)
 - `lib/backfill.ts` -- pure `runBackfill()` -- scans cached matches for a shooter, dependency-injected, fully unit-tested
@@ -134,7 +136,8 @@ This app is used courtside during live IPSC competitions -- on a phone, outdoors
   label. Two sections on the same page cannot share the same accessible name.
 
 ## Chart info popovers
-Every chart section in `app/match/[ct]/[id]/match-page-client.tsx` has a `?` (`HelpCircle`) icon button
+Every chart (`components/analysis/charts-card.tsx`, help text in `components/analysis/chart-help.tsx`;
+Deep dive charts in `components/analysis/deep-dive.tsx`) has a `?` (`HelpCircle`) icon button
 that opens a `<Popover>` explaining the chart. **When adding a new chart section, always add
 a matching info popover.** When modifying what a chart shows, update its popover text to match.
 The popover should include: what the axes/axes represent, how to read the visual, and 1-2
@@ -246,12 +249,15 @@ Levers and overrides:
 
 ## Courtside Grid -> `docs/live-grid.md`
 
-The match index route for every match (before, during and after scoring): one row per shooter, one column per stage, full-screen and
+The match index route for every match (before, during and after scoring): one row per
+shooter, one column per stage, filling the viewport between the top bar and the tab bar and
 mobile-first. **Its data contract is field-blind** -- every rendered value derives from a
 single shooter's own scorecard plus the stage list. No stage-winner HF, field median,
 division distribution, or ranking. That constraint exists so Phase 2 can swap the server
 from "project the cached whole-field snapshot" to "fetch just these shooters" without a
 client change; breaking it silently forecloses the only real upstream-load lever we have.
+The Grid route never mounts the compare query; compare lives only on the Analysis route
+(e2e-guarded). Do not add a second poll clock. See `docs/live-grid.md`.
 
 Grid is the index route; Analysis and Info are sibling routes behind the match tabs (bottom
 nav on mobile, top strip on desktop). The SSI upstream constraint extends to navigation:
@@ -259,8 +265,6 @@ links into match routes use `prefetch={false}`; the match loading boundary lives
 `app/match/[ct]/loading.tsx`, above the match layout, so link prefetch never runs the
 layout's match fetch; the pre-match grid is drawn from loaded match data and never fetches
 scorecards until the user taps "Show live scores".
-`compareEnabled` must stay false while the grid shows (e2e-guarded). Do not add a second
-poll clock. See `docs/live-grid.md`.
 
 ## Telemetry -> `docs/telemetry.md`
 

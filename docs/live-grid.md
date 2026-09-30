@@ -107,10 +107,10 @@ runs at. **Do not add a second poll clock.** The server's freshness window
 the same match raises refresh frequency, which is the opposite of why this
 view exists.
 
-While the grid is showing, `compareEnabled` is false in
-`match-page-client.tsx`. If compare fires alongside the grid it pulls the
-whole-field snapshot anyway and the saving is gone. There is an e2e assertion
-guarding this (`tests/e2e/live-grid.spec.ts`).
+The Grid route never mounts the compare query; compare lives only on the Analysis route
+(`analysis-page-client.tsx`). If compare fired alongside the grid it would pull the
+whole-field snapshot anyway and the saving would be gone. An e2e assertion guards this
+(`tests/e2e/live-grid.spec.ts`, "never calls /api/compare while the grid is showing").
 
 ## Phase 2 -- per-competitor fetching (not yet built)
 
