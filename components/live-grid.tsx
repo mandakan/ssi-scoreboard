@@ -71,6 +71,9 @@ export function LiveGrid({
   );
 
   const data = staticData ?? query.data ?? placeholder;
+  // A failed background poll keeps query.data, so the grid stays. The alert
+  // shows only when there is nothing live to draw. Retry is one manual refetch.
+  const loadFailed = query.isError && !staticData && !query.data;
   const stages = useMemo(() => data?.stages ?? [], [data]);
   const cells = useMemo(() => data?.cells ?? {}, [data]);
 
@@ -214,8 +217,28 @@ export function LiveGrid({
         </div>
       </div>
 
+      {loadFailed && (
+        <div
+          role="alert"
+          className={cn(
+            "flex flex-none flex-wrap items-center gap-2 border-b bg-card px-3 py-2 text-sm text-foreground",
+            !data && "flex-1 content-center justify-center",
+          )}
+        >
+          <span>Could not load live scores.</span>
+          <button
+            type="button"
+            onClick={() => void query.refetch()}
+            className="inline-flex min-h-11 items-center rounded-md border px-3 text-sm font-medium"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Grid. scroll-padding-left (SCROLL_PAD) matches the sticky name column (NAME_COL, 104px) so snap
           points land beside it rather than hiding a stage underneath. */}
+      {(data || !loadFailed) && (
       <div
         ref={scrollerRef}
         data-live-grid-scroller
@@ -307,6 +330,7 @@ export function LiveGrid({
           </tbody>
         </table>
       </div>
+      )}
 
       {active?.shooter && active.stage && (
         <LiveGridSheet

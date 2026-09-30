@@ -249,4 +249,49 @@ describe("LiveGrid", () => {
     // ("Mathias Axell, stage 1") and excludes the header buttons.
     expect(screen.getAllByRole("button", { name: /, stage \d/i })).toHaveLength(4);
   });
+
+  describe("query error", () => {
+    const erroring = (refetch: () => void) => ({
+      data: undefined,
+      isLoading: false,
+      isFetching: false,
+      isError: true,
+      error: new Error("boom"),
+      refetch,
+    });
+
+    it("shows an alert with one Retry that refetches once, when nothing to show", () => {
+      const refetch = vi.fn();
+      useLiveGridQuerySpy.mockReturnValueOnce(erroring(refetch));
+      renderGrid();
+      expect(screen.getByRole("alert")).toHaveTextContent("Could not load live scores.");
+      const retry = screen.getByRole("button", { name: "Retry" });
+      expect(retry.className).toContain("min-h-11");
+      fireEvent.click(retry);
+      expect(refetch).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole("table")).toBeNull();
+    });
+
+    it("keeps the placeholder grid under a compact alert", () => {
+      const refetch = vi.fn();
+      useLiveGridQuerySpy.mockReturnValueOnce(erroring(refetch));
+      renderGrid({ placeholder: FIXTURE });
+      expect(screen.getByRole("alert")).toHaveTextContent("Could not load live scores.");
+      expect(screen.getByRole("table")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+      expect(refetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows no alert for staticData even if the (disabled) query reports an error", () => {
+      useLiveGridQuerySpy.mockReturnValueOnce(erroring(vi.fn()));
+      renderGrid({ staticData: FIXTURE });
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
+
+    it("keeps the grid without an alert when a background poll fails but data exists", () => {
+      useLiveGridQuerySpy.mockReturnValueOnce({ ...erroring(vi.fn()), data: FIXTURE });
+      renderGrid();
+      expect(screen.getByRole("table")).toBeInTheDocument();
+    });
+  });
 });

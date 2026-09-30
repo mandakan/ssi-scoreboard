@@ -234,6 +234,52 @@ test("grid with live scores hidden explains why", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Match in progress" })).toBeVisible();
 });
 
+test("scores-not-public block links to the Info tab", async ({ page }) => {
+  await suppressDialogs(page);
+  await page.route("**/api/match/**", (r) =>
+    r.fulfill({ json: { ...MOCK_MATCH, is_live_scores_accessible: false } }));
+  await page.goto("/match/22/88888888");
+  const link = page.getByRole("link", { name: "Match info" });
+  await expect(link).toHaveAttribute("href", "/match/22/88888888/info");
+  const box = await link.boundingBox();
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+});
+
+test("live grid error shows an alert and Retry refetches exactly once", async ({ page }) => {
+  await suppressDialogs(page);
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "ssi-my-shooter",
+      JSON.stringify({ shooterId: 500, name: "Shooter 1 Lastname", license: null }),
+    );
+  });
+  await page.route("**/api/match/**", (r) => r.fulfill({ json: MOCK_MATCH }));
+  await page.route("**/api/upstream-status**", (r) =>
+    r.fulfill({ json: { degraded: false, paused: false } }));
+  let gridCalls = 0;
+  let failing = true;
+  await page.route("**/api/live-grid**", (r) => {
+    gridCalls++;
+    return failing
+      ? r.fulfill({ status: 500, json: { error: "boom" } })
+      : r.fulfill({ json: { match_id: 1, stages: [], shooters: [], cells: {} } });
+  });
+  await page.goto("/match/22/88888888");
+  await expect(page.getByRole("alert").filter({ hasText: "Could not load live scores." })).toBeVisible();
+  const retry = page.getByRole("button", { name: "Retry" });
+  const box = await retry.boundingBox();
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+  // Settle: the global retry:1 has already used its one extra attempt.
+  await page.waitForTimeout(2500);
+  const before = gridCalls;
+  failing = false;
+  await retry.click();
+  await expect(page.getByRole("alert").filter({ hasText: "Could not load live scores." })).toHaveCount(0);
+  await page.waitForTimeout(1500);
+  expect(gridCalls - before).toBe(1);
+  console.log(`grid requests: ${before} before Retry, ${gridCalls - before} for one tap`);
+});
+
 async function openPreMatchGrid(page: Page) {
   await suppressDialogs(page);
   await page.addInitScript(() => {
