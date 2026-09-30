@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import type { MatchResponse } from "@/lib/types";
+import type { CompareResponse, MatchResponse } from "@/lib/types";
 import { LATEST_RELEASE_ID } from "@/lib/releases";
 
 // 390px -- iPhone 14, the primary breakpoint per CLAUDE.md.
@@ -79,6 +79,64 @@ const MOCK_MATCH: MatchResponse = {
       number: 4,
       name: "Squad 4",
       competitorIds: COMPETITORS.map((c) => c.id),
+    },
+  ],
+};
+
+const MOCK_COMPARE: CompareResponse = {
+  match_id: 88888888,
+  mode: "coaching",
+  cacheInfo: { cachedAt: null },
+  competitors: [COMPETITORS[0], COMPETITORS[1]],
+  penaltyStats: {
+    100: { totalPenalties: 0, penaltyCostPercent: 0, matchPctActual: 90, matchPctClean: 90, penaltiesPerStage: 0, penaltiesPer100Rounds: 0 },
+    101: { totalPenalties: 0, penaltyCostPercent: 0, matchPctActual: 90, matchPctClean: 90, penaltiesPerStage: 0, penaltiesPer100Rounds: 0 },
+  },
+  efficiencyStats: {},
+  consistencyStats: {
+    100: { coefficientOfVariation: null, label: null, stagesFired: 2 },
+    101: { coefficientOfVariation: null, label: null, stagesFired: 2 },
+  },
+  lossBreakdownStats: {
+    100: { totalHitLoss: 0, totalPenaltyLoss: 0, totalLoss: 0, stagesFired: 2, hasHitZoneData: false },
+    101: { totalHitLoss: 0, totalPenaltyLoss: 0, totalLoss: 0, stagesFired: 2, hasHitZoneData: false },
+  },
+  whatIfStats: { 100: null, 101: null },
+  styleFingerprintStats: {
+    100: { alphaRatio: null, pointsPerSecond: null, penaltyRate: null, totalA: 0, totalC: 0, totalD: 0, totalPoints: 0, totalTime: 0, totalPenalties: 0, totalRounds: 0, stagesFired: 0, accuracyPercentile: null, speedPercentile: null, archetype: null, composurePercentile: 50, consistencyPercentile: 50 },
+    101: { alphaRatio: null, pointsPerSecond: null, penaltyRate: null, totalA: 0, totalC: 0, totalD: 0, totalPoints: 0, totalTime: 0, totalPenalties: 0, totalRounds: 0, stagesFired: 0, accuracyPercentile: null, speedPercentile: null, archetype: null, composurePercentile: 50, consistencyPercentile: 50 },
+  },
+  fieldFingerprintPoints: [],
+  archetypePerformance: {},
+  courseLengthPerformance: {},
+  constraintPerformance: {
+    100: { normal: { stageCount: 2, avgGroupPercent: 90 }, constrained: { stageCount: 0, avgGroupPercent: null } },
+    101: { normal: { stageCount: 2, avgGroupPercent: 90 }, constrained: { stageCount: 0, avgGroupPercent: null } },
+  },
+  stageDegradationData: null,
+  stageConditions: null,
+  stages: [
+    {
+      stage_id: 1, stage_name: "Stage 1", stage_num: 1, max_points: 60, course_display: "Medium",
+      constraints: { strongHand: false, weakHand: false, movingTargets: false, unloadedStart: false },
+      group_leader_hf: 5, group_leader_points: 55, overall_leader_hf: 5,
+      field_median_hf: 4, field_median_accuracy: null, field_cv: null, field_competitor_count: 8,
+      stageDifficultyLevel: 3, stageDifficultyLabel: "hard", stageSeparatorLevel: 2 as const,
+      competitors: {
+        100: { competitor_id: 100, points: 50, hit_factor: 4.5, time: 11.1, group_rank: 2, group_percent: 90, div_rank: 2, div_percent: 90, overall_rank: 2, overall_percent: 90, overall_percentile: 0.5, dq: false, zeroed: false, dnf: false, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null, stageClassification: null, hitLossPoints: null, penaltyLossPoints: 0 },
+        101: { competitor_id: 101, points: 55, hit_factor: 5, time: 11, group_rank: 1, group_percent: 100, div_rank: 1, div_percent: 100, overall_rank: 1, overall_percent: 100, overall_percentile: 0.5, dq: false, zeroed: false, dnf: false, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null, stageClassification: null, hitLossPoints: null, penaltyLossPoints: 0 },
+      },
+    },
+    {
+      stage_id: 2, stage_name: "Stage 2", stage_num: 2, max_points: 60, course_display: "Medium",
+      constraints: { strongHand: false, weakHand: false, movingTargets: false, unloadedStart: false },
+      group_leader_hf: 5, group_leader_points: 55, overall_leader_hf: 5,
+      field_median_hf: 4, field_median_accuracy: null, field_cv: null, field_competitor_count: 8,
+      stageDifficultyLevel: 3, stageDifficultyLabel: "hard", stageSeparatorLevel: 2 as const,
+      competitors: {
+        100: { competitor_id: 100, points: 50, hit_factor: 4.5, time: 11.1, group_rank: 2, group_percent: 90, div_rank: 2, div_percent: 90, overall_rank: 2, overall_percent: 90, overall_percentile: 0.5, dq: false, zeroed: false, dnf: false, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null, stageClassification: null, hitLossPoints: null, penaltyLossPoints: 0 },
+        101: { competitor_id: 101, points: 55, hit_factor: 5, time: 11, group_rank: 1, group_percent: 100, div_rank: 1, div_percent: 100, overall_rank: 1, overall_percent: 100, overall_percentile: 0.5, dq: false, zeroed: false, dnf: false, incomplete: false, a_hits: null, c_hits: null, d_hits: null, miss_count: null, no_shoots: null, procedurals: null, stageClassification: null, hitLossPoints: null, penaltyLossPoints: 0 },
+      },
     },
   ],
 };
@@ -219,4 +277,36 @@ test("tab bar links meet the 44px touch floor", async ({ page }) => {
     .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
   expect(heights).toHaveLength(3);
   expect(Math.min(...heights)).toBeGreaterThanOrEqual(44);
+});
+
+test("analysis sections appear in spec order without horizontal overflow", async ({ page }) => {
+  await suppressDialogs(page);
+  await mockApis(page);
+  await page.route(/\/api\/compare/, (r) => r.fulfill({ json: MOCK_COMPARE }));
+  await page.goto("/match/22/88888888/analysis?competitors=100,101");
+  // Wait for the compare-driven sections so order and overflow run on rendered content.
+  await expect(page.locator("main h2", { hasText: /Hit factor by stage/ })).toBeVisible();
+  await expect(page.locator("main h2", { hasText: /Deep dive/ })).toBeVisible();
+  const order = await page.locator("main h2").allTextContents();
+  const idx = (re: RegExp) => order.findIndex((t) => re.test(t));
+  expect(idx(/Stage results/)).toBeGreaterThanOrEqual(0);
+  expect(idx(/Stage results/)).toBeLessThan(idx(/Hit factor by stage/));
+  expect(idx(/Hit factor by stage/)).toBeLessThan(idx(/Deep dive/));
+  // Selection bar summary precedes Stage results. (Focus areas are identity-gated
+  // and not present in this fixture, so they are not asserted here.)
+  const barFirst = await page.evaluate(() => {
+    const bar = Array.from(document.querySelectorAll("main button")).find((b) =>
+      /comparing:|choose shooters/i.test(b.textContent ?? ""),
+    );
+    const heading = Array.from(document.querySelectorAll("main h2")).find((h) =>
+      /Stage results/.test(h.textContent ?? ""),
+    );
+    if (!bar || !heading) return false;
+    return !!(bar.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+  expect(barFirst).toBe(true);
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  );
+  expect(overflow).toBe(false);
 });

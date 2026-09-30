@@ -58,7 +58,7 @@ export function ArchetypePerformanceSummary({ data }: ArchetypePerformanceSummar
               <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-80" side="bottom" align="start">
+          <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
             <PopoverHeader>
               <PopoverTitle>Stage archetype breakdown</PopoverTitle>
               <PopoverDescription>Average performance grouped by stage type.</PopoverDescription>

@@ -167,17 +167,20 @@ interface Scene {
 const MOCK_IDS = "1001,1002,1003";
 
 /**
- * Expand the "Coaching analysis" accordion (idempotent).
+ * Expand the "Deep dive" accordion (idempotent).
  * The accordion starts collapsed; its content only mounts when open.
  */
 async function openCoachingSection(page: import("@playwright/test").Page): Promise<void> {
-  const btn = page.locator('button[aria-controls="coaching-view-panel"]');
+  const btn = page.getByRole("button", { name: /deep dive/i });
   await btn.waitFor({ timeout: 8000 }).catch(() => null);
   const expanded = await btn.getAttribute("aria-expanded").catch(() => null);
   if (expanded !== "true") {
     await btn.click().catch(() => null);
-    // Wait for the section to mount in the DOM
-    await page.locator("#coaching-view-panel").waitFor({ timeout: 5000 }).catch(() => null);
+    // Wait for the region to mount in the DOM
+    await page
+      .locator("[aria-labelledby='deep-dive-heading']")
+      .waitFor({ timeout: 5000 })
+      .catch(() => null);
   }
 }
 
@@ -277,7 +280,7 @@ const SCENES: Scene[] = [
   },
   {
     name: "stage-times-export",
-    description: "Stage times export download buttons inside the coaching analysis accordion",
+    description: "Stage times export download buttons inside the Deep dive accordion",
     suppressWhatsNew: true,
     setup: async (page, matchPath) => {
       await page.goto(`${matchPath}/analysis?competitors=${MOCK_IDS}`);

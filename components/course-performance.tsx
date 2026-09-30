@@ -55,7 +55,7 @@ export function CourseLengthSummary({ data }: CoursePerformanceSummaryProps) {
               <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-80" side="bottom" align="start">
+          <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
             <PopoverHeader>
               <PopoverTitle>Course length split</PopoverTitle>
               <PopoverDescription>Average group % by official course-length category.</PopoverDescription>
@@ -173,7 +173,7 @@ export function ConstraintSummary({ data }: CoursePerformanceSummaryProps) {
               <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-80" side="bottom" align="start">
+          <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" side="bottom" align="start">
             <PopoverHeader>
               <PopoverTitle>Constrained stages</PopoverTitle>
               <PopoverDescription>Normal vs restricted-technique stage performance.</PopoverDescription>
