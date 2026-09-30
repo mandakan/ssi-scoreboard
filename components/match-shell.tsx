@@ -9,7 +9,7 @@ import { saveRecentCompetition } from "@/lib/competition-store";
 import { matchTabHref } from "@/lib/match-routes";
 
 function TopBar() {
-  const { ct, id, match } = useMatch();
+  const { ct, id, match, stale } = useMatch();
   useEffect(() => saveRecentCompetition(ct, id, match), [ct, id, match]);
   // Cancelled or degraded only: "results not published" holds for the whole
   // live phase, so flagging it here would be a permanent dot.
@@ -34,9 +34,24 @@ function TopBar() {
           <span aria-hidden="true" className="h-2 w-2 rounded-full bg-amber-500" />
         </Link>
       )}
-      <span className="shrink-0 pr-2 font-mono text-xs text-muted-foreground" aria-label={`${Math.round(match.scoring_pct)} percent scored`}>
-        {Math.round(match.scoring_pct)}%
-      </span>
+      {stale ? (
+        <span
+          role="status"
+          className="flex shrink-0 items-center gap-1.5 pr-2 text-xs text-muted-foreground"
+        >
+          <span aria-hidden="true" className="h-2 w-2 rounded-full bg-amber-500" />
+          <span aria-hidden="true">{stale === "gone" ? "Unavailable" : "Not updating"}</span>
+          <span className="sr-only">
+            {stale === "gone"
+              ? "This match is no longer viewable. Showing the last loaded data."
+              : "Could not refresh match data. Showing the last loaded update."}
+          </span>
+        </span>
+      ) : (
+        <span className="shrink-0 pr-2 font-mono text-xs text-muted-foreground" aria-label={`${Math.round(match.scoring_pct)} percent scored`}>
+          {Math.round(match.scoring_pct)}%
+        </span>
+      )}
     </header>
   );
 }

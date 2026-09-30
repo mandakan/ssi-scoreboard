@@ -279,6 +279,44 @@ test("live grid error shows an alert and Retry refetches exactly once", async ({
   expect(gridCalls - before).toBe(1);
 });
 
+test("a failed match poll shows a top-bar chip without overflowing the grid", async ({ page }) => {
+  await suppressDialogs(page);
+  await page.clock.install();
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "ssi-my-shooter",
+      JSON.stringify({ shooterId: 500, name: "Shooter 1 Lastname", license: null }),
+    );
+  });
+  let matchCalls = 0;
+  await page.route("**/api/match/**", (r) => {
+    matchCalls++;
+    return matchCalls === 1
+      ? r.fulfill({ json: MOCK_MATCH })
+      : r.fulfill({ status: 500, json: { error: "boom" } });
+  });
+  await page.route("**/api/upstream-status**", (r) =>
+    r.fulfill({ json: { degraded: false, paused: false } }));
+  await page.route("**/api/live-grid**", (r) =>
+    r.fulfill({ json: { match_id: 1, stages: [], shooters: [], cells: {} } }));
+  await page.goto("/match/22/88888888");
+  await expect(page.getByLabel("50 percent scored")).toBeVisible();
+  // Drive the 30s match poll (and the one query retry) on the fake clock.
+  const chip = page.getByRole("status").filter({ hasText: "Not updating" });
+  await expect
+    .poll(async () => {
+      await page.clock.runFor(5000);
+      return chip.count();
+    }, { timeout: 20000 })
+    .toBe(1);
+  await expect(chip).toContainText("Could not refresh match data. Showing the last loaded update.");
+  await expect(page.getByRole("heading", { name: "Failed to load match" })).toHaveCount(0);
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollHeight - window.innerHeight,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+});
+
 async function openPreMatchGrid(page: Page) {
   await suppressDialogs(page);
   await page.addInitScript(() => {

@@ -9,8 +9,8 @@ vi.mock("@/lib/queries", () => ({ useMatchQuery: (...a: unknown[]) => useMatchQu
 import { MatchGate, useMatch } from "@/components/match-gate";
 
 function Probe() {
-  const { match, ct, id } = useMatch();
-  return <p>{`${ct}/${id}: ${match.name}`}</p>;
+  const { match, ct, id, stale } = useMatch();
+  return <p>{`${ct}/${id}: ${match.name}`}<span data-testid="stale">{String(stale)}</span></p>;
 }
 
 function renderGate() {
@@ -65,9 +65,8 @@ describe("MatchGate", () => {
     renderGate();
     expect(screen.getByText("22/1: Test Match")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Could not refresh match data. Showing the last loaded update.",
-    );
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByTestId("stale")).toHaveTextContent("refresh-failed");
   });
 
   it("words a mid-session 404 as no longer viewable, keeping the data", () => {
@@ -78,9 +77,7 @@ describe("MatchGate", () => {
     });
     renderGate();
     expect(screen.getByText("22/1: Test Match")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "This match is no longer viewable. Showing the last loaded data.",
-    );
+    expect(screen.getByTestId("stale")).toHaveTextContent("gone");
   });
 
   it("shows no stale notice when the query succeeds", () => {
@@ -90,6 +87,7 @@ describe("MatchGate", () => {
     });
     renderGate();
     expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByTestId("stale")).toHaveTextContent("null");
   });
 
   it("shows the generic failure copy on a non-404", () => {

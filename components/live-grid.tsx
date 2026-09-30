@@ -221,9 +221,9 @@ export function LiveGrid({
       {staleData && (
         <p
           role="status"
-          className="flex-none border-b bg-muted/40 px-3 py-1.5 text-sm text-muted-foreground"
+          className="flex-none truncate border-b bg-muted/40 px-3 py-1.5 text-sm text-muted-foreground"
         >
-          Could not refresh live scores. Showing the last update.
+          Refresh failed. Showing last update.
         </p>
       )}
       {loadFailed && (

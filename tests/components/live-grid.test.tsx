@@ -294,7 +294,7 @@ describe("LiveGrid", () => {
       expect(screen.getByRole("table")).toBeInTheDocument();
       expect(screen.queryByRole("alert")).toBeNull();
       expect(screen.getByRole("status")).toHaveTextContent(
-        "Could not refresh live scores. Showing the last update.",
+        "Refresh failed. Showing last update.",
       );
     });
 
