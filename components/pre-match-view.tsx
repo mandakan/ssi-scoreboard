@@ -684,6 +684,7 @@ export function PreMatchView({
     defaultSquadNum,
   );
   const [sheetCompetitor, setSheetCompetitor] = useState<CompetitorInfo | null>(null);
+  const [fieldOpen, setFieldOpen] = useState(false);
 
   useEffect(() => {
     setSelectedSquadNum(defaultSquadNum);
@@ -777,17 +778,6 @@ export function PreMatchView({
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {/* AI pre-match brief ----------------------------------------------- */}
-      <PreMatchBriefCard ct={ct} id={id} shooterId={briefShooterId} aiAvailable={aiAvailable} onManageShooters={onManageShooters} />
-
-      {/* Weather forecast -------------------------------------------------- */}
-      {hasVenueInfo && matchDate && (
-        <WeatherCard
-          response={weatherQuery.data}
-          isLoading={weatherQuery.isLoading}
-        />
-      )}
-
       {/* Your squad -------------------------------------------------------- */}
       {match.squads.length > 0 && squadMembers.length > 0 && (
         <Card className="gap-3 p-4 shadow-none rounded-lg">
@@ -1046,17 +1036,41 @@ export function PreMatchView({
         </Card>
       )}
 
+      {/* Weather forecast -------------------------------------------------- */}
+      {hasVenueInfo && matchDate && (
+        <WeatherCard
+          response={weatherQuery.data}
+          isLoading={weatherQuery.isLoading}
+        />
+      )}
+
+      {/* AI pre-match brief ----------------------------------------------- */}
+      <PreMatchBriefCard ct={ct} id={id} shooterId={briefShooterId} aiAvailable={aiAvailable} onManageShooters={onManageShooters} />
+
       {/* Registered field -------------------------------------------------- */}
       {divisionGroups.length > 0 && (
         <Card className="gap-3 p-4 shadow-none rounded-lg md:col-span-2">
           <CardHeader className="p-0">
-            <CardTitle>
-              <h2 className="flex items-center gap-1.5">
-                Registered field
-                <span className="text-xs text-muted-foreground font-normal">
-                  — {match.competitors.length} competitors
-                </span>
-                <Popover>
+            <CardTitle className="flex items-center gap-1.5">
+              <h2 className="min-w-0 flex-1">
+                <button
+                  id="registered-field-heading"
+                  type="button"
+                  className="flex w-full items-center gap-1.5 text-left rounded focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                  aria-expanded={fieldOpen}
+                  aria-controls="registered-field-panel"
+                  onClick={() => setFieldOpen((o) => !o)}
+                >
+                  Registered field
+                  <span className="text-xs text-muted-foreground font-normal">
+                    — {match.competitors.length} competitors
+                  </span>
+                  {fieldOpen
+                    ? <ChevronUp className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                    : <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+                </button>
+              </h2>
+              <Popover>
                   <PopoverTrigger asChild>
                     <button
                       className="ml-auto text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
@@ -1084,24 +1098,27 @@ export function PreMatchView({
                     </div>
                   </PopoverContent>
                 </Popover>
-              </h2>
             </CardTitle>
           </CardHeader>
 
-          <CardContent className="p-0">
-            <div className="divide-y divide-border">
-              {divisionGroups.map(([division, competitors]) => (
-                <DivisionSection
-                  key={division}
-                  division={division}
-                  competitors={competitors}
-                  trackedShooterIds={trackedShooterIds}
-                  myShooterId={myShooterId}
-                  onSelectCompetitor={setSheetCompetitor}
-                />
-              ))}
-            </div>
-          </CardContent>
+          {fieldOpen && (
+            <section id="registered-field-panel" role="region" aria-labelledby="registered-field-heading">
+              <CardContent className="p-0">
+                <div className="divide-y divide-border">
+                  {divisionGroups.map(([division, competitors]) => (
+                    <DivisionSection
+                      key={division}
+                      division={division}
+                      competitors={competitors}
+                      trackedShooterIds={trackedShooterIds}
+                      myShooterId={myShooterId}
+                      onSelectCompetitor={setSheetCompetitor}
+                    />
+                  ))}
+                </div>
+              </CardContent>
+            </section>
+          )}
         </Card>
       )}
 
