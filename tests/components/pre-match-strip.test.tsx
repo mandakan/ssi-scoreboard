@@ -62,4 +62,16 @@ describe("PreMatchStrip", () => {
     expect(screen.getByText(/12.*18/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Show live scores" })).toBeInTheDocument();
   });
+
+  it("does not crash or show a first stage when the squad number is 0", () => {
+    const match = {
+      ...MATCH,
+      squads: [{ id: 1, number: 0, name: "Squad ?", competitorIds: [100, 101] }],
+    } as unknown as MatchResponse;
+    render(
+      <PreMatchStrip ct="22" id="1" match={match} myShooterId={500} onShowLiveScores={vi.fn()} />,
+    );
+    expect(screen.getByText(/Squad \?/)).toBeInTheDocument();
+    expect(screen.queryByText(/First stage/)).not.toBeInTheDocument();
+  });
 });

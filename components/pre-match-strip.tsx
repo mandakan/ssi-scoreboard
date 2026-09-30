@@ -37,7 +37,7 @@ export function PreMatchStrip({
 
   const squad = squadForShooter(match, myShooterId);
   const firstStage = squad
-    ? squadRotation(squad.number, match.stages)[0]?.stage.stage_number ?? null
+    ? (squadRotation(squad.number, match.stages)[0]?.stage.stage_number ?? null)
     : null;
 
   const response = weatherQuery.data;

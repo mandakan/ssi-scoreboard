@@ -17,6 +17,11 @@ describe("stage rotation", () => {
   it("is empty without stages", () => {
     expect(squadRotation(1, [])).toEqual([]);
   });
+
+  it("returns [] for a missing squad number (0 or below)", () => {
+    expect(squadRotation(0, stages)).toEqual([]);
+    expect(squadRotation(-1, stages)).toEqual([]);
+  });
   it("finds the shooter's squad", () => {
     const match = {
       competitors: [{ id: 5, shooterId: 900 }, { id: 6, shooterId: null }],

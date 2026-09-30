@@ -23,7 +23,7 @@ export function squadRotation<T extends { stage_number: number }>(
   squadNumber: number,
   stages: T[],
 ): { round: number; stage: T }[] {
-  if (stages.length === 0) return [];
+  if (stages.length === 0 || !(squadNumber >= 1)) return [];
 
   // Sort stages by stage_number to get canonical order
   const sortedStages = [...stages].sort((a, b) => a.stage_number - b.stage_number);
