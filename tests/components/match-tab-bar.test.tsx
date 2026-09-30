@@ -24,6 +24,8 @@ describe("MatchTabBar", () => {
     ]);
     expect(screen.getByRole("link", { name: /info/i })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: /grid/i })).not.toHaveAttribute("aria-current");
+    // One landmark: desktop restyles it, never duplicates it.
+    expect(screen.getAllByRole("navigation")).toHaveLength(1);
   });
 
   it("reports the viewed tab once", () => {

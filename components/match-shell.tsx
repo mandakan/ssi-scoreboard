@@ -42,18 +42,19 @@ function TopBar() {
 }
 
 /**
- * Chrome for every match tab: top bar, bottom tab bar, and the MatchGate that
+ * Chrome for every match tab: top bar, tab bar, and the MatchGate that
  * owns loading and error states. Lives in the layout, so it persists across
  * tab switches -- the match query and its polling survive navigation.
  */
 export function MatchShell({ ct, id, children }: { ct: string; id: string; children: React.ReactNode }) {
   return (
-    <main id="main-content" tabIndex={-1} className="flex min-h-[100dvh] flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))]">
+    <main id="main-content" tabIndex={-1} className="flex min-h-[100dvh] flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:min-h-[calc(100dvh-3.5rem)] md:pb-0">
       <MatchGate ct={ct} id={id}>
         <TopBar />
+        {/* Fixed bottom bar on mobile, sticky strip under the top bar on md+. */}
+        <MatchTabBar ct={ct} id={id} />
         <div className="min-h-0 flex-1">{children}</div>
       </MatchGate>
-      <MatchTabBar ct={ct} id={id} />
     </main>
   );
 }

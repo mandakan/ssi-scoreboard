@@ -388,3 +388,51 @@ test("install banner sits above the match tab bar", async ({ page }) => {
   // (offset 3.5rem) covers that hairline. Anything more is a real overlap.
   expect(bannerBottom).toBeLessThanOrEqual(navTop + 1);
 });
+
+test.describe("desktop 1280x900", () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+
+  test("tabs are a top strip and the grid tab does not scroll the page", async ({ page }) => {
+    await openPreMatchGrid(page);
+    const nav = page.getByRole("navigation", { name: "Match sections" });
+    await expect(nav).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "S1", exact: true })).toBeVisible();
+    await expect(page.locator('nav[aria-label="Match sections"]')).toHaveCount(1);
+    const box = await nav.boundingBox();
+    expect(box!.y).toBeLessThan(200);
+    const heights = await page.evaluate(() => ({
+      scrollH: document.documentElement.scrollHeight,
+      innerH: window.innerHeight,
+    }));
+    expect(heights.scrollH).toBeLessThanOrEqual(heights.innerH);
+  });
+
+  test("analysis tab strip is also at the top", async ({ page }) => {
+    await suppressDialogs(page);
+    await mockApis(page);
+    await page.goto("/match/22/88888888/analysis");
+    const nav = page.getByRole("navigation", { name: "Match sections" });
+    await expect(nav).toBeVisible();
+    await expect(page.locator('nav[aria-label="Match sections"]')).toHaveCount(1);
+    expect((await nav.boundingBox())!.y).toBeLessThan(200);
+  });
+
+  test("install banner does not cover the top tab strip", async ({ page }) => {
+    await suppressDialogs(page);
+    await mockApis(page);
+    await page.goto("/match/22/88888888/info");
+    const nav = page.getByRole("navigation", { name: "Match sections" });
+    await expect(nav).toBeVisible();
+    const banner = page.getByRole("status").filter({ hasText: /install ssi scoreboard/i });
+    await expect(async () => {
+      await page.evaluate(() =>
+        window.dispatchEvent(new Event("beforeinstallprompt", { cancelable: true })),
+      );
+      await expect(banner).toBeVisible({ timeout: 500 });
+    }).toPass({ timeout: 10_000 });
+    const b = (await banner.boundingBox())!;
+    const n = (await nav.boundingBox())!;
+    const overlap = b.y < n.y + n.height && b.y + b.height > n.y;
+    expect(overlap).toBe(false);
+  });
+});

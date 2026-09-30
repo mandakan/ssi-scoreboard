@@ -141,7 +141,7 @@ export function LiveGrid({
       : null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background">
+    <div className="flex h-full min-h-0 flex-col bg-background md:mx-auto md:w-full md:max-w-5xl">
       {/* Row source chips, progress indicator and live-stage jump */}
       <div
         data-live-grid-header
