@@ -229,6 +229,7 @@ function GridPageContent() {
         onSourceChange={onSourceChange}
         onManage={() => setShowManage(true)}
         live={phase !== "complete"}
+        placeholder={emptyGrid}
       />
       <TrackedShootersSheet open={showManage} onOpenChange={setShowManage} />
     </div>

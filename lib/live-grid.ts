@@ -50,7 +50,7 @@ function classify(sc: RawScorecard): LiveGridCell["status"] {
  * The stage the visible shooters most recently produced a scorecard on.
  *
  * The grid opens scrolled here, because it is the stage they just shot.
- * Falls back to the first stage so a pre-scoring match still lands somewhere.
+ * Null when nothing has been scored yet: there is no live edge to show.
  */
 export function computeLiveEdgeStageId(
   cells: Record<number, Record<number, LiveGridCell>>,
@@ -70,7 +70,7 @@ export function computeLiveEdgeStageId(
       }
     }
   }
-  return bestStage ?? stages[0].stage_id;
+  return bestStage;
 }
 
 /**

@@ -40,6 +40,11 @@ export interface LiveGridProps {
    * query is called with no ids, so nothing reaches the upstream API.
    */
   staticData?: LiveGridResponse;
+  /**
+   * Shown while the first live response is pending (e.g. the empty grid
+   * right after opting in). Presentation only: does not affect the query.
+   */
+  placeholder?: LiveGridResponse;
 }
 
 /**
@@ -56,6 +61,7 @@ export function LiveGrid({
   onManage,
   live = true,
   staticData,
+  placeholder,
 }: LiveGridProps) {
   const query = useLiveGridQuery(ct, id, staticData ? EMPTY_IDS : shooters, { live });
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -64,15 +70,15 @@ export function LiveGrid({
     null,
   );
 
-  const data = staticData ?? query.data;
+  const data = staticData ?? query.data ?? placeholder;
   const stages = useMemo(() => data?.stages ?? [], [data]);
   const cells = useMemo(() => data?.cells ?? {}, [data]);
 
-  // computeLiveEdgeStageId falls back to the first stage when nothing is
-  // scored; a static pre-match grid has no live stage at all.
+  // No live stage for a static pre-match grid or a finished match; the pure
+  // helper returns null while nothing has been scored.
   const liveEdgeStageId = useMemo(
-    () => (staticData ? null : computeLiveEdgeStageId(cells, stages)),
-    [staticData, cells, stages],
+    () => (staticData || !live ? null : computeLiveEdgeStageId(cells, stages)),
+    [staticData, live, cells, stages],
   );
 
   const jumpTo = useCallback(

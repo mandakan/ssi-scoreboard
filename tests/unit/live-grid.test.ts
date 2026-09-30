@@ -90,8 +90,8 @@ describe("computeLiveEdgeStageId", () => {
     expect(computeLiveEdgeStageId(cells, STAGES)).toBe(11);
   });
 
-  it("returns the first stage when nothing has been scored", () => {
-    expect(computeLiveEdgeStageId({ 1: {} }, STAGES)).toBe(10);
+  it("returns null when nothing has been scored", () => {
+    expect(computeLiveEdgeStageId({ 1: {} }, STAGES)).toBeNull();
   });
 
   it("returns null when there are no stages", () => {

@@ -176,6 +176,41 @@ describe("LiveGrid", () => {
     }
   });
 
+  it("shows no Live button or live rail segment when the match is not live", () => {
+    renderGrid({ live: false });
+    expect(screen.queryByRole("button", { name: /Jump to live stage/ })).not.toBeInTheDocument();
+    const rail = document.querySelector("[data-live-grid-rail]")!;
+    expect(rail.querySelector(".h-1\\.5")).toBeNull();
+  });
+
+  it("shows no Live button when nothing has been scored", () => {
+    useLiveGridQuerySpy.mockImplementation(() => ({
+      data: { ...FIXTURE, cells: { 1: {}, 2: {} } },
+      isLoading: false,
+      isFetching: false,
+      error: null,
+    }));
+    try {
+      renderGrid();
+      expect(screen.queryByRole("button", { name: /Jump to live stage/ })).not.toBeInTheDocument();
+    } finally {
+      useLiveGridQuerySpy.mockImplementation(() => ({
+        data: FIXTURE,
+        isLoading: false,
+        isFetching: false,
+        error: null,
+      }));
+    }
+  });
+
+  it("renders the placeholder rows while the query is pending, without a Live button", () => {
+    useLiveGridQuerySpy.mockReturnValueOnce({ data: undefined, isLoading: true, isFetching: true, error: null });
+    renderGrid({ placeholder: { ...FIXTURE, cells: { 1: {}, 2: {} } } });
+    expect(screen.getByRole("rowheader", { name: /Jonas/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Jump to live stage/ })).not.toBeInTheDocument();
+    expect(useLiveGridQuerySpy).toHaveBeenLastCalledWith("22", "1", [1, 2], { live: true });
+  });
+
   it("shows Manage only for the tracked source and calls onManage", () => {
     const onManage = vi.fn();
     const { unmount } = renderGrid({ source: "squad", onManage });
