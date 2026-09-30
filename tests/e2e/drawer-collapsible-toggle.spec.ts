@@ -131,8 +131,14 @@ test.describe("Drawer — desktop", () => {
     await page.getByRole("banner").getByRole("button", { name: /my shooters/i }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
 
-    // Click the overlay (fixed inset-0 element behind the drawer)
-    await page.locator("[data-slot='drawer-overlay']").click({ force: true });
+    // Click the dimmed area above the sheet, where a user would tap. A plain
+    // (or forced) click targets the overlay's centre, which the bottom sheet
+    // covers once its slide-in settles -- the click then lands on the sheet
+    // and the test only passed if it fired mid-animation. Without `force`,
+    // Playwright's hit-target check proves the overlay is what gets clicked.
+    await page
+      .locator("[data-slot='drawer-overlay']")
+      .click({ position: { x: 10, y: 10 } });
     await expect(page.getByRole("dialog")).not.toBeVisible();
   });
 
