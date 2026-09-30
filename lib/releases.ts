@@ -12,7 +12,7 @@ import type { Release } from "@/lib/types";
  * only opens when the user asks for it.
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-10-match-tabs";
+export const LATEST_RELEASE_ID = "2026-10-01-match-tabs";
 
 export const RELEASES: Release[] = [
   {
