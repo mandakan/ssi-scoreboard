@@ -57,7 +57,7 @@ export default function GridPageClient() {
 }
 
 function GridPageContent() {
-  const { ct, id, match } = useMatch();
+  const { ct, id, match, stale } = useMatch();
   const router = useRouter();
   const { identity } = useMyIdentity();
   const { trackedIds } = useTrackedShooters();
@@ -238,7 +238,8 @@ function GridPageContent() {
         source={source}
         onSourceChange={onSourceChange}
         onManage={() => setShowManage(true)}
-        live={phase !== "complete"}
+        // No polling while the match query is failing/gone: data stays on screen.
+        live={phase !== "complete" && stale == null}
         placeholder={emptyGrid}
       />
       <TrackedShootersSheet open={showManage} onOpenChange={setShowManage} />
