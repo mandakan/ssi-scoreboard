@@ -364,3 +364,27 @@ test("analysis sections appear in spec order without horizontal overflow", async
   );
   expect(overflow).toBe(false);
 });
+
+// UpdateBanner only appears after a build-id mismatch from a 60s poll (and needs
+// NEXT_PUBLIC_BUILD_ID, unset under `next dev`), so it cannot be forced here.
+// InstallBanner shares the same offset classes and is driven by beforeinstallprompt.
+test("install banner sits above the match tab bar", async ({ page }) => {
+  await suppressDialogs(page);
+  await mockApis(page);
+  await page.goto("/match/22/88888888/info");
+  const nav = page.getByRole("navigation", { name: "Match sections" });
+  await expect(nav).toBeVisible();
+  const banner = page.getByRole("status").filter({ hasText: /install ssi scoreboard/i });
+  // The provider attaches its listener after hydration, so re-fire until it lands.
+  await expect(async () => {
+    await page.evaluate(() =>
+      window.dispatchEvent(new Event("beforeinstallprompt", { cancelable: true })),
+    );
+    await expect(banner).toBeVisible({ timeout: 500 });
+  }).toPass({ timeout: 10_000 });
+  const bannerBottom = await banner.evaluate((e) => e.getBoundingClientRect().bottom);
+  const navTop = await nav.evaluate((e) => e.getBoundingClientRect().top);
+  // 1px tolerance: the bar's border-t sits outside its h-14, so the banner
+  // (offset 3.5rem) covers that hairline. Anything more is a real overlap.
+  expect(bannerBottom).toBeLessThanOrEqual(navTop + 1);
+});
