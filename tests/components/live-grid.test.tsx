@@ -292,6 +292,29 @@ describe("LiveGrid", () => {
       useLiveGridQuerySpy.mockReturnValueOnce({ ...erroring(vi.fn()), data: FIXTURE });
       renderGrid();
       expect(screen.getByRole("table")).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Could not refresh live scores. Showing the last update.",
+      );
+    });
+
+    it("shows no stale notice on success or for staticData", () => {
+      renderGrid();
+      expect(screen.queryByRole("status")).toBeNull();
+      useLiveGridQuerySpy.mockReturnValueOnce({ ...erroring(vi.fn()), data: FIXTURE });
+      renderGrid({ staticData: FIXTURE });
+      expect(screen.queryByRole("status")).toBeNull();
+    });
+
+    it("disables Retry while a refetch is in flight", () => {
+      const refetch = vi.fn();
+      useLiveGridQuerySpy.mockReturnValueOnce({ ...erroring(refetch), isFetching: true });
+      renderGrid();
+      const retry = screen.getByRole("button", { name: "Retry" });
+      expect(retry).toBeDisabled();
+      expect(retry).toHaveAttribute("aria-busy", "true");
+      fireEvent.click(retry);
+      expect(refetch).not.toHaveBeenCalled();
     });
   });
 });

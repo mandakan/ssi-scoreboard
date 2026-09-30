@@ -270,14 +270,13 @@ test("live grid error shows an alert and Retry refetches exactly once", async ({
   const box = await retry.boundingBox();
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
   // Settle: the global retry:1 has already used its one extra attempt.
-  await page.waitForTimeout(2500);
+  await expect.poll(() => gridCalls).toBe(2);
   const before = gridCalls;
   failing = false;
   await retry.click();
   await expect(page.getByRole("alert").filter({ hasText: "Could not load live scores." })).toHaveCount(0);
   await page.waitForTimeout(1500);
   expect(gridCalls - before).toBe(1);
-  console.log(`grid requests: ${before} before Retry, ${gridCalls - before} for one tap`);
 });
 
 async function openPreMatchGrid(page: Page) {

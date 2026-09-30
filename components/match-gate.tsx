@@ -114,8 +114,9 @@ export function MatchGate({
   }
 
   // Only without match data. A failed background poll leaves isError true with
-  // the last good data in place: keep the page (the upstream-degraded banner
-  // covers outage messaging) instead of swapping it for this card.
+  // the last good data in place: keep the page and show a one-line notice
+  // (below) instead of swapping it for this card. The upstream-degraded banner
+  // cannot cover this: it reads the same stale cacheInfo.
   if (!value) {
     // SSI returns null for the match node when the requesting account isn't
     // allowed to read it — most often a non-public match where the bot hasn't
@@ -202,5 +203,23 @@ export function MatchGate({
     );
   }
 
-  return <MatchContext.Provider value={value}>{children}</MatchContext.Provider>;
+  const staleNotice = matchQuery.isError
+    ? /\(404\)/.test(matchQuery.error?.message ?? "")
+      ? "This match is no longer viewable. Showing the last loaded data."
+      : "Could not refresh match data. Showing the last loaded update."
+    : null;
+
+  return (
+    <MatchContext.Provider value={value}>
+      {staleNotice && (
+        <p
+          role="status"
+          className="border-b bg-muted/40 px-3 py-1.5 text-center text-sm text-muted-foreground"
+        >
+          {staleNotice}
+        </p>
+      )}
+      {children}
+    </MatchContext.Provider>
+  );
 }

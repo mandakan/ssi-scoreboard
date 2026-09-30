@@ -65,6 +65,31 @@ describe("MatchGate", () => {
     renderGate();
     expect(screen.getByText("22/1: Test Match")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Could not refresh match data. Showing the last loaded update.",
+    );
+  });
+
+  it("words a mid-session 404 as no longer viewable, keeping the data", () => {
+    useMatchQuery.mockReturnValue({
+      isLoading: false, isError: true, isFetching: false,
+      data: { name: "Test Match" } as MatchResponse,
+      error: new Error("Match fetch failed (404): gone"),
+    });
+    renderGate();
+    expect(screen.getByText("22/1: Test Match")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "This match is no longer viewable. Showing the last loaded data.",
+    );
+  });
+
+  it("shows no stale notice when the query succeeds", () => {
+    useMatchQuery.mockReturnValue({
+      isLoading: false, isError: false, isFetching: false,
+      data: { name: "Test Match" } as MatchResponse,
+    });
+    renderGate();
+    expect(screen.queryByRole("status")).toBeNull();
   });
 
   it("shows the generic failure copy on a non-404", () => {

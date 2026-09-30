@@ -73,6 +73,7 @@ export function LiveGrid({
   const data = staticData ?? query.data ?? placeholder;
   // A failed background poll keeps query.data, so the grid stays. The alert
   // shows only when there is nothing live to draw. Retry is one manual refetch.
+  const staleData = query.isError && !staticData && !!query.data;
   const loadFailed = query.isError && !staticData && !query.data;
   const stages = useMemo(() => data?.stages ?? [], [data]);
   const cells = useMemo(() => data?.cells ?? {}, [data]);
@@ -217,6 +218,14 @@ export function LiveGrid({
         </div>
       </div>
 
+      {staleData && (
+        <p
+          role="status"
+          className="flex-none border-b bg-muted/40 px-3 py-1.5 text-sm text-muted-foreground"
+        >
+          Could not refresh live scores. Showing the last update.
+        </p>
+      )}
       {loadFailed && (
         <div
           role="alert"
@@ -229,7 +238,9 @@ export function LiveGrid({
           <button
             type="button"
             onClick={() => void query.refetch()}
-            className="inline-flex min-h-11 items-center rounded-md border px-3 text-sm font-medium"
+            disabled={query.isFetching}
+            aria-busy={query.isFetching}
+            className="inline-flex min-h-11 items-center rounded-md border px-3 text-sm font-medium disabled:opacity-50"
           >
             Retry
           </button>
