@@ -128,8 +128,9 @@ export function LiveGrid({
       {/* Row source chips, progress indicator and live-stage jump */}
       <div
         data-live-grid-header
-        className="flex flex-none items-center gap-2 border-b bg-card px-3 py-1.5"
+        className="flex-none border-b bg-card"
       >
+        <div className="flex items-center gap-2 px-3 py-1.5">
         <div className="flex flex-none items-center gap-1.5">
           {(["squad", "tracked"] as const).map((s) => (
             <button
@@ -157,26 +158,7 @@ export function LiveGrid({
             </button>
           )}
         </div>
-        {/* Progress only: per-stage buttons cannot reach 44px at 390px. */}
-        <div aria-hidden="true" className="flex min-w-0 flex-1 items-center gap-[3px]">
-          {stages.map((stage) => {
-            const state = stageState(stage);
-            return (
-              <span
-                key={stage.stage_id}
-                className={cn(
-                  "block w-full rounded-sm",
-                  state === "live"
-                    ? "h-[5px] bg-foreground"
-                    : state === "done"
-                      ? "h-[3px] bg-[var(--perf-green)]"
-                      : "h-[3px] bg-border",
-                )}
-              />
-            );
-          })}
-        </div>
-        <span className="flex-none whitespace-nowrap font-mono text-[12px] text-muted-foreground">
+        <span className="ml-auto flex-none whitespace-nowrap font-mono text-[12px] text-muted-foreground">
           <span className="sr-only">Stages done: </span>
           {doneCount}/{stages.length}
         </span>
@@ -190,6 +172,30 @@ export function LiveGrid({
             Live: S{liveEdgeStage.stage_num}
           </button>
         )}
+        </div>
+        {/* Progress only, full width: per-stage buttons cannot reach 44px at 390px. */}
+        <div
+          aria-hidden="true"
+          data-live-grid-rail
+          className="flex w-full gap-px"
+        >
+          {stages.map((stage) => {
+            const state = stageState(stage);
+            return (
+              <span
+                key={stage.stage_id}
+                className={cn(
+                  "block h-1 flex-1",
+                  state === "live"
+                    ? "bg-foreground"
+                    : state === "done"
+                      ? "bg-[var(--perf-green)]"
+                      : "bg-border",
+                )}
+              />
+            );
+          })}
+        </div>
       </div>
 
       {/* Grid. scroll-padding-left (SCROLL_PAD) matches the sticky name column (NAME_COL, 104px) so snap
@@ -242,16 +248,16 @@ export function LiveGrid({
                     "sticky left-0 z-20 border-b border-r bg-card px-2 py-1.5 text-left shadow-[3px_0_6px_-4px_rgba(0,0,0,0.28)]",
                   )}
                 >
-                  <span className="block truncate font-sans text-[12px] font-semibold tracking-tight text-foreground">
-                    {shortName(shooter.name)}
+                  <span className="flex items-center gap-1.5 font-sans text-[12px] font-semibold tracking-tight text-foreground">
+                    <span className="min-w-0 truncate">{shortName(shooter.name)}</span>
                     {shooter.shooterId != null &&
                       shooter.shooterId === myShooterId && (
-                        <span className="ml-1.5 inline-flex items-center rounded-sm bg-primary/10 px-1 py-px align-middle font-sans text-[12px] font-medium uppercase tracking-wide text-primary">
+                        <span className="inline-flex shrink-0 items-center rounded-sm bg-primary/10 px-1 py-px font-sans text-[12px] font-medium uppercase tracking-wide text-primary">
                           You
                         </span>
                       )}
                   </span>
-                  <span className="block text-[12px] tracking-wide text-muted-foreground">
+                  <span className="block truncate text-[12px] tracking-wide text-muted-foreground">
                     {shooter.division ?? "—"} &middot; {shooter.competitor_number}
                   </span>
                 </th>

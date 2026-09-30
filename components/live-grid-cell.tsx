@@ -74,7 +74,7 @@ export function LiveGridCellView({ cell }: { cell: LiveGridCell }) {
       <span className="text-[15px] font-semibold leading-none tracking-tight tabular-nums">
         {cell.hf != null ? cell.hf.toFixed(2) : "—"}
       </span>
-      <span className="text-[12px] text-muted-foreground tabular-nums">
+      <span className="text-[12px] leading-none text-muted-foreground tabular-nums">
         {cell.time != null ? cell.time.toFixed(2) : "—"}
       </span>
       {isClean ? (
@@ -191,7 +191,7 @@ function PenaltyPips({ m, ns, p }: { m: number; ns: number; p: number }) {
           }}
         />
       ))}
-      <span className="text-[12px] font-bold tracking-tight text-destructive">
+      <span className="text-[12px] font-bold leading-none tracking-tight text-destructive">
         {text}
       </span>
     </span>
