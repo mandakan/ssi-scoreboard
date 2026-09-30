@@ -173,10 +173,10 @@ test.describe("live grid", () => {
     expect(overflow).toBe(false);
   });
 
-  test("every cell button meets the 44px touch floor", async ({ page }) => {
+  test("every grid and header button meets the 44px touch floor", async ({ page }) => {
     await openGrid(page);
     const heights = await page
-      .locator("[data-live-grid-scroller] tbody button")
+      .locator("[data-live-grid-scroller] button, [data-live-grid-header] button")
       .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
     expect(heights.length).toBeGreaterThan(0);
     expect(Math.min(...heights)).toBeGreaterThanOrEqual(44);
@@ -196,14 +196,17 @@ test.describe("live grid", () => {
     await expect(page.getByRole("dialog")).toBeHidden();
   });
 
-  test("rail jump scrolls the grid", async ({ page }) => {
+  test("Live jump scrolls to the live stage", async ({ page }) => {
     await openGrid(page);
     const scroller = page.locator("[data-live-grid-scroller]");
-    const before = await scroller.evaluate((e) => e.scrollLeft);
-    await page.getByRole("button", { name: "Jump to stage 12" }).click();
+    await scroller.evaluate((e) => {
+      e.scrollLeft = 0;
+    });
+    await expect.poll(() => scroller.evaluate((e) => e.scrollLeft)).toBe(0);
+    await page.getByRole("button", { name: /jump to live stage/i }).click();
     await expect
       .poll(() => scroller.evaluate((e) => e.scrollLeft))
-      .toBeGreaterThan(before);
+      .toBeGreaterThan(0);
   });
 
   test("scroll snapping never parks a stage column under the name column", async ({
@@ -239,7 +242,7 @@ test.describe("live grid", () => {
     await settle();
     expect(await hiddenPx()).toBeLessThanOrEqual(1);
 
-    await page.getByRole("button", { name: "Jump to stage 5" }).click();
+    await page.getByRole("button", { name: /jump to live stage/i }).click();
     await settle();
     expect(await hiddenPx()).toBeLessThanOrEqual(1);
   });

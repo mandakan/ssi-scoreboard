@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { LiveGridResponse } from "@/lib/types";
 
@@ -98,14 +98,40 @@ describe("LiveGrid", () => {
     expect(screen.getByRole("columnheader", { name: "S2" })).toBeInTheDocument();
   });
 
-  it("gives every stage a labelled rail jump button", () => {
+  it("has no per-stage rail buttons (indicator only)", () => {
     renderGrid();
     expect(
-      screen.getByRole("button", { name: "Jump to stage 1" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Jump to stage 2" }),
-    ).toBeInTheDocument();
+      screen.queryAllByRole("button", { name: /jump to stage \d+$/i }),
+    ).toHaveLength(0);
+    expect(screen.getByText("Stages done:")).toBeInTheDocument();
+  });
+
+  it("offers one Live jump button that scrolls to the live stage", () => {
+    const scrollTo = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      value: scrollTo,
+    });
+    try {
+      renderGrid();
+      scrollTo.mockClear();
+      const btn = screen.getByRole("button", { name: "Jump to live stage 1" });
+      expect(btn).toHaveTextContent("Live: S1");
+      fireEvent.click(btn);
+      expect(scrollTo).toHaveBeenCalledTimes(1);
+    } finally {
+      delete (HTMLElement.prototype as { scrollTo?: unknown }).scrollTo;
+    }
+  });
+
+  it("shows Manage only for the tracked source and calls onManage", () => {
+    const onManage = vi.fn();
+    const { unmount } = renderGrid({ source: "squad", onManage });
+    expect(screen.queryByRole("button", { name: "Manage" })).not.toBeInTheDocument();
+    unmount();
+    renderGrid({ source: "tracked", onManage });
+    fireEvent.click(screen.getByRole("button", { name: "Manage" }));
+    expect(onManage).toHaveBeenCalledTimes(1);
   });
 
   it("marks the identity shooter with a You badge", () => {
@@ -133,7 +159,7 @@ describe("LiveGrid", () => {
   it("renders a cell button for every shooter and stage combination", () => {
     renderGrid();
     // 2 shooters x 2 stages. The comma anchors this to cell buttons
-    // ("Mathias Axell, stage 1") and excludes the rail's "Jump to stage N".
+    // ("Mathias Axell, stage 1") and excludes the header buttons.
     expect(screen.getAllByRole("button", { name: /, stage \d/i })).toHaveLength(4);
   });
 });

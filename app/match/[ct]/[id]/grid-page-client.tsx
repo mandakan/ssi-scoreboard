@@ -226,8 +226,10 @@ function GridPageContent() {
         myShooterId={identity?.shooterId ?? null}
         source={source}
         onSourceChange={onSourceChange}
+        onManage={() => setShowManage(true)}
         live={phase !== "complete"}
       />
+      <TrackedShootersSheet open={showManage} onOpenChange={setShowManage} />
     </div>
   );
 }
