@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.3.0](https://github.com/mandakan/ssi-scoreboard/compare/v1.2.0...v1.3.0) (2026-09-30)
+
+
+### Features
+
+* **analysis:** selection sheet, chart switcher and deep dive ([#565](https://github.com/mandakan/ssi-scoreboard/issues/565)) ([b543fee](https://github.com/mandakan/ssi-scoreboard/commit/b543feeb2ccd125705dcab8b2c810aea8da539cc))
+* **grid:** pre-match grid, 12px floor and info tab order ([#566](https://github.com/mandakan/ssi-scoreboard/issues/566)) ([13a8c11](https://github.com/mandakan/ssi-scoreboard/commit/13a8c114a11e2bf0109c0a1dab97e76abdb813e8))
+* **match:** grid, info and analysis tabs replace the mode toggle ([#563](https://github.com/mandakan/ssi-scoreboard/issues/563)) ([49dfc50](https://github.com/mandakan/ssi-scoreboard/commit/49dfc5098a4ad12c37c978cf3f6794cb44ec0aa7))
+* **release:** what's new dot, desktop match tabs and the match tabs release entry ([#567](https://github.com/mandakan/ssi-scoreboard/issues/567)) ([10d33ba](https://github.com/mandakan/ssi-scoreboard/commit/10d33bafa640e78377ba647fbe7790f9d20c4acd))
+
 ## [1.2.0](https://github.com/mandakan/ssi-scoreboard/compare/v1.1.0...v1.2.0) (2026-09-29)
 
 
