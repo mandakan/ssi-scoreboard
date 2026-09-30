@@ -113,7 +113,10 @@ export function MatchGate({
     );
   }
 
-  if (matchQuery.isError || !value) {
+  // Only without match data. A failed background poll leaves isError true with
+  // the last good data in place: keep the page (the upstream-degraded banner
+  // covers outage messaging) instead of swapping it for this card.
+  if (!value) {
     // SSI returns null for the match node when the requesting account isn't
     // allowed to read it — most often a non-public match where the bot hasn't
     // been invited as Staff. When the user reached this page from a list that

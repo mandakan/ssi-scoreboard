@@ -56,6 +56,17 @@ describe("MatchGate", () => {
     expect(screen.getByRole("alert")).toBeInTheDocument();
   });
 
+  it("keeps rendering children when a background refetch fails but data exists", () => {
+    useMatchQuery.mockReturnValue({
+      isLoading: false, isError: true, isFetching: false,
+      data: { name: "Test Match" } as MatchResponse,
+      error: new Error("Match fetch failed (502): upstream"),
+    });
+    renderGate();
+    expect(screen.getByText("22/1: Test Match")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it("shows the generic failure copy on a non-404", () => {
     useMatchQuery.mockReturnValue({
       isLoading: false, isError: true, data: undefined,
