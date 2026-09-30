@@ -7,15 +7,49 @@ import type { Release } from "@/lib/types";
  *   1. Prepend a new Release object with a unique `id` (ISO date recommended).
  *   2. Fill in the sections with user-facing highlights.
  *
- * The dialog auto-shows once per browser profile whenever RELEASES[0].id
- * differs from the value stored in localStorage("whats-new-seen-id").
+ * A dot (More button, desktop header) marks the release as unseen whenever
+ * RELEASES[0].id differs from localStorage("whats-new-seen-id"). The dialog
+ * only opens when the user asks for it.
  */
 /** The `id` of the newest release. Used by e2e tests to suppress the What's New dialog. */
-export const LATEST_RELEASE_ID = "2026-08-23-courtside-grid";
+export const LATEST_RELEASE_ID = "2026-10-01-match-tabs";
 
 export const RELEASES: Release[] = [
   {
     id: LATEST_RELEASE_ID,
+    date: "October 2026",
+    title: "One match, three tabs: Grid, Info and Analysis",
+    screenshotScenes: ["live-grid", "comparison-table", "stage-times-export", "match-info", "pre-match-grid"],
+    sections: [
+      {
+        heading: "The grid is the match page",
+        items: [
+          "Opening a match now lands on the courtside grid for every match, before, during and after scoring. A tab bar at the bottom switches between Grid, Info and Analysis.",
+          "Before scoring starts the grid shows your squad's rows with empty cells, plus your squad, your first stage and the weather. Tap Show live scores when you want results loaded.",
+          "Bigger text and larger tap targets throughout the grid, and a Live button that jumps to the stage being shot now.",
+        ],
+      },
+      {
+        heading: "Analysis, tidied",
+        items: [
+          "Who you compare is one line at the top. Tap it to pick shooters, apply a squad or benchmark, or reset to the shooters from your grid.",
+          "The five charts share one card. Switch between them with the chips above the chart; your last choice is remembered.",
+          "Coaching analyses, the stage-time export and, for finished matches, the stage simulator live in a Deep dive section that stays closed until you open it.",
+        ],
+      },
+      {
+        heading: "Also",
+        items: [
+          "Match info collects the match details, notices, squad rotation, weather and the AI brief in one place.",
+          "What's new no longer pops up. A dot on More (or in the header on desktop) tells you when there is something new.",
+          "On a computer the match tabs sit at the top of the page.",
+          "If the scoreboard cannot refresh, the top bar says Not updating instead of silently showing old scores.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "2026-08-23-courtside-grid",
     date: "August 23, 2026",
     title: "Courtside grid: the live view, rebuilt for a phone at the range",
     screenshotScenes: ["live-grid", "comparison-table"],

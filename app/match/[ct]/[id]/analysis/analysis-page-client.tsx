@@ -65,7 +65,7 @@ export default function AnalysisPageClient() {
 }
 
 function AnalysisPageContent() {
-  const { ct, id, match, isFetching } = useMatch();
+  const { ct, id, match, isFetching, stale } = useMatch();
 
   const [showManage, setShowManage] = useState(false);
   // Deep dive open state lives here so it survives the section unmounting
@@ -190,7 +190,9 @@ function AnalysisPageContent() {
   const liveScoresAccessible = match.is_live_scores_accessible === true;
   const compareEnabled =
     (compareMode === "coaching" || liveScoresAccessible) && !prematchGated;
-  const compareQuery = useCompareQuery(ct, id, compareEnabled ? selectedIds : EMPTY_IDS, compareMode);
+  const compareQuery = useCompareQuery(ct, id, compareEnabled ? selectedIds : EMPTY_IDS, compareMode, {
+    paused: stale != null,
+  });
   const coachingAvailability = useCoachingAvailability();
 
   // ── Stage sort (shared by table + charts) ─────────────────────────────────

@@ -9,8 +9,8 @@ vi.mock("@/lib/queries", () => ({ useMatchQuery: (...a: unknown[]) => useMatchQu
 import { MatchGate, useMatch } from "@/components/match-gate";
 
 function Probe() {
-  const { match, ct, id } = useMatch();
-  return <p>{`${ct}/${id}: ${match.name}`}</p>;
+  const { match, ct, id, stale } = useMatch();
+  return <p>{`${ct}/${id}: ${match.name}`}<span data-testid="stale">{String(stale)}</span></p>;
 }
 
 function renderGate() {
@@ -54,6 +54,40 @@ describe("MatchGate", () => {
     renderGate();
     expect(screen.getByRole("heading", { name: "Match not viewable" })).toBeInTheDocument();
     expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
+
+  it("keeps rendering children when a background refetch fails but data exists", () => {
+    useMatchQuery.mockReturnValue({
+      isLoading: false, isError: true, isFetching: false,
+      data: { name: "Test Match" } as MatchResponse,
+      error: new Error("Match fetch failed (502): upstream"),
+    });
+    renderGate();
+    expect(screen.getByText("22/1: Test Match")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByTestId("stale")).toHaveTextContent("refresh-failed");
+  });
+
+  it("words a mid-session 404 as no longer viewable, keeping the data", () => {
+    useMatchQuery.mockReturnValue({
+      isLoading: false, isError: true, isFetching: false,
+      data: { name: "Test Match" } as MatchResponse,
+      error: new Error("Match fetch failed (404): gone"),
+    });
+    renderGate();
+    expect(screen.getByText("22/1: Test Match")).toBeInTheDocument();
+    expect(screen.getByTestId("stale")).toHaveTextContent("gone");
+  });
+
+  it("shows no stale notice when the query succeeds", () => {
+    useMatchQuery.mockReturnValue({
+      isLoading: false, isError: false, isFetching: false,
+      data: { name: "Test Match" } as MatchResponse,
+    });
+    renderGate();
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByTestId("stale")).toHaveTextContent("null");
   });
 
   it("shows the generic failure copy on a non-404", () => {

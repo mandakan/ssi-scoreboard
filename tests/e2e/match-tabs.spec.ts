@@ -234,6 +234,89 @@ test("grid with live scores hidden explains why", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Match in progress" })).toBeVisible();
 });
 
+test("scores-not-public block links to the Info tab", async ({ page }) => {
+  await suppressDialogs(page);
+  await page.route("**/api/match/**", (r) =>
+    r.fulfill({ json: { ...MOCK_MATCH, is_live_scores_accessible: false } }));
+  await page.goto("/match/22/88888888");
+  const link = page.getByRole("link", { name: "Match info" });
+  await expect(link).toHaveAttribute("href", "/match/22/88888888/info");
+  const box = await link.boundingBox();
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+});
+
+test("live grid error shows an alert and Retry refetches exactly once", async ({ page }) => {
+  await suppressDialogs(page);
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "ssi-my-shooter",
+      JSON.stringify({ shooterId: 500, name: "Shooter 1 Lastname", license: null }),
+    );
+  });
+  await page.route("**/api/match/**", (r) => r.fulfill({ json: MOCK_MATCH }));
+  await page.route("**/api/upstream-status**", (r) =>
+    r.fulfill({ json: { degraded: false, paused: false } }));
+  let gridCalls = 0;
+  let failing = true;
+  await page.route("**/api/live-grid**", (r) => {
+    gridCalls++;
+    return failing
+      ? r.fulfill({ status: 500, json: { error: "boom" } })
+      : r.fulfill({ json: { match_id: 1, stages: [], shooters: [], cells: {} } });
+  });
+  await page.goto("/match/22/88888888");
+  await expect(page.getByRole("alert").filter({ hasText: "Could not load live scores." })).toBeVisible();
+  const retry = page.getByRole("button", { name: "Retry" });
+  const box = await retry.boundingBox();
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+  // Settle: the global retry:1 has already used its one extra attempt.
+  await expect.poll(() => gridCalls).toBe(2);
+  const before = gridCalls;
+  failing = false;
+  await retry.click();
+  await expect(page.getByRole("alert").filter({ hasText: "Could not load live scores." })).toHaveCount(0);
+  await page.waitForTimeout(1500);
+  expect(gridCalls - before).toBe(1);
+});
+
+test("a failed match poll shows a top-bar chip without overflowing the grid", async ({ page }) => {
+  await suppressDialogs(page);
+  await page.clock.install();
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "ssi-my-shooter",
+      JSON.stringify({ shooterId: 500, name: "Shooter 1 Lastname", license: null }),
+    );
+  });
+  let matchCalls = 0;
+  await page.route("**/api/match/**", (r) => {
+    matchCalls++;
+    return matchCalls === 1
+      ? r.fulfill({ json: MOCK_MATCH })
+      : r.fulfill({ status: 500, json: { error: "boom" } });
+  });
+  await page.route("**/api/upstream-status**", (r) =>
+    r.fulfill({ json: { degraded: false, paused: false } }));
+  await page.route("**/api/live-grid**", (r) =>
+    r.fulfill({ json: { match_id: 1, stages: [], shooters: [], cells: {} } }));
+  await page.goto("/match/22/88888888");
+  await expect(page.getByLabel("50 percent scored")).toBeVisible();
+  // Drive the 30s match poll (and the one query retry) on the fake clock.
+  const chip = page.getByRole("status").filter({ hasText: "Not updating" });
+  await expect
+    .poll(async () => {
+      await page.clock.runFor(5000);
+      return chip.count();
+    }, { timeout: 20000 })
+    .toBe(1);
+  await expect(chip).toContainText("Could not refresh match data. Showing the last loaded update.");
+  await expect(page.getByRole("heading", { name: "Failed to load match" })).toHaveCount(0);
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollHeight - window.innerHeight,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+});
+
 async function openPreMatchGrid(page: Page) {
   await suppressDialogs(page);
   await page.addInitScript(() => {
@@ -363,4 +446,76 @@ test("analysis sections appear in spec order without horizontal overflow", async
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
   );
   expect(overflow).toBe(false);
+});
+
+// UpdateBanner only appears after a build-id mismatch from a 60s poll (and needs
+// NEXT_PUBLIC_BUILD_ID, unset under `next dev`), so it cannot be forced here.
+// InstallBanner shares the same offset classes and is driven by beforeinstallprompt.
+test("install banner sits above the match tab bar", async ({ page }) => {
+  await suppressDialogs(page);
+  await mockApis(page);
+  await page.goto("/match/22/88888888/info");
+  const nav = page.getByRole("navigation", { name: "Match sections" });
+  await expect(nav).toBeVisible();
+  const banner = page.getByRole("status").filter({ hasText: /install ssi scoreboard/i });
+  // The provider attaches its listener after hydration, so re-fire until it lands.
+  await expect(async () => {
+    await page.evaluate(() =>
+      window.dispatchEvent(new Event("beforeinstallprompt", { cancelable: true })),
+    );
+    await expect(banner).toBeVisible({ timeout: 500 });
+  }).toPass({ timeout: 10_000 });
+  const bannerBottom = await banner.evaluate((e) => e.getBoundingClientRect().bottom);
+  const navTop = await nav.evaluate((e) => e.getBoundingClientRect().top);
+  // 1px tolerance: the bar's border-t sits outside its h-14, so the banner
+  // (offset 3.5rem) covers that hairline. Anything more is a real overlap.
+  expect(bannerBottom).toBeLessThanOrEqual(navTop + 1);
+});
+
+test.describe("desktop 1280x900", () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+
+  test("tabs are a top strip and the grid tab does not scroll the page", async ({ page }) => {
+    await openPreMatchGrid(page);
+    const nav = page.getByRole("navigation", { name: "Match sections" });
+    await expect(nav).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "S1", exact: true })).toBeVisible();
+    await expect(page.locator('nav[aria-label="Match sections"]')).toHaveCount(1);
+    const box = await nav.boundingBox();
+    expect(box!.y).toBeLessThan(200);
+    const heights = await page.evaluate(() => ({
+      scrollH: document.documentElement.scrollHeight,
+      innerH: window.innerHeight,
+    }));
+    expect(heights.scrollH).toBeLessThanOrEqual(heights.innerH);
+  });
+
+  test("analysis tab strip is also at the top", async ({ page }) => {
+    await suppressDialogs(page);
+    await mockApis(page);
+    await page.goto("/match/22/88888888/analysis");
+    const nav = page.getByRole("navigation", { name: "Match sections" });
+    await expect(nav).toBeVisible();
+    await expect(page.locator('nav[aria-label="Match sections"]')).toHaveCount(1);
+    expect((await nav.boundingBox())!.y).toBeLessThan(200);
+  });
+
+  test("install banner does not cover the top tab strip", async ({ page }) => {
+    await suppressDialogs(page);
+    await mockApis(page);
+    await page.goto("/match/22/88888888/info");
+    const nav = page.getByRole("navigation", { name: "Match sections" });
+    await expect(nav).toBeVisible();
+    const banner = page.getByRole("status").filter({ hasText: /install ssi scoreboard/i });
+    await expect(async () => {
+      await page.evaluate(() =>
+        window.dispatchEvent(new Event("beforeinstallprompt", { cancelable: true })),
+      );
+      await expect(banner).toBeVisible({ timeout: 500 });
+    }).toPass({ timeout: 10_000 });
+    const b = (await banner.boundingBox())!;
+    const n = (await nav.boundingBox())!;
+    const overlap = b.y < n.y + n.height && b.y + b.height > n.y;
+    expect(overlap).toBe(false);
+  });
 });

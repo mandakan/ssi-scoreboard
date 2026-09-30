@@ -33,6 +33,22 @@ function setMatch(over: Partial<MatchResponse>) {
   });
 }
 
+function setStale(message: string) {
+  useMatchQuery.mockReturnValue({
+    isLoading: false,
+    isError: true,
+    isFetching: false,
+    error: new Error(message),
+    data: {
+      name: "Shell Match",
+      scoring_pct: 40,
+      match_status: "on",
+      results_status: "stg",
+      cacheInfo: { cachedAt: null },
+    } as MatchResponse,
+  });
+}
+
 function renderShell() {
   return render(
     <QueryClientProvider client={new QueryClient()}>
@@ -72,5 +88,34 @@ describe("TopBar match notice", () => {
     setMatch({ cacheInfo: { cachedAt: null, upstreamPaused: true } });
     renderShell();
     expect(screen.getByRole("link", { name: "Match notice" })).toBeInTheDocument();
+  });
+});
+
+describe("TopBar stale chip", () => {
+  beforeEach(() => useMatchQuery.mockReset());
+
+  it("is absent on success and keeps the scoring percent", () => {
+    setMatch({});
+    renderShell();
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByLabelText("40 percent scored")).toBeInTheDocument();
+  });
+
+  it("shows Not updating with a full sentence when a refresh failed", () => {
+    setStale("Match fetch failed (502): x");
+    renderShell();
+    const chip = screen.getByRole("status");
+    expect(chip).toHaveTextContent("Not updating");
+    expect(chip).toHaveTextContent("Could not refresh match data. Showing the last loaded update.");
+    expect(screen.queryByLabelText("40 percent scored")).toBeNull();
+    expect(screen.getByText("child")).toBeInTheDocument();
+  });
+
+  it("shows Unavailable when the match is gone", () => {
+    setStale("Match fetch failed (404): x");
+    renderShell();
+    const chip = screen.getByRole("status");
+    expect(chip).toHaveTextContent("Unavailable");
+    expect(chip).toHaveTextContent("This match is no longer viewable. Showing the last loaded data.");
   });
 });

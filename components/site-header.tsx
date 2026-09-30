@@ -2,14 +2,17 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { BarChart2, Download, Smartphone, UserCheck, Users } from "lucide-react";
+import { BarChart2, Download, Smartphone, Sparkles, UserCheck, Users } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AppLogo } from "@/components/app-logo";
 import { useMyIdentity } from "@/lib/hooks/use-my-identity";
+import { useWhatsNew } from "@/components/whats-new-provider";
+import { RELEASES } from "@/lib/releases";
 import { TrackedShootersSheet } from "@/components/tracked-shooters-sheet";
 
 export function SiteHeader() {
   const { identity } = useMyIdentity();
+  const { setOpen: setWhatsNewOpen, hasUnseen } = useWhatsNew();
   const [showManage, setShowManage] = useState(false);
 
   return (
@@ -68,6 +71,23 @@ export function SiteHeader() {
             <Download className="w-4 h-4" aria-hidden="true" />
             <span>Install app</span>
           </Link>
+          {RELEASES.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setWhatsNewOpen(true)}
+              className="relative inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
+              aria-label={hasUnseen ? "What's new, new release notes" : "What's new"}
+            >
+              <Sparkles className="w-4 h-4" aria-hidden="true" />
+              <span>What&apos;s new</span>
+              {hasUnseen && (
+                <span
+                  aria-hidden="true"
+                  className="absolute -top-0.5 -right-2 h-2 w-2 rounded-full bg-primary"
+                />
+              )}
+            </button>
+          )}
           <ThemeToggle />
         </nav>
       </header>

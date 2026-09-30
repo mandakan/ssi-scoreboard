@@ -9,7 +9,7 @@ import { saveRecentCompetition } from "@/lib/competition-store";
 import { matchTabHref } from "@/lib/match-routes";
 
 function TopBar() {
-  const { ct, id, match } = useMatch();
+  const { ct, id, match, stale } = useMatch();
   useEffect(() => saveRecentCompetition(ct, id, match), [ct, id, match]);
   // Cancelled or degraded only: "results not published" holds for the whole
   // live phase, so flagging it here would be a permanent dot.
@@ -34,26 +34,42 @@ function TopBar() {
           <span aria-hidden="true" className="h-2 w-2 rounded-full bg-amber-500" />
         </Link>
       )}
-      <span className="shrink-0 pr-2 font-mono text-xs text-muted-foreground" aria-label={`${Math.round(match.scoring_pct)} percent scored`}>
-        {Math.round(match.scoring_pct)}%
-      </span>
+      {stale ? (
+        <span
+          role="status"
+          className="flex shrink-0 items-center gap-1.5 pr-2 text-xs text-muted-foreground"
+        >
+          <span aria-hidden="true" className="h-2 w-2 rounded-full bg-amber-500" />
+          <span aria-hidden="true">{stale === "gone" ? "Unavailable" : "Not updating"}</span>
+          <span className="sr-only">
+            {stale === "gone"
+              ? "This match is no longer viewable. Showing the last loaded data."
+              : "Could not refresh match data. Showing the last loaded update."}
+          </span>
+        </span>
+      ) : (
+        <span className="shrink-0 pr-2 font-mono text-xs text-muted-foreground" aria-label={`${Math.round(match.scoring_pct)} percent scored`}>
+          {Math.round(match.scoring_pct)}%
+        </span>
+      )}
     </header>
   );
 }
 
 /**
- * Chrome for every match tab: top bar, bottom tab bar, and the MatchGate that
+ * Chrome for every match tab: top bar, tab bar, and the MatchGate that
  * owns loading and error states. Lives in the layout, so it persists across
  * tab switches -- the match query and its polling survive navigation.
  */
 export function MatchShell({ ct, id, children }: { ct: string; id: string; children: React.ReactNode }) {
   return (
-    <main id="main-content" tabIndex={-1} className="flex min-h-[100dvh] flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))]">
+    <main id="main-content" tabIndex={-1} className="flex min-h-[100dvh] flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:min-h-[calc(100dvh-3.5rem)] md:pb-0">
       <MatchGate ct={ct} id={id}>
         <TopBar />
+        {/* Fixed bottom bar on mobile, sticky strip under the top bar on md+. */}
+        <MatchTabBar ct={ct} id={id} />
         <div className="min-h-0 flex-1">{children}</div>
       </MatchGate>
-      <MatchTabBar ct={ct} id={id} />
     </main>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useState, useSyncExternalStore } from "react";
 import { Sparkles } from "lucide-react";
 import {
   Dialog,
@@ -17,15 +17,37 @@ import type { Release } from "@/lib/types";
 
 const LS_KEY = "whats-new-seen-id";
 
+const WHATS_NEW_SEEN = "whats-new-seen";
+
 interface WhatsNewContextValue {
   open: boolean;
   setOpen: (open: boolean) => void;
+  /** True when the newest release has not been opened yet. Drives the dot. */
+  hasUnseen: boolean;
 }
 
 const WhatsNewContext = createContext<WhatsNewContextValue>({
   open: false,
   setOpen: () => {},
+  hasUnseen: false,
 });
+
+function safeGet(): string | null {
+  try {
+    return localStorage.getItem(LS_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function subscribe(callback: () => void) {
+  window.addEventListener("storage", callback);
+  window.addEventListener(WHATS_NEW_SEEN, callback);
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener(WHATS_NEW_SEEN, callback);
+  };
+}
 
 export function useWhatsNew() {
   return useContext(WhatsNewContext);
@@ -36,31 +58,22 @@ export function WhatsNewProvider({ children }: { children: React.ReactNode }) {
   const [releasesToShow, setReleasesToShow] = useState<Release[]>([]);
   const latest = RELEASES[0] ?? null;
 
-  // Auto-show once per release id, displaying all releases missed since last visit.
-  useEffect(() => {
-    if (!latest) return;
-    const timer = setTimeout(() => {
-      const seen = localStorage.getItem(LS_KEY);
-      if (seen !== latest.id) {
-        const seenIndex = RELEASES.findIndex((r) => r.id === seen);
-        // seenIndex === -1 means first visit or stale id — show only latest to avoid overwhelming.
-        const missed =
-          seenIndex >= 1 ? RELEASES.slice(0, seenIndex) : [latest];
-        setReleasesToShow(missed);
-        // Blur any focused element before opening the dialog so Radix's
-        // aria-hidden on the page root doesn't conflict with active focus.
-        if (document.activeElement instanceof HTMLElement) {
-          document.activeElement.blur();
-        }
-        setOpenState(true);
-      }
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [latest]);
+  // No auto-open: a dot signals an unseen release and the user opts in.
+  // Server snapshot is false so SSR and hydration render no dot.
+  const hasUnseen = useSyncExternalStore(
+    subscribe,
+    () => (latest ? safeGet() !== latest.id : false),
+    () => false,
+  );
 
   function handleClose() {
     if (latest) {
-      localStorage.setItem(LS_KEY, latest.id);
+      try {
+        localStorage.setItem(LS_KEY, latest.id);
+      } catch {
+        // Storage unavailable (private mode); the dot returns next load.
+      }
+      window.dispatchEvent(new Event(WHATS_NEW_SEEN));
     }
     setOpenState(false);
     setReleasesToShow([]);
@@ -70,10 +83,25 @@ export function WhatsNewProvider({ children }: { children: React.ReactNode }) {
     if (!next) handleClose();
   }
 
-  // Exposed via context. Footer calls setOpen(true) to manually show latest.
+  // Exposed via context. Shows all releases missed since the last visit, or
+  // just the latest when everything has been seen.
   function setOpen(next: boolean) {
     if (next) {
-      setReleasesToShow(latest ? [latest] : []);
+      const seen = safeGet();
+      const seenIndex = RELEASES.findIndex((r) => r.id === seen);
+      // seenIndex === -1 means first visit or stale id -- show only latest to avoid overwhelming.
+      const missed =
+        latest && seen !== latest.id && seenIndex >= 1
+          ? RELEASES.slice(0, seenIndex)
+          : latest
+            ? [latest]
+            : [];
+      setReleasesToShow(missed);
+      // Blur any focused element before opening the dialog so Radix's
+      // aria-hidden on the page root doesn't conflict with active focus.
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
       setOpenState(true);
     } else {
       handleClose();
@@ -84,7 +112,7 @@ export function WhatsNewProvider({ children }: { children: React.ReactNode }) {
   const firstRelease = releasesToShow[0];
 
   return (
-    <WhatsNewContext.Provider value={{ open: openState, setOpen }}>
+    <WhatsNewContext.Provider value={{ open: openState, setOpen, hasUnseen }}>
       {children}
       {latest && (
         <Dialog open={openState} onOpenChange={handleDialogOpenChange}>

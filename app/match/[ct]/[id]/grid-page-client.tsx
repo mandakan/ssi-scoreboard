@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { LiveGrid } from "@/components/live-grid";
@@ -24,7 +25,7 @@ import {
   saveGridSourcePreference,
   saveLiveScoresOptIn,
 } from "@/lib/competition-store";
-import { resolveLegacyMatchUrl } from "@/lib/match-routes";
+import { matchTabHref, resolveLegacyMatchUrl } from "@/lib/match-routes";
 import { matchScoresPhase } from "@/lib/scores-phase";
 
 // Stable reference for the useSyncExternalStore server snapshot.
@@ -56,7 +57,7 @@ export default function GridPageClient() {
 }
 
 function GridPageContent() {
-  const { ct, id, match } = useMatch();
+  const { ct, id, match, stale } = useMatch();
   const router = useRouter();
   const { identity } = useMyIdentity();
   const { trackedIds } = useTrackedShooters();
@@ -139,6 +140,15 @@ function GridPageContent() {
               ? ` (${Math.round(match.scoring_pct)}% scored so far)`
               : ""}
             .
+          </p>
+          <p className="text-sm">
+            <Link
+              href={matchTabHref(ct, id, "info")}
+              prefetch={false}
+              className="inline-flex min-h-11 items-center text-primary underline underline-offset-2 hover:opacity-80"
+            >
+              Match info
+            </Link>
           </p>
           {match.ssi_url && (
             <p className="text-sm">
@@ -228,7 +238,8 @@ function GridPageContent() {
         source={source}
         onSourceChange={onSourceChange}
         onManage={() => setShowManage(true)}
-        live={phase !== "complete"}
+        // No polling while the match query is failing/gone: data stays on screen.
+        live={phase !== "complete" && stale == null}
         placeholder={emptyGrid}
       />
       <TrackedShootersSheet open={showManage} onOpenChange={setShowManage} />

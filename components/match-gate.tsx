@@ -14,6 +14,11 @@ interface MatchContextValue {
   id: string;
   match: MatchResponse;
   isFetching: boolean;
+  /**
+   * Set when a refresh failed but the last loaded match is still shown:
+   * "gone" for a 404, "refresh-failed" otherwise. The top bar surfaces it.
+   */
+  stale: "refresh-failed" | "gone" | null;
 }
 
 const MatchContext = createContext<MatchContextValue | null>(null);
@@ -62,12 +67,19 @@ export function MatchGate({
     return null;
   }, [matchQuery.isError, queryClient, ct, id]);
 
+  const errMessage = matchQuery.error?.message ?? "";
+  const stale: MatchContextValue["stale"] = !matchQuery.isError
+    ? null
+    : /\(404\)/.test(errMessage)
+      ? "gone"
+      : "refresh-failed";
+
   const value = useMemo(
     () =>
       matchQuery.data
-        ? { ct, id, match: matchQuery.data, isFetching: matchQuery.isFetching === true }
+        ? { ct, id, match: matchQuery.data, isFetching: matchQuery.isFetching === true, stale }
         : null,
-    [ct, id, matchQuery.data, matchQuery.isFetching],
+    [ct, id, matchQuery.data, matchQuery.isFetching, stale],
   );
 
   if (matchQuery.isLoading) {
@@ -113,7 +125,11 @@ export function MatchGate({
     );
   }
 
-  if (matchQuery.isError || !value) {
+  // Only without match data. A failed background poll leaves isError true with
+  // the last good data in place: keep the page and signal it
+  // (the top-bar chip, via context) instead of swapping it for this card. The upstream-degraded banner
+  // cannot cover this: it reads the same stale cacheInfo.
+  if (!value) {
     // SSI returns null for the match node when the requesting account isn't
     // allowed to read it — most often a non-public match where the bot hasn't
     // been invited as Staff. When the user reached this page from a list that
@@ -199,5 +215,9 @@ export function MatchGate({
     );
   }
 
-  return <MatchContext.Provider value={value}>{children}</MatchContext.Provider>;
+  return (
+    <MatchContext.Provider value={value}>
+      {children}
+    </MatchContext.Provider>
+  );
 }

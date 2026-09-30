@@ -71,6 +71,10 @@ export function LiveGrid({
   );
 
   const data = staticData ?? query.data ?? placeholder;
+  // A failed background poll keeps query.data, so the grid stays. The alert
+  // shows only when there is nothing live to draw. Retry is one manual refetch.
+  const staleData = query.isError && !staticData && !!query.data;
+  const loadFailed = query.isError && !staticData && !query.data;
   const stages = useMemo(() => data?.stages ?? [], [data]);
   const cells = useMemo(() => data?.cells ?? {}, [data]);
 
@@ -141,7 +145,7 @@ export function LiveGrid({
       : null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background">
+    <div className="flex h-full min-h-0 flex-col bg-background md:mx-auto md:w-full md:max-w-5xl">
       {/* Row source chips, progress indicator and live-stage jump */}
       <div
         data-live-grid-header
@@ -214,8 +218,38 @@ export function LiveGrid({
         </div>
       </div>
 
+      {staleData && (
+        <p
+          role="status"
+          className="flex-none truncate border-b bg-muted/40 px-3 py-1.5 text-sm text-muted-foreground"
+        >
+          Refresh failed. Showing last update.
+        </p>
+      )}
+      {loadFailed && (
+        <div
+          role="alert"
+          className={cn(
+            "flex flex-none flex-wrap items-center gap-2 border-b bg-card px-3 py-2 text-sm text-foreground",
+            !data && "flex-1 content-center justify-center",
+          )}
+        >
+          <span>Could not load live scores.</span>
+          <button
+            type="button"
+            onClick={() => void query.refetch()}
+            disabled={query.isFetching}
+            aria-busy={query.isFetching}
+            className="inline-flex min-h-11 items-center rounded-md border px-3 text-sm font-medium disabled:opacity-50"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Grid. scroll-padding-left (SCROLL_PAD) matches the sticky name column (NAME_COL, 104px) so snap
           points land beside it rather than hiding a stage underneath. */}
+      {(data || !loadFailed) && (
       <div
         ref={scrollerRef}
         data-live-grid-scroller
@@ -307,6 +341,7 @@ export function LiveGrid({
           </tbody>
         </table>
       </div>
+      )}
 
       {active?.shooter && active.stage && (
         <LiveGridSheet

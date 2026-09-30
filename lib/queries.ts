@@ -102,17 +102,20 @@ export function useCompareQuery(
   id: string,
   competitorIds: number[],
   mode: CompareMode = "coaching",
+  { paused = false }: { paused?: boolean } = {},
 ) {
+  const polling = mode === "live" && !paused;
   return useQuery<CompareResponse, Error>({
     queryKey: compareQueryKey(ct, id, competitorIds, mode),
     queryFn: () => fetchCompare(ct, id, competitorIds, mode),
     staleTime: mode === "live" ? 30_000 : 300_000,
-    refetchInterval: mode === "live" ? 30_000 : false,
+    // `paused` (match data stale/gone): keep data on screen, stop all polling.
+    refetchInterval: polling ? 30_000 : false,
     // Refetch immediately on tab focus during the live phase. See the same
     // override on `useMatchQuery` for rationale — the global default in
     // Providers.tsx is `false` site-wide, but courtside users tap back into
     // the page expecting the latest scorecards.
-    refetchOnWindowFocus: mode === "live",
+    refetchOnWindowFocus: polling,
     enabled: Boolean(ct && id && competitorIds.length > 0),
   });
 }

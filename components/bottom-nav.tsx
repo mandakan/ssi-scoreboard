@@ -57,25 +57,38 @@ function NavItem({
   );
 }
 
+function NavDot() {
+  return (
+    <span
+      aria-hidden="true"
+      className="absolute top-2 right-[calc(50%-14px)] h-2 w-2 rounded-full bg-primary"
+    />
+  );
+}
+
 function NavButton({
   icon,
   label,
   onClick,
+  dot = false,
 }: {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
+  dot?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex flex-col items-center justify-center gap-0.5 min-w-[64px] min-h-[44px] text-xs text-muted-foreground hover:text-foreground transition-colors"
+      aria-label={dot ? `${label}, new release notes` : undefined}
+      className="relative flex flex-col items-center justify-center gap-0.5 min-w-[64px] min-h-[44px] text-xs text-muted-foreground hover:text-foreground transition-colors"
     >
       <span className="[&>svg]:h-5 [&>svg]:w-5" aria-hidden="true">
         {icon}
       </span>
       <span>{label}</span>
+      {dot && <NavDot />}
     </button>
   );
 }
@@ -112,10 +125,12 @@ function MoreButton({
   icon,
   label,
   onClick,
+  badge = false,
 }: {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
+  badge?: boolean;
 }) {
   return (
     <button
@@ -130,6 +145,15 @@ function MoreButton({
         {icon}
       </span>
       {label}
+      {badge && (
+        <span className="ml-auto flex items-center gap-1.5 text-xs font-medium text-primary">
+          <span
+            aria-hidden="true"
+            className="h-2 w-2 rounded-full bg-primary"
+          />
+          New
+        </span>
+      )}
     </button>
   );
 }
@@ -138,10 +162,12 @@ function MoreSheet({
   open,
   onOpenChange,
   onWhatsNew,
+  hasUnseen,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onWhatsNew: () => void;
+  hasUnseen: boolean;
 }) {
   const hasReleases = RELEASES.length > 0;
 
@@ -179,6 +205,7 @@ function MoreSheet({
                 icon={<Sparkles />}
                 label="What's new"
                 onClick={onWhatsNew}
+                badge={hasUnseen}
               />
             )}
           </div>
@@ -195,7 +222,7 @@ function MoreSheet({
 export function BottomNav() {
   const pathname = usePathname();
   const { identity } = useMyIdentity();
-  const { setOpen: setWhatsNewOpen } = useWhatsNew();
+  const { setOpen: setWhatsNewOpen, hasUnseen } = useWhatsNew();
   const [showShooters, setShowShooters] = useState(false);
   const [showMore, setShowMore] = useState(false);
 
@@ -249,6 +276,7 @@ export function BottomNav() {
             icon={<MoreHorizontal />}
             label="More"
             onClick={() => setShowMore(true)}
+            dot={hasUnseen}
           />
         </div>
       </nav>
@@ -261,6 +289,7 @@ export function BottomNav() {
         open={showMore}
         onOpenChange={setShowMore}
         onWhatsNew={handleWhatsNew}
+        hasUnseen={hasUnseen}
       />
     </>
   );

@@ -33,11 +33,12 @@ export function UpdateBanner() {
 
   if (!updateAvailable) return null;
 
+  // Both bottom bars (BottomNav, MatchTabBar) are h-14 plus the safe-area inset; keep the offset below in sync.
   return (
     <div
       role="status"
       aria-live="polite"
-      className="fixed bottom-14 md:bottom-0 inset-x-0 z-50 flex items-center justify-between gap-3 px-4 py-3 bg-primary text-primary-foreground text-sm shadow-lg"
+      className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom))] md:bottom-0 inset-x-0 z-40 flex items-center justify-between gap-3 px-4 py-3 bg-primary text-primary-foreground text-sm shadow-lg"
     >
       <div className="flex items-center gap-2">
         <RefreshCw className="w-4 h-4 shrink-0" aria-hidden="true" />
