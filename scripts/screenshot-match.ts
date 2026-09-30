@@ -26,10 +26,12 @@
  *   archetype-chart       Archetype performance breakdown
  *   style-fingerprint     Style fingerprint scatter chart
  *   live-grid             Courtside grid -- the full-screen live view
+ *   match-info            Match Info tab (squad, weather, match details)
+ *   pre-match-grid        Grid before scoring starts: empty cells and the pre-match strip
  *   shooter-dashboard     Shooter dashboard with match history and trend charts
  *   competitor-identity   Competitor picker open showing identity + tracked star states
  *   tracked-shooters-sheet  My shooters management sheet
- *   whats-new-dialog      What's New dialog open
+ *   whats-new-dialog      What's New dialog open (opened from the More button or header)
  */
 
 import { chromium } from "@playwright/test";
@@ -333,6 +335,55 @@ const SCENES: Scene[] = [
     },
   },
   {
+    name: "match-info",
+    description: "Match Info tab -- squad, weather and match details in one place",
+    suppressWhatsNew: true,
+    setup: async (page, matchPath) => {
+      await page.addInitScript((shooterId: number) => {
+        localStorage.setItem(
+          "ssi-my-shooter",
+          JSON.stringify({ shooterId, name: "A. Lindstr\u00f6m", license: null }),
+        );
+      }, MOCK_MATCH.competitors[0].shooterId as number);
+      await page.goto(`${matchPath}/info`);
+      await page
+        .getByRole("heading", { name: /your squad/i })
+        .first()
+        .waitFor({ timeout: 10000 });
+    },
+  },
+  {
+    name: "pre-match-grid",
+    description: "Grid before scoring starts -- empty cells and the Show live scores strip",
+    suppressWhatsNew: true,
+    setup: async (page, matchPath) => {
+      await page.addInitScript((shooterId: number) => {
+        localStorage.setItem(
+          "ssi-my-shooter",
+          JSON.stringify({ shooterId, name: "A. Lindstr\u00f6m", license: null }),
+        );
+      }, MOCK_MATCH.competitors[0].shooterId as number);
+      // Registered after the shared mock routes, so this one wins: the same
+      // match, but with scoring not started. The grid stays empty until the
+      // user taps Show live scores, so no live-grid request is made.
+      await page.route(/\/api\/match\/22\/88888888/, (route) =>
+        route.fulfill({
+          json: {
+            ...MOCK_MATCH,
+            scoring_pct: 0,
+            match_status: "on",
+            results_status: "org",
+            date: "2026-10-31T09:00:00+01:00",
+          },
+        }),
+      );
+      await page.goto(matchPath);
+      await page
+        .getByRole("button", { name: /show live scores/i })
+        .waitFor({ timeout: 10000 });
+    },
+  },
+  {
     name: "competitor-identity",
     description: "Competitor picker open showing 'This is me' identity and tracked star states",
     suppressWhatsNew: true,
@@ -400,12 +451,16 @@ const SCENES: Scene[] = [
     setup: async (page, matchPath) => {
       void matchPath; // dialog scene navigates to home page, not match
       await page.goto("/");
-      // The What's New dialog auto-shows because we did NOT suppress it.
+      // The dialog no longer auto-shows; open it from the header (desktop)
+      // or the More sheet (mobile).
       const dialog = page.locator('[role="dialog"]');
-      await dialog.waitFor({ timeout: 8000 }).catch(async () => {
-        // Fallback: trigger via footer link
-        await page.locator("text=What's new").first().click().catch(() => null);
-      });
+      const header = page.getByRole("button", { name: /what.s new/i }).first();
+      if (await header.isVisible().catch(() => false)) {
+        await header.click().catch(() => null);
+      } else {
+        await page.getByRole("button", { name: /^more$/i }).first().click().catch(() => null);
+        await page.getByText("What's new").first().click().catch(() => null);
+      }
       await dialog.waitFor({ timeout: 5000 }).catch(() => null);
     },
   },

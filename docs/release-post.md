@@ -83,10 +83,13 @@ Every scene is captured at both **mobile** (390×844) and **desktop** (1280×900
 | `hf-level-bars` | HF Level bars |
 | `archetype-chart` | Archetype performance breakdown |
 | `style-fingerprint` | Style fingerprint scatter chart |
+| `live-grid` | Courtside grid, the match index route |
+| `match-info` | Match Info tab: squad, weather and match details |
+| `pre-match-grid` | Grid before scoring starts, with the Show live scores strip |
 | `shooter-dashboard` | Shooter dashboard with match history and trend charts |
 | `competitor-identity` | Competitor picker open showing identity and tracked star states |
 | `tracked-shooters-sheet` | My shooters management sheet |
-| `whats-new-dialog` | What's New dialog open |
+| `whats-new-dialog` | What's New dialog open (from the More button or header) |
 
 The script writes `manifest.json` alongside the PNGs listing each scene name, description,
 and the filenames keyed by viewport tag (`mobile`/`desktop`).

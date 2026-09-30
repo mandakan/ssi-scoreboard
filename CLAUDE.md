@@ -246,12 +246,19 @@ Levers and overrides:
 
 ## Courtside Grid -> `docs/live-grid.md`
 
-The default live view: one row per shooter, one column per stage, full-screen and
+The match index route for every match (before, during and after scoring): one row per shooter, one column per stage, full-screen and
 mobile-first. **Its data contract is field-blind** -- every rendered value derives from a
 single shooter's own scorecard plus the stage list. No stage-winner HF, field median,
 division distribution, or ranking. That constraint exists so Phase 2 can swap the server
 from "project the cached whole-field snapshot" to "fetch just these shooters" without a
 client change; breaking it silently forecloses the only real upstream-load lever we have.
+
+Grid is the index route; Analysis and Info are sibling routes behind the match tabs (bottom
+nav on mobile, top strip on desktop). The SSI upstream constraint extends to navigation:
+links into match routes use `prefetch={false}`; the match loading boundary lives at
+`app/match/[ct]/loading.tsx`, above the match layout, so link prefetch never runs the
+layout's match fetch; the pre-match grid is drawn from loaded match data and never fetches
+scorecards until the user taps "Show live scores".
 `compareEnabled` must stay false while the grid shows (e2e-guarded). Do not add a second
 poll clock. See `docs/live-grid.md`.
 
@@ -302,7 +309,8 @@ and persists new tiers fire-and-forget. Adding an achievement: append one entry 
 
 ## What's New dialog -> `docs/whats-new.md`
 
-Auto-shows once per release; also reachable from the footer. To announce a release, prepend a
+Never opens by itself. A new release shows a dot on the More button (mobile) and the header
+button (desktop); the dialog opens when the user asks. To announce a release, prepend a
 `Release` entry (with ISO `id`, `date`, `sections`, and `screenshotScenes`) to `RELEASES` in
 `lib/releases.ts`. Add an entry whenever a user-visible feature ships. See `docs/whats-new.md`
 for the full entry shape, screenshot scene catalogue, and rules for adding new scenes.

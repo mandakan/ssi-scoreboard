@@ -1,15 +1,17 @@
 # What's New dialog
 
-A "What's New" dialog auto-shows once per release whenever a user opens the app after a new
-entry has been added. It is also accessible at any time via the "What's new" link in the footer.
+The "What's New" dialog never opens by itself. When a new entry has been added, a dot marks
+the "What's new" entry point until the user opens it: on the More button of the bottom nav
+(mobile) and on the header button (desktop). The footer is hidden on match pages, so it is
+not the entry point there.
 
 ## To announce a new release
 
 1. Open `lib/releases.ts`.
 2. **Prepend** a new `Release` object to the `RELEASES` array (newest entry must always be first).
 3. Set `id` to an ISO date string (e.g. `"2026-03-15"`) — this is the key stored in
-   `localStorage("whats-new-seen-id")`. The dialog shows whenever this `id` differs from
-   what the user's browser last saw.
+   `localStorage("whats-new-seen-id")`. The dot shows whenever this `id` differs from
+   what the user's browser last saw; opening the dialog stores it and clears the dot.
 4. Fill in `date` (human-readable), optional `title`, and one or more `sections`
    (`heading` + `items` string array).
 
@@ -39,8 +41,9 @@ entry has been added. It is also accessible at any time via the "What's new" lin
 
 - `lib/releases.ts` — the only file you edit to publish a new What's New
 - `lib/types.ts` — `Release` / `ReleaseSection` interfaces
-- `components/whats-new-provider.tsx` — context, auto-show logic, dialog render
-- `components/footer.tsx` — "What's new" trigger link
+- `components/whats-new-provider.tsx` -- context, unseen state, dialog render
+- `components/bottom-nav.tsx` -- More button (with the dot) and its "What's new" item on mobile
+- `components/site-header.tsx` -- desktop header button (with the dot)
 
 **Rule of thumb:** add an entry whenever a user-visible feature ships. Skip patch/fix-only
 deploys unless the fix is prominent enough that users should know about it.
@@ -52,8 +55,9 @@ New releases must include a `screenshotScenes` array. Point it at the scenes fro
 at both mobile (390x844) and desktop (1280x900).
 
 Current catalogue: `comparison-table`, `degradation-chart`, `hf-level-bars`,
-`archetype-chart`, `style-fingerprint`, `stage-times-export`, `shooter-dashboard`,
-`competitor-identity`, `tracked-shooters-sheet`, `whats-new-dialog`. Omit the field
+`archetype-chart`, `style-fingerprint`, `stage-times-export`, `live-grid`, `match-info`,
+`pre-match-grid`, `shooter-dashboard`, `competitor-identity`, `tracked-shooters-sheet`,
+`whats-new-dialog`. Omit the field
 to capture all.
 
 **When to add a new scene:** if a new chart or UI section isn't well-represented by any

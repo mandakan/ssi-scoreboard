@@ -1,8 +1,10 @@
 # Courtside Grid -- the live view
 
-One row per shooter, one column per stage, full-screen on a phone. The default
-surface for `effectiveMode === "live"`. The comparison table and coaching
-analysis stay one tap away behind "Full analysis".
+One row per shooter, one column per stage, full-screen on a phone. The grid is the
+match index route (`/match/{ct}/{id}`) for every match, before, during and after
+scoring. Info (`/info`) and Analysis (`/analysis`) are sibling routes behind a tab bar:
+bottom nav on mobile, a top strip on desktop. The comparison table, charts and coaching
+analysis live in the Analysis tab.
 
 Design doc: `docs/superpowers/specs/2026-08-23-live-grid-design.md`.
 
@@ -31,6 +33,8 @@ sheet -- that is the field dependency. Put it in the comparison table instead.
 | `lib/live-grid-rows.ts` | `resolveGridRows()` -- squad vs tracked row sources |
 | `app/api/live-grid/route.ts` | Cache reads, then projection. Imports nothing from `compare/logic` |
 | `components/live-grid.tsx` | Full-screen shell, rail, sticky-column table |
+| `components/live-grid-layout.ts` | Layout constants: 12px text floor, 104px name column |
+| `components/pre-match-strip.tsx` | Strip shown above the empty pre-match grid |
 | `components/live-grid-cell.tsx` | The cell -- quiet by default |
 | `components/live-grid-sheet.tsx` | Tap-through scorecard detail |
 
@@ -80,6 +84,20 @@ Non-handgun disciplines never get a Major/Minor suffix, because
 set. They therefore fall to minor here. That matches the stage simulator
 rather than diverging from it; if IPSC Rifle/Shotgun power factor is ever
 modelled, fix both together.
+
+## Rail
+
+The rail across the top is a progress strip plus a "Live: S{n}" button that jumps to the
+stage being shot now. Tracked shooters are managed through a Manage button.
+
+## Before scoring starts
+
+While a match is pre-match, the grid draws its rows and empty cells from the already loaded
+match data and shows a strip with a "Show live scores" button. **Nothing fetches
+scorecards until the user taps it.** This is part of the SSI upstream constraint below; do
+not add an automatic fetch. Links into match routes use `prefetch={false}`, and the loading
+boundary sits at `app/match/[ct]/loading.tsx`, above the match layout, so link prefetch
+never runs the layout's match fetch.
 
 ## Refresh
 
