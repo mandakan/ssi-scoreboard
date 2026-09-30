@@ -5,6 +5,13 @@ import type { MatchResponse } from "@/lib/types";
 
 const useMatchQuery = vi.fn();
 vi.mock("@/lib/queries", () => ({ useMatchQuery: (...a: unknown[]) => useMatchQuery(...a) }));
+const linkProps: Array<Record<string, unknown>> = [];
+vi.mock("next/link", () => ({
+  default: ({ children, ...props }: Record<string, unknown> & { children: React.ReactNode }) => {
+    linkProps.push(props);
+    return <a href={props.href as string} aria-label={props["aria-label"] as string | undefined}>{children}</a>;
+  },
+}));
 vi.mock("next/navigation", () => ({ usePathname: () => "/match/22/1" }));
 vi.mock("@/lib/competition-store", () => ({ saveRecentCompetition: () => () => {} }));
 
@@ -35,7 +42,10 @@ function renderShell() {
 }
 
 describe("TopBar match notice", () => {
-  beforeEach(() => useMatchQuery.mockReset());
+  beforeEach(() => {
+    useMatchQuery.mockReset();
+    linkProps.length = 0;
+  });
 
   it("is absent when results are merely unpublished", () => {
     setMatch({});
@@ -48,6 +58,8 @@ describe("TopBar match notice", () => {
     renderShell();
     const link = screen.getByRole("link", { name: "Match notice" });
     expect(link).toHaveAttribute("href", "/match/22/1/info");
+    const props = linkProps.find((p) => p["aria-label"] === "Match notice");
+    expect(props?.prefetch).toBe(false);
   });
 
   it("shows when upstream is degraded", () => {
