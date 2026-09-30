@@ -9,7 +9,10 @@ import type { GridRowSource } from "@/lib/live-grid-rows";
 import { useLiveGridQuery } from "@/lib/queries";
 import { shortName } from "@/lib/selection-summary";
 import { cn } from "@/lib/utils";
-import type { LiveGridCell, LiveGridStage } from "@/lib/types";
+import type { LiveGridCell, LiveGridResponse, LiveGridStage } from "@/lib/types";
+
+// Stable empty list: with staticData the query gets no ids and self-disables.
+const EMPTY_IDS: number[] = [];
 
 const PENDING_CELL: LiveGridCell = {
   hf: null, time: null, points: null,
@@ -32,6 +35,11 @@ export interface LiveGridProps {
    * polling. Defaults to true (live polling).
    */
   live?: boolean;
+  /**
+   * Pre-built grid to render instead of fetching (pre-match empty grid). The
+   * query is called with no ids, so nothing reaches the upstream API.
+   */
+  staticData?: LiveGridResponse;
 }
 
 /**
@@ -47,21 +55,24 @@ export function LiveGrid({
   onSourceChange,
   onManage,
   live = true,
+  staticData,
 }: LiveGridProps) {
-  const query = useLiveGridQuery(ct, id, shooters, { live });
+  const query = useLiveGridQuery(ct, id, staticData ? EMPTY_IDS : shooters, { live });
   const scrollerRef = useRef<HTMLDivElement>(null);
   const didAutoScroll = useRef(false);
   const [openCell, setOpenCell] = useState<{ row: number; stage: number } | null>(
     null,
   );
 
-  const data = query.data;
+  const data = staticData ?? query.data;
   const stages = useMemo(() => data?.stages ?? [], [data]);
   const cells = useMemo(() => data?.cells ?? {}, [data]);
 
+  // computeLiveEdgeStageId falls back to the first stage when nothing is
+  // scored; a static pre-match grid has no live stage at all.
   const liveEdgeStageId = useMemo(
-    () => computeLiveEdgeStageId(cells, stages),
-    [cells, stages],
+    () => (staticData ? null : computeLiveEdgeStageId(cells, stages)),
+    [staticData, cells, stages],
   );
 
   const jumpTo = useCallback(
@@ -185,12 +196,11 @@ export function LiveGrid({
               <span
                 key={stage.stage_id}
                 className={cn(
-                  "block h-1 flex-1",
-                  state === "live"
-                    ? "bg-foreground"
-                    : state === "done"
-                      ? "bg-[var(--perf-green)]"
-                      : "bg-border",
+                  "block flex-1 self-end",
+                  // Live is taller as well as darker: state is not color-only.
+                  state === "live" ? "h-1.5 bg-foreground" : "h-1",
+                  state === "done" && "bg-[var(--perf-green)]",
+                  state === "todo" && "bg-border",
                 )}
               />
             );

@@ -202,7 +202,7 @@ test("grid with live scores hidden explains why", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Match in progress" })).toBeVisible();
 });
 
-test("pre-match grid never fetches live-grid until the user opts in", async ({ page }) => {
+async function openPreMatchGrid(page: Page) {
   await suppressDialogs(page);
   await page.addInitScript(() => {
     localStorage.setItem(
@@ -214,17 +214,39 @@ test("pre-match grid never fetches live-grid until the user opts in", async ({ p
     r.fulfill({ json: { ...MOCK_MATCH, scoring_pct: 0, date: new Date().toISOString() } }));
   await page.route("**/api/upstream-status**", (r) =>
     r.fulfill({ json: { degraded: false, paused: false } }));
-  let gridCalls = 0;
+  await page.route("**/api/pre-match/weather**", (r) =>
+    r.fulfill({ json: { available: false, reason: "no_coordinates" } }));
+  const calls = { grid: 0, compare: 0 };
   await page.route("**/api/live-grid**", (r) => {
-    gridCalls++;
+    calls.grid++;
     return r.fulfill({ json: { stages: [], shooters: [], cells: {} } });
   });
+  await page.route("**/api/compare**", (r) => {
+    calls.compare++;
+    return r.fulfill({ json: MOCK_COMPARE });
+  });
   await page.goto("/match/22/88888888");
-  await expect(page.getByText("Scoring has not really started")).toBeVisible();
-  await page.waitForTimeout(1500);
-  expect(gridCalls).toBe(0);
+  return calls;
+}
+
+test("pre-match grid draws from the match and never fetches until the user opts in", async ({ page }) => {
+  const calls = await openPreMatchGrid(page);
+  await expect(page.getByRole("columnheader", { name: "S1", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Show live scores" })).toBeVisible();
+  await page.waitForTimeout(1000);
+  expect(calls.grid).toBe(0);
+  expect(calls.compare).toBe(0);
   await page.getByRole("button", { name: "Show live scores" }).click();
-  await expect.poll(() => gridCalls).toBeGreaterThan(0);
+  await expect.poll(() => calls.grid).toBeGreaterThan(0);
+  expect(calls.compare).toBe(0);
+});
+
+test("tapping a pre-match cell opens the detail sheet with Not shot yet", async ({ page }) => {
+  const calls = await openPreMatchGrid(page);
+  await page.getByRole("button", { name: "Shooter 1 Lastname, stage 1", exact: true }).click();
+  await expect(page.getByText("Not shot yet.")).toBeVisible();
+  expect(calls.grid).toBe(0);
+  expect(calls.compare).toBe(0);
 });
 
 test("tab switches keep one match fetch and hide the global nav", async ({ page }) => {

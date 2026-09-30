@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { LiveGrid } from "@/components/live-grid";
@@ -9,10 +8,11 @@ import { SquadPicker } from "@/components/squad-picker";
 import { TrackedShootersSheet } from "@/components/tracked-shooters-sheet";
 import { useMatch } from "@/components/match-gate";
 import { MatchTabPlaceholder } from "@/components/match-tab-placeholder";
-import { Button } from "@/components/ui/button";
+import { PreMatchStrip } from "@/components/pre-match-strip";
 import { useHydrated } from "@/lib/hooks/use-hydrated";
 import { useMyIdentity } from "@/lib/hooks/use-my-identity";
 import { useTrackedShooters } from "@/lib/hooks/use-tracked-shooters";
+import { buildEmptyGrid } from "@/lib/live-grid";
 import { resolveGridRows, type GridRowSource } from "@/lib/live-grid-rows";
 import {
   SCORES_OPTIN_CHANGED,
@@ -24,7 +24,7 @@ import {
   saveGridSourcePreference,
   saveLiveScoresOptIn,
 } from "@/lib/competition-store";
-import { matchTabHref, resolveLegacyMatchUrl } from "@/lib/match-routes";
+import { resolveLegacyMatchUrl } from "@/lib/match-routes";
 import { matchScoresPhase } from "@/lib/scores-phase";
 
 // Stable reference for the useSyncExternalStore server snapshot.
@@ -122,6 +122,9 @@ function GridPageContent() {
     [match, source, identity, trackedIds, savedIds],
   );
 
+  // Pre-match grid drawn from the loaded match: no upstream call.
+  const emptyGrid = useMemo(() => buildEmptyGrid(match, rows), [match, rows]);
+
   const phase = matchScoresPhase(match, mountMs);
 
   if (!match.is_live_scores_accessible && phase !== "complete") {
@@ -156,31 +159,29 @@ function GridPageContent() {
     );
   }
 
-  if (phase === "prematch" && !scoresOptIn) {
+  if (phase === "prematch" && !scoresOptIn && rows.length > 0) {
     return (
-      <div className="p-4">
-        <div role="status" className="rounded-lg border bg-muted/40 p-4 space-y-3">
-          <h2 className="font-semibold">Scoring has not really started</h2>
-          <p className="text-sm text-muted-foreground">
-            Live scores are not loaded automatically this early in the match.
-            Load them now if you want to see shooters who have already scored.
-          </p>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              variant="outline"
-              className="min-h-11"
-              onClick={() => saveLiveScoresOptIn(ct, id)}
-            >
-              Show live scores
-            </Button>
-            <Link
-              href={matchTabHref(ct, id, "info")}
-              className="inline-flex min-h-11 items-center text-sm text-primary underline underline-offset-2 hover:opacity-80"
-            >
-              Match info
-            </Link>
-          </div>
+      <div className="flex h-full flex-col">
+        <PreMatchStrip
+          ct={ct}
+          id={id}
+          match={match}
+          myShooterId={identity?.shooterId ?? null}
+          onShowLiveScores={() => saveLiveScoresOptIn(ct, id)}
+        />
+        <div className="min-h-0 flex-1">
+          <LiveGrid
+            ct={ct}
+            id={id}
+            shooters={rows}
+            staticData={emptyGrid}
+            myShooterId={identity?.shooterId ?? null}
+            source={source}
+            onSourceChange={onSourceChange}
+            onManage={() => setShowManage(true)}
+          />
         </div>
+        <TrackedShootersSheet open={showManage} onOpenChange={setShowManage} />
       </div>
     );
   }

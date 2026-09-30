@@ -106,6 +106,27 @@ describe("LiveGrid", () => {
     expect(screen.getByText("Stages done:")).toBeInTheDocument();
   });
 
+  it("makes the live rail segment taller than done segments (not color-only)", () => {
+    const { container } = renderGrid({ shooters: [1] });
+    const segs = Array.from(
+      container.querySelectorAll("[data-live-grid-rail] > span"),
+    );
+    // Stage 10 holds the newest scorecard (live edge); stage 11 is not shot.
+    const [live, other] = segs;
+    expect(other.className).toMatch(/\bh-1\b/);
+    expect(live.className).toMatch(/\bh-1\.5\b/);
+    expect(live.className).not.toBe(other.className);
+  });
+
+  it("renders staticData without fetching (empty id list)", () => {
+    useLiveGridQuerySpy.mockClear();
+    useLiveGridQuerySpy.mockReturnValueOnce({ data: undefined, isLoading: false, isFetching: false, error: null });
+    renderGrid({ staticData: { ...FIXTURE, cells: { 1: {}, 2: {} } } });
+    expect(useLiveGridQuerySpy).toHaveBeenLastCalledWith("22", "1", [], { live: true });
+    expect(screen.getByRole("rowheader", { name: /Jonas/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Jump to live stage/ })).not.toBeInTheDocument();
+  });
+
   it("offers one Live jump button that scrolls to the live stage", () => {
     const scrollTo = vi.fn();
     Object.defineProperty(HTMLElement.prototype, "scrollTo", {
