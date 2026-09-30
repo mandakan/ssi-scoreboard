@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { regionToFlagEmoji } from "@/lib/ipsc-categories";
 import type { MatchResponse, CompetitorInfo, PreMatchWeatherResponse } from "@/lib/types";
+import { squadRotation } from "@/lib/stage-rotation";
 import {
   Popover,
   PopoverContent,
@@ -51,16 +52,6 @@ interface PreMatchViewProps {
   id: string;
   aiAvailable: boolean;
   onManageShooters?: () => void;
-}
-
-// ── Stage rotation ────────────────────────────────────────────────────────────
-
-// IPSC standard round-robin rotation (used by most matches).
-// Some matches use a different order — this is a prediction, not a guarantee.
-// For squad number `s` (1-indexed) and round `r` (1-indexed), returns the
-// 0-based index into a stages array sorted by stage_number.
-function getStageIndex(squadNumber: number, round: number, totalStages: number): number {
-  return ((squadNumber - 1) + (round - 1)) % totalStages;
 }
 
 // ── Constraint parsing ────────────────────────────────────────────────────────
@@ -700,11 +691,7 @@ export function PreMatchView({
 
   const rotation = useMemo(() => {
     if (selectedSquadNum === null || sortedStages.length === 0) return [];
-    const N = sortedStages.length;
-    return Array.from({ length: N }, (_, r) => ({
-      round: r + 1,
-      stage: sortedStages[getStageIndex(selectedSquadNum, r + 1, N)],
-    }));
+    return squadRotation(selectedSquadNum, sortedStages);
   }, [selectedSquadNum, sortedStages]);
 
   // Group competitors by division; divisions with tracked shooters sort first.
