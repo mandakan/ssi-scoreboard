@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildLiveGridCells, computeLiveEdgeStageId } from "@/lib/live-grid";
+import { buildLiveGridCells, computeLiveEdgeStageId, buildEmptyGrid } from "@/lib/live-grid";
 import type { RawScorecard } from "@/app/api/compare/logic";
-import type { LiveGridStage } from "@/lib/types";
+import type { LiveGridStage, MatchResponse } from "@/lib/types";
 
 function card(over: Partial<RawScorecard> = {}): RawScorecard {
   return {
@@ -90,11 +90,31 @@ describe("computeLiveEdgeStageId", () => {
     expect(computeLiveEdgeStageId(cells, STAGES)).toBe(11);
   });
 
-  it("returns the first stage when nothing has been scored", () => {
-    expect(computeLiveEdgeStageId({ 1: {} }, STAGES)).toBe(10);
+  it("returns null when nothing has been scored", () => {
+    expect(computeLiveEdgeStageId({ 1: {} }, STAGES)).toBeNull();
   });
 
   it("returns null when there are no stages", () => {
     expect(computeLiveEdgeStageId({}, [])).toBeNull();
+  });
+});
+
+describe("buildEmptyGrid", () => {
+  const match = {
+    stages: [{ id: 11, stage_number: 1, name: "S1", max_points: 60 }],
+    competitors: [
+      { id: 5, shooterId: 900, name: "Anna Lind", competitor_number: "12", division: "Production" },
+      { id: 6, shooterId: null, name: "Bo Ek", competitor_number: "13", division: null },
+    ],
+    squads: [{ id: 1, number: 4, name: "Squad 4", competitorIds: [5] }],
+  } as unknown as MatchResponse;
+
+  it("builds pending rows in the given order from match data only", () => {
+    const g = buildEmptyGrid(match, [6, 5, 99]);
+    expect(g.shooters.map((s) => s.id)).toEqual([6, 5]);
+    expect(g.shooters[1]).toMatchObject({ name: "Anna Lind", competitor_number: "12", division: "Production", squad: "Squad 4", shooterId: 900 });
+    expect(g.shooters[0].squad).toBeNull();
+    expect(g.stages).toEqual([{ stage_id: 11, stage_num: 1, name: "S1", max_points: 60 }]);
+    expect(g.cells).toEqual({ 6: {}, 5: {} });
   });
 });

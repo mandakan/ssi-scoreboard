@@ -3,12 +3,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LiveGridCellView } from "@/components/live-grid-cell";
 import { LiveGridSheet } from "@/components/live-grid-sheet";
+import { CELL_MIN_W, NAME_COL, SCROLL_PAD } from "@/components/live-grid-layout";
 import { computeLiveEdgeStageId } from "@/lib/live-grid";
 import type { GridRowSource } from "@/lib/live-grid-rows";
 import { useLiveGridQuery } from "@/lib/queries";
 import { shortName } from "@/lib/selection-summary";
 import { cn } from "@/lib/utils";
-import type { LiveGridCell, LiveGridStage } from "@/lib/types";
+import type { LiveGridCell, LiveGridResponse, LiveGridStage } from "@/lib/types";
+
+// Stable empty list: with staticData the query gets no ids and self-disables.
+const EMPTY_IDS: number[] = [];
 
 const PENDING_CELL: LiveGridCell = {
   hf: null, time: null, points: null,
@@ -24,11 +28,23 @@ export interface LiveGridProps {
   myShooterId?: number | null;
   source: GridRowSource;
   onSourceChange: (source: GridRowSource) => void;
+  /** Opens the tracked-shooters manager; the Manage button shows for the tracked source only. */
+  onManage?: () => void;
   /**
    * False once the match is complete: the grid fetches once and stops
    * polling. Defaults to true (live polling).
    */
   live?: boolean;
+  /**
+   * Pre-built grid to render instead of fetching (pre-match empty grid). The
+   * query is called with no ids, so nothing reaches the upstream API.
+   */
+  staticData?: LiveGridResponse;
+  /**
+   * Shown while the first live response is pending (e.g. the empty grid
+   * right after opting in). Presentation only: does not affect the query.
+   */
+  placeholder?: LiveGridResponse;
 }
 
 /**
@@ -42,22 +58,27 @@ export function LiveGrid({
   myShooterId = null,
   source,
   onSourceChange,
+  onManage,
   live = true,
+  staticData,
+  placeholder,
 }: LiveGridProps) {
-  const query = useLiveGridQuery(ct, id, shooters, { live });
+  const query = useLiveGridQuery(ct, id, staticData ? EMPTY_IDS : shooters, { live });
   const scrollerRef = useRef<HTMLDivElement>(null);
   const didAutoScroll = useRef(false);
   const [openCell, setOpenCell] = useState<{ row: number; stage: number } | null>(
     null,
   );
 
-  const data = query.data;
+  const data = staticData ?? query.data ?? placeholder;
   const stages = useMemo(() => data?.stages ?? [], [data]);
   const cells = useMemo(() => data?.cells ?? {}, [data]);
 
+  // No live stage for a static pre-match grid or a finished match; the pure
+  // helper returns null while nothing has been scored.
   const liveEdgeStageId = useMemo(
-    () => computeLiveEdgeStageId(cells, stages),
-    [cells, stages],
+    () => (staticData || !live ? null : computeLiveEdgeStageId(cells, stages)),
+    [staticData, live, cells, stages],
   );
 
   const jumpTo = useCallback(
@@ -107,6 +128,9 @@ export function LiveGrid({
     [cells, data, liveEdgeStageId],
   );
 
+  const doneCount = stages.filter((s) => stageState(s) === "done").length;
+  const liveEdgeStage = stages.find((s) => s.stage_id === liveEdgeStageId);
+
   const active =
     openCell != null
       ? {
@@ -118,8 +142,12 @@ export function LiveGrid({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
-      {/* Row source chips and stage rail */}
-      <div className="flex flex-none items-center gap-2 border-b bg-card px-3 py-1.5">
+      {/* Row source chips, progress indicator and live-stage jump */}
+      <div
+        data-live-grid-header
+        className="flex-none border-b bg-card"
+      >
+        <div className="flex items-center gap-2 px-3 py-1.5">
         <div className="flex flex-none items-center gap-1.5">
           {(["squad", "tracked"] as const).map((s) => (
             <button
@@ -128,7 +156,7 @@ export function LiveGrid({
               aria-pressed={source === s}
               onClick={() => onSourceChange(s)}
               className={cn(
-                "min-h-0 rounded-full border px-3 py-1.5 text-[11.5px] font-medium",
+                "min-h-11 rounded-full border px-3 text-[12px] font-medium",
                 source === s
                   ? "border-foreground bg-foreground text-background"
                   : "text-muted-foreground",
@@ -137,44 +165,64 @@ export function LiveGrid({
               {s === "squad" ? "My squad" : "Tracked"}
             </button>
           ))}
+          {source === "tracked" && onManage && (
+            <button
+              type="button"
+              onClick={onManage}
+              className="min-h-11 rounded-md border px-2.5 text-[12px] font-medium"
+            >
+              Manage
+            </button>
+          )}
         </div>
-        <div className="flex min-w-0 flex-1 items-center gap-[3px]">
+        <span className="ml-auto flex-none whitespace-nowrap font-mono text-[12px] text-muted-foreground">
+          <span className="sr-only">Stages done: </span>
+          {doneCount}/{stages.length}
+        </span>
+        {liveEdgeStage && (
+          <button
+            type="button"
+            onClick={() => jumpTo(liveEdgeStage.stage_id)}
+            aria-label={`Jump to live stage ${liveEdgeStage.stage_num}`}
+            className="min-h-11 shrink-0 rounded-md border px-2.5 text-[12px] font-medium"
+          >
+            Live: S{liveEdgeStage.stage_num}
+          </button>
+        )}
+        </div>
+        {/* Progress only, full width: per-stage buttons cannot reach 44px at 390px. */}
+        <div
+          aria-hidden="true"
+          data-live-grid-rail
+          className="flex w-full gap-px"
+        >
           {stages.map((stage) => {
             const state = stageState(stage);
             return (
-              <button
+              <span
                 key={stage.stage_id}
-                type="button"
-                onClick={() => jumpTo(stage.stage_id)}
-                aria-label={`Jump to stage ${stage.stage_num}`}
-                className="grid h-5 flex-1 place-items-center bg-transparent p-0"
-              >
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "block w-full rounded-sm",
-                    state === "live"
-                      ? "h-[5px] bg-foreground"
-                      : state === "done"
-                        ? "h-[3px] bg-[var(--perf-green)]"
-                        : "h-[3px] bg-border",
-                  )}
-                />
-              </button>
+                className={cn(
+                  "block flex-1 self-end",
+                  // Live is taller as well as darker: state is not color-only.
+                  state === "live" ? "h-1.5 bg-foreground" : "h-1",
+                  state === "done" && "bg-[var(--perf-green)]",
+                  state === "todo" && "bg-border",
+                )}
+              />
             );
           })}
-          <small className="ml-1.5 whitespace-nowrap font-mono text-[9.5px] tracking-wide text-muted-foreground">
-            {stages.filter((s) => stageState(s) === "done").length}/{stages.length}
-          </small>
         </div>
       </div>
 
-      {/* Grid. scroll-padding-left matches the sticky name column so snap
+      {/* Grid. scroll-padding-left (SCROLL_PAD) matches the sticky name column (NAME_COL, 104px) so snap
           points land beside it rather than hiding a stage underneath. */}
       <div
         ref={scrollerRef}
         data-live-grid-scroller
-        className="min-h-0 flex-1 overflow-auto bg-muted [scroll-snap-type:x_proximity] [scroll-padding-left:94px] [overscroll-behavior-x:contain]"
+        className={cn(
+          "min-h-0 flex-1 overflow-auto bg-muted [scroll-snap-type:x_proximity] [overscroll-behavior-x:contain]",
+          SCROLL_PAD,
+        )}
       >
         <table className="min-w-full border-separate border-spacing-0 font-mono tabular-nums">
           <thead>
@@ -182,7 +230,10 @@ export function LiveGrid({
               <th
                 scope="col"
                 data-name-col
-                className="sticky left-0 top-0 z-40 w-[94px] min-w-[94px] max-w-[94px] border-b border-r bg-card px-2 py-1.5 text-left text-[10px] font-semibold tracking-widest text-muted-foreground"
+                className={cn(
+                  NAME_COL,
+                  "sticky left-0 top-0 z-40 border-b border-r bg-card px-2 py-1.5 text-left text-[12px] font-semibold tracking-widest text-muted-foreground",
+                )}
               >
                 SHOOTER
               </th>
@@ -191,7 +242,7 @@ export function LiveGrid({
                   key={stage.stage_id}
                   scope="col"
                   className={cn(
-                    "sticky top-0 z-30 border-b border-r bg-card px-1 py-1.5 text-center text-[10px] font-semibold tracking-wide",
+                    "sticky top-0 z-30 border-b border-r bg-card px-1 py-1.5 text-center text-[12px] font-semibold tracking-wide",
                     stage.stage_id === liveEdgeStageId
                       ? "text-foreground"
                       : "text-muted-foreground",
@@ -208,18 +259,21 @@ export function LiveGrid({
                 <th
                   scope="row"
                   data-name-col
-                  className="sticky left-0 z-20 w-[94px] min-w-[94px] max-w-[94px] border-b border-r bg-card px-2 py-1.5 text-left shadow-[3px_0_6px_-4px_rgba(0,0,0,0.28)]"
+                  className={cn(
+                    NAME_COL,
+                    "sticky left-0 z-20 border-b border-r bg-card px-2 py-1.5 text-left shadow-[3px_0_6px_-4px_rgba(0,0,0,0.28)]",
+                  )}
                 >
-                  <span className="block truncate font-sans text-[11.5px] font-semibold tracking-tight text-foreground">
-                    {shortName(shooter.name)}
+                  <span className="flex items-center gap-1.5 font-sans text-[12px] font-semibold tracking-tight text-foreground">
+                    <span className="min-w-0 truncate">{shortName(shooter.name)}</span>
                     {shooter.shooterId != null &&
                       shooter.shooterId === myShooterId && (
-                        <span className="ml-1.5 inline-flex items-center rounded-sm bg-primary/10 px-1 py-px align-middle font-sans text-[8.5px] font-medium uppercase tracking-wide text-primary">
+                        <span className="inline-flex shrink-0 items-center rounded-sm bg-primary/10 px-1 py-px font-sans text-[12px] font-medium uppercase tracking-wide text-primary">
                           You
                         </span>
                       )}
                   </span>
-                  <span className="block text-[9.5px] tracking-wide text-muted-foreground">
+                  <span className="block truncate text-[12px] tracking-wide text-muted-foreground">
                     {shooter.division ?? "—"} &middot; {shooter.competitor_number}
                   </span>
                 </th>
@@ -238,7 +292,10 @@ export function LiveGrid({
                           setOpenCell({ row: shooter.id, stage: stage.stage_id })
                         }
                         aria-label={`${shooter.name}, stage ${stage.stage_num}`}
-                        className="flex min-h-11 w-full min-w-[74px] flex-col gap-0.5 bg-transparent px-1.5 py-1.5 text-left font-mono tabular-nums"
+                        className={cn(
+                          CELL_MIN_W,
+                          "flex min-h-11 w-full flex-col gap-0.5 bg-transparent px-1.5 py-1.5 text-left font-mono tabular-nums",
+                        )}
                       >
                         <LiveGridCellView cell={cell} />
                       </button>

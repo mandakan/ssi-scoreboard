@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { regionToFlagEmoji } from "@/lib/ipsc-categories";
 import type { MatchResponse, CompetitorInfo, PreMatchWeatherResponse } from "@/lib/types";
+import { squadRotation } from "@/lib/stage-rotation";
 import {
   Popover,
   PopoverContent,
@@ -51,16 +52,6 @@ interface PreMatchViewProps {
   id: string;
   aiAvailable: boolean;
   onManageShooters?: () => void;
-}
-
-// ── Stage rotation ────────────────────────────────────────────────────────────
-
-// IPSC standard round-robin rotation (used by most matches).
-// Some matches use a different order — this is a prediction, not a guarantee.
-// For squad number `s` (1-indexed) and round `r` (1-indexed), returns the
-// 0-based index into a stages array sorted by stage_number.
-function getStageIndex(squadNumber: number, round: number, totalStages: number): number {
-  return ((squadNumber - 1) + (round - 1)) % totalStages;
 }
 
 // ── Constraint parsing ────────────────────────────────────────────────────────
@@ -693,6 +684,7 @@ export function PreMatchView({
     defaultSquadNum,
   );
   const [sheetCompetitor, setSheetCompetitor] = useState<CompetitorInfo | null>(null);
+  const [fieldOpen, setFieldOpen] = useState(false);
 
   useEffect(() => {
     setSelectedSquadNum(defaultSquadNum);
@@ -700,11 +692,7 @@ export function PreMatchView({
 
   const rotation = useMemo(() => {
     if (selectedSquadNum === null || sortedStages.length === 0) return [];
-    const N = sortedStages.length;
-    return Array.from({ length: N }, (_, r) => ({
-      round: r + 1,
-      stage: sortedStages[getStageIndex(selectedSquadNum, r + 1, N)],
-    }));
+    return squadRotation(selectedSquadNum, sortedStages);
   }, [selectedSquadNum, sortedStages]);
 
   // Group competitors by division; divisions with tracked shooters sort first.
@@ -790,17 +778,6 @@ export function PreMatchView({
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {/* AI pre-match brief ----------------------------------------------- */}
-      <PreMatchBriefCard ct={ct} id={id} shooterId={briefShooterId} aiAvailable={aiAvailable} onManageShooters={onManageShooters} />
-
-      {/* Weather forecast -------------------------------------------------- */}
-      {hasVenueInfo && matchDate && (
-        <WeatherCard
-          response={weatherQuery.data}
-          isLoading={weatherQuery.isLoading}
-        />
-      )}
-
       {/* Your squad -------------------------------------------------------- */}
       {match.squads.length > 0 && squadMembers.length > 0 && (
         <Card className="gap-3 p-4 shadow-none rounded-lg">
@@ -1059,17 +1036,41 @@ export function PreMatchView({
         </Card>
       )}
 
+      {/* Weather forecast -------------------------------------------------- */}
+      {hasVenueInfo && matchDate && (
+        <WeatherCard
+          response={weatherQuery.data}
+          isLoading={weatherQuery.isLoading}
+        />
+      )}
+
+      {/* AI pre-match brief ----------------------------------------------- */}
+      <PreMatchBriefCard ct={ct} id={id} shooterId={briefShooterId} aiAvailable={aiAvailable} onManageShooters={onManageShooters} />
+
       {/* Registered field -------------------------------------------------- */}
       {divisionGroups.length > 0 && (
         <Card className="gap-3 p-4 shadow-none rounded-lg md:col-span-2">
           <CardHeader className="p-0">
-            <CardTitle>
-              <h2 className="flex items-center gap-1.5">
-                Registered field
-                <span className="text-xs text-muted-foreground font-normal">
-                  — {match.competitors.length} competitors
-                </span>
-                <Popover>
+            <CardTitle className="flex items-center gap-1.5">
+              <h2 className="min-w-0 flex-1">
+                <button
+                  id="registered-field-heading"
+                  type="button"
+                  className="flex w-full items-center gap-1.5 text-left rounded focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                  aria-expanded={fieldOpen}
+                  aria-controls="registered-field-panel"
+                  onClick={() => setFieldOpen((o) => !o)}
+                >
+                  Registered field
+                  <span className="text-xs text-muted-foreground font-normal">
+                    — {match.competitors.length} competitors
+                  </span>
+                  {fieldOpen
+                    ? <ChevronUp className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                    : <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+                </button>
+              </h2>
+              <Popover>
                   <PopoverTrigger asChild>
                     <button
                       className="ml-auto text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
@@ -1087,8 +1088,9 @@ export function PreMatchView({
                     </PopoverHeader>
                     <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
                       <p>
-                        Competitors you track are highlighted. Divisions with your
-                        tracked shooters expand automatically.
+                        Competitors you track are highlighted. The field starts
+                        collapsed. Once you open it, divisions with your tracked
+                        shooters are already expanded.
                       </p>
                       <p>
                         Tap a division heading to expand or collapse the competitor
@@ -1097,24 +1099,27 @@ export function PreMatchView({
                     </div>
                   </PopoverContent>
                 </Popover>
-              </h2>
             </CardTitle>
           </CardHeader>
 
-          <CardContent className="p-0">
-            <div className="divide-y divide-border">
-              {divisionGroups.map(([division, competitors]) => (
-                <DivisionSection
-                  key={division}
-                  division={division}
-                  competitors={competitors}
-                  trackedShooterIds={trackedShooterIds}
-                  myShooterId={myShooterId}
-                  onSelectCompetitor={setSheetCompetitor}
-                />
-              ))}
-            </div>
-          </CardContent>
+          {fieldOpen && (
+            <section id="registered-field-panel" role="region" aria-labelledby="registered-field-heading">
+              <CardContent className="p-0">
+                <div className="divide-y divide-border">
+                  {divisionGroups.map(([division, competitors]) => (
+                    <DivisionSection
+                      key={division}
+                      division={division}
+                      competitors={competitors}
+                      trackedShooterIds={trackedShooterIds}
+                      myShooterId={myShooterId}
+                      onSelectCompetitor={setSheetCompetitor}
+                    />
+                  ))}
+                </div>
+              </CardContent>
+            </section>
+          )}
         </Card>
       )}
 

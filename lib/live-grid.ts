@@ -1,5 +1,5 @@
 import type { RawScorecard } from "@/app/api/compare/logic";
-import type { LiveGridCell, LiveGridStage } from "@/lib/types";
+import type { LiveGridCell, LiveGridStage, LiveGridResponse, MatchResponse } from "@/lib/types";
 
 /**
  * Project raw scorecards into the live grid's cell map.
@@ -50,7 +50,7 @@ function classify(sc: RawScorecard): LiveGridCell["status"] {
  * The stage the visible shooters most recently produced a scorecard on.
  *
  * The grid opens scrolled here, because it is the stage they just shot.
- * Falls back to the first stage so a pre-scoring match still lands somewhere.
+ * Null when nothing has been scored yet: there is no live edge to show.
  */
 export function computeLiveEdgeStageId(
   cells: Record<number, Record<number, LiveGridCell>>,
@@ -70,5 +70,61 @@ export function computeLiveEdgeStageId(
       }
     }
   }
-  return bestStage ?? stages[0].stage_id;
+  return bestStage;
+}
+
+/**
+ * Builds a LiveGridResponse with empty cells from match metadata only.
+ * Stages are taken from match.stages; shooters are resolved from rowIds
+ * by looking up the corresponding competitors in match.competitors.
+ * Squad names are resolved for each shooter based on SquadInfo.
+ * Unknown row IDs are silently dropped.
+ */
+export function buildEmptyGrid(
+  match: Pick<MatchResponse, "stages" | "competitors" | "squads">,
+  rowIds: number[],
+): LiveGridResponse {
+  // Build a map of competitor ID -> squad name (or null)
+  const competitorSquadMap = new Map<number, string | null>();
+  for (const squad of match.squads) {
+    for (const cId of squad.competitorIds) {
+      competitorSquadMap.set(cId, squad.name);
+    }
+  }
+
+  // Build stages array from match.stages
+  const stages = match.stages.map((s) => ({
+    stage_id: s.id,
+    stage_num: s.stage_number,
+    name: s.name,
+    max_points: s.max_points,
+  }));
+
+  // Build shooters array by resolving rowIds to competitors
+  const shooters = [];
+  const cells: Record<number, Record<number, LiveGridCell>> = {};
+
+  for (const rowId of rowIds) {
+    const competitor = match.competitors.find((c) => c.id === rowId);
+    if (!competitor) continue; // Unknown row ID, drop it
+
+    shooters.push({
+      id: competitor.id,
+      shooterId: competitor.shooterId,
+      name: competitor.name,
+      competitor_number: competitor.competitor_number,
+      division: competitor.division,
+      squad: competitorSquadMap.get(competitor.id) ?? null,
+    });
+
+    cells[rowId] = {};
+  }
+
+  return {
+    match_id: 0,
+    stages,
+    shooters,
+    cells,
+    cacheInfo: { cachedAt: null },
+  };
 }

@@ -51,6 +51,8 @@ export default function InfoPageClient() {
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6 animate-fade-in">
+      <MatchHeader match={match} />
+
       <div className="flex flex-wrap items-center gap-2">
         <ShareEventLink ct={ct} id={id} matchName={match.name} />
         <ShareButton title={match.name} competitorCount={0} />
@@ -61,8 +63,6 @@ export default function InfoPageClient() {
       {(upstreamDegraded || upstreamPaused) && (
         <UpstreamDegradedBanner cachedAt={match.cacheInfo.cachedAt} paused={upstreamPaused} />
       )}
-
-      <MatchHeader match={match} />
 
       {/* Results disclaimer -- shown whenever SSI has not publicly published results */}
       {!resultsPublished && (

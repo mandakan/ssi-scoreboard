@@ -173,13 +173,57 @@ test.describe("live grid", () => {
     expect(overflow).toBe(false);
   });
 
-  test("every cell button meets the 44px touch floor", async ({ page }) => {
+  test("every grid and header button meets the 44px touch floor", async ({ page }) => {
     await openGrid(page);
     const heights = await page
-      .locator("[data-live-grid-scroller] tbody button")
+      .locator("[data-live-grid-scroller] button, [data-live-grid-header] button")
       .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
     expect(heights.length).toBeGreaterThan(0);
     expect(Math.min(...heights)).toBeGreaterThanOrEqual(44);
+  });
+
+  test("the You badge stays visible inside the name cell", async ({ page }) => {
+    await openGrid(page);
+    const row = page.locator("tbody tr").first().locator("th[data-name-col]");
+    const badge = row.getByText("You", { exact: true });
+    await expect(badge).toBeVisible();
+    const b = (await badge.boundingBox())!;
+    const c = (await row.boundingBox())!;
+    expect(b.x + b.width).toBeLessThanOrEqual(c.x + c.width + 0.5);
+    expect(b.x).toBeGreaterThanOrEqual(c.x);
+    // Not clipped by a truncating ancestor either.
+    const clipped = await badge.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      for (let p = el.parentElement; p && p.tagName !== "TH"; p = p.parentElement) {
+        if (r.right > p.getBoundingClientRect().right + 0.5) return true;
+      }
+      return false;
+    });
+    expect(clipped).toBe(false);
+  });
+
+  test("tracked mode keeps a full-width progress strip with every segment", async ({
+    page,
+  }) => {
+    await openGrid(page);
+    await page.getByRole("button", { name: "Tracked" }).click();
+    const strip = page.locator("[data-live-grid-header] [data-live-grid-rail]");
+    const box = (await strip.boundingBox())!;
+    expect(box.width).toBeGreaterThanOrEqual(200);
+    const widths = await strip
+      .locator("> *")
+      .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width));
+    expect(widths).toHaveLength(12);
+    expect(Math.min(...widths)).toBeGreaterThan(0);
+  });
+
+  test("grid body rows are single-line (at most 64px tall)", async ({ page }) => {
+    await openGrid(page);
+    const heights = await page
+      .locator("[data-live-grid-scroller] tbody tr")
+      .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
+    expect(heights.length).toBeGreaterThan(0);
+    expect(Math.max(...heights)).toBeLessThanOrEqual(64);
   });
 
   test("opens the detail sheet on cell tap and closes it", async ({ page }) => {
@@ -196,14 +240,17 @@ test.describe("live grid", () => {
     await expect(page.getByRole("dialog")).toBeHidden();
   });
 
-  test("rail jump scrolls the grid", async ({ page }) => {
+  test("Live jump scrolls to the live stage", async ({ page }) => {
     await openGrid(page);
     const scroller = page.locator("[data-live-grid-scroller]");
-    const before = await scroller.evaluate((e) => e.scrollLeft);
-    await page.getByRole("button", { name: "Jump to stage 12" }).click();
+    await scroller.evaluate((e) => {
+      e.scrollLeft = 0;
+    });
+    await expect.poll(() => scroller.evaluate((e) => e.scrollLeft)).toBe(0);
+    await page.getByRole("button", { name: /jump to live stage/i }).click();
     await expect
       .poll(() => scroller.evaluate((e) => e.scrollLeft))
-      .toBeGreaterThan(before);
+      .toBeGreaterThan(0);
   });
 
   test("scroll snapping never parks a stage column under the name column", async ({
@@ -239,7 +286,7 @@ test.describe("live grid", () => {
     await settle();
     expect(await hiddenPx()).toBeLessThanOrEqual(1);
 
-    await page.getByRole("button", { name: "Jump to stage 5" }).click();
+    await page.getByRole("button", { name: /jump to live stage/i }).click();
     await settle();
     expect(await hiddenPx()).toBeLessThanOrEqual(1);
   });

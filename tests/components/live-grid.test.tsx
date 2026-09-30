@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { LiveGridResponse } from "@/lib/types";
 
@@ -98,14 +98,127 @@ describe("LiveGrid", () => {
     expect(screen.getByRole("columnheader", { name: "S2" })).toBeInTheDocument();
   });
 
-  it("gives every stage a labelled rail jump button", () => {
+  it("has no per-stage rail buttons (indicator only)", () => {
     renderGrid();
     expect(
-      screen.getByRole("button", { name: "Jump to stage 1" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Jump to stage 2" }),
-    ).toBeInTheDocument();
+      screen.queryAllByRole("button", { name: /jump to stage \d+$/i }),
+    ).toHaveLength(0);
+    expect(screen.getByText("Stages done:")).toBeInTheDocument();
+  });
+
+  it("draws the live rail segment h-1.5 and done and todo segments h-1", () => {
+    const scored = (created: string) => ({
+      ...FIXTURE.cells[1][10],
+      created,
+    });
+    const data: LiveGridResponse = {
+      ...FIXTURE,
+      stages: [
+        ...FIXTURE.stages,
+        { stage_id: 12, stage_num: 3, name: "Third", max_points: 30 },
+      ],
+      cells: {
+        // Stage 10: both shooters scored (done). Stage 11: newest card (live).
+        // Stage 12: nobody yet (todo).
+        1: { 10: scored("2026-08-23T09:00:00Z"), 11: scored("2026-08-23T10:00:00Z") },
+        2: { 10: scored("2026-08-23T09:05:00Z") },
+      },
+    };
+    useLiveGridQuerySpy.mockReturnValue({
+      data,
+      isLoading: false,
+      isFetching: false,
+      error: null,
+    });
+    try {
+      const { container } = renderGrid();
+      const heightOf = (el: Element) =>
+        el.className.split(/\s+/).find((c) => /^h-/.test(c));
+      const segs = Array.from(
+        container.querySelectorAll("[data-live-grid-rail] > span"),
+      );
+      expect(segs.map(heightOf)).toEqual(["h-1", "h-1.5", "h-1"]);
+    } finally {
+      useLiveGridQuerySpy.mockReset();
+      useLiveGridQuerySpy.mockImplementation(() => ({
+        data: FIXTURE,
+        isLoading: false,
+        isFetching: false,
+        error: null,
+      }));
+    }
+  });
+
+  it("renders staticData without fetching (empty id list)", () => {
+    useLiveGridQuerySpy.mockClear();
+    useLiveGridQuerySpy.mockReturnValueOnce({ data: undefined, isLoading: false, isFetching: false, error: null });
+    renderGrid({ staticData: { ...FIXTURE, cells: { 1: {}, 2: {} } } });
+    expect(useLiveGridQuerySpy).toHaveBeenLastCalledWith("22", "1", [], { live: true });
+    expect(screen.getByRole("rowheader", { name: /Jonas/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Jump to live stage/ })).not.toBeInTheDocument();
+  });
+
+  it("offers one Live jump button that scrolls to the live stage", () => {
+    const scrollTo = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      value: scrollTo,
+    });
+    try {
+      renderGrid();
+      scrollTo.mockClear();
+      const btn = screen.getByRole("button", { name: "Jump to live stage 1" });
+      expect(btn).toHaveTextContent("Live: S1");
+      fireEvent.click(btn);
+      expect(scrollTo).toHaveBeenCalledTimes(1);
+    } finally {
+      delete (HTMLElement.prototype as { scrollTo?: unknown }).scrollTo;
+    }
+  });
+
+  it("shows no Live button or live rail segment when the match is not live", () => {
+    renderGrid({ live: false });
+    expect(screen.queryByRole("button", { name: /Jump to live stage/ })).not.toBeInTheDocument();
+    const rail = document.querySelector("[data-live-grid-rail]")!;
+    expect(rail.querySelector(".h-1\\.5")).toBeNull();
+  });
+
+  it("shows no Live button when nothing has been scored", () => {
+    useLiveGridQuerySpy.mockImplementation(() => ({
+      data: { ...FIXTURE, cells: { 1: {}, 2: {} } },
+      isLoading: false,
+      isFetching: false,
+      error: null,
+    }));
+    try {
+      renderGrid();
+      expect(screen.queryByRole("button", { name: /Jump to live stage/ })).not.toBeInTheDocument();
+    } finally {
+      useLiveGridQuerySpy.mockImplementation(() => ({
+        data: FIXTURE,
+        isLoading: false,
+        isFetching: false,
+        error: null,
+      }));
+    }
+  });
+
+  it("renders the placeholder rows while the query is pending, without a Live button", () => {
+    useLiveGridQuerySpy.mockReturnValueOnce({ data: undefined, isLoading: true, isFetching: true, error: null });
+    renderGrid({ placeholder: { ...FIXTURE, cells: { 1: {}, 2: {} } } });
+    expect(screen.getByRole("rowheader", { name: /Jonas/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Jump to live stage/ })).not.toBeInTheDocument();
+    expect(useLiveGridQuerySpy).toHaveBeenLastCalledWith("22", "1", [1, 2], { live: true });
+  });
+
+  it("shows Manage only for the tracked source and calls onManage", () => {
+    const onManage = vi.fn();
+    const { unmount } = renderGrid({ source: "squad", onManage });
+    expect(screen.queryByRole("button", { name: "Manage" })).not.toBeInTheDocument();
+    unmount();
+    renderGrid({ source: "tracked", onManage });
+    fireEvent.click(screen.getByRole("button", { name: "Manage" }));
+    expect(onManage).toHaveBeenCalledTimes(1);
   });
 
   it("marks the identity shooter with a You badge", () => {
@@ -133,7 +246,7 @@ describe("LiveGrid", () => {
   it("renders a cell button for every shooter and stage combination", () => {
     renderGrid();
     // 2 shooters x 2 stages. The comma anchors this to cell buttons
-    // ("Mathias Axell, stage 1") and excludes the rail's "Jump to stage N".
+    // ("Mathias Axell, stage 1") and excludes the header buttons.
     expect(screen.getAllByRole("button", { name: /, stage \d/i })).toHaveLength(4);
   });
 });

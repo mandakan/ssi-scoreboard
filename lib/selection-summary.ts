@@ -1,5 +1,5 @@
 /**
- * Fit a name into a 94px column: "Mathias Axell" -> "Mathias A."
+ * Fit a name into a 104px column: "Mathias Axell" -> "Mathias A."
  *
  * When the first token is already an initial -- plenty of competitors
  * register as "A. Lindstrom" -- abbreviating the surname too would leave

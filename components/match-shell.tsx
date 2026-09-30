@@ -6,10 +6,17 @@ import { ArrowLeft } from "lucide-react";
 import { MatchGate, useMatch } from "@/components/match-gate";
 import { MatchTabBar } from "@/components/match-tab-bar";
 import { saveRecentCompetition } from "@/lib/competition-store";
+import { matchTabHref } from "@/lib/match-routes";
 
 function TopBar() {
   const { ct, id, match } = useMatch();
   useEffect(() => saveRecentCompetition(ct, id, match), [ct, id, match]);
+  // Cancelled or degraded only: "results not published" holds for the whole
+  // live phase, so flagging it here would be a permanent dot.
+  const notice =
+    match.match_status === "cs" ||
+    match.cacheInfo.upstreamDegraded === true ||
+    match.cacheInfo.upstreamPaused === true;
   return (
     <header className="sticky top-0 md:top-14 z-30 flex h-12 items-center gap-2 border-b bg-card px-2">
       <Link href="/" aria-label="All matches" className="grid h-11 w-11 place-items-center rounded-md text-muted-foreground hover:text-foreground">
@@ -17,6 +24,16 @@ function TopBar() {
       </Link>
       {/* A <p>, not a heading: the Info tab's MatchHeader already renders the match name as a heading. */}
       <p className="min-w-0 flex-1 truncate text-sm font-semibold">{match.name}</p>
+      {notice && (
+        <Link
+          href={matchTabHref(ct, id, "info")}
+          prefetch={false}
+          aria-label="Match notice"
+          className="grid h-11 w-11 shrink-0 place-items-center"
+        >
+          <span aria-hidden="true" className="h-2 w-2 rounded-full bg-amber-500" />
+        </Link>
+      )}
       <span className="shrink-0 pr-2 font-mono text-xs text-muted-foreground" aria-label={`${Math.round(match.scoring_pct)} percent scored`}>
         {Math.round(match.scoring_pct)}%
       </span>

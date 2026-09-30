@@ -100,7 +100,7 @@ export function LiveGridSheet({
             <b className="block text-[15px] font-semibold tracking-tight">
               {shooter.name}
             </b>
-            <span className="text-[11.5px] text-muted-foreground">
+            <span className="text-[12px] text-muted-foreground">
               Stage {stage.stage_num} &middot; {stage.name}
               {shooter.division ? ` · ${shooter.division}` : ""}
             </span>
@@ -224,7 +224,7 @@ function SheetBody({
             <b className="block text-[13px] font-semibold">
               −{dropped} points dropped
             </b>
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-[12px] text-muted-foreground">
               {hitLoss} on target
               {penLoss ? `, ${penLoss} to penalties` : ""}
             </span>
@@ -234,7 +234,7 @@ function SheetBody({
               <b className="font-mono text-[17px] font-semibold tracking-tight text-[var(--perf-green)] tabular-nums">
                 {cleanHf.toFixed(2)}
               </b>
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-[12px] text-muted-foreground">
                 HF if clean (+{gain.toFixed(2)})
               </span>
             </div>
@@ -245,13 +245,13 @@ function SheetBody({
           <b className="block text-[13px] font-semibold text-[var(--perf-green)]">
             Clean stage
           </b>
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-[12px] text-muted-foreground">
             Every shot an alpha. Nothing left on the table.
           </span>
         </div>
       )}
 
-      <p className="border-t pt-2.5 text-[11px] leading-relaxed text-muted-foreground">
+      <p className="border-t pt-2.5 text-[12px] leading-relaxed text-muted-foreground">
         Stage max {stage.max_points} points. Every figure here comes from this
         shooter&rsquo;s own scorecard &mdash; no stage winner, no field median,
         no ranking.
@@ -291,13 +291,13 @@ function Metric({
 }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <dt className="text-[9.5px] uppercase tracking-wider text-muted-foreground">
+      <dt className="text-[12px] uppercase tracking-wider text-muted-foreground">
         {label}
       </dt>
       <dd className="m-0 font-mono text-[16px] font-semibold tracking-tight tabular-nums">
         {value}
         {suffix && (
-          <span className="text-[11px] font-medium text-muted-foreground">
+          <span className="text-[12px] font-medium text-muted-foreground">
             {suffix}
           </span>
         )}

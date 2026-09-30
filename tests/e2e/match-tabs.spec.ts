@@ -141,9 +141,9 @@ const MOCK_COMPARE: CompareResponse = {
   ],
 };
 
-async function mockApis(page: Page) {
+async function mockApis(page: Page, match: MatchResponse = MOCK_MATCH) {
   await page.route("**/api/match/**", (route) =>
-    route.fulfill({ json: MOCK_MATCH }),
+    route.fulfill({ json: match }),
   );
   // Everything else the page pulls in -- keep it quiet so the test is about
   // the tab, not the surrounding chrome.
@@ -163,6 +163,26 @@ async function suppressDialogs(page: Page) {
   }, LATEST_RELEASE_ID);
 }
 
+// Asserts document order: match heading, then (optionally) the results
+// disclaimer, then "Your squad", then "Stage rotation".
+async function expectInfoOrder(page: Page, { disclaimer }: { disclaimer: boolean }) {
+  const squad = page.getByRole("heading", { name: /your squad/i });
+  await expect(squad).toBeVisible();
+  const ordered = await page.evaluate((withDisclaimer) => {
+    const match = document.querySelector("main h1");
+    const alert = withDisclaimer
+      ? Array.from(document.querySelectorAll('[role="alert"]')).find((e) => /results are not yet/i.test(e.textContent ?? "")) ?? null
+      : null;
+    const h2s = Array.from(document.querySelectorAll("h2"));
+    const sq = h2s.find((h) => /your squad/i.test(h.textContent ?? "")) ?? null;
+    const rot = h2s.find((h) => /stage rotation/i.test(h.textContent ?? "")) ?? null;
+    if (!match || (withDisclaimer && !alert) || !sq || !rot) return false;
+    const before = (a: Element, b: Element) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    return before(match, sq) && (!alert || (before(match, alert) && before(alert, sq))) && before(sq, rot);
+  }, disclaimer);
+  expect(ordered).toBe(true);
+}
+
 test.describe("match tabs", () => {
   test("info tab shows the match header and squad rotation", async ({ page }) => {
     await suppressDialogs(page);
@@ -170,6 +190,18 @@ test.describe("match tabs", () => {
     await page.goto("/match/22/88888888/info");
     await expect(page.getByRole("heading", { name: "Live Grid Test Match" })).toBeVisible();
     await expect(page.getByText(/results are not yet officially published/i)).toBeVisible();
+    await expectInfoOrder(page, { disclaimer: true });
+  });
+
+  test("info tab for a completed match has no disclaimer but keeps the sections", async ({ page }) => {
+    await suppressDialogs(page);
+    await mockApis(page, { ...MOCK_MATCH, match_status: "cp", results_status: "all" });
+    await page.goto("/match/22/88888888/info");
+    await expect(page.getByRole("heading", { name: "Live Grid Test Match" })).toBeVisible();
+    await expect(page.getByText(/results are not yet officially published/i)).toHaveCount(0);
+    await expectInfoOrder(page, { disclaimer: false });
+    await expect(page.getByRole("heading", { name: /stage rotation/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^registered field/i })).toHaveAttribute("aria-expanded", "false");
   });
 });
 
@@ -202,7 +234,7 @@ test("grid with live scores hidden explains why", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Match in progress" })).toBeVisible();
 });
 
-test("pre-match grid never fetches live-grid until the user opts in", async ({ page }) => {
+async function openPreMatchGrid(page: Page) {
   await suppressDialogs(page);
   await page.addInitScript(() => {
     localStorage.setItem(
@@ -214,17 +246,39 @@ test("pre-match grid never fetches live-grid until the user opts in", async ({ p
     r.fulfill({ json: { ...MOCK_MATCH, scoring_pct: 0, date: new Date().toISOString() } }));
   await page.route("**/api/upstream-status**", (r) =>
     r.fulfill({ json: { degraded: false, paused: false } }));
-  let gridCalls = 0;
+  await page.route("**/api/pre-match/weather**", (r) =>
+    r.fulfill({ json: { available: false, reason: "no_coordinates" } }));
+  const calls = { grid: 0, compare: 0 };
   await page.route("**/api/live-grid**", (r) => {
-    gridCalls++;
+    calls.grid++;
     return r.fulfill({ json: { stages: [], shooters: [], cells: {} } });
   });
+  await page.route("**/api/compare**", (r) => {
+    calls.compare++;
+    return r.fulfill({ json: MOCK_COMPARE });
+  });
   await page.goto("/match/22/88888888");
-  await expect(page.getByText("Scoring has not really started")).toBeVisible();
-  await page.waitForTimeout(1500);
-  expect(gridCalls).toBe(0);
+  return calls;
+}
+
+test("pre-match grid draws from the match and never fetches until the user opts in", async ({ page }) => {
+  const calls = await openPreMatchGrid(page);
+  await expect(page.getByRole("columnheader", { name: "S1", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Show live scores" })).toBeVisible();
+  await page.waitForTimeout(1000);
+  expect(calls.grid).toBe(0);
+  expect(calls.compare).toBe(0);
   await page.getByRole("button", { name: "Show live scores" }).click();
-  await expect.poll(() => gridCalls).toBeGreaterThan(0);
+  await expect.poll(() => calls.grid).toBeGreaterThan(0);
+  expect(calls.compare).toBe(0);
+});
+
+test("tapping a pre-match cell opens the detail sheet with Not shot yet", async ({ page }) => {
+  const calls = await openPreMatchGrid(page);
+  await page.getByRole("button", { name: "Shooter 1 Lastname, stage 1", exact: true }).click();
+  await expect(page.getByText("Not shot yet.")).toBeVisible();
+  expect(calls.grid).toBe(0);
+  expect(calls.compare).toBe(0);
 });
 
 test("tab switches keep one match fetch and hide the global nav", async ({ page }) => {
